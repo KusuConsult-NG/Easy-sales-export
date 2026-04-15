@@ -44,7 +44,7 @@ export default function SellerAnalyticsPage() {
                 const result = await getSellerAnalyticsAction();
                 if (result.success && result.data?.analytics) {
                     const defaults = { prevMonthRevenue: 0, prevTotalSales: 0, prevActiveListings: 0 };
-                    setStats({ ...defaults, ...result.data?.analytics });
+                    setStats({ ...defaults, ...result.data.analytics });
                 }
             } catch (error) {
                 logger.error("Failed to load analytics:", error);

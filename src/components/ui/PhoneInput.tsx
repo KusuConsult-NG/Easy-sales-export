@@ -17,7 +17,7 @@ interface PhoneInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 't
 const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
     ({ error, label, required, optional, hint, labelRight, className = "", value, onChange, ...props }, ref) => {
 
-        const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        function handlePhoneChange(e: React.ChangeEvent<HTMLInputElement>) {
             // Only allow digits, spaces, +, (, ), and -
             const inputValue = e.target.value;
 
@@ -45,7 +45,7 @@ const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
         };
 
         // Prevent non-numeric key presses (except allowed characters)
-        const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
             const allowedKeys = [
                 'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
                 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',

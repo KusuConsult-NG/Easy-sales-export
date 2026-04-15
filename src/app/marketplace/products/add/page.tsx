@@ -60,12 +60,12 @@ export default function AddProductPage() {
         "Rainforest Alliance"
     ];
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
         setMedia(prev => ({ ...prev, images: [...prev.images, ...files].slice(0, 5) }));
     };
 
-    const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0] || null;
         setMedia(prev => ({ ...prev, video: file }));
     };
@@ -96,7 +96,7 @@ export default function AddProductPage() {
 
     const { showToast } = useToast();
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setIsSubmitting(true);
 

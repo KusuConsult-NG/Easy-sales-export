@@ -29,7 +29,7 @@ export function useMarketplaceSearch() {
 
     const debouncedQuery = useDebounce(query, 500);
 
-    const loadProducts = async (isLoadMore = false) => {
+    async function loadProducts(isLoadMore = false) {
         setLoading(true);
         setError(null);
         try {

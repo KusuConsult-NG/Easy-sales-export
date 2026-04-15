@@ -36,8 +36,8 @@ export default function WaveShipmentsPage() {
         setLoading(true);
         try {
             const result = await getShipmentTrackingAction(session.user.id);
-            if (result.success && result.data) {
-                setShipments(result.data);
+            if (result.success ) {
+                setShipments(result.data ?? []);
             } else {
                 logger.error("Failed to load shipments:", result.error);
                 setShipments([]);

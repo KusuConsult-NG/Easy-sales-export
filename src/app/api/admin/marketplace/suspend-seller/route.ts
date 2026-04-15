@@ -60,10 +60,10 @@ export async function POST(request: NextRequest) {
         });
 
         // Update marketplace_sellers record
-        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).update({
+        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).set({
             verificationStatus: "suspended",
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         return NextResponse.json({
             success: true,

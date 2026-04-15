@@ -41,7 +41,7 @@ export function DocumentUpload({
         return /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
     };
 
-    const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
+    function handleFileSelect(e: ChangeEvent<HTMLInputElement>) {
         const selectedFile = e.target.files?.[0];
         if (!selectedFile) return;
 
@@ -65,7 +65,7 @@ export function DocumentUpload({
         onChange(selectedFile);
     };
 
-    const handleRemove = () => {
+    function handleRemove() {
         setFile(null);
         setPreviewUrl(null);
         setError("");
@@ -75,7 +75,7 @@ export function DocumentUpload({
         onChange(null);
     };
 
-    const handleClick = () => {
+    function handleClick() {
         fileInputRef.current?.click();
     };
 

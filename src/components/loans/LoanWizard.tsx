@@ -74,7 +74,7 @@ export function LoanWizard({ onSubmit, onCancel }: LoanWizardProps) {
         }
     };
 
-    const handleSubmit = async (data: LoanApplicationData) => {
+    async function handleSubmit(data: LoanApplicationData) {
         setIsSubmitting(true);
         try {
             await onSubmit(data);

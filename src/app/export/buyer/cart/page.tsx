@@ -33,7 +33,7 @@ export default function ExportCartPage() {
     // Warn before leaving mid-checkout
     useEffect(() => {
         if (step === "details" || step === "payment") {
-            const handler = (e: BeforeUnloadEvent) => {
+            function handler(e: BeforeUnloadEvent) {
                 e.preventDefault();
                 e.returnValue = "";
             };
@@ -69,7 +69,7 @@ export default function ExportCartPage() {
     const totalInNaira = cartTotal * USD_TO_NGN_RATE;
     const shippingFee = 0; // Shipping calculated separately based on Incoterms
 
-    const handlePaystackCheckout = async () => {
+    async function handlePaystackCheckout() {
         if (!buyerDetails.email) {
             setError("Please provide your email address");
             return;
@@ -104,7 +104,7 @@ export default function ExportCartPage() {
                 shippingFee
             );
 
-            if (result.success && result.data) {
+            if (result.success ) {
                 // Store buyer details in user-scoped localStorage for post-payment processing
                 const userId = session?.user?.id;
                 const detailsKey = userId ? `export_buyer_details_${userId}` : "export_buyer_details";
@@ -126,7 +126,12 @@ export default function ExportCartPage() {
                 clearCart();
 
                 // Redirect to Paystack
-                window.location.href = result.data.authorizationUrl;
+                if (result.data?.authorizationUrl) {
+                    window.location.href = result.data.authorizationUrl;
+                } else {
+                    setError("Failed to initialize payment: No authorization URL");
+                    setIsSubmitting(false);
+                }
             } else {
                 setError(result.error || "Failed to initialize payment");
                 setIsSubmitting(false);
@@ -137,7 +142,7 @@ export default function ExportCartPage() {
         }
     };
 
-    const handlePayment = () => {
+    function handlePayment() {
         handlePaystackCheckout();
     };
 

@@ -43,17 +43,23 @@ export default function AdminMessagesPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Load all conversations (admin sees ALL via server action)
+    // Real-time listener for ALL conversations
     useEffect(() => {
-        async function load() {
-            setLoading(true);
-            const result = await getAllConversationsAdminAction();
-            if (result && "conversations" in result) {
-                setConversations(result.conversations || []);
-            }
+        setLoading(true);
+        const q = query(
+            collection(db, COLLECTIONS.CONVERSATIONS),
+            orderBy("updatedAt", "desc"),
+            limit(50)
+        );
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const convs = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Conversation[];
+            setConversations(convs);
             setLoading(false);
-        }
-        load();
+        });
+        return () => unsubscribe();
     }, []);
 
     // Real-time listener for messages in active conversation

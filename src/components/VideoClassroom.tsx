@@ -33,7 +33,7 @@ export default function VideoClassroom({
 
     useEffect(() => {
         // Load Jitsi Meet API
-        const loadJitsiScript = () => {
+        function loadJitsiScript() {
             if (window.JitsiMeetExternalAPI) {
                 initializeJitsi();
                 return;

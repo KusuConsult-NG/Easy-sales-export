@@ -110,7 +110,7 @@ export default function BroadcastComposePage() {
         csvEmails: audience === "csv_upload" ? csvEmails : undefined,
     });
 
-    const handleEstimate = async () => {
+    async function handleEstimate() {
         if (!subject.trim() || !body.trim()) {
             showToast("Please fill in subject and message before estimating.", "error");
             return;
@@ -123,7 +123,7 @@ export default function BroadcastComposePage() {
         setRecipientSample(res.sample);
     };
 
-    const handleSend = async () => {
+    async function handleSend() {
         setSending(true);
         try {
             const res = await fetch("/api/admin/broadcast/send", {

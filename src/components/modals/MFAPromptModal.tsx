@@ -21,7 +21,7 @@ export default function MFAPromptModal({
     const [error, setError] = useState("");
     const [isVerifying, setIsVerifying] = useState(false);
 
-    const handleVerify = async () => {
+    async function handleVerify() {
         if (code.length !== 6) {
             setError("Please enter a 6-digit code");
             return;
@@ -53,7 +53,7 @@ export default function MFAPromptModal({
         }
     };
 
-    const handleSetup = () => {
+    function handleSetup() {
         router.push("/settings/security/mfa");
         onClose();
     };

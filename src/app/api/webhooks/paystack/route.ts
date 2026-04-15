@@ -212,7 +212,7 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
             paymentMethod: "paystack_webhook"
         });
 
-        // 2. Mark Processed
+        // 2. Mark Processed (Legacy)
         transaction.set(processedRef, {
             processedAt: FieldValue.serverTimestamp(),
             userId: userId || orderData.buyerId,
@@ -220,6 +220,20 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
             type: "marketplace_order",
             reference,
             source: "webhook"
+        });
+
+        // 2b. Write to Unified Ledger
+        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId: userId || orderData.buyerId,
+            type: "marketplace_order",
+            module: "marketplace",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: "Marketplace order payment"
         });
 
         // 3. Create Escrow Transactions
@@ -305,7 +319,7 @@ async function processExportInvestment(reference: string, amount: number, userId
             updatedAt: FieldValue.serverTimestamp()
         });
 
-        // 3. Mark Payment Processed
+        // 3. Mark Payment Processed (Legacy)
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         t.set(processedRef, {
             reference,
@@ -315,6 +329,20 @@ async function processExportInvestment(reference: string, amount: number, userId
             amount,
             processedAt: FieldValue.serverTimestamp(),
             source: "webhook"
+        });
+
+        // 3b. Write to Unified Ledger
+        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId,
+            type: "export_investment",
+            module: "export",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: "Export window investment"
         });
     });
 
@@ -405,6 +433,19 @@ async function processCooperativeRegistration(reference: string, amount: number,
             processedAt: FieldValue.serverTimestamp(),
             source: "webhook"
         });
+
+        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId,
+            type: "cooperative_registration",
+            module: "cooperative",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: "Cooperative membership payment"
+        });
     });
 
     logger.info(`[Paystack Webhook] Processed Cooperative Registration for ${userId}`);
@@ -476,6 +517,19 @@ async function processAcademyRegistration(reference: string, amount: number, use
             processedAt: FieldValue.serverTimestamp(),
             source: "webhook"
         });
+
+        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId,
+            type: "academy_registration",
+            module: "academy",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: "Academy registration payment"
+        });
     });
 
     // Auto-create academy_applications record so admin can see paid users
@@ -546,6 +600,19 @@ async function processFarmNationRegistration(reference: string, amount: number, 
             processedAt: FieldValue.serverTimestamp(),
             source: "webhook",
         });
+
+        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId,
+            type: "farm_nation_registration",
+            module: "farm_nation",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: "Farm Nation payment"
+        });
     });
 
     logger.info(`[Paystack Webhook] Processed Farm Nation Registration for ${userId}`);
@@ -578,6 +645,19 @@ async function processWaveRegistration(reference: string, amount: number, userId
             userId, amount,
             processedAt: FieldValue.serverTimestamp(),
             source: "webhook",
+        });
+
+        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+            id: reference,
+            userId,
+            type: "wave_registration",
+            module: "wave",
+            amount: amount,
+            currency: "NGN",
+            status: "completed",
+            date: FieldValue.serverTimestamp(),
+            reference,
+            description: "Wave application payment"
         });
     });
 

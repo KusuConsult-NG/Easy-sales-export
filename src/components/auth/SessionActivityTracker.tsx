@@ -96,7 +96,7 @@ export default function SessionActivityTracker() {
 
     // Cross-tab synchronization
     useEffect(() => {
-        const handleStorageChange = (e: StorageEvent) => {
+        function handleStorageChange(e: StorageEvent) {
             if (e.key === "lastActivity" && e.newValue) {
                 setLastActivityTime(parseInt(e.newValue, 10));
                 setShowWarning(false);

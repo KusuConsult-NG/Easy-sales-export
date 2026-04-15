@@ -61,7 +61,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (validate()) {
             onNext();
         }

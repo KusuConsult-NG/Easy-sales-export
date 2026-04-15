@@ -91,7 +91,7 @@ export default function VerifyIDPage() {
     useEffect(() => () => stopCamera(), [stopCamera]);
 
     // ── Image file upload ────────────────────────────────────────────────────────
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
         setResult(null);

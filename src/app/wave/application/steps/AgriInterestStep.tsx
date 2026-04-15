@@ -41,7 +41,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateForm()) {
             onNext();
         } else {

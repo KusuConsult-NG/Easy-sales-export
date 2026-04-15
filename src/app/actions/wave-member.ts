@@ -98,7 +98,7 @@ export async function getWaveMemberStatsAction(): Promise<{ success: boolean; da
             return { success: false, error: "Not enrolled in WAVE" };
         }
         
-        const membership = membershipResult.data;
+        const membership = membershipResult.data!;
 
         // Get resources accessed
         const resourceAccessSnap = await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS)

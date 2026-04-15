@@ -32,7 +32,7 @@ interface SellerProfile {
     createdAt: Date;
 }
 
-export default function FarmNationSellersPage() {
+export default function FarmNationApplicationsPage() {
     const { showToast } = useToast();
     const [selectedSeller, setSelectedSeller] = useState<StandardPendingForm<SellerProfile> | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -85,7 +85,7 @@ export default function FarmNationSellersPage() {
         limit: 20
     });
 
-    const handleApproveSeller = async (seller: StandardPendingForm<SellerProfile>) => {
+    async function handleApproveSeller(seller: StandardPendingForm<SellerProfile>) {
         if (!confirm("Approve this seller and grant posting rights?")) return;
         setProcessingId(seller.id);
 
@@ -106,7 +106,7 @@ export default function FarmNationSellersPage() {
         setProcessingId(null);
     };
 
-    const handleRejectSeller = async (seller: StandardPendingForm<SellerProfile>) => {
+    async function handleRejectSeller(seller: StandardPendingForm<SellerProfile>) {
         const reason = prompt("Enter rejection reason:");
         if (!reason?.trim()) return;
         setProcessingId(seller.id + "_reject");
@@ -140,7 +140,7 @@ export default function FarmNationSellersPage() {
 
     const columns = [
         {
-            header: "Seller",
+            header: "Applicant",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
@@ -244,10 +244,10 @@ export default function FarmNationSellersPage() {
         <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
             <div className="mb-6 sm:mb-8">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
-                    Seller Applications
+                    Registration Applications
                 </h1>
                 <p className="text-sm sm:text-base text-slate-600">
-                    Review and approve Farm Nation seller applications
+                    Review and approve Farm Nation applications
                 </p>
             </div>
 
@@ -280,7 +280,7 @@ export default function FarmNationSellersPage() {
             <Modal
                 isOpen={isDetailOpen}
                 onClose={() => setIsDetailOpen(false)}
-                title="Seller Details"
+                title="Applicant Details"
             >
                 {selectedSeller && (
                     <div className="space-y-4">

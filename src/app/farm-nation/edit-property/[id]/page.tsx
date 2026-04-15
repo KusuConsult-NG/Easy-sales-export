@@ -92,7 +92,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
         loadProperty();
     }, [params.id, session, router, showToast]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         if (!session?.user) {

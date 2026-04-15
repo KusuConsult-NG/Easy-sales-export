@@ -180,7 +180,7 @@ export default function QuizBuilderPage(props: QuizBuilderPageProps) {
         });
     };
 
-    const handleSaveQuiz = async () => {
+    async function handleSaveQuiz() {
         if (!quizData.title || quizData.questions.length === 0) {
             showToast("Please add a title and at least one question", "error");
             return;

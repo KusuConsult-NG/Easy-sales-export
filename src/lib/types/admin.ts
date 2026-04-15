@@ -2,6 +2,11 @@ export interface StandardPendingUser {
     id: string;
     name: string;
     email: string;
+    phone?: string;
+    dob?: string;
+    address?: string;
+    state?: string;
+    lga?: string;
 }
 
 export interface StandardPendingForm<T = any> {

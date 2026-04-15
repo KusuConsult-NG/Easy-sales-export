@@ -37,15 +37,15 @@ export default function LoanApplicationWizard({
         ? calculateLoanCost(formData.amount, tierInfo.maxLoanMultiplier === 3 ? 2 : 2.5, formData.durationMonths)
         : null;
 
-    const handleNext = () => {
+    function handleNext() {
         if (step < 4) setStep(step + 1);
     };
 
-    const handlePrevious = () => {
+    function handlePrevious() {
         if (step > 1) setStep(step - 1);
     };
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         // Submit loan application
         logger.info("Submitting loan application", { userId, ...formData });
         onComplete();

@@ -74,7 +74,7 @@ export default function ProfilePage() {
         }
     }, [session]);
 
-    const handleSave = async () => {
+    async function handleSave() {
         setIsLoading(true);
         setSaveMessage(null);
 

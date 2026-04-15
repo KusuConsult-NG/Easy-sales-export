@@ -72,15 +72,40 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        // Update marketplace_sellers record
-        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).update({
+        // Upsert marketplace_sellers record (use set+merge so it works whether doc exists or not)
+        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).set({
+            userId: verificationData.userId,
             verificationStatus: "approved",
-            businessName: verificationData.businessName,
+            businessName: verificationData.businessName || "",
+            businessType: verificationData.businessType || "",
+            email: verificationData.userEmail || verificationData.email || "",
+            phone: verificationData.phone || "",
+            state: verificationData.state || "",
+            lga: verificationData.lga || "",
             rating: 0,
             totalSales: 0,
+            isActive: true,
             approvedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
+
+        // Grant seller role on the user document
+        try {
+            const userRef = db.collection(COLLECTIONS.USERS).doc(verificationData.userId);
+            const userSnap = await userRef.get();
+            if (userSnap.exists) {
+                const existingRoles: string[] = userSnap.data()?.roles || [];
+                if (!existingRoles.includes("seller")) {
+                    await userRef.update({
+                        roles: [...existingRoles, "seller"],
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                }
+            }
+        } catch (roleErr) {
+            logger.error("Failed to grant seller role:", roleErr);
+            // Non-fatal — continue
+        }
 
         // Fetch user document to get the correct email/name and send email (non-blocking)
         try {

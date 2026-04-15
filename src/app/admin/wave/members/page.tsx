@@ -115,7 +115,7 @@ export default function AdminWaveMembersPage() {
         return m.fullName || m.id;
     };
 
-    const handleExportCSV = async () => {
+    async function handleExportCSV() {
         setIsExporting(true);
         try {
             // Build CSV from the already-loaded members data (no extra fetch needed)

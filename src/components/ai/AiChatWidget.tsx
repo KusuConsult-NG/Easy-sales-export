@@ -119,7 +119,7 @@ export function AiChatWidget({ module: moduleProp }: AiChatWidgetProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
 

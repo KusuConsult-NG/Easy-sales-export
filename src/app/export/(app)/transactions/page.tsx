@@ -19,10 +19,10 @@ export default function ExportTransactionsPage() {
 
     useEffect(() => {
         getMyExportInvestmentsAction().then((result) => {
-            if (result.success && result.data) {
+            if (result.success ) {
                 // Each slot = one investment transaction + one pending return
                 const rows: TransactionRow[] = [];
-                for (const inv of result.data as any[]) {
+                for (const inv of (result.data || []) as any[]) {
                     rows.push({
                         id: `inv-${inv.id}`,
                         type: "investment",

@@ -29,8 +29,8 @@ export default function InvestmentDetailPage() {
 
     useEffect(() => {
         getMyExportInvestmentsAction().then((result) => {
-            if (result.success && result.data) {
-                const found = result.data.find((inv: any) => inv.id === investmentId);
+            if (result.success ) {
+                const found = result.data?.find((inv: any) => inv.id === investmentId);
                 if (found) {
                     setInvestment(found as any);
                 } else {

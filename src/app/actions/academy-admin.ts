@@ -348,6 +348,11 @@ export async function getStandardAcademyApplicationsAction(statusFilter?: "pendi
                     id: app.userId,
                     name: userName,
                     email: uData.email || pi.email || app.email || "Unknown",
+                    phone: uData.phone || pi.phone || app.phone || app.phoneNumber || "Unknown",
+                    dob: uData.dob || pi.dateOfBirth || app.dateOfBirth || "Unknown",
+                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || pi.residentialAddress || app.residentialAddress || "Unknown"),
+                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || pi.stateOfOrigin || app.stateOfOrigin || "Unknown"),
+                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || pi.lga || app.lga || "Unknown"),
                 },
                 status: app.status || "pending",
                 data: app

@@ -34,7 +34,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
         return Object.keys(e).length === 0;
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (validate()) { onNext(); }
         else {
             showToast("Please provide all required next of kin details", "error");

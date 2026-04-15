@@ -45,7 +45,7 @@ export default function SecuritySettingsPage() {
         load();
     }, []);
 
-    const handleSave = async () => {
+    async function handleSave() {
         setIsSaving(true);
         try {
             const res = await fetch("/api/admin/settings/security", {

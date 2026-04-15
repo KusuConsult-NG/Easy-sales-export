@@ -38,7 +38,7 @@ export default function FarmNationListingsPage() {
         limit: 20
     });
 
-    const handleDelete = async (id: string) => {
+    async function handleDelete(id: string) {
         if (!confirm("Are you sure you want to delete this listing?")) return;
         setProcessingId(id);
 

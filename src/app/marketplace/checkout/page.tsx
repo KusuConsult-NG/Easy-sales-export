@@ -101,9 +101,14 @@ export default function CheckoutPage() {
                 deliveryFee
             );
 
-            if (result.success && result.data) {
+            if (result.success ) {
                 // Redirect to Paystack for payment
-                window.location.href = result.data?.authorizationUrl;
+                if (result.data?.authorizationUrl) {
+                    window.location.href = result.data.authorizationUrl;
+                } else {
+                    setError("Failed to initialize payment: No authorization URL");
+                    setIsProcessing(false);
+                }
             } else {
                 setError(result.error || "Failed to initialize payment");
                 setIsProcessing(false);

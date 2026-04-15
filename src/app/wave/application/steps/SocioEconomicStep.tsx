@@ -41,7 +41,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateForm()) {
             onNext();
         } else {

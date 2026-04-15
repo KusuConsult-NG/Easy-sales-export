@@ -28,11 +28,12 @@ export default function AcademyAdminPage() {
             const currentLastDoc = reset ? undefined : lastDocId || undefined;
             const result = await getCoursesAction(12, currentLastDoc);
 
-            if (result.success && result.data) {
+            if (result.success) {
+                const courses = (result.data ?? []) as Course[];
                 if (reset) {
-                    setCourses(result.data);
+                    setCourses(courses);
                 } else {
-                    setCourses(prev => [...prev, ...result.data!]);
+                    setCourses(prev => [...prev, ...courses]);
                 }
                 setLastDocId(result.meta?.lastDocId || null);
                 setHasMore(!!result.meta?.lastDocId);
@@ -53,7 +54,7 @@ export default function AcademyAdminPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!isLoadingMore && hasMore) {
             loadCourses(false);
         }

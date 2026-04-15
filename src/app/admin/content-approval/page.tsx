@@ -18,8 +18,8 @@ export default function ContentApprovalPage() {
         setLoading(true);
         try {
             const result = await getPendingContentAction();
-            if (result.success && result.data) {
-                setPendingItems(result.data);
+            if (result.success) {
+                setPendingItems((result.data ?? []) as any);
             } else {
                 toast.error(result.error || "Failed to load content");
             }
@@ -32,7 +32,7 @@ export default function ContentApprovalPage() {
         loadContent();
     }, [loadContent]);
 
-    const handleApprove = async (item: PendingContentItem) => {
+    async function handleApprove(item: PendingContentItem) {
         if (!confirm(`Are you sure you want to approve "${item.title}"?`)) return;
 
         setActionLoading(true);
@@ -47,7 +47,7 @@ export default function ContentApprovalPage() {
         setActionLoading(false);
     };
 
-    const handleReject = async (item: PendingContentItem) => {
+    async function handleReject(item: PendingContentItem) {
         const reason = prompt("Enter rejection reason:");
         if (!reason) return;
 

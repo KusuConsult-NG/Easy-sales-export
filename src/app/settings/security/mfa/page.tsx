@@ -30,7 +30,7 @@ export default function MFASetupPage() {
         }
     };
 
-    const handleSetupMFA = async () => {
+    async function handleSetupMFA() {
         setIsLoading(true);
         try {
             const response = await fetch("/api/auth/mfa/setup", {
@@ -55,7 +55,7 @@ export default function MFASetupPage() {
         }
     };
 
-    const handleVerify = async () => {
+    async function handleVerify() {
         if (verificationCode.length !== 6) {
             showToast("Please enter a 6-digit code", "error");
             return;
@@ -85,7 +85,7 @@ export default function MFASetupPage() {
         }
     };
 
-    const handleDisableMFA = async () => {
+    async function handleDisableMFA() {
         if (!confirm("Are you sure you want to disable MFA? This will reduce your account security.")) {
             return;
         }

@@ -48,7 +48,7 @@ export default function SellerOrderDetailPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleStatusUpdate = async (newStatus: OrderStatus) => {
+    async function handleStatusUpdate(newStatus: OrderStatus) {
         if (!order) return;
         setUpdating(true);
         try {

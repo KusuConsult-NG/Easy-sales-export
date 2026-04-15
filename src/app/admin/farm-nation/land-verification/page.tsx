@@ -86,7 +86,7 @@ export default function AdminLandVerificationPage() {
 
     useEffect(() => { filterVerificationsByStatus(); }, [filterVerificationsByStatus]);
 
-    const handleApprove = async (verificationId: string) => {
+    async function handleApprove(verificationId: string) {
         if (!confirm("Approve this land listing?")) return;
         setIsProcessing(true);
         try {
@@ -109,7 +109,7 @@ export default function AdminLandVerificationPage() {
         }
     };
 
-    const handleReject = async (verificationId: string) => {
+    async function handleReject(verificationId: string) {
         const reason = prompt("Enter rejection reason:");
         if (!reason) return;
         setIsProcessing(true);
@@ -133,7 +133,7 @@ export default function AdminLandVerificationPage() {
         }
     };
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (verifications.length === 0) return;
         const headers = [
             "Owner Name", "Title", "Category", "State", "LGA",

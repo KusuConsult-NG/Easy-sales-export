@@ -52,7 +52,7 @@ export default function WaveTrainingPage() {
             // Load user's registrations
             const regsResult = await getUserTrainingRegistrationsAction();
             if (regsResult.success && regsResult.data?.registrations) {
-                const eventIds = new Set(
+                const eventIds = new Set<string>(
                     regsResult.data.registrations.map((reg: any) => reg.eventId)
                 );
                 setRegisteredEventIds(eventIds);

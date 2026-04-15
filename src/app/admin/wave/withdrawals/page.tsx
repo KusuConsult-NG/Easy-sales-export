@@ -55,7 +55,7 @@ export default function AdminWaveWithdrawalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { fetchWithdrawals(); }, [statusFilter]);
 
-    const handleAction = async (withdrawalId: string, action: "approve" | "reject" | "complete") => {
+    async function handleAction(withdrawalId: string, action: "approve" | "reject" | "complete") {
         const notes = action === "reject"
             ? prompt("Enter rejection reason:")
             : action === "approve"

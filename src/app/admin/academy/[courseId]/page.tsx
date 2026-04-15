@@ -136,7 +136,7 @@ export default function CourseManagerPage() {
         toast.success(`Module "${newModule.title}" created successfully.`);
     };
 
-    const handleAddLesson = (moduleId: string) => {
+    function handleAddLesson(moduleId: string) {
         const newModules = modules.map(m => {
             if (m.id === moduleId) {
                 return {
@@ -157,7 +157,7 @@ export default function CourseManagerPage() {
         toast.success("Lesson added. Click the edit icon to set its content.");
     };
 
-    const handleDeleteModule = (moduleId: string) => {
+    function handleDeleteModule(moduleId: string) {
         toast("Delete this module and all its lessons?", {
             action: {
                 label: "Delete",
@@ -172,7 +172,7 @@ export default function CourseManagerPage() {
         });
     };
 
-    const handleDeleteLesson = (moduleId: string, lessonId: string) => {
+    function handleDeleteLesson(moduleId: string, lessonId: string) {
         toast("Delete this lesson?", {
             action: {
                 label: "Delete",
@@ -192,7 +192,7 @@ export default function CourseManagerPage() {
         });
     };
 
-    const handleEditLesson = (moduleId: string, lesson: LessonWithState) => {
+    function handleEditLesson(moduleId: string, lesson: LessonWithState) {
         setEditingLesson({ moduleId, lesson: { ...lesson } });
         setIsUploadModalOpen(true);
     };
@@ -242,7 +242,7 @@ export default function CourseManagerPage() {
         }
     }
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document' | 'excel') => {
+    async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'document' | 'excel') {
         const file = e.target.files?.[0];
         if (!file) return;
 

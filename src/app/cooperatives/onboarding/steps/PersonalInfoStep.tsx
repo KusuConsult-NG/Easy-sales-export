@@ -48,7 +48,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (validate()) {
             onNext();
         } else {

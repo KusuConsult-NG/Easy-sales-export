@@ -169,7 +169,7 @@ export default function VillageMarketSellerHubPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(); }, []);
 
-    const handleJoin = async (eventId: string) => {
+    async function handleJoin(eventId: string) {
         setJoiningId(eventId);
         const res = await joinVillageMarketEventAction(eventId);
         setJoiningId(null);

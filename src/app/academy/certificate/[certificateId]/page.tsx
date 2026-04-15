@@ -57,7 +57,7 @@ export default function CertificatePage() {
 
 
 
-    const handleDownload = () => {
+    function handleDownload() {
         setDownloading(true);
         // Use Server-Side PDF Generation API
         const date = new Date().toISOString().split('T')[0];
@@ -69,7 +69,7 @@ export default function CertificatePage() {
         setDownloading(false);
     };
 
-    const handleShare = () => {
+    function handleShare() {
         const shareText = `I just completed ${course?.title} on Easy Sales Export Academy! 🎓`;
         if (navigator.share) {
             navigator.share({

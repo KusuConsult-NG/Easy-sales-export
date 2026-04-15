@@ -41,12 +41,13 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
             if (status !== "authenticated" || !session?.user) return;
 
             const result = await getEscrowTransactionByIdAction(escrowId);
-            if (result.success && result.data) {
-                const isBuyer = result.data.buyerId === session.user.id;
-                const isSeller = result.data.sellerId === session.user.id;
+            if (result.success) {
+                const escrow = result.data;
+                const isBuyer = escrow?.buyerId === session.user.id;
+                const isSeller = escrow?.sellerId === session.user.id;
 
                 if (isBuyer || isSeller) {
-                    setEscrowData(result.data);
+                    setEscrowData(escrow);
                     setAuthorized(true);
                 } else {
                     showToast("You are not authorized to view this chat", "error");

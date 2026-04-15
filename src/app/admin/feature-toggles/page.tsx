@@ -19,8 +19,8 @@ export default function FeatureTogglesPage() {
         // Delay synchronous state update slightly to avoid rendering warnings
         setTimeout(() => setLoading(true), 0);
         const result = await getAllFeatureToggles();
-        if (result.success && result.data) {
-            setToggles(result.data);
+        if (result.success ) {
+            setToggles(result.data ?? []);
         }
         setLoading(false);
     }, []);
@@ -72,7 +72,7 @@ export default function FeatureTogglesPage() {
         <div className="min-h-screen bg-slate-50 p-6">
             {/* Header */}
             <div className="max-w-7xl mx-auto mb-8">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-4">
                     <div className="flex items-center space-x-3">
                         <div className="w-12 h-12 bg-linear-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
                             <Shield className="w-6 h-6 text-white" />
@@ -86,14 +86,33 @@ export default function FeatureTogglesPage() {
                             </p>
                         </div>
                     </div>
-                    <button
-                        onClick={loadToggles}
-                        disabled={loading}
-                        className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
-                    >
-                        <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        <span>Refresh</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={async () => {
+                                setLoading(true);
+                                const result = await fetch("/api/admin/feature-toggles/seed", { method: "POST" });
+                                if (result.ok) {
+                                    showToast("Default features seeded successfully", "success");
+                                    await loadToggles();
+                                } else {
+                                    showToast("Failed to seed toggles", "error");
+                                    setLoading(false);
+                                }
+                            }}
+                            disabled={loading}
+                            className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 text-sm font-semibold"
+                        >
+                            <span>Seed Defaults</span>
+                        </button>
+                        <button
+                            onClick={loadToggles}
+                            disabled={loading}
+                            className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition disabled:opacity-50 text-sm font-semibold"
+                        >
+                            <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            <span>Refresh</span>
+                        </button>
+                    </div>
                 </div>
 
                 {/* Search and Filter */}
@@ -172,13 +191,23 @@ export default function FeatureTogglesPage() {
                                                     <p className="text-sm text-slate-600 mb-3">
                                                         {metadata?.description || toggle.description}
                                                     </p>
-                                                    <div className="flex items-center space-x-4 text-xs text-slate-500">
+                                                    <div className="flex items-center space-x-4 text-xs text-slate-500 flex-wrap gap-y-2">
                                                         <span>ID: <code className="bg-slate-100 px-2 py-1 rounded">{toggle.id}</code></span>
                                                         {toggle.targetRoles && toggle.targetRoles.length > 0 && (
                                                             <span className="flex items-center space-x-1">
                                                                 <Shield className="w-3 h-3" />
                                                                 <span>Roles: {toggle.targetRoles.join(", ")}</span>
                                                             </span>
+                                                        )}
+                                                        {toggle.updatedAt && (
+                                                          <span className="text-slate-400">
+                                                            Last updated: {new Date(toggle.updatedAt).toLocaleDateString()}
+                                                          </span>
+                                                        )}
+                                                        {toggle.updatedBy && (
+                                                          <span className="text-slate-400">
+                                                            by {toggle.updatedBy.substring(0, 8)}...
+                                                          </span>
                                                         )}
                                                     </div>
                                                 </div>

@@ -71,8 +71,8 @@ export default function AcademyApplicationPage() {
 
                     if (isEditParam) {
                         const result = await getAcademyApplicationAction();
-                        if (result.success && result.data) {
-                            const d = result.data;
+                        if (result.success) {
+                            const d = result.data ?? {};
                             if (d.personalInfo) {
                                 const pi = d.personalInfo;
                                 setPersonalInfo((prev: any) => ({
@@ -100,8 +100,8 @@ export default function AcademyApplicationPage() {
                 } else if (status.data === "revision_required") {
                     // Pre-populate form with existing data
                     const result = await getAcademyApplicationAction();
-                    if (result.success && result.data) {
-                        const d = result.data;
+                    if (result.success) {
+                        const d = result.data ?? {};
                         if (d.personalInfo) {
                             const pi = d.personalInfo;
                             setPersonalInfo((prev: any) => ({
@@ -261,18 +261,18 @@ export default function AcademyApplicationPage() {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateStep(currentStep)) {
             setCurrentStep((prev) => Math.min(prev + 1, 4));
         }
     };
 
-    const handlePrevious = () => {
+    function handlePrevious() {
         setCurrentStep((prev) => Math.max(prev - 1, 1));
         setErrors({});
     };
 
-    const handlePayment = async () => {
+    async function handlePayment() {
         setIsPaying(true);
         try {
             const result = await initiateAcademyPaymentAction();
@@ -289,7 +289,7 @@ export default function AcademyApplicationPage() {
         }
     };
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         if (!validateStep(4)) return;
 
         setIsSubmitting(true);

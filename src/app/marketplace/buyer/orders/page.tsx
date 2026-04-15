@@ -47,7 +47,7 @@ export default function OrdersPage() {
             });
 
             if (result.success && result.data?.orders) {
-                setOrders(prev => isReset ? result.data?.orders : [...prev, ...result.data?.orders]);
+                setOrders(prev => isReset ? result.data!.orders : [...prev, ...result.data!.orders]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
             } else if (result.error) {
@@ -67,13 +67,13 @@ export default function OrdersPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterStatus]);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             fetchOrders(false);
         }
     };
 
-    const handleConfirmReceipt = async (orderId: string) => {
+    async function handleConfirmReceipt(orderId: string) {
         if (!confirm("Are you sure you have received this order? This will release funds to the seller.")) return;
 
         setProcessingId(orderId);

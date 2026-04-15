@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * In-App Notification System
@@ -89,21 +90,7 @@ export async function getUserNotificationsAction(userId: string): Promise<Notifi
             .orderBy("createdAt", "desc")
             .get();
 
-        return snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                userId: data.userId,
-                title: data.title,
-                message: data.message,
-                type: data.type,
-                link: data.link,
-                linkText: data.linkText,
-                read: data.read,
-                createdAt: data.createdAt,
-                readAt: data.readAt,
-            } as Notification;
-        });
+        return serializeDocs(snapshot.docs) as unknown as Notification[];
     } catch (error) {
         logger.error("Failed to fetch notifications:", error);
         return [];

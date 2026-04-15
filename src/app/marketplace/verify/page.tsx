@@ -54,7 +54,7 @@ export default function SellerVerificationPage() {
         async function checkVerification() {
             const result = await getSellerVerificationAction();
             if (result.success && result.data?.verification) {
-                setExistingVerification(result.data?.verification);
+                setExistingVerification(result.data.verification);
             }
             setLoading(false);
         }

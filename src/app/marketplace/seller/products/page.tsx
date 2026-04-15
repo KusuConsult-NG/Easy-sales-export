@@ -51,7 +51,7 @@ export default function SellerProductsPage() {
             });
 
             if (result.success && result.data?.products) {
-                setProducts(prev => isReset ? result.data?.products : [...prev, ...result.data?.products]);
+                setProducts(prev => isReset ? result.data!.products : [...prev, ...result.data!.products]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
             } else if (result.error) {
@@ -71,13 +71,13 @@ export default function SellerProductsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterStatus, debouncedSearch]);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             fetchProducts(false);
         }
     };
 
-    const handleDeleteProduct = async (productId: string, productTitle: string) => {
+    async function handleDeleteProduct(productId: string, productTitle: string) {
         if (!confirm(`Are you sure you want to delete "${productTitle}"? This action cannot be undone.`)) {
             return;
         }

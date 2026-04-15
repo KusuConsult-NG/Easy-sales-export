@@ -42,7 +42,7 @@ const CURRENT_ROLES = [
 ];
 
 export default function EducationStep({ data, onChange, errors }: EducationStepProps) {
-    const handleChange = (field: keyof EducationData, value: string | number) => {
+    function handleChange(field: keyof EducationData, value: string | number) {
         onChange({ ...data, [field]: value });
     };
 

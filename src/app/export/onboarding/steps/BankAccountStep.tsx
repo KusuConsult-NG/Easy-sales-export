@@ -29,11 +29,11 @@ export function BankAccountStep({
     );
     const { showToast } = useToast();
 
-    const handleVerified = (data: BankAccountData) => {
+    function handleVerified(data: BankAccountData) {
         setBankData(data);
     };
 
-    const handleSubmit = () => {
+    function handleSubmit() {
         if (!bankData || !bankData.verified) {
             showToast("Please verify your bank account to continue", "error");
             return;

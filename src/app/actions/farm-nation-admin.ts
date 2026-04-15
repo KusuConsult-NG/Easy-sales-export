@@ -137,6 +137,11 @@ export async function getStandardFarmNationRegistrantsAction(statusFilter?: "pen
                     id: user.id,
                     name: userName,
                     email: user.email || "Unknown",
+                    phone: user.phone || "Unknown",
+                    dob: user.dob || "Unknown",
+                    address: typeof user.address === 'object' ? user.address?.street : (user.address || "Unknown"),
+                    state: typeof user.address === 'object' ? user.address?.state : (user.stateOfOrigin || "Unknown"),
+                    lga: typeof user.address === 'object' ? user.address?.lga : (user.lga || "Unknown"),
                 },
                 status: status,
                 data: user // Returning complete user profile including nested farmNation data

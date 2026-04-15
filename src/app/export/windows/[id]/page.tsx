@@ -24,9 +24,9 @@ export default function ExportWindowDetailPage() {
     const loadWindow = useCallback(async () => {
         setTimeout(() => setLoading(true), 0);
         const result = await getExportOpportunityById(windowId as string);
-        if (result.success && result.data) {
+        if (result.success) {
             setWindowData(result.data);
-            setInvestmentAmount(result.data.minInvestment);
+            setInvestmentAmount(result.data?.minInvestment ?? 0);
         }
         setLoading(false);
     }, [windowId]);
@@ -58,9 +58,14 @@ export default function ExportWindowDetailPage() {
                 parseFloat(windowData.projectedROI.replace("%", ""))
             );
 
-            if (result.success && result.data) {
+            if (result.success) {
                 // Redirect to Paystack for payment
-                globalThis.window.location.href = result.data.authorizationUrl;
+                if (result.data?.authorizationUrl) {
+                    globalThis.window.location.href = result.data.authorizationUrl;
+                } else {
+                    setError("Failed to initialize investment: No authorization URL");
+                    setInvesting(false);
+                }
             } else {
                 setError(result.error || "Failed to initialize investment");
                 setInvesting(false);

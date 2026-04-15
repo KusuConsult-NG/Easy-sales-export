@@ -52,7 +52,7 @@ export default function EscalatedDisputesPage() {
                 getAdminDisputesAction({ escalated: true }),
                 getAdminUsersAction(),
             ]);
-            if (disputeRes.success && disputeRes.data?.disputes) setDisputes(disputeRes.data.disputes);
+            if (disputeRes.success && disputeRes.disputes) setDisputes(disputeRes.disputes);
             if (adminRes.success && adminRes.admins) setAdmins(adminRes.admins);
         } catch {
             showToast("Failed to load data", "error");

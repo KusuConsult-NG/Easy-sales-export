@@ -61,10 +61,10 @@ export async function POST(request: NextRequest) {
         });
 
         // Update marketplace_sellers record
-        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).update({
+        await db.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(verificationData.userId).set({
             verificationStatus: "rejected",
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         // Fetch user document to get the correct email/name and send email (non-blocking)
         try {

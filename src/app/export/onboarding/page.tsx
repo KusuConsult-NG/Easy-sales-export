@@ -82,8 +82,8 @@ export default function ExportOnboardingPage() {
 
                     if (isEditParam) {
                         const result = await getExportApplicationAction();
-                        if (result.success && result.data) {
-                            setFormData((prev: any) => ({ ...prev, ...result.data }));
+                        if (result.success ) {
+                            setFormData((prev: any) => ({ ...prev, ...result }));
                         }
                         setIsEditMode(true);
                         setIsLoading(false);
@@ -96,8 +96,8 @@ export default function ExportOnboardingPage() {
                     router.replace("/export/dashboard");
                 } else if (status === "revision_required" || status === "rejected") {
                     const result = await getExportApplicationAction();
-                    if (result.success && result.data) {
-                        setFormData((prev: any) => ({ ...prev, ...result.data }));
+                    if (result.success ) {
+                        setFormData((prev: any) => ({ ...prev, ...result }));
                     }
                     if (result.revisionNote) setRevisionNote(result.revisionNote);
                     setIsRevisionMode(true);
@@ -144,7 +144,7 @@ export default function ExportOnboardingPage() {
         );
     };
 
-    const handleNext = (stepData: any) => {
+    function handleNext(stepData: any) {
         const next = { ...formData, ...stepData };
         setFormData(next);
         markStepComplete(currentStepId);
@@ -165,14 +165,14 @@ export default function ExportOnboardingPage() {
         }
     };
 
-    const handleBack = () => {
+    function handleBack() {
         const prevIndex = currentStepIndex - 1;
         if (prevIndex >= 0) {
             setCurrentStepId(steps[prevIndex].id);
         }
     };
 
-    const handleSubmit = async (finalData: any) => {
+    async function handleSubmit(finalData: any) {
         try {
             if (isRevisionMode || isEditMode) {
                 // Resubmit — send text fields only (no file re-upload required)

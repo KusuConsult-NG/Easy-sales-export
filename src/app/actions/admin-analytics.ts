@@ -49,7 +49,7 @@ async function safeCount(
     try {
         const snap = await ref.count().get();
         return snap.data().count ?? 0;
-    } catch {
+    } catch (_e) {
         return 0;
     }
 }
@@ -113,122 +113,55 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc").limit(10).get(),
     ]);
 
-    const totalUsers =
-        totalUsersSnap.status === "fulfilled" ? (totalUsersSnap.value.data().count ?? 0) : 0;
-    // Active users: try lastLoginAt, fall back to totalUsers if field rarely populated
-    const rawActiveUsers =
-        activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
+    const { getPlatformMetricsAction, getGlobalPendingApprovalsAction } = await import("./global-aggregation");
+
+    const [metricsResult, pendingResult] = await Promise.all([
+        getPlatformMetricsAction(),
+        getGlobalPendingApprovalsAction()
+    ]);
+
+    const totalUsers = metricsResult.success ? (metricsResult.data?.totalUsers ?? 0) : 0;
+    const totalTransactions = metricsResult.success ? (metricsResult.data?.totalTransactions ?? 0) : 0;
+    const totalRevenue = metricsResult.success ? (metricsResult.data?.totalRevenue ?? 0) : 0;
+    const pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
+
+    // Active users: fall back to totalUsers for now since we rely on lastLoginAt which may be sparse
+    const rawActiveUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
     const activeUsers = rawActiveUsers > 0 ? rawActiveUsers : totalUsers;
 
     const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
     const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
     const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
-    const pendingSellers = pendingSellersCount.status === "fulfilled" ? pendingSellersCount.value : 0;
-    const pendingWithdrawals = pendingWithdrawalsCount.status === "fulfilled" ? pendingWithdrawalsCount.value : 0;
-    const totalOrders = totalOrdersCount.status === "fulfilled" ? totalOrdersCount.value : 0;
-    const totalEscrows = totalEscrowsCount.status === "fulfilled" ? totalEscrowsCount.value : 0;
 
-    // Total transactions: marketplace orders + escrow entries + processed payments + cooperative payments
-    const [processedPaymentsCount, coopTxnCount, paymentsCount] = await Promise.allSettled([
-        safeCount(db.collection(COLLECTIONS.PROCESSED_PAYMENTS)),
-        safeCount(db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)),
-        safeCount(db.collection(COLLECTIONS.PAYMENTS)),
-    ]);
-    const processedPayments = processedPaymentsCount.status === "fulfilled" ? processedPaymentsCount.value : 0;
-    const coopTxns = coopTxnCount.status === "fulfilled" ? coopTxnCount.value : 0;
-    const paymentsTxns = paymentsCount.status === "fulfilled" ? paymentsCount.value : 0;
-    const totalTransactions = totalOrders + totalEscrows + processedPayments + coopTxns + paymentsTxns;
-    const pendingApprovals = pendingEscrows + pendingSellers + pendingWithdrawals + pendingLoans;
-
-    // ── Revenue: aggregate ALL payment collections ──────────────────────────
-    let totalRevenue = 0;
+    // Revenue is already computed in getPlatformMetricsAction (totalRevenue)
+    // We just compute monthlyRevenue here:
     let monthlyRevenue = 0;
     try {
-        const [
-            allProcessedR, monthProcessedR,
-            allCoopMemberR, monthCoopMemberR,
-            allCoopTxnR, monthCoopTxnR,
-            allPaymentsR, monthPaymentsR,
-        ] = await Promise.allSettled([
-            // processedPayments = all Paystack webhook payments (primary source)
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("processedAt", ">=", thisMonthStart)
-                .aggregate({ total: AggregateField.sum("amount") }).get(),
-            // cooperative_members registrationFee (membership fees paid)
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("paymentStatus", "==", "completed")
-                .aggregate({ total: AggregateField.sum("registrationFee") }).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("paymentStatus", "==", "completed")
-                .where("updatedAt", ">=", thisMonthStart)
-                .aggregate({ total: AggregateField.sum("registrationFee") }).get(),
-            // cooperative_transactions (contributions, savings)
-            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-                .where("type", "in", ["contribution", "payment", "registration"])
-                .aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-                .where("type", "in", ["contribution", "payment", "registration"])
-                .where("createdAt", ">=", thisMonthStart)
-                .aggregate({ total: AggregateField.sum("amount") }).get(),
-            // payments collection (general platform payments)
-            db.collection(COLLECTIONS.PAYMENTS)
+        const [monthRevSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.TRANSACTIONS)
                 .where("status", "==", "completed")
-                .aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.PAYMENTS)
-                .where("status", "==", "completed")
-                .where("createdAt", ">=", thisMonthStart)
+                .where("date", ">=", thisMonthStart)
                 .aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
-
-        const processedRev = allProcessedR.status === "fulfilled" ? (allProcessedR.value.data().total ?? 0) : 0;
-        const processedMonthRev = monthProcessedR.status === "fulfilled" ? (monthProcessedR.value.data().total ?? 0) : 0;
-        const coopMemberRev = allCoopMemberR.status === "fulfilled" ? (allCoopMemberR.value.data().total ?? 0) : 0;
-        const coopMemberMonthRev = monthCoopMemberR.status === "fulfilled" ? (monthCoopMemberR.value.data().total ?? 0) : 0;
-        const coopTxnRev = allCoopTxnR.status === "fulfilled" ? (allCoopTxnR.value.data().total ?? 0) : 0;
-        const coopTxnMonthRev = monthCoopTxnR.status === "fulfilled" ? (monthCoopTxnR.value.data().total ?? 0) : 0;
-        const paymentsRev = allPaymentsR.status === "fulfilled" ? (allPaymentsR.value.data().total ?? 0) : 0;
-        const paymentsMonthRev = monthPaymentsR.status === "fulfilled" ? (monthPaymentsR.value.data().total ?? 0) : 0;
-
-        totalRevenue = processedRev + coopMemberRev + coopTxnRev + paymentsRev;
-        monthlyRevenue = processedMonthRev + coopMemberMonthRev + coopTxnMonthRev + paymentsMonthRev;
-    } catch {
-        // collections may not exist yet — leave as 0
+        monthlyRevenue = monthRevSnap.status === "fulfilled" ? (monthRevSnap.value.data().total ?? 0) : 0;
+    } catch (_e) {
+        // collection may not exist yet — leave as 0
     }
 
     // ── Revenue by month (last 6 months — all payment sources) ─────────────
     const revenueByMonth = await Promise.all(
         months.map(async ({ label, start, end }) => {
             try {
-                const [p1, p2, p3, p4] = await Promise.allSettled([
-                    db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                        .where("processedAt", ">=", start)
-                        .where("processedAt", "<=", end)
-                        .aggregate({ total: AggregateField.sum("amount") }).get(),
-                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                        .where("paymentStatus", "==", "completed")
-                        .where("updatedAt", ">=", start)
-                        .where("updatedAt", "<=", end)
-                        .aggregate({ total: AggregateField.sum("registrationFee") }).get(),
-                    db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-                        .where("type", "in", ["contribution", "payment", "registration"])
-                        .where("createdAt", ">=", start)
-                        .where("createdAt", "<=", end)
-                        .aggregate({ total: AggregateField.sum("amount") }).get(),
-                    db.collection(COLLECTIONS.PAYMENTS)
+                const [p1] = await Promise.allSettled([
+                    db.collection(COLLECTIONS.TRANSACTIONS)
                         .where("status", "==", "completed")
-                        .where("createdAt", ">=", start)
-                        .where("createdAt", "<=", end)
+                        .where("date", ">=", start)
+                        .where("date", "<=", end)
                         .aggregate({ total: AggregateField.sum("amount") }).get(),
                 ]);
-                const rev =
-                    (p1.status === "fulfilled" ? (p1.value.data().total ?? 0) : 0) +
-                    (p2.status === "fulfilled" ? (p2.value.data().total ?? 0) : 0) +
-                    (p3.status === "fulfilled" ? (p3.value.data().total ?? 0) : 0) +
-                    (p4.status === "fulfilled" ? (p4.value.data().total ?? 0) : 0);
+                const rev = p1.status === "fulfilled" ? (p1.value.data().total ?? 0) : 0;
                 return { month: label, revenue: rev };
-            } catch {
+            } catch (_e) {
                 return { month: label, revenue: 0 };
             }
         })
@@ -245,7 +178,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
                     .count()
                     .get();
                 return { month: label, users: snap.data().count ?? 0 };
-            } catch {
+            } catch (_e) {
                 return { month: label, users: 0 };
             }
         })
@@ -287,39 +220,30 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
     ].filter((m) => m.count > 0);
 
-    // ── Recent transactions: primary source is processedPayments (all Paystack webhook payments)
-    // ── Supplemented by escrow_transactions for marketplace escrow entries
+    // ── Recent transactions: pulling completely from unified platform ledger
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
 
     try {
-        const [processedSnap, escrowSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).limit(100).get(),
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(50).get(),
-        ]);
+        const txSnap = await db.collection(COLLECTIONS.TRANSACTIONS)
+            .orderBy("date", "desc")
+            .limit(15)
+            .get();
 
-        const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot, typeLabel: string) => {
+        txSnap.docs.forEach(doc => {
+            if (recentTransactions.length >= 8) return;
             const d = doc.data();
-            const ts = d.processedAt ?? d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
-            return {
-                id: doc.id,
-                type: d.type ?? d.action ?? typeLabel,
-                amount: Number(d.amount ?? d.registrationFee) || 0,
-                date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString()),
-            };
-        };
-
-        const allTx: Array<{ id: string; type: string; amount: number; date: string }> = [];
-
-        if (processedSnap.status === "fulfilled") allTx.push(...processedSnap.value.docs.map(d => toTx(d, "Payment")));
-        if (escrowSnap.status === "fulfilled") allTx.push(...escrowSnap.value.docs.map(d => toTx(d, "Escrow Transaction")));
-
-        allTx
-            .filter(tx => tx.amount > 0)
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .slice(0, 8)
-            .forEach(tx => recentTransactions.push(tx));
+            const ts = d.date ?? null;
+            if (Number(d.amount) > 0 || d.amount === undefined) {
+                recentTransactions.push({
+                    id: doc.id,
+                    type: d.type ?? "Transaction",
+                    amount: Number(d.amount) || 0,
+                    date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString())
+                });
+            }
+        });
     } catch (e) {
-        logger.error("Failed to fetch recent transactions:", e);
+        logger.error("Failed to fetch unified recent transactions:", e);
     }
 
 
@@ -486,7 +410,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
             const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
             return tb - ta;
         });
-    } catch {
+    } catch (_e) {
         // Silently skip — collection may not exist yet
     }
 

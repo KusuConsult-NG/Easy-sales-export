@@ -70,7 +70,7 @@ export default function InAppBroadcastPage() {
         sellerStatus: isSellerAudience ? sellerStatus : undefined,
     });
 
-    const handlePreview = async () => {
+    async function handlePreview() {
         setLoadingPreview(true);
         setPreview(null);
         setResult(null);
@@ -79,7 +79,7 @@ export default function InAppBroadcastPage() {
         setLoadingPreview(false);
     };
 
-    const handleSend = async () => {
+    async function handleSend() {
         if (!title.trim() || !message.trim()) {
             alert("Please fill in both the title and message.");
             return;

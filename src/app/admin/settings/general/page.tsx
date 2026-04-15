@@ -24,7 +24,7 @@ export default function GeneralSettingsPage() {
         });
     }, []);
 
-    const handleSave = async () => {
+    async function handleSave() {
         setSaving(true);
         const result = await savePlatformSettingsAction(settings);
         setSaving(false);

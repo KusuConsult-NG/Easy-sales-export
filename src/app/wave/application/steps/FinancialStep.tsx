@@ -24,7 +24,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
     const [bvnVerified, setBvnVerified] = useState(false);
     const [bvnError, setBvnError] = useState("");
 
-    const handleVerifyBvn = async () => {
+    async function handleVerifyBvn() {
         if (!data.bvn || data.bvn.length !== 11) {
             setBvnError("Please enter a valid 11-digit BVN");
             return;
@@ -92,7 +92,7 @@ export default function FinancialStep({ data, updateData, onNext, onBack }: Prop
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateForm()) {
             onNext();
         } else {

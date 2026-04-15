@@ -227,7 +227,7 @@ export default function AdminVillageMarketPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     useEffect(() => { load(); }, []);
 
-    const handleStatus = async (eventId: string, status: "active" | "ended" | "cancelled") => {
+    async function handleStatus(eventId: string, status: "active" | "ended" | "cancelled") {
         setProcessingId(eventId);
         const res = await updateVillageMarketEventStatusAction(eventId, status);
         setProcessingId(null);

@@ -243,7 +243,7 @@ export async function registerCooperativeMemberAction(
             };
         }
 
-        const validatedData = validationResult.data;
+        const validatedData = validationResult.data!;
 
         // 🔒 DEDUP GUARD: Collection-level phone & email check
         // Catches cross-account duplicates (same phone/email, different account)
@@ -432,6 +432,21 @@ export async function joinCooperativeAction(
                 status: "completed",
                 description: "Initial contribution upon joining"
             });
+
+            // Universal ledger sync
+            batch.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), {
+                id: txRef.id,
+                userId,
+                type: "contribution",
+                module: "cooperative",
+                amount: initialContribution,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: txRef.id,
+                description: "Initial contribution upon joining"
+            });
+
             cooperativeUpdateData.totalSavings = FieldValue.increment(initialContribution);
         }
 
@@ -485,7 +500,7 @@ export async function makeContributionAction(
             };
         }
 
-        const { cooperativeId, amount, type } = validationResult.data;
+        const { cooperativeId, amount, type } = validationResult.data!;
 
         if (amount <= 0) {
             return { error: "Contribution amount must be positive", success: false };
@@ -520,6 +535,20 @@ export async function makeContributionAction(
                 amount,
                 date: FieldValue.serverTimestamp(),
                 status: "completed",
+                description: type === "savings" ? "Savings contribution" : "Loan repayment"
+            });
+
+            // Universal ledger sync
+            t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), {
+                id: txRef.id,
+                userId,
+                type: type,
+                module: "cooperative",
+                amount: amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: txRef.id,
                 description: type === "savings" ? "Savings contribution" : "Loan repayment"
             });
 
@@ -765,7 +794,7 @@ export async function applyForLoanAction(
             };
         }
 
-        const { productId, amount, purpose } = validationResult.data;
+        const { productId, amount, purpose } = validationResult.data!;
 
         await db.runTransaction(async (t) => {
             // Verify membership and eligibility
@@ -878,7 +907,7 @@ export async function createFixedSavingsAction(
             };
         }
 
-        const { amount, durationMonths } = validationResult.data;
+        const { amount, durationMonths } = validationResult.data!;
 
         if (amount <= 0) {
             return { error: "Amount must be positive", success: false };

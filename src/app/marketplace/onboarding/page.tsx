@@ -195,7 +195,7 @@ export default function MarketplaceOnboarding() {
         setFormData(prev => ({ ...prev, ...data }));
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (currentStep < totalSteps) {
             const nextStep = currentStep + 1;
             setCurrentStep(nextStep);
@@ -208,13 +208,13 @@ export default function MarketplaceOnboarding() {
         }
     };
 
-    const handleBack = () => {
+    function handleBack() {
         if (currentStep > 1) {
             setCurrentStep(prev => prev - 1);
         }
     };
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         try {
             if (isRevisionMode || isEditMode) {
                 const { resubmitSellerVerificationAction } = await import("@/app/actions/marketplace");

@@ -102,7 +102,7 @@ export default function ProductsPage() {
             });
 
             if (result.success && result.data?.products) {
-                const sorted = [...result.data?.products];
+                const sorted = [...result.data.products];
                 if (sortBy === "price_low")  sorted.sort((a, b) => (a.pricingTiers[0]?.price ?? 0) - (b.pricingTiers[0]?.price ?? 0));
                 if (sortBy === "price_high") sorted.sort((a, b) => (b.pricingTiers[0]?.price ?? 0) - (a.pricingTiers[0]?.price ?? 0));
                 if (sortBy === "rating")     sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));

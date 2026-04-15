@@ -13,7 +13,7 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
         initialData || null
     );
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (selectedRole) {
             onNext({ role: selectedRole });
         }

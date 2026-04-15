@@ -78,7 +78,7 @@ export default function AcademyOnboardingPage() {
         checkStatus();
     }, [sessionStatus, router]);
 
-    const handlePayNow = async (planName: "foundation" | "standard" | "elite") => {
+    async function handlePayNow(planName: "foundation" | "standard" | "elite") {
         setIsPaymentLoading(true);
         try {
             const result = await initiateAcademyPaymentAction(planName);
@@ -94,7 +94,7 @@ export default function AcademyOnboardingPage() {
         }
     };
 
-    const handleInterestToggle = (interest: InterestArea) => {
+    function handleInterestToggle(interest: InterestArea) {
         setInterests(prev =>
             prev.includes(interest)
                 ? prev.filter(i => i !== interest)
@@ -102,7 +102,7 @@ export default function AcademyOnboardingPage() {
         );
     };
 
-    const handleComplete = async () => {
+    async function handleComplete() {
         if (!session?.user) return;
         setIsSubmitting(true);
 

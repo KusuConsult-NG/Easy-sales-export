@@ -11,9 +11,10 @@ export interface FeatureToggle {
     name: string; // Human-readable name
     description: string;
     enabled: boolean;
-    createdAt: Timestamp;
-    updatedAt: Timestamp;
-    createdBy: string; // Admin user ID
+    createdAt?: any;
+    updatedAt?: any;
+    createdBy?: string; // Admin user ID
+    updatedBy?: string; // Admin user ID
     targetRoles?: string[]; // ["admin", "user", "premium"]
     targetUsers?: string[]; // Specific user IDs for testing
 }

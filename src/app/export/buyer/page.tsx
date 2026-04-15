@@ -128,7 +128,7 @@ function ProductCard({ product }: { product: ExportProduct }) {
 
     const inCart = cart.find(item => item.product.id === product.id);
 
-    const handleAddToCart = () => {
+    function handleAddToCart() {
         addToCart(product, quantity, selectedGrade);
     };
 

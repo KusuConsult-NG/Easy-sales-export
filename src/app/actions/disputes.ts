@@ -107,7 +107,7 @@ export async function createDisputeAction(params: {
             });
         });
 
-        return { success: true, data: { disputeId: disputeRef.id } };
+        return { success: true, disputeId: disputeRef.id };
     } catch (error: any) {
         logger.error("Create dispute error:", error);
         return { success: false, error: error.message };
@@ -140,7 +140,7 @@ export async function getBuyerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true, data: { disputes } };
+        return { success: true, disputes };
     } catch (error: any) {
         logger.error("Get buyer disputes error:", error);
         return { success: false, error: error.message };
@@ -173,7 +173,7 @@ export async function getSellerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true, data: { disputes } };
+        return { success: true, disputes };
     } catch (error: any) {
         logger.error("Get seller disputes error:", error);
         return { success: false, error: error.message };
@@ -226,7 +226,7 @@ export async function getAdminDisputesAction(filters?: {
             };
         }) as Dispute[];
 
-        return { success: true, data: { disputes } };
+        return { success: true, disputes };
     } catch (error: any) {
         logger.error("Get admin disputes error:", error);
         return { success: false, error: error.message };
@@ -269,7 +269,7 @@ export async function getDisputeByIdAction(disputeId: string) {
             resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt,
         } as Dispute;
 
-        return { success: true, data: { dispute: disputeData } };
+        return { success: true, dispute: disputeData };
     } catch (error: any) {
         logger.error("Get dispute error:", error);
         return { success: false, error: error.message };

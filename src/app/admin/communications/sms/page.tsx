@@ -73,7 +73,7 @@ export default function SmsBroadcastPage() {
         customRecipients: audience === "custom" ? parseCustomPhones(customPhonesText) : undefined,
     });
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -93,7 +93,7 @@ export default function SmsBroadcastPage() {
         reader.readAsText(file);
     };
 
-    const handlePreview = async () => {
+    async function handlePreview() {
         if (audience === "custom" && customPhonesText.trim() === "") {
             toast.error("Please enter or upload at least one phone number.");
             return;
@@ -118,7 +118,7 @@ export default function SmsBroadcastPage() {
         }
     };
 
-    const handleSend = async () => {
+    async function handleSend() {
         if (!message.trim()) return;
         if (!preview || preview.count === 0) {
             toast.error("Please run a preview first and ensure there are recipients.");

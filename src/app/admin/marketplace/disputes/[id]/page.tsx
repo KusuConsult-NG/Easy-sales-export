@@ -98,14 +98,14 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
         try {
             // Load dispute
             const disputeResult = await getDisputeByIdAction(params.id);
-            if (!disputeResult.success || !disputeResult.data?.dispute) {
+            if (!disputeResult.success || !disputeResult.dispute) {
                 showToast("Dispute not found", "error");
                 router.push("/admin/marketplace/disputes");
                 return;
             }
 
-            setDispute(disputeResult.data.dispute);
-            const d = disputeResult.data.dispute;
+            setDispute(disputeResult.dispute);
+            const d = disputeResult.dispute;
             // Load notes for escalated disputes
             if ((d as any).escalated) loadNotes(d.id);
 

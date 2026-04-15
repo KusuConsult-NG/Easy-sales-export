@@ -69,7 +69,7 @@ export default function OrderReviewPage() {
         }
     });
 
-    const handleProductReview = async () => {
+    async function handleProductReview() {
         if (!productRating) return showToast("Please select a rating", "error");
         setLoading(true);
         const res = await submitProductReviewAction({
@@ -87,7 +87,7 @@ export default function OrderReviewPage() {
         }
     };
 
-    const handleSellerReview = async () => {
+    async function handleSellerReview() {
         if (!sellerRating) return showToast("Please rate the seller", "error");
         setLoading(true);
         const res = await submitSellerReviewAction({

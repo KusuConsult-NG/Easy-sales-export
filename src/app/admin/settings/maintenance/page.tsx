@@ -10,7 +10,7 @@ export default function MaintenancePage() {
     const [result, setResult] = useState<{ count: number } | null>(null);
     const { showToast } = useToast();
 
-    const handleCleanup = async () => {
+    async function handleCleanup() {
         if (!confirm("Are you sure you want to delete all draft listings older than 30 days? This action cannot be undone.")) {
             return;
         }

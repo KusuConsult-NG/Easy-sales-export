@@ -62,11 +62,11 @@ export default function AccountTypeStep({ value, sellerCategory, onChange, onSel
         }
     ];
 
-    const handleSelect = (type: "buyer" | "seller" | "both") => {
+    function handleSelect(type: "buyer" | "seller" | "both") {
         onChange(type);
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (!value) return;
         // Sellers must pick a category before continuing
         if ((value === "seller" || value === "both") && !sellerCategory) return;

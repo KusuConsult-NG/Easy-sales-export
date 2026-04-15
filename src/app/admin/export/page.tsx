@@ -67,7 +67,7 @@ export default function AdminExportPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filter]);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             loadExports(false);
         }

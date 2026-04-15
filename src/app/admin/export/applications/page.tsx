@@ -137,7 +137,7 @@ export default function AdminExportApplicationsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [statusFilter]);
 
-    const handleApprove = async (app: StandardPendingForm<ExportApplication>) => {
+    async function handleApprove(app: StandardPendingForm<ExportApplication>) {
         if (!confirm(`Approve application for ${app.user.name}?`)) return;
         setProcessingId(app.id);
         const appId = app.data.applicationId || app.id;
@@ -151,7 +151,7 @@ export default function AdminExportApplicationsPage() {
         setProcessingId(null);
     };
 
-    const handleRejectConfirm = async (reason: string) => {
+    async function handleRejectConfirm(reason: string) {
         if (!rejectingAppId) return;
         const app = applications.find((a) => a.id === rejectingAppId);
         const appId = app?.data.applicationId || rejectingAppId;
@@ -168,7 +168,7 @@ export default function AdminExportApplicationsPage() {
         setRejectingAppId(null);
     };
 
-    const handleOpenEdit = (app: StandardPendingForm<ExportApplication>) => {
+    function handleOpenEdit(app: StandardPendingForm<ExportApplication>) {
         setEditingApp(app.data);
         setRevisionNote(app.data.revisionNote || "");
     };

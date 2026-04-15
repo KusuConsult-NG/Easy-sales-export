@@ -82,7 +82,7 @@ export default function AdminWaveApplicationsPage() {
         fetchData();
     }, [statusFilter]);
 
-    const handleApprove = async (applicationId: string) => {
+    async function handleApprove(applicationId: string) {
         setProcessingId(applicationId);
         const result = await approveWaveApplicationAction(applicationId);
 
@@ -96,12 +96,12 @@ export default function AdminWaveApplicationsPage() {
         setProcessingId(null);
     };
 
-    const handleReject = (applicationId: string) => {
+    function handleReject(applicationId: string) {
         setRejectingAppId(applicationId);
         setRejectionModalOpen(true);
     };
 
-    const handleConfirmReject = async (reason: string) => {
+    async function handleConfirmReject(reason: string) {
         if (!rejectingAppId) return;
         setProcessingId(rejectingAppId);
         setRejectionModalOpen(false);
@@ -117,7 +117,7 @@ export default function AdminWaveApplicationsPage() {
         setRejectingAppId(null);
     };
 
-    const handleOpenEdit = (app: StandardPendingForm<WaveApplication>) => {
+    function handleOpenEdit(app: StandardPendingForm<WaveApplication>) {
         setEditingApp(app.data);
         setEditDraft({
             surname: app.data.surname || "",

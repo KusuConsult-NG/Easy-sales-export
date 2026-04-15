@@ -725,9 +725,10 @@ export async function sendEscrowMessageAction(data: {
             return { success: false, error: "Not a participant of this escrow" };
         }
 
-        const messageData: Omit<Message, "id"> = {
+        const messageData: Omit<Message, "id"> & { createdAt: any } = {
             ...data,
             timestamp: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             read: false,
         };
 
@@ -761,7 +762,7 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<Message
 
         const snapshot = await db.collection(COLLECTIONS.ESCROW_MESSAGES)
             .where("escrowId", "==", escrowId)
-            .orderBy("timestamp", "asc")
+            .orderBy("createdAt", "asc")
             .get();
 
         return serializeDocs(snapshot.docs) as unknown as Message[];

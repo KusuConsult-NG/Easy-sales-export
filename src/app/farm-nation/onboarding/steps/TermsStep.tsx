@@ -19,7 +19,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
 
     const [error, setError] = useState("");
 
-    const handleSubmit = (e: React.FormEvent) => {
+    function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         if (!formData.termsAccepted || !formData.privacyAccepted || !formData.feeDisclosureAccepted) {
@@ -30,7 +30,7 @@ export default function TermsStep({ onNext, onBack, initialData }: TermsStepProp
         onNext({ terms: formData });
     };
 
-    const handleCheckboxChange = (field: keyof typeof formData) => {
+    function handleCheckboxChange(field: keyof typeof formData) {
         setFormData((prev) => ({ ...prev, [field]: !prev[field] }));
         setError("");
     };

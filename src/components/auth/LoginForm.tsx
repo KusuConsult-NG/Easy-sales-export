@@ -41,7 +41,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
     const [showPassword, setShowPassword] = useState(false);
 
     // Handle form submission
-    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         setIsLoading(true);
         setError("");
@@ -140,7 +140,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
         }
     }, [error]);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         if (errors[name]) {

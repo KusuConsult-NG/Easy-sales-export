@@ -50,7 +50,7 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
         return Object.keys(e).length === 0;
     };
 
-    const handleSubmit = (ev: React.FormEvent) => {
+    function handleSubmit(ev: React.FormEvent) {
         ev.preventDefault();
         if (validate()) {
             const fullName = [formData.firstName, formData.otherName, formData.lastName]

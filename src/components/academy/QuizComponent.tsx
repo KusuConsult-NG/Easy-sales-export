@@ -28,7 +28,7 @@ export default function QuizComponent({
     const [submitting, setSubmitting] = useState(false);
     const { showToast } = useToast();
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         if (Object.keys(answers).length !== quiz.questions.length) {
             showToast("Please answer all questions before submitting", "warning");
             return;
@@ -57,7 +57,7 @@ export default function QuizComponent({
         onComplete();
     };
 
-    const handleRetry = () => {
+    function handleRetry() {
         setAnswers({});
         setSubmitted(false);
         setScore(null);

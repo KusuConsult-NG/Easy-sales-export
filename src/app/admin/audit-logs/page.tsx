@@ -80,6 +80,9 @@ export default function AdminAuditLogsPage() {
 
             if (logsResult.success && logsResult.logs) {
                 setLogs(logsResult.logs);
+            } else if (!logsResult.success) {
+                // Show the actual error so admins can diagnose (e.g. missing Firestore index)
+                showToast(`Audit log error: ${logsResult.error || "Failed to load logs. Check Firestore indexes."}`, "error");
             }
 
             // Load stats

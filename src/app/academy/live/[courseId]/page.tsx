@@ -49,7 +49,7 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
         loadCourse();
     }, [status, courseId, router]);
 
-    const handleMeetingEnd = () => {
+    function handleMeetingEnd() {
         router.push("/academy/dashboard");
     };
 

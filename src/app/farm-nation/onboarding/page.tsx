@@ -139,7 +139,7 @@ export default function FarmNationOnboardingPage() {
         );
     };
 
-    const handleNext = (stepData: any) => {
+    function handleNext(stepData: any) {
         const next = { ...formData, ...stepData };
         setFormData(next);
         markStepComplete(currentStepId);
@@ -158,14 +158,14 @@ export default function FarmNationOnboardingPage() {
         }
     };
 
-    const handleBack = () => {
+    function handleBack() {
         const prevIndex = currentStepIndex - 1;
         if (prevIndex >= 0) {
             setCurrentStepId(steps[prevIndex].id);
         }
     };
 
-    const handleSubmit = async (finalData: any) => {
+    async function handleSubmit(finalData: any) {
         try {
             if (isRevisionMode || isEditMode) {
                 const result = await resubmitFarmNationApplicationAction(finalData);

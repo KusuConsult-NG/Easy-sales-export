@@ -67,17 +67,17 @@ export default function ListLandPage() {
         "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT"
     ];
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const files = Array.from(e.target.files || []);
         setMedia(prev => ({ ...prev, images: [...prev.images, ...files].slice(0, 8) }));
     };
 
-    const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleVideoSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0] || null;
         setMedia(prev => ({ ...prev, video: file }));
     };
 
-    const handleDocumentChange = (field: keyof typeof documents, file: File | null) => {
+    function handleDocumentChange(field: keyof typeof documents, file: File | null) {
         setDocuments(prev => ({ ...prev, [field]: file }));
     };
 
@@ -88,7 +88,7 @@ export default function ListLandPage() {
         }));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         if (!session?.user) {
@@ -635,7 +635,7 @@ function FileUploadField({
     required?: boolean;
     uploadState?: { progress: number; isUploading: boolean; error: string | null };
 }) {
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const selectedFile = e.target.files?.[0] || null;
         onChange(selectedFile);
     };

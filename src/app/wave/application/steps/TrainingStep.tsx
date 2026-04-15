@@ -41,7 +41,7 @@ export default function TrainingStep({ data, updateData, onNext, onBack }: Props
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateForm()) {
             onNext();
         } else {

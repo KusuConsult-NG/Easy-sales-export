@@ -207,6 +207,19 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
+            t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id), {
+                id: txnRef.id,
+                userId,
+                type: "funding",
+                module: "wallet",
+                amount: amountNGN,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: "Wallet funded successfully"
+            }, { merge: true });
+
             return updatedBalance;
         });
 
@@ -268,6 +281,19 @@ export async function walletCheckoutAction(
                 status: "completed",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txnRef.id), {
+                id: txnRef.id,
+                userId,
+                type: "purchase",
+                module: "wallet",
+                amount: amountNGN, // We can store absolute amounts or negative. Keeping negative to show debit in ledger.
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: orderId,
+                description: "Marketplace purchase — Order"
             });
 
             return updatedBalance;

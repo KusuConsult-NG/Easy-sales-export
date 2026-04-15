@@ -102,7 +102,7 @@ export default function AdminSellersPage() {
         setFilteredVerifications(filtered);
     }, [verifications, searchQuery, filterStatus]);
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (verifications.length === 0) return;
         const headers = [
             "Business Name", "Business Type", "Owner Name", "Email", "Phone",
@@ -129,7 +129,7 @@ export default function AdminSellersPage() {
         document.body.removeChild(a); URL.revokeObjectURL(url);
     };
 
-    const handleApprove = async (verificationId: string) => {
+    async function handleApprove(verificationId: string) {
         if (!confirm("Approve this seller?")) return;
         setIsProcessing(true);
         try {
@@ -153,19 +153,19 @@ export default function AdminSellersPage() {
         }
     };
 
-    const handleReject = (verificationId: string) => {
+    function handleReject(verificationId: string) {
         setRejectionTargetId(verificationId);
         setRejectionMode("reject");
         setRejectionModalOpen(true);
     };
 
-    const handleSuspend = (verificationId: string) => {
+    function handleSuspend(verificationId: string) {
         setRejectionTargetId(verificationId);
         setRejectionMode("suspend");
         setRejectionModalOpen(true);
     };
 
-    const handleConfirmRejection = async (reason: string) => {
+    async function handleConfirmRejection(reason: string) {
         if (!rejectionTargetId) return;
         setRejectionModalOpen(false);
         setIsProcessing(true);
@@ -194,7 +194,7 @@ export default function AdminSellersPage() {
         }
     };
 
-    const handleOpenEdit = (standardApp: StandardPendingForm<SellerVerification>) => {
+    function handleOpenEdit(standardApp: StandardPendingForm<SellerVerification>) {
         const v = standardApp.data;
         setEditingVerification(v);
         setEditDraft({
@@ -207,7 +207,7 @@ export default function AdminSellersPage() {
         setEditNote("");
     };
 
-    const handleSaveEdit = async () => {
+    async function handleSaveEdit() {
         if (!editingVerification) return;
         setEditSaving(true);
         const result = await editApplicationAction({
@@ -226,7 +226,7 @@ export default function AdminSellersPage() {
         setEditSaving(false);
     };
 
-    const handleToggleBadge = async (verification: SellerVerification) => {
+    async function handleToggleBadge(verification: SellerVerification) {
         if (verification.status !== "approved") {
             showToast("Only approved sellers can receive a Verified Badge", "error");
             return;

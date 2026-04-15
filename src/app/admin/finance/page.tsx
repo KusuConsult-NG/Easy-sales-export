@@ -20,7 +20,8 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, Timestamp } from "firebase/firestore";
+import { Timestamp } from "firebase/firestore";
+import { getFinancialOverviewAction } from "@/app/actions/admin-analytics";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -88,65 +89,21 @@ export default function AdminFinancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ── Real-time listener: processedPayments
-    useEffect(() => {
-        // No orderBy — sorting in-memory to avoid dropping docs without that field index
-        const q = query(
-            collection(db, "processedPayments")
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            const txs: Transaction[] = snap.docs.map(doc => {
-                const d = doc.data();
-                const ts = d.processedAt ?? d.createdAt ?? d.timestamp ?? null;
-                return {
-                    id: doc.id,
-                    type: d.type ?? "payment",
-                    amount: Number(d.amount) || 0,
-                    status: d.status ?? "completed",
-                    reference: d.reference ?? doc.id,
-                    timestamp: toIso(ts),
-                };
-            }).filter(t => t.amount > 0)
-              .sort((a, b) => {
-                  const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                  const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                  return tb - ta;
-              });
-            setTransactions(txs);
-            setTotalRevenue(txs.reduce((sum, t) => sum + t.amount, 0));
-        }, () => {
-            // Silently handle permission errors - show what we have
-        });
-        return () => unsub();
-    }, []);
+    const [loading, setLoading] = useState(true);
 
-    // ── Real-time listener: failedPayments (failed + abandoned)
+    async function loadFinanceData(silent = false) {
+        if (!silent) setLoading(true);
+        const res = await getFinancialOverviewAction();
+        if (res.success && res.recentTransactions) {
+            setTotalRevenue(res.totalRevenue ?? 0);
+            setTransactions(res.recentTransactions as Transaction[]);
+            setFailedTx(res.failedTransactions as FailedTransaction[]);
+        }
+        setLoading(false);
+    };
+
     useEffect(() => {
-        const q = query(
-            collection(db, "failedPayments")
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            const txs: FailedTransaction[] = snap.docs.map(doc => {
-                const d = doc.data();
-                const ts = d.failedAt ?? d.abandonedAt ?? null;
-                return {
-                    id: doc.id,
-                    type: d.type ?? "unknown",
-                    amount: Number(d.amount) || 0,
-                    status: (d.status === "abandoned" ? "abandoned" : "failed") as "failed" | "abandoned",
-                    gatewayResponse: d.gatewayResponse ?? null,
-                    timestamp: toIso(ts),
-                };
-            }).sort((a, b) => {
-                const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                return tb - ta;
-            });
-            setFailedTx(txs);
-        }, () => {
-            // Silently handle — collection may not exist yet (no failed payments)
-        });
-        return () => unsub();
+        loadFinanceData();
     }, []);
 
     const abandonedTx = failedTx.filter(t => t.status === "abandoned");
@@ -257,10 +214,9 @@ export default function AdminFinancePage() {
                             <h1 className="text-4xl font-bold text-slate-900 mb-2">Financial Dashboard</h1>
                             <p className="text-slate-600">Live data — updates automatically</p>
                         </div>
-                        {/* Live indicator */}
-                        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-2">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                            <span className="text-sm font-semibold text-green-700">Live</span>
+                        {/* Live indicator (now static loaded) */}
+                        <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2">
+                            <span className="text-sm font-semibold text-slate-700">Financial Suite</span>
                         </div>
                     </div>
                 </div>
@@ -427,7 +383,14 @@ export default function AdminFinancePage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {visibleTx.map((tx, i) => {
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={5} className="py-12 text-center">
+                                            <Loader2 className="w-8 h-8 animate-spin text-slate-300 mx-auto" />
+                                            <p className="text-slate-500 mt-2">Loading transactions...</p>
+                                        </td>
+                                    </tr>
+                                ) : visibleTx.map((tx, i) => {
                                     const isFailed = activeTab !== "successful";
                                     const failed = tx as FailedTransaction;
                                     const isChecked = selectedRefs.has(tx.id);

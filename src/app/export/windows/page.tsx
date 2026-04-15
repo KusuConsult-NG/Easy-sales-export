@@ -27,11 +27,12 @@ export default function ExportWindowsPage() {
             const currentLastId = reset ? undefined : lastDocId || undefined;
             const result = await getExportOpportunities(12, currentLastId);
 
-            if (result.success && result.data) {
+            if (result.success) {
+                const windows = (result.data ?? []) as ExportOpportunity[];
                 if (reset) {
-                    setExportWindows(result.data);
+                    setExportWindows(windows);
                 } else {
-                    setExportWindows(prev => [...prev, ...result.data]);
+                    setExportWindows(prev => [...prev, ...windows]);
                 }
                 setLastDocId(result.meta?.cursor || null);
                 setHasMore(!!result.meta?.cursor);
@@ -59,7 +60,7 @@ export default function ExportWindowsPage() {
         setSeeding(false);
     }
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             loadWindows(false);
         }

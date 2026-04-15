@@ -75,7 +75,7 @@ export default function CreateProductPage() {
         }
     }, [state, showToast, router]);
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const files = e.target.files;
         if (!files) return;
 
@@ -91,7 +91,7 @@ export default function CreateProductPage() {
         setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
     };
 
-    const handleSubmit = (formData: FormData) => {
+    function handleSubmit(formData: FormData) {
         // Append files manually
         selectedFiles.forEach((file, index) => {
             formData.append(`productImages_${index}`, file);

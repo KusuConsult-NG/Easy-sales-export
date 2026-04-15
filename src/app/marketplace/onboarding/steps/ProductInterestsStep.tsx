@@ -75,7 +75,7 @@ export default function ProductInterestsStep({ accountType, data, onChange, onNe
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (validate()) {
             onNext();
         }

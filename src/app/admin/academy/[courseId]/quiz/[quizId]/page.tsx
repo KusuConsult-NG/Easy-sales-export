@@ -32,9 +32,9 @@ export default function QuizEditorPage() {
     useEffect(() => {
         async function load() {
             const result = await getQuizAction(quizId);
-            if (result.success && result.data) {
-                setQuizTitle(result.data.title || "Module Quiz");
-                setQuestions((result.data.questions || []) as any);
+            if (result.success) {
+                setQuizTitle(result.data?.title || "Module Quiz");
+                setQuestions((result.data?.questions || []) as any);
             } else {
                 toast.error(result.error || "Failed to load quiz");
             }
@@ -43,7 +43,7 @@ export default function QuizEditorPage() {
         load();
     }, [quizId]);
 
-    const handleAddQuestion = () => {
+    function handleAddQuestion() {
         const newQuestion: Question = {
             id: `q-${Date.now()}`,
             text: "New Question",
@@ -55,11 +55,11 @@ export default function QuizEditorPage() {
         setQuestions([...questions, newQuestion]);
     };
 
-    const handleUpdateQuestion = (qId: string, text: string) => {
+    function handleUpdateQuestion(qId: string, text: string) {
         setQuestions(questions.map(q => q.id === qId ? { ...q, text } : q));
     };
 
-    const handleUpdateOption = (qId: string, oId: string, text: string) => {
+    function handleUpdateOption(qId: string, oId: string, text: string) {
         setQuestions(questions.map(q => {
             if (q.id === qId) {
                 return {
@@ -71,7 +71,7 @@ export default function QuizEditorPage() {
         }));
     };
 
-    const handleSetCorrectOption = (qId: string, oId: string) => {
+    function handleSetCorrectOption(qId: string, oId: string) {
         setQuestions(questions.map(q => {
             if (q.id === qId) {
                 return {
@@ -83,7 +83,7 @@ export default function QuizEditorPage() {
         }));
     };
 
-    const handleAddOption = (qId: string) => {
+    function handleAddOption(qId: string) {
         setQuestions(questions.map(q => {
             if (q.id === qId) {
                 return {
@@ -95,11 +95,11 @@ export default function QuizEditorPage() {
         }));
     };
 
-    const handleDeleteQuestion = (qId: string) => {
+    function handleDeleteQuestion(qId: string) {
         setQuestions(questions.filter(q => q.id !== qId));
     };
 
-    const handleDeleteOption = (qId: string, oId: string) => {
+    function handleDeleteOption(qId: string, oId: string) {
         setQuestions(questions.map(q => {
             if (q.id === qId) {
                 return { ...q, options: q.options.filter(o => o.id !== oId) };
@@ -108,7 +108,7 @@ export default function QuizEditorPage() {
         }));
     };
 
-    const handleSave = async () => {
+    async function handleSave() {
         setIsLoading(true);
         const result = await saveQuizAction(courseId, quizId, quizTitle, questions as any);
         setIsLoading(false);

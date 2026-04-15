@@ -87,7 +87,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
     const [ninConfirmed, setNinConfirmed] = useState(false);
     const [bvnConfirmed, setBvnConfirmed] = useState(false);
 
-    const handleChange = (field: keyof KYCData, value: string | boolean) => {
+    function handleChange(field: keyof KYCData, value: string | boolean) {
         const updated = { ...formData, [field]: value };
         // Reset verify state when the field changes
         if (field === 'bvn') {
@@ -111,7 +111,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         onDataChange(updated);
     };
 
-    const handleVerifyBVN = async () => {
+    async function handleVerifyBVN() {
         const { bvn, firstName, lastName } = formData;
         if (!bvn || bvn.length !== 11) {
             setBvnError('Enter your full 11-digit BVN before verifying.');
@@ -154,7 +154,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
     };
 
-    const handleVerifyNIN = async () => {
+    async function handleVerifyNIN() {
         const { nin, firstName, lastName } = formData;
         if (!nin || nin.length !== 11) {
             setNinError('Enter your full 11-digit NIN before verifying.');
@@ -197,7 +197,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         }
     };
 
-    const handleVerifyVotersCard = async () => {
+    async function handleVerifyVotersCard() {
         const { votersCard, firstName, lastName } = formData;
         if (!votersCard) {
             setVotersCardError("Enter your Voter's Card Number before verifying.");

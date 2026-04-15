@@ -165,7 +165,7 @@ export default function LocalizationSettingsPage() {
     };
 
     // ── Save ──────────────────────────────────────────────────────────────
-    const handleSave = async () => {
+    async function handleSave() {
         setIsSaving(true);
         try {
             const res = await fetch("/api/admin/settings/localization", {

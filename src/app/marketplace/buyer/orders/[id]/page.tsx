@@ -47,7 +47,7 @@ export default function BuyerOrderDetailPage() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleConfirmReceipt = async () => {
+    async function handleConfirmReceipt() {
         if (!confirm("Confirm you received this order? This will release funds to the seller.")) return;
         setConfirming(true);
         try {

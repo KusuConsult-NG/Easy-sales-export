@@ -29,7 +29,7 @@ export default function RejectionModal({
     const maxLength = 500;
     const isValid = reason.trim().length >= minLength;
 
-    const handleConfirm = async () => {
+    async function handleConfirm() {
         if (!isValid || isLoading) return;
         setLocalProcessing(true);
         try {
@@ -40,7 +40,7 @@ export default function RejectionModal({
         }
     };
 
-    const handleClose = () => {
+    function handleClose() {
         if (!isLoading) {
             setReason("");
             onClose();

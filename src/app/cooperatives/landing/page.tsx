@@ -22,7 +22,7 @@ export default function CooperativeLandingPage() {
     const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
     const [isSending, setIsSending] = useState(false);
 
-    const handleContactSubmit = async (e: React.FormEvent) => {
+    async function handleContactSubmit(e: React.FormEvent) {
         e.preventDefault();
         setIsSending(true);
         try {

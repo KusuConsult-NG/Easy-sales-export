@@ -67,7 +67,7 @@ export default function ExportPortfolioPage() {
             const result = await getUserExportInvestmentsAction(10, currentLastId);
 
             if (result.success && result.data) {
-                const mappedInvestments = result.data.map(inv => ({
+                const mappedInvestments = result.data.map((inv: any) => ({
                     ...inv,
                     roi: inv.amount > 0 ? Math.round((inv.expectedReturn / inv.amount) * 100) : 0 // Calculate ROI dynamically
                 }));
@@ -96,7 +96,7 @@ export default function ExportPortfolioPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             loadInvestments(false);
         }

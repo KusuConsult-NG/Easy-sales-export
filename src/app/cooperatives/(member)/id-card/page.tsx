@@ -32,7 +32,7 @@ function PassportUploadWidget({ onUploaded }: { onUploaded: (url: string, name: 
 
     const ALLOWED = ["image/jpeg", "image/jpg", "image/png"];
 
-    const handleFile = async (file: File | null) => {
+    async function handleFile(file: File | null) {
         if (!file) return;
         if (!ALLOWED.includes(file.type)) {
             showToast("Only JPG or PNG images allowed for passport photos.", "error");
@@ -300,11 +300,11 @@ export default function CooperativeIdCardPage() {
     useEffect(() => { fetchData(); }, []);
 
     // Called after a successful passport upload — refresh card data
-    const handlePhotoUploaded = (_url: string, _name: string) => {
+    function handlePhotoUploaded(_url: string, _name: string) {
         fetchData();
     };
 
-    const handleDownload = async () => {
+    async function handleDownload() {
         setDownloading(true);
         try {
             const html2canvas = (await import("html2canvas")).default;
@@ -398,7 +398,7 @@ export default function CooperativeIdCardPage() {
                                 <p className="text-sm text-slate-600 font-medium">Passport photo on file ✓</p>
                                 <button
                                     onClick={() => {
-                                        setResult((prev) => prev ? { ...prev, data: prev.data ? { ...prev.data, passportPhotoUrl: null } : prev.data } : prev);
+                                        setResult((prev) => prev ? { ...prev, data: prev.data ? { ...prev.data, passportPhotoUrl: "" as any } : prev.data } : prev);
                                     }}
                                     className="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-semibold transition"
                                 >

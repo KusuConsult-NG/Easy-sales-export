@@ -55,7 +55,7 @@ export default function CooperativePaymentPage() {
         checkExisting();
     }, [sessionStatus, router, showToast]);
 
-    const handlePayment = async () => {
+    async function handlePayment() {
         setIsSubmitting(true);
         try {
             const result = await initiateCooperativePaymentAction("basic");

@@ -97,7 +97,7 @@ export default function AdminLoansPage() {
         setFilteredApplications(filtered);
     }, [applications, searchQuery, filterStatus]);
 
-    const handleApprove = async (applicationId: string) => {
+    async function handleApprove(applicationId: string) {
         if (!confirm("Approve this loan application?")) return;
 
         setIsProcessing(true);
@@ -122,7 +122,7 @@ export default function AdminLoansPage() {
         }
     };
 
-    const handleReject = async (applicationId: string) => {
+    async function handleReject(applicationId: string) {
         const reason = prompt("Enter rejection reason:");
         if (!reason) return;
 
@@ -147,7 +147,7 @@ export default function AdminLoansPage() {
         }
     };
 
-    const handleDisburse = async (applicationId: string) => {
+    async function handleDisburse(applicationId: string) {
         if (!confirm("Disburse funds for this loan? This cannot be undone.")) return;
 
         setIsProcessing(true);
@@ -167,7 +167,7 @@ export default function AdminLoansPage() {
         }
     };
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (applications.length === 0) return;
         const headers = [
             "Name", "Email", "Loan Product", "Amount (₦)",

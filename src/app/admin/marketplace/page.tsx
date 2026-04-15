@@ -8,8 +8,16 @@ export default function AdminMarketplacePage() {
         {
             title: "Seller Verification",
             description: "Review and approve new seller accounts",
-            icon: Users,
+            icon: CheckSquare,
             href: "/admin/marketplace/sellers",
+            color: "text-amber-600",
+            bg: "bg-amber-100"
+        },
+        {
+            title: "Marketplace Users",
+            description: "Manage buyers, sellers, and dual-role accounts",
+            icon: Users,
+            href: "/admin/marketplace/buyers",
             color: "text-blue-600",
             bg: "bg-blue-100"
         },

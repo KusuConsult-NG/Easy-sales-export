@@ -35,7 +35,7 @@ export default function CreateDisputePage(props: DisputePageProps) {
             if (status !== "authenticated" || !session?.user) return;
 
             const result = await getEscrowTransactionByIdAction(escrowId);
-            if (result.success && result.data) {
+            if (result.success) {
                 setEscrowData(result.data);
             } else {
                 showToast("Escrow transaction not found", "error");

@@ -468,6 +468,11 @@ export async function getStandardWaveApplicationsAction(statusFilter?: "pending"
                     id: app.userId,
                     name: userName,
                     email: uData.email || app.email || app.userEmail || "Unknown",
+                    phone: uData.phone || app.phone || app.phoneNumber || "Unknown",
+                    dob: uData.dob || app.dateOfBirth || "Unknown",
+                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
+                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
+                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
                 },
                 status: app.status || "pending",
                 data: app // raw

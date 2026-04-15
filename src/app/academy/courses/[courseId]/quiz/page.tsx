@@ -124,14 +124,14 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
         }
     };
 
-    const handleAnswerChange = (questionId: string, answer: string | string[]) => {
+    function handleAnswerChange(questionId: string, answer: string | string[]) {
         setAnswers(prev => ({
             ...prev,
             [questionId]: answer
         }));
     };
 
-    const handleMultipleChoice = (questionId: string, answerId: string, isMultiple: boolean) => {
+    function handleMultipleChoice(questionId: string, answerId: string, isMultiple: boolean) {
         if (isMultiple) {
             const current = (answers[questionId] as string[]) || [];
             const updated = current.includes(answerId)

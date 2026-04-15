@@ -40,7 +40,7 @@ export default function FarmNationSidebar() {
     const router = useRouter();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    const handleLogout = async () => {
+    async function handleLogout() {
         await signOut({ redirect: false });
         router.push('/auth/login?callbackUrl=/farm-nation/dashboard');
     };

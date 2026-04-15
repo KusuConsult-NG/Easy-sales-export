@@ -384,6 +384,20 @@ export interface LandListing {
     createdAt: Date;
 }
 
+export interface UnifiedTransaction {
+    id: string;          // Maps to document ID
+    userId: string;      // Mandatory
+    type: string;        // Specific payload type e.g. "contribution", "registration", "wallet_funding", "escrow_payment"
+    module: "wave" | "cooperative" | "marketplace" | "farm_nation" | "export" | "academy" | "general" | "wallet";
+    amount: number;
+    currency: string;
+    status: "pending" | "completed" | "failed" | "refunded";
+    date: Date;          // Core aggregation timestamp
+    reference?: string;  // Payment gateway reference
+    description?: string;
+    metadata?: Record<string, unknown>; // Any legacy properties (cooperativeId, escrowId)
+}
+
 // Import detailed types from marketplace module
 import type {
     EscrowTransaction,

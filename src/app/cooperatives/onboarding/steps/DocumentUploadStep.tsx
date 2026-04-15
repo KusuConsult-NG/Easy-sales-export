@@ -43,7 +43,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
 
     const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
 
-    const handleFileUpload = async (field: string, file: File | null) => {
+    async function handleFileUpload(field: string, file: File | null) {
         if (!file) return;
 
         if (!ALLOWED_TYPES.includes(file.type)) {
@@ -110,7 +110,7 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (validate()) {
             onNext();
         } else {

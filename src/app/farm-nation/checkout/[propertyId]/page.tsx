@@ -71,7 +71,7 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propertyId, status, session, params.propertyId]); // Added params.propertyId to dependencies
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         if (!agreed) {
@@ -106,9 +106,14 @@ export default function CheckoutPage() {
                 property.ownerId
             );
 
-            if (result.success && result.data) {
+            if (result.success ) {
                 // Redirect to Paystack for payment
-                window.location.href = result.data.authorizationUrl;
+                if (result.data?.authorizationUrl) {
+                    window.location.href = result.data.authorizationUrl;
+                } else {
+                    setError("Failed to initialize payment: No authorization URL");
+                    setSubmitting(false);
+                }
             } else {
                 setError(result.error || "Failed to initialize payment");
                 setSubmitting(false);

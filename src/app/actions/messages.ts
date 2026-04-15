@@ -344,3 +344,40 @@ export async function searchUsersAction(query: string) {
         return { error: "Failed to search users", users: [] };
     }
 }
+
+/**
+ * Start a Support conversation with an Administrator
+ */
+export async function startSupportConversationAction() {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { error: "Not authenticated", conversationId: null };
+        }
+
+        // Find an admin user
+        const adminSnapshot = await db.collection(COLLECTIONS.USERS)
+            .where("roles", "array-contains", "admin")
+            .limit(1)
+            .get();
+
+        if (adminSnapshot.empty) {
+            return { error: "No admin available currently", conversationId: null };
+        }
+
+        const adminUid = adminSnapshot.docs[0].id;
+
+        // If user is admin themselves, prevent
+        if (adminUid === session.user.id) {
+            return { error: "You are an admin", conversationId: null };
+        }
+
+        // Return the existing conversation or start a new one
+        return await startConversationAction(adminUid);
+    } catch (error) {
+        logger.error("Start support conversation error", error);
+        return { error: "Failed to start support conversation", conversationId: null };
+    }
+}

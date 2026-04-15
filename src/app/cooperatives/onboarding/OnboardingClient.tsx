@@ -188,7 +188,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         }));
                     }
                 }
-                if (result.revisionNote) setRevisionNote(result.revisionNote);
+                if (result.data?.revisionNote) setRevisionNote(result.data.revisionNote);
                 setIsRevisionMode(true);
                 setIsCheckingStatus(false);
                 return;

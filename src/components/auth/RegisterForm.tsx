@@ -80,7 +80,7 @@ export default function RegisterForm() {
         }
     }, [state.error]);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
         const { name, value } = e.target;
         setFormData({
             ...formData,

@@ -42,7 +42,7 @@ export default function CooperativeDashboardPage() {
 
                 if (result.success && result.data?.membership) {
                     setMembership(result.data.membership);
-                    setTransactions(result.data.transactions);
+                    setTransactions(result.data.transactions || []);
                 } else if (result.error?.includes("No cooperative")) {
                     // Not a member - membership will be null
                     setMembership(null);

@@ -28,7 +28,7 @@ function PropertiesContent() {
     const [hasMore, setHasMore] = useState(false);
 
     // Initial load & Filter change
-    const loadProperties = async (reset = true) => {
+    async function loadProperties(reset = true) {
         if (reset) {
             setLoading(true);
             setProperties([]);
@@ -94,13 +94,13 @@ function PropertiesContent() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filters, searchTerm]);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             loadProperties(false);
         }
     };
 
-    const handleFilterChange = (key: keyof typeof filters, value: string) => {
+    function handleFilterChange(key: keyof typeof filters, value: string) {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
 

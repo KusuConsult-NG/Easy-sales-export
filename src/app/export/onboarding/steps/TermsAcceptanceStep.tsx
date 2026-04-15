@@ -38,7 +38,7 @@ export function TermsAcceptanceStep({
     const allAccepted =
         acceptedInvestment && acceptedRisk && acceptedEscrow && acceptedPrivacy;
 
-    const handleSubmit = () => {
+    function handleSubmit() {
         if (!allAccepted) {
             showToast("Please accept all terms and conditions to continue", "error");
             return;

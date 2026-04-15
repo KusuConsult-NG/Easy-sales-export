@@ -32,8 +32,8 @@ export default function BriefingRegistrationsPage() {
             try {
                 const { getBriefingRegistrationsAction } = await import("@/app/actions/briefing-admin");
                 const result = await getBriefingRegistrationsAction();
-                if (result.success && result.data) {
-                    setRegistrations(result.data as unknown as BriefingRegistration[]);
+                if (result.success ) {
+                    setRegistrations(result as unknown as BriefingRegistration[]);
                 } else {
                     setError(result.error || "Failed to load registrations");
                 }
@@ -62,7 +62,7 @@ export default function BriefingRegistrationsPage() {
         ));
     }, [registrations, searchQuery]);
 
-    const handleExportCSV = () => {
+    function handleExportCSV() {
         if (registrations.length === 0) return;
         setIsExporting(true);
         try {

@@ -56,7 +56,7 @@ export default function LoanProductsPage() {
         fetchProducts();
     }, [fetchProducts]);
 
-    const handleOpenModal = (product?: LoanProduct) => {
+    function handleOpenModal(product?: LoanProduct) {
         if (product) {
             setEditingProduct(product);
             setFormData({
@@ -83,12 +83,12 @@ export default function LoanProductsPage() {
         setIsModalOpen(true);
     };
 
-    const handleCloseModal = () => {
+    function handleCloseModal() {
         setIsModalOpen(false);
         setEditingProduct(null);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         try {
@@ -119,7 +119,7 @@ export default function LoanProductsPage() {
         }
     };
 
-    const handleDelete = async (productId: string) => {
+    async function handleDelete(productId: string) {
         if (!confirm("Are you sure you want to delete this loan product?")) {
             return;
         }

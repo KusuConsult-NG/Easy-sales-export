@@ -40,7 +40,7 @@ export default function ContributePage() {
 
     const tierPreview = getTierPreview(amountNum);
 
-    const handlePayment = async () => {
+    async function handlePayment() {
         try {
             setLoading(true);
             setError(null);
@@ -63,7 +63,7 @@ export default function ContributePage() {
             // Initialize payment
             const result = await initializeContributionPaymentAction(amountNum);
 
-            if (!result.success || !result.data) {
+            if (!result.success || !result) {
                 setError(result.error || 'Failed to initialize payment');
                 showToast(result.error || 'Failed to initialize payment', 'error');
                 return;
@@ -72,8 +72,8 @@ export default function ContributePage() {
             showToast('Redirecting to payment gateway...', 'success');
             // Redirect to Paystack
             setTimeout(() => {
-                if (result.data) {
-                    window.location.href = result.data.authorizationUrl;
+                if (result) {
+                    window.location.href = result.data?.authorizationUrl;
                 }
             }, 1000);
         } catch (err: any) {

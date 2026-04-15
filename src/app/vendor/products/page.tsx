@@ -40,7 +40,7 @@ export default function VendorProductsPage() {
         }
     };
 
-    const handleToggleStatus = async (productId: string) => {
+    async function handleToggleStatus(productId: string) {
         try {
             const result = await toggleVendorProductStatusAction(productId);
             if (result.success) {
@@ -54,7 +54,7 @@ export default function VendorProductsPage() {
         }
     };
 
-    const handleDeleteProduct = async (productId: string, productName: string) => {
+    async function handleDeleteProduct(productId: string, productName: string) {
         if (!confirm(`Delete "${productName}"? This action cannot be undone.`)) {
             return;
         }

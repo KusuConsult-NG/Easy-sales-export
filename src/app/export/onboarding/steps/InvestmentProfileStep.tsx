@@ -45,7 +45,7 @@ export function InvestmentProfileStep({
         );
     };
 
-    const handleSubmit = () => {
+    function handleSubmit() {
         if (!minInvestment || !maxInvestment || goals.length === 0 || !riskTolerance) {
             showToast("Please fill in all required fields", "error");
             return;

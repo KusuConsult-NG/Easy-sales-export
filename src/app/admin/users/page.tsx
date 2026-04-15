@@ -95,7 +95,7 @@ export default function AdminUsersPage() {
         updateFilter("status", "all");
     };
 
-    const handleToggleVerification = async (userId: string) => {
+    async function handleToggleVerification(userId: string) {
         setProcessingId(userId);
         const result = await toggleUserVerificationAction(userId);
 
@@ -108,7 +108,7 @@ export default function AdminUsersPage() {
         setProcessingId(null);
     };
 
-    const handleBulkVerify = async () => {
+    async function handleBulkVerify() {
         if (selectedIds.size === 0 || !confirm(`Verify ${selectedIds.size} user(s)?`)) return;
         setBulkProcessing(true);
 
@@ -123,12 +123,12 @@ export default function AdminUsersPage() {
         showToast("Bulk verification completed", "success");
     };
 
-    const handleManageUser = (user: User) => {
+    function handleManageUser(user: User) {
         setSelectedUserForModal(user);
         setIsModalOpen(true);
     };
 
-    const handleUpdateRoles = async (formData: FormData) => {
+    async function handleUpdateRoles(formData: FormData) {
         if (!selectedUserForModal) return;
         setIsUpdatingRoles(true);
 
@@ -145,7 +145,7 @@ export default function AdminUsersPage() {
         setIsUpdatingRoles(false);
     };
 
-    const handleAcademyEnrollment = async () => {
+    async function handleAcademyEnrollment() {
         if (!selectedUserForModal) return;
         setIsEnrollingAcademy(true);
         const result = await manualAcademyEnrollmentAction(selectedUserForModal.id, academyPlan);
@@ -172,7 +172,7 @@ export default function AdminUsersPage() {
         }).format(new Date(date));
     };
 
-    const handleExportCSV = async () => {
+    async function handleExportCSV() {
         setIsExporting(true);
         try {
             // Use the full DB exact endpoint instead of local pagination to satisfy Data Consistency 

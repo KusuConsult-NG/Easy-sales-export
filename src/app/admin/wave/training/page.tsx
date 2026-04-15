@@ -66,8 +66,8 @@ export default function AdminWaveTrainingPage() {
         setLoading(true);
         try {
             const result = await getWaveTrainingEventsAction();
-            if (result.success && result.data) {
-                setEvents(result.data);
+            if (result.success ) {
+                setEvents(result.data ?? []);
             } else {
                 showToast(result.error || "Failed to load events", "error");
             }

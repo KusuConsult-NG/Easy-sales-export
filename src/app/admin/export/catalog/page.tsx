@@ -49,7 +49,7 @@ function ProductForm({ initial, onSave, onCancel }: {
     const addArr = (k: "grades" | "certifications") => setField(k, [...p[k], ""]);
     const removeArr = (k: "grades" | "certifications", i: number) => setField(k, p[k].filter((_, idx) => idx !== i));
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setSaving(true);
         try {

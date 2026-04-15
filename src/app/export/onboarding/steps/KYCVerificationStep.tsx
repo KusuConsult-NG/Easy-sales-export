@@ -32,7 +32,7 @@ export function KYCVerificationStep({
     const [saving, setSaving] = useState(false);
     const { showToast } = useToast();
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         // Validate required personal info fields
         if (
             !kycData.firstName ||

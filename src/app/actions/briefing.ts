@@ -57,7 +57,7 @@ export const registerForBriefingAction = withSafeAction(
                 return { success: false, error: firstError };
             }
 
-            const validData = validationResult.data;
+            const validData = validationResult.data!;
 
             // Note: From this point on, we use validData instead of data for the database insertions
             const emailToStore = validData.email;

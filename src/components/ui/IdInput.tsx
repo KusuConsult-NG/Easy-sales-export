@@ -53,7 +53,7 @@ export function IdInput({
     placeholder,
     ...rest
 }: IdInputProps) {
-    const handleChange = (raw: string) => {
+    function handleChange(raw: string) {
         let val = digitsOnly ? raw.replace(/\D/g, '') : raw.toUpperCase();
         if (maxLength) val = val.slice(0, maxLength);
         onChange(val);

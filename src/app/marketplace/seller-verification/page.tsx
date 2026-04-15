@@ -44,23 +44,23 @@ export default function SellerVerificationPage() {
         "Sokoto", "Taraba", "Yobe", "Zamfara", "FCT"
     ];
 
-    const handleFileChange = (field: keyof typeof documents, file: File | null) => {
+    function handleFileChange(field: keyof typeof documents, file: File | null) {
         setDocuments(prev => ({ ...prev, [field]: file }));
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (currentStep < 4) {
             setCurrentStep((currentStep + 1) as VerificationStep);
         }
     };
 
-    const handleBack = () => {
+    function handleBack() {
         if (currentStep > 1) {
             setCurrentStep((currentStep - 1) as VerificationStep);
         }
     };
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         setIsSubmitting(true);
         try {
             // Create FormData for file uploads
@@ -464,7 +464,7 @@ function FileUploadField({
     onChange: (file: File | null) => void;
     required?: boolean;
 }) {
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
         const selectedFile = e.target.files?.[0] || null;
         onChange(selectedFile);
     };

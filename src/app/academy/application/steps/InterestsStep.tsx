@@ -42,14 +42,14 @@ const LEARNING_PATHS = [
 ];
 
 export default function InterestsStep({ data, onChange, errors }: InterestsStepProps) {
-    const handlePathToggle = (pathId: string) => {
+    function handlePathToggle(pathId: string) {
         const updatedPaths = data.learningPaths.includes(pathId)
             ? data.learningPaths.filter((p) => p !== pathId)
             : [...data.learningPaths, pathId];
         onChange({ ...data, learningPaths: updatedPaths });
     };
 
-    const handleChange = (field: keyof InterestsData, value: string) => {
+    function handleChange(field: keyof InterestsData, value: string) {
         onChange({ ...data, [field]: value });
     };
 

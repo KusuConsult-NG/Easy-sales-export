@@ -108,9 +108,18 @@ export async function getCooperativeStatsAction(): Promise<{
         const paidMembersList = allMembers.filter((m: any) => m.paymentStatus === "completed");
         const paidMembersCount = paidMembersList.length;
 
-        const activeMembers = paidMembersList.filter((m: any) => m.membershipStatus === "active").length;
-        const pendingMembers = paidMembersList.filter((m: any) => m.membershipStatus === "pending").length;
-        const suspendedMembers = paidMembersList.filter((m: any) => m.membershipStatus === "suspended").length;
+        // Count approved members across both field names (membershipStatus and status)
+        // Some docs use membershipStatus="active", others use status="approved" — check both
+        const activeMembers = paidMembersList.filter((m: any) =>
+            m.membershipStatus === "active" || m.membershipStatus === "approved" ||
+            m.status === "active" || m.status === "approved"
+        ).length;
+        const pendingMembers = paidMembersList.filter((m: any) =>
+            m.membershipStatus === "pending" || m.status === "pending"
+        ).length;
+        const suspendedMembers = paidMembersList.filter((m: any) =>
+            m.membershipStatus === "suspended" || m.status === "suspended"
+        ).length;
 
         // Get transactions (Scoped)
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
@@ -1023,6 +1032,11 @@ export async function getStandardCooperativeMembersAction(statusFilter?: "pendin
                     id: app.userId,
                     name: userName,
                     email: uData.email || app.email || "Unknown",
+                    phone: uData.phone || app.phone || app.phoneNumber || "Unknown",
+                    dob: uData.dob || app.dateOfBirth || "Unknown",
+                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
+                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
+                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
                 },
                 status: app.membershipStatus || "pending",
                 data: app

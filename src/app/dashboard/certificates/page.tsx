@@ -70,7 +70,7 @@ export default function CertificatesPage() {
         }
     };
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -103,7 +103,7 @@ export default function CertificatesPage() {
         }
     };
 
-    const handleDownload = async (certificate: Certificate) => {
+    async function handleDownload(certificate: Certificate) {
         try {
             const response = await fetch(`/api/certificates/download?id=${certificate.id}`);
             const blob = await response.blob();
@@ -118,7 +118,7 @@ export default function CertificatesPage() {
         }
     };
 
-    const handleDelete = async (id: string) => {
+    async function handleDelete(id: string) {
         if (!confirm("Are you sure you want to delete this certificate?")) return;
         try {
             const response = await fetch(`/api/certificates/${id}`, { method: "DELETE" });

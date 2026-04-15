@@ -35,12 +35,12 @@ export default function BuyerDashboard() {
                 ]);
 
                 if (statsResult.success && statsResult.data?.stats) {
-                    setStats(statsResult.data?.stats);
+                    setStats(statsResult.data.stats);
                 }
 
                 if (ordersResult.success && ordersResult.data?.orders) {
                     // Sort by newest first and take top 5
-                    const sorted = ordersResult.data?.orders.sort((a, b) => {
+                    const sorted = ordersResult.data.orders.sort((a: any, b: any) => {
                         const dateA = a.createdAt instanceof Date ? a.createdAt : new Date((a.createdAt as unknown as { seconds: number }).seconds * 1000);
                         const dateB = b.createdAt instanceof Date ? b.createdAt : new Date((b.createdAt as unknown as { seconds: number }).seconds * 1000);
                         return dateB.getTime() - dateA.getTime();
@@ -50,7 +50,7 @@ export default function BuyerDashboard() {
 
                 if (recommendedResult.success && recommendedResult.data?.products) {
                     // Transform to match expected format
-                    const transformed = recommendedResult.data?.products.map(p => ({
+                    const transformed = recommendedResult.data.products.map((p: any) => ({
                         id: p.id,
                         name: p.title,
                         price: p.pricingTiers[0]?.price || 0,

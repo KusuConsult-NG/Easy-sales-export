@@ -20,7 +20,7 @@ export default function EnrollStudentModal({ isOpen, onClose }: EnrollStudentMod
     const [plan, setPlan] = useState<"foundation" | "standard" | "elite">("foundation");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const handleSearch = async (e: React.FormEvent) => {
+    async function handleSearch(e: React.FormEvent) {
         e.preventDefault();
         if (!searchQuery.trim()) return;
 
@@ -37,7 +37,7 @@ export default function EnrollStudentModal({ isOpen, onClose }: EnrollStudentMod
         setIsSearching(false);
     };
 
-    const handleEnroll = async () => {
+    async function handleEnroll() {
         if (!selectedUser) {
             showToast("Please select a user first", "error");
             return;

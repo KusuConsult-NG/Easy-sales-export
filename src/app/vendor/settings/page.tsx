@@ -89,7 +89,7 @@ export default function VendorSettingsPage() {
                 setNotifPrefs(result.data.settings.notifications);
             }
 
-            const dataAny = result.data as any;
+            const dataAny = result as any;
             if (dataAny.shipping) {
                 setShippingForm({
                     processingDays: dataAny.shipping.processingDays || 2,

@@ -33,7 +33,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
         return age;
     };
 
-    const handleDateChange = (dobString: string) => {
+    function handleDateChange(dobString: string) {
         const age = calculateAge(dobString);
         updateData({ dateOfBirth: dobString, age });
     };
@@ -73,7 +73,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateForm()) {
             onNext();
         } else {

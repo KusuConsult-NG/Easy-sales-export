@@ -45,7 +45,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         loadBankList();
     }, []);
 
-    const loadBankList = async () => {
+    async function loadBankList() {
         setLoadingBanks(true);
         setBanksError("");
 
@@ -66,7 +66,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         }
     };
 
-    const handleVerify = async () => {
+    async function handleVerify() {
         if (!bankName || !accountNumber) {
             setError("Please fill in all fields");
             return;
@@ -139,13 +139,13 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         }
     };
 
-    const handleRetry = () => {
+    function handleRetry() {
         setError("");
         setVerified(false);
         setAccountName("");
     };
 
-    const handleVerifyBvn = async () => {
+    async function handleVerifyBvn() {
         if (!bvn || bvn.length !== 11) {
             setBvnError("Please enter a valid 11-digit BVN");
             return;

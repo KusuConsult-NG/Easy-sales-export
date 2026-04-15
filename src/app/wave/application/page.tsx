@@ -210,14 +210,14 @@ export default function WaveApplicationPage() {
     // Warn before tab close / navigation away mid-form
     useEffect(() => {
         if (currentStep === 0 || submitting) return; // no warning on first step or after submit
-        const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+        function handler(e: BeforeUnloadEvent) { e.preventDefault(); e.returnValue = ""; };
         window.addEventListener("beforeunload", handler);
         return () => window.removeEventListener("beforeunload", handler);
     }, [currentStep, submitting]);
 
     // Mobile back button: intercept popstate and go to the previous step
     useEffect(() => {
-        const handlePopState = (e: PopStateEvent) => {
+        function handlePopState(e: PopStateEvent) {
             if (currentStep > 0) {
                 e.preventDefault?.();
                 setCurrentStep(prev => Math.max(0, prev - 1));
@@ -245,7 +245,7 @@ export default function WaveApplicationPage() {
         try {
             const { checkWaveStatusAction } = await import("@/app/actions/wave");
             const statusResult = await checkWaveStatusAction();
-            const waveStatus = statusResult.success ? statusResult.data : null;
+            const waveStatus = statusResult.success ? statusResult.data?.status : null;
 
             if (waveStatus === "pending" || waveStatus === "under_review") {
                 if (isEditParam) {

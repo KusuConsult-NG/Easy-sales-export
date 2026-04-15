@@ -83,7 +83,7 @@ export default function FixedSavingsPage() {
     const projectedProfit = calculateProfit(amount, duration, interestRate);
     const totalReturn = amount + projectedProfit;
 
-    const handleCreatePlan = async () => {
+    async function handleCreatePlan() {
         if (amount < 50000) {
             showToast("Minimum amount is ₦50,000", "error");
             return;

@@ -101,7 +101,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (validate()) {
             onNext({ interests: formData });

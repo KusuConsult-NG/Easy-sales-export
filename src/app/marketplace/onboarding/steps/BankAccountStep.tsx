@@ -22,11 +22,11 @@ interface BankAccountStepProps {
 }
 
 export default function BankAccountStep({ data, onChange, onNext, onBack }: BankAccountStepProps) {
-    const handleVerified = (accountData: { bankName: string; accountNumber: string; accountName: string }) => {
+    function handleVerified(accountData: { bankName: string; accountNumber: string; accountName: string }) {
         onChange(accountData);
     };
 
-    const handleContinue = () => {
+    function handleContinue() {
         if (data?.accountName) {
             onNext();
         }

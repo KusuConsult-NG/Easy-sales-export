@@ -37,7 +37,7 @@ export default function ChatThreadPage() {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [data.messages]);
 
-    const handleResolve = async () => {
+    async function handleResolve() {
         if (!sessionId) return;
         setResolving(true);
         try {

@@ -127,8 +127,8 @@ export default function AdminAcademyApplicationsPage() {
         try {
             // 1. fetch standard applications
             const result = await getStandardAcademyApplicationsAction();
-            if (result.success && result.data) {
-                const apps = result.data.map(stdApp => {
+            if (result.success) {
+                const apps = (result.data ?? []).map((stdApp: any) => {
                     const d = stdApp.data;
                     const pi = d.personalInfo || {};
                     return {
@@ -219,7 +219,7 @@ export default function AdminAcademyApplicationsPage() {
         fetchData();
     }, []);
 
-    const handleApprove = async (id: string) => {
+    async function handleApprove(id: string) {
         setProcessingId(id);
         const result = await approveAcademyApplicationAction(id);
         if (result.success) {
@@ -231,7 +231,7 @@ export default function AdminAcademyApplicationsPage() {
         setProcessingId(null);
     };
 
-    const handleReject = async (id: string) => {
+    async function handleReject(id: string) {
         const reason = prompt("Enter rejection reason:");
         if (!reason) return;
         setProcessingId(id);
@@ -245,7 +245,7 @@ export default function AdminAcademyApplicationsPage() {
         setProcessingId(null);
     };
 
-    const handleMarkUnderReview = async (id: string) => {
+    async function handleMarkUnderReview(id: string) {
         setProcessingId(id + "_review");
         const result = await markAcademyApplicationUnderReviewAction(id);
         if (result.success) {

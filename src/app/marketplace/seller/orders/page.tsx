@@ -46,7 +46,7 @@ export default function SellerOrdersPage() {
             });
 
             if (result.success && result.data?.orders) {
-                setOrders(prev => isReset ? result.data?.orders : [...prev, ...result.data?.orders]);
+                setOrders(prev => isReset ? result.data!.orders : [...prev, ...result.data!.orders]);
                 setLastId(result.data?.lastId);
                 setHasMore(!!result.data?.hasMore);
             } else if (result.error) {
@@ -66,7 +66,7 @@ export default function SellerOrdersPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterStatus, debouncedSearch]);
 
-    const handleLoadMore = () => {
+    function handleLoadMore() {
         if (!loadingMore && hasMore) {
             fetchOrders(false);
         }

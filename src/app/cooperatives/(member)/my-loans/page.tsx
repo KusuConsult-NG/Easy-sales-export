@@ -40,7 +40,7 @@ export default function MyLoansPage() {
         setError(null);
         try {
             const result = await getMembershipAction();
-            if (result.success && result.data && result.data.membership) {
+            if (result.success  && result.data?.membership) {
                 setMembership(result.data.membership);
 
                 // Fetch real loans from Firestore using membership.id (which is the User ID)

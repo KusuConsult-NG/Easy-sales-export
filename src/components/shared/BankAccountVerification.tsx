@@ -41,7 +41,7 @@ export default function BankAccountVerification({
         }
     }, [initialData]);
 
-    const handleVerify = async () => {
+    async function handleVerify() {
         if (!bankName || !accountNumber || accountNumber.length < 10) {
             return;
         }

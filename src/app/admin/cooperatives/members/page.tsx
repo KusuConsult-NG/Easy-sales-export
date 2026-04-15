@@ -89,9 +89,9 @@ export default function CooperativeMembersPage() {
         try {
             const result = await getStandardCooperativeMembersAction(statusFilter);
 
-            if (result.success && result.data) {
+            if (result.success ) {
                 // Apply local filters since Server Action fetches up to 500
-                let filtered = result.data as StandardPendingForm<MembershipApplication>[];
+                let filtered = (result.data || []) as StandardPendingForm<MembershipApplication>[];
                 
                 if (paymentStatusFilter && paymentStatusFilter !== "all") {
                     filtered = filtered.filter(a => a.data.paymentStatus === paymentStatusFilter);
@@ -153,7 +153,7 @@ export default function CooperativeMembersPage() {
         );
     });
 
-    const handleApprove = async (applicationId: string) => {
+    async function handleApprove(applicationId: string) {
         if (!confirm("Are you sure you want to approve this membership application?")) {
             return;
         }
@@ -182,12 +182,12 @@ export default function CooperativeMembersPage() {
         }
     };
 
-    const handleReject = (applicationId: string) => {
+    function handleReject(applicationId: string) {
         setRejectingId(applicationId);
         setRejectionModalOpen(true);
     };
 
-    const handleConfirmReject = async (reason: string) => {
+    async function handleConfirmReject(reason: string) {
         if (!rejectingId) return;
         setRejectionModalOpen(false);
         const targetId = rejectingId;
@@ -214,7 +214,7 @@ export default function CooperativeMembersPage() {
         }
     };
 
-    const handleExportCSV = async () => {
+    async function handleExportCSV() {
         setIsExporting(true);
         try {
             window.location.href = "/api/admin/export/cooperative-members";
@@ -678,26 +678,159 @@ export default function CooperativeMembersPage() {
                 }
             >
                 {selectedApplication && (
-                    <div className="space-y-6">
+                    <div className="space-y-5">
+                        {/* ── Status Banner ─────────────────────────────────── */}
+                        <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500 font-medium">Application Status:</span>
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize
+                                    ${selectedApplication.status === "approved" || selectedApplication.status === "active" ? "bg-green-100 text-green-700" :
+                                      selectedApplication.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                                      selectedApplication.status === "suspended" ? "bg-red-100 text-red-700" :
+                                      "bg-slate-100 text-slate-600"}`}
+                                >
+                                    {selectedApplication.status || selectedApplication.data.membershipStatus || "—"}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500 font-medium">Payment:</span>
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize
+                                    ${selectedApplication.data.paymentStatus === "completed" ? "bg-emerald-100 text-emerald-700" :
+                                      selectedApplication.data.paymentStatus === "failed" ? "bg-red-100 text-red-700" :
+                                      "bg-amber-100 text-amber-700"}`}
+                                >
+                                    {selectedApplication.data.paymentStatus || "pending"}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500 font-medium">Tier:</span>
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize
+                                    ${selectedApplication.data.membershipTier === "premium" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
+                                >
+                                    {selectedApplication.data.membershipTier || "basic"}
+                                </span>
+                            </div>
+                            <div className="ml-auto text-xs text-slate-500">
+                                Fee: <span className="font-bold text-slate-700">₦{(selectedApplication.data.registrationFee || 0).toLocaleString()}</span>
+                            </div>
+                        </div>
 
-                        {/* Actions */}
-                        {/* Audit Note when in Edit mode */}
-                        {isEditMode && (
-                            <div className="pt-3 border-t border-slate-200">
-                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                                    Edit Note <span className="text-slate-400 font-normal text-xs">(optional — saved to audit log)</span>
-                                </label>
-                                <textarea
-                                    rows={2}
-                                    value={editNote}
-                                    onChange={(e) => setEditNote(e.target.value)}
-                                    placeholder="e.g. Corrected typo in applicant name per phone verification"
-                                    className="w-full text-sm px-3 py-2 border border-blue-300 rounded-lg bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                                />
+                        {/* ── Personal Information ───────────────────────────── */}
+                        {!isEditMode ? (
+                            <>
+                                <div>
+                                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Personal Information</h4>
+                                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 bg-slate-50 rounded-xl p-4 text-sm">
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Full Name</p>
+                                            <p className="font-semibold text-slate-900">
+                                                {[selectedApplication.data.firstName, selectedApplication.data.middleName, selectedApplication.data.lastName].filter(Boolean).join(" ") || selectedApplication.user.name || "—"}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Email</p>
+                                            <p className="font-semibold text-slate-900 break-all">{selectedApplication.data.email || selectedApplication.user.email || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Phone</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.phone || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Date of Birth</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.dateOfBirth || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Gender</p>
+                                            <p className="font-semibold text-slate-900 capitalize">{selectedApplication.data.gender || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Occupation</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.occupation || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">State of Origin</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.stateOfOrigin || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">LGA</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.lga || "—"}</p>
+                                        </div>
+                                        <div className="col-span-2">
+                                            <p className="text-xs text-slate-400 mb-0.5">Residential Address</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.residentialAddress || "—"}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ── Next of Kin ─────────────────────────────────── */}
+                                {(selectedApplication.data.nextOfKin?.name || (selectedApplication.data as any).nextOfKinName) && (
+                                    <div>
+                                        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Next of Kin</h4>
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-3 bg-slate-50 rounded-xl p-4 text-sm">
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-0.5">Name</p>
+                                                <p className="font-semibold text-slate-900">{selectedApplication.data.nextOfKin?.name || (selectedApplication.data as any).nextOfKinName || "—"}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-400 mb-0.5">Phone</p>
+                                                <p className="font-semibold text-slate-900">{selectedApplication.data.nextOfKin?.phone || (selectedApplication.data as any).nextOfKinPhone || "—"}</p>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <p className="text-xs text-slate-400 mb-0.5">Address</p>
+                                                <p className="font-semibold text-slate-900">{selectedApplication.data.nextOfKin?.address || (selectedApplication.data as any).nextOfKinAddress || "—"}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            /* Edit mode fields */
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Edit Member Details</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    {[
+                                        { key: "firstName", label: "First Name" },
+                                        { key: "lastName", label: "Last Name" },
+                                        { key: "otherName", label: "Other Name" },
+                                        { key: "phone", label: "Phone" },
+                                        { key: "email", label: "Email" },
+                                        { key: "dateOfBirth", label: "Date of Birth" },
+                                        { key: "stateOfOrigin", label: "State of Origin" },
+                                        { key: "lga", label: "LGA" },
+                                        { key: "occupation", label: "Occupation" },
+                                        { key: "residentialAddress", label: "Residential Address" },
+                                        { key: "nextOfKin.name", label: "Next of Kin Name" },
+                                        { key: "nextOfKin.phone", label: "Next of Kin Phone" },
+                                        { key: "nextOfKin.address", label: "Next of Kin Address" },
+                                    ].map(({ key, label }) => (
+                                        <div key={key} className={key === "residentialAddress" || key === "nextOfKin.address" ? "col-span-2" : ""}>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+                                            <input
+                                                type="text"
+                                                value={editFields[key] ?? ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
+                                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="pt-3 border-t border-slate-200">
+                                    <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                                        Edit Note <span className="text-slate-400 font-normal text-xs">(optional — saved to audit log)</span>
+                                    </label>
+                                    <textarea
+                                        rows={2}
+                                        value={editNote}
+                                        onChange={(e) => setEditNote(e.target.value)}
+                                        placeholder="e.g. Corrected typo in applicant name per phone verification"
+                                        className="w-full text-sm px-3 py-2 border border-blue-300 rounded-lg bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                    />
+                                </div>
                             </div>
                         )}
 
-                        {!isEditMode && selectedApplication.data.membershipStatus === "pending" && (
+                        {/* ── Approve / Reject Actions ─────────────────────── */}
+                        {!isEditMode && (selectedApplication.status === "pending" || selectedApplication.data.membershipStatus === "pending") && (
                             <div className="pt-4 border-t border-slate-200 space-y-3">
                                 {selectedApplication.data.paymentStatus !== "completed" && (
                                     <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
@@ -712,7 +845,7 @@ export default function CooperativeMembersPage() {
                                         className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
                                         <CheckCircle className="w-5 h-5" />
-                                        Approve
+                                        {isProcessing ? "Processing…" : "Approve"}
                                     </button>
                                     <button
                                         onClick={() => handleReject(selectedApplication.id)}

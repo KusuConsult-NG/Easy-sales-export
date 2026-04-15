@@ -130,7 +130,7 @@ export function VideoPlayer({
         }
     };
 
-    const handleTimeUpdate = () => {
+    function handleTimeUpdate() {
         if (videoRef.current) {
             setCurrentTime(videoRef.current.currentTime);
             const prog = (videoRef.current.currentTime / videoRef.current.duration) * 100;
@@ -138,13 +138,13 @@ export function VideoPlayer({
         }
     };
 
-    const handleLoadedMetadata = () => {
+    function handleLoadedMetadata() {
         if (videoRef.current) {
             setDuration(videoRef.current.duration);
         }
     };
 
-    const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+    function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
         if (!videoRef.current) return;
         const rect = e.currentTarget.getBoundingClientRect();
         const pos = (e.clientX - rect.left) / rect.width;

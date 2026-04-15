@@ -26,10 +26,10 @@ function PaymentCallbackContent() {
             try {
                 const result = await verifyInvestmentPaymentAction(reference);
 
-                if (result.success && result.data) {
+                if (result.success ) {
                     setStatus("success");
-                    setMessage(result.data.message || "Investment successful!");
-                    setInvestmentDetails(result.data.investmentId || null);
+                    setMessage(result.data?.message || "Investment successful!");
+                    setInvestmentDetails(result.data?.investmentId || null);
                 } else {
                     setStatus("error");
                     setMessage(result.error || "Payment verification failed");

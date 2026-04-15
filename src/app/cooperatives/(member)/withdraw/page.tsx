@@ -19,7 +19,7 @@ export default function WithdrawPage() {
 
     const amountNum = parseFloat(amount) || 0;
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
 
         try {

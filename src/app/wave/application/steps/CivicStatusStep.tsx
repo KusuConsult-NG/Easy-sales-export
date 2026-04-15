@@ -27,7 +27,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
     const [ninVerified, setNinVerified] = useState(false);
     const [ninError, setNinError] = useState("");
 
-    const handleVerifyNin = async () => {
+    async function handleVerifyNin() {
         if (!data.nin || data.nin.length !== 11) {
             setNinError("Please enter a valid 11-digit NIN");
             return;
@@ -76,7 +76,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateForm()) {
             onNext();
         } else {

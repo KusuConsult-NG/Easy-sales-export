@@ -22,10 +22,10 @@ export default function AdminFarmNationPage() {
             bg: "bg-amber-100"
         },
         {
-            title: "Seller Review",
-            description: "Approve prospective land sellers",
+            title: "Registration Applications",
+            description: "Review and approve Farm Nation applications",
             icon: Search,
-            href: "/admin/farm-nation/sellers",
+            href: "/admin/farm-nation/applications",
             color: "text-blue-600",
             bg: "bg-blue-100"
         }

@@ -22,7 +22,8 @@ export default function BookingModal({ isOpen, onClose, exportWindow }: BookingM
     const availableVolume = exportWindow.targetVolume - exportWindow.currentVolume;
     const totalPrice = quantity * exportWindow.slotPrice;
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
+        if (!exportWindow) return;
         if (quantity <= 0 || quantity > availableVolume) {
             showToast(`Please enter a quantity between 1 and ${availableVolume}kg`, "warning");
             return;

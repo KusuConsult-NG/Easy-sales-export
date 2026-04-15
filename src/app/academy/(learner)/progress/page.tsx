@@ -40,9 +40,17 @@ export default function ProgressPage() {
                     getUserAggregateProgressAction(userId),
                     calculateStreakAction(userId),
                 ]);
+                const agg = aggResult.data ?? {};
                 setProgressData({
-                    ...aggResult.data,
-                    currentStreak: streakResult.data?.streak || 0,
+                    totalCourses: agg.totalCourses ?? 0,
+                    completedCourses: agg.completedCourses ?? 0,
+                    inProgressCourses: agg.inProgressCourses ?? 0,
+                    totalHoursLearned: agg.totalHoursLearned ?? 0,
+                    certificatesEarned: agg.certificatesEarned ?? 0,
+                    totalLessons: agg.totalLessons ?? 0,
+                    completedLessons: agg.completedLessons ?? 0,
+                    overallProgress: agg.overallProgress ?? 0,
+                    currentStreak: streakResult.data?.streak ?? 0,
                 });
             } catch (error) {
                 logger.error("Failed to load progress:", error);

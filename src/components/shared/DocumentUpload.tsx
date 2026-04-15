@@ -26,7 +26,7 @@ export default function DocumentUpload({
     const [preview, setPreview] = useState<string | null>(null);
     const { showToast } = useToast();
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const selectedFile = e.target.files?.[0];
         if (!selectedFile) return;
 
@@ -51,7 +51,7 @@ export default function DocumentUpload({
         }
     };
 
-    const handleRemove = () => {
+    function handleRemove() {
         setFile(null);
         setPreview(null);
     };

@@ -43,7 +43,7 @@ export default function AdminPasswordResetsPage() {
         fetchRecords();
     }, [fetchRecords]);
 
-    const handlePurgeExpired = async () => {
+    async function handlePurgeExpired() {
         if (!confirm("Purge all expired & used reset tokens? This cannot be undone.")) return;
         setPurging(true);
         try {

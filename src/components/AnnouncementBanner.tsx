@@ -33,7 +33,7 @@ export default function AnnouncementBanner() {
         ]);
     }, []);
 
-    const handleDismiss = (id: string) => {
+    function handleDismiss(id: string) {
         const newDismissed = new Set(dismissed);
         newDismissed.add(id);
         setDismissed(newDismissed);

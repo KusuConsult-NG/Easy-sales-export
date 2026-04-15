@@ -61,7 +61,7 @@ export async function getVendorSalesStatsAction() {
             }
         });
 
-        return { success: true, data: { stats } };
+        return { success: true, stats };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -113,7 +113,7 @@ export async function getVendorRevenueTrendsAction() {
             });
         }
 
-        return { success: true, data: { trends } };
+        return { success: true, trends };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -162,7 +162,7 @@ export async function getTopSellingProductsAction(limit: number = 5) {
             .sort((a, b) => b.totalRevenue - a.totalRevenue)
             .slice(0, limit);
 
-        return { success: true, data: { products } };
+        return { success: true, products };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -209,7 +209,7 @@ export async function getVendorInventoryStatsAction() {
         });
 
         stats.lowStockProducts.sort((a, b) => a.stock - b.stock);
-        return { success: true, data: { stats } };
+        return { success: true, stats };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -255,12 +255,12 @@ export async function getVendorRevenueInsightsAction() {
             .map(([category, revenue]) => ({ category, revenue }))
             .sort((a, b) => b.revenue - a.revenue);
 
-        return { success: true, data: { insights: {
+        return { success: true, insights: {
                 totalRevenue,
                 pendingPayouts,
                 completedTransactions,
                 averageOrderValue,
-                revenueByCategory, } },
+                revenueByCategory, }
         };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -317,7 +317,7 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
         });
 
         activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        return { success: true, data: { activities: activities.slice(0, limit) } };
+        return { success: true, activities: activities.slice(0, limit) };
     } catch (error: any) {
         return { success: false, error: error.message };
     }

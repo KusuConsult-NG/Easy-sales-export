@@ -27,12 +27,12 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
         }).format(date);
     };
 
-    const handleApply = () => {
+    function handleApply() {
         onChange(tempRange);
         setIsOpen(false);
     };
 
-    const handleClear = () => {
+    function handleClear() {
         const cleared = { from: null, to: null };
         setTempRange(cleared);
         onChange(cleared);

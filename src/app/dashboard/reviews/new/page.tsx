@@ -44,8 +44,8 @@ function NewReviewContent() {
         if (!orderId) return;
 
         try {
-            const result = await getOrderByIdAction(orderId) as any;
-            if (result.success && result.order) {
+            const result = await getOrderByIdAction(orderId);
+            if (result.success && "order" in result && result.order) {
                 setOrder(result.order);
                 // Auto-select first item if only one
                 if (result.order.items.length === 1) {

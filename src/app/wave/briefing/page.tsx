@@ -68,7 +68,7 @@ export default function WaveBriefingPage() {
 
     // Offline sync listener
     useEffect(() => {
-        const handleOnline = async () => {
+        async function handleOnline() {
             const pendingData = localStorage.getItem("wave_briefing_pending_sync");
             if (pendingData && !isSubmitting) {
                 try {
@@ -98,7 +98,7 @@ export default function WaveBriefingPage() {
         formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setError("");
 

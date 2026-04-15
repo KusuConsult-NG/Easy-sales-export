@@ -26,7 +26,7 @@ export default function ProductDetailPage() {
             try {
                 const result = await getProductAction(productId);
                 if (result.success && result.data?.product) {
-                    setProduct(result.data?.product);
+                    setProduct(result.data.product);
 
                     // Load related products
                     const relatedResult = await getRelatedProductsAction(productId, 4);

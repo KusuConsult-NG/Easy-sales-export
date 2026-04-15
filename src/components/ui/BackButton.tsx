@@ -20,7 +20,7 @@ export default function BackButton({
 }: BackButtonProps) {
     const router = useRouter();
 
-    const handleBack = () => {
+    function handleBack() {
         if (typeof window !== 'undefined' && window.history.length > 1) {
             router.back();
         } else if (fallbackPath) {

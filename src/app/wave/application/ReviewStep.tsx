@@ -23,7 +23,7 @@ export default function ReviewStep({ data, onBack, onSubmit, submitting, onEdit 
     const [consentGiven, setConsentGiven] = useState(false);
     const { showToast } = useToast();
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         if (!declarationAccepted || !consentGiven) {
             showToast("Please accept both the declaration and consent to continue", "error");
             return;

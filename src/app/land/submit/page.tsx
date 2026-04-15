@@ -50,17 +50,17 @@ export default function SubmitLandListingPage() {
     const [imageFiles, setImageFiles] = useState<File[]>([]);
     const [documentFiles, setDocumentFiles] = useState<File[]>([]);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    function handleInputChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
         if (e.target.files) {
             setImageFiles(Array.from(e.target.files).slice(0, 5)); // Max 5 images
         }
     };
 
-    const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    function handleDocumentUpload(e: React.ChangeEvent<HTMLInputElement>) {
         if (e.target.files) {
             setDocumentFiles(Array.from(e.target.files).slice(0, 3)); // Max 3 documents
         }
@@ -79,7 +79,7 @@ export default function SubmitLandListingPage() {
         return true;
     };
 
-    const handleNext = () => {
+    function handleNext() {
         if (validateStep(step)) {
             setError(null);
             setStep(step + 1);
@@ -88,12 +88,12 @@ export default function SubmitLandListingPage() {
         }
     };
 
-    const handleBack = () => {
+    function handleBack() {
         setError(null);
         setStep(step - 1);
     };
 
-    const handleSubmit = async () => {
+    async function handleSubmit() {
         if (!session?.user) {
             setError("You must be logged in to submit a listing");
             return;

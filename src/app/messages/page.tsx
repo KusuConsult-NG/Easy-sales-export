@@ -1,18 +1,20 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { isSessionExpired } from '@/lib/session-expiry-code';
 import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
-import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction } from "@/app/actions/messages";
+import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction, startSupportConversationAction } from "@/app/actions/messages";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { format } from "date-fns";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function MessagesPage() {
     const { data: session } = useSession();
+    const { showToast } = useToast();
     const searchParams = useSearchParams();
     const defaultConv = searchParams.get("conversation");
     
@@ -26,6 +28,14 @@ export default function MessagesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
     const [searching, setSearching] = useState(false);
+
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
+    };
 
     // Load conversations on mount
     useEffect(() => {
@@ -58,6 +68,7 @@ export default function MessagesPage() {
             const result = await getMessagesAction(selectedConv!);
             if (!isSessionExpired(result) && result.messages) {
                 setMessages(result.messages);
+                scrollToBottom();
             }
 
             // Mark as read
@@ -76,6 +87,7 @@ export default function MessagesPage() {
                 newMessages.push({ id: doc.id, ...doc.data() } as Message);
             });
             setMessages(newMessages.reverse());
+            scrollToBottom();
         });
 
         return () => unsubscribe();
@@ -86,15 +98,23 @@ export default function MessagesPage() {
         if (!newMessage.trim() || !selectedConv || sending) return;
 
         setSending(true);
-        const result = await sendMessageAction(selectedConv, newMessage);
-        if (result.success) {
-            setNewMessage("");
+        try {
+            const result = await sendMessageAction(selectedConv, newMessage);
+            if (result && typeof result === 'object' && result.success) {
+                setNewMessage("");
+                scrollToBottom();
+            } else {
+                showToast((result as any)?.error || "Failed to send message", "error");
+            }
+        } catch (error: any) {
+            showToast(error.message || "An unexpected error occurred", "error");
+        } finally {
+            setSending(false);
         }
-        setSending(false);
     };
 
     // Handle user search
-    const handleSearch = async (query: string) => {
+    async function handleSearch(query: string) {
         setSearchQuery(query);
         if (!query.trim()) {
             setSearchResults([]);
@@ -110,7 +130,7 @@ export default function MessagesPage() {
     };
 
     // Start new conversation
-    const handleStartConversation = async (userUid: string) => {
+    async function handleStartConversation(userUid: string) {
         const result = await startConversationAction(userUid);
         if (!isSessionExpired(result) && result.conversationId) {
             setSelectedConv(result.conversationId);
@@ -124,6 +144,25 @@ export default function MessagesPage() {
                 setConversations(convResult.conversations);
             }
         }
+    };
+
+    // Start Support conversation
+    async function handleStartSupportConversation() {
+        setSearching(true);
+        const result = await startSupportConversationAction();
+        if (!isSessionExpired(result) && result.conversationId) {
+            setSelectedConv(result.conversationId);
+            setShowNewChat(false);
+            setSearchQuery("");
+            setSearchResults([]);
+
+            // Reload conversations
+            const convResult = await getConversationsAction();
+            if (!isSessionExpired(convResult) && convResult.conversations) {
+                setConversations(convResult.conversations);
+            }
+        }
+        setSearching(false);
     };
 
     // Get other participant
@@ -167,6 +206,13 @@ export default function MessagesPage() {
                                     className="w-full pl-10 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
                             </div>
+
+                            <button
+                                onClick={handleStartSupportConversation}
+                                className="w-full mt-3 p-3 bg-blue-50 text-blue-700 font-semibold rounded-lg hover:bg-blue-100 transition-colors text-sm text-center"
+                            >
+                                Contact Admin Support
+                            </button>
 
                             {searching && <div className="mt-2 text-sm text-slate-500">Searching...</div>}
 
@@ -299,6 +345,7 @@ export default function MessagesPage() {
                                     </div>
                                 );
                             })}
+                            <div ref={messagesEndRef} />
                         </div>
 
                         {/* Input */}
