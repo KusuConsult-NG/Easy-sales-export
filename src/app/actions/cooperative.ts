@@ -84,7 +84,8 @@ export async function initiateCooperativePaymentAction(
             membershipTier: tier,
             registrationFee,
             membershipStatus: "pending",
-            paymentStatus: "pending",
+            // Only set paymentStatus to pending if they haven't already paid
+            paymentStatus: memberData?.paymentStatus === "completed" ? "completed" : "pending",
             updatedAt: FieldValue.serverTimestamp(),
             // Preserve creation date if exists
             createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp(),

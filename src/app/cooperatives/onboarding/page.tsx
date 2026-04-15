@@ -1,4 +1,6 @@
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import { redirect } from "next/navigation";
 import OnboardingClient from "./OnboardingClient";
 
@@ -27,6 +29,16 @@ export default async function CooperativeOnboardingPage(
         redirect(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     }
 
-    // Pass token to client
-    return <OnboardingClient initialTier="basic" paymentStatus="pending" inviteToken={token} />;
+    let paymentStatus = "pending";
+    try {
+        const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id).get();
+        if (memberDoc.exists) {
+            paymentStatus = memberDoc.data()?.paymentStatus || "pending";
+        }
+    } catch {
+        // Safe fallback
+    }
+
+    // Pass token and real paymentStatus to client
+    return <OnboardingClient initialTier="basic" paymentStatus={paymentStatus} inviteToken={token} />;
 }
