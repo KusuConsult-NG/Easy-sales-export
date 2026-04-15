@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         const limitParam = parseInt(searchParams.get("limit") || "50");
         const lastCreatedAt = searchParams.get("lastCreatedAt");
         const status = searchParams.get("status");
+        const paymentStatus = searchParams.get("paymentStatus");
         const stateFilter = searchParams.get("state") || "";
         const lgaFilter = searchParams.get("lga") || "";
         const fromDate = searchParams.get("fromDate") || "";
@@ -37,6 +38,11 @@ export async function GET(request: NextRequest) {
         // Status filter
         if (status && status !== "all") {
             query = query.where("membershipStatus", "==", status);
+        }
+
+        // Payment status filter
+        if (paymentStatus && paymentStatus !== "all") {
+            query = query.where("paymentStatus", "==", paymentStatus);
         }
 
         // State filter (server-side)

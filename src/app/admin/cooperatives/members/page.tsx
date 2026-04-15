@@ -50,6 +50,7 @@ export default function CooperativeMembersPage() {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "under_review" | "suspended">("all");
+    const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "pending" | "completed" | "failed">("completed");
     const [searchQuery, setSearchQuery] = useState("");
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -92,6 +93,7 @@ export default function CooperativeMembersPage() {
             const params = new URLSearchParams({
                 limit: "20",
                 status: statusFilter,
+                ...(paymentStatusFilter && paymentStatusFilter !== "all" && { paymentStatus: paymentStatusFilter }),
                 ...(stateFilter && { state: stateFilter }),
                 ...(lgaFilter && { lga: lgaFilter }),
                 ...(fromDate && { fromDate }),
@@ -123,14 +125,14 @@ export default function CooperativeMembersPage() {
             setIsLoadingMore(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter, lastCreatedAt, stateFilter, lgaFilter, fromDate, toDate]);
+    }, [statusFilter, paymentStatusFilter, lastCreatedAt, stateFilter, lgaFilter, fromDate, toDate]);
 
     // Initial Load & Filter Change
     useEffect(() => {
         setLastCreatedAt(undefined);
         fetchApplications(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter, stateFilter, lgaFilter, fromDate, toDate]);
+    }, [statusFilter, paymentStatusFilter, stateFilter, lgaFilter, fromDate, toDate]);
 
     // Load Global Stats
     useEffect(() => {
@@ -358,6 +360,23 @@ export default function CooperativeMembersPage() {
                             <option value="under_review">Under Review</option>
                             <option value="approved">Approved</option>
                             <option value="suspended">Suspended</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* Second row of filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    {/* Payment Status Filter */}
+                    <div className="relative">
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <select
+                            value={paymentStatusFilter}
+                            onChange={(e) => setPaymentStatusFilter(e.target.value as "all" | "pending" | "completed" | "failed")}
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                            <option value="all">All Payment Statuses</option>
+                            <option value="completed">Paid Only</option>
+                            <option value="pending">Unpaid Only</option>
                         </select>
                     </div>
                 </div>
