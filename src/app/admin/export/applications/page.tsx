@@ -37,8 +37,10 @@ import {
     approveExportOnboardingAction,
     rejectExportApplicationAction,
     requestExportApplicationRevisionAction,
+    getStandardExportApplicationsAction
 } from "@/app/actions/admin";
 import RejectionModal from "@/components/admin/RejectionModal";
+import { StandardPendingForm } from "@/lib/types/admin";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -103,15 +105,14 @@ function formatDate(ts: any): string {
 
 export default function AdminExportApplicationsPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<ExportApplication[]>([]);
+    const [applications, setApplications] = useState<StandardPendingForm<ExportApplication>[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [statusFilter, setStatusFilter] = useState<AppStatus | "all">("pending_review");
+    const [statusFilter, setStatusFilter] = useState<AppStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
-    const [selectedApp, setSelectedApp] = useState<ExportApplication | null>(null);
+    const [selectedApp, setSelectedApp] = useState<StandardPendingForm<ExportApplication> | null>(null);
 
     // Edit/Revision Note modal state
     const [editingApp, setEditingApp] = useState<ExportApplication | null>(null);
@@ -136,45 +137,31 @@ export default function AdminExportApplicationsPage() {
                 } else {
                     constraints.push(where("status", "==", statusFilter));
                 }
+            const result = await getStandardExportApplicationsAction(statusFilter);
+            if (result.success) {
+                setApplications(result.data || []);
+            } else {
+                setError(result.error || "Failed to load applications.");
             }
-
-            constraints.push(orderBy("createdAt", "desc"));
-
-            const q = query(col, ...constraints);
-
-            unsubscribeRef.current = onSnapshot(
-                q,
-                (snap) => {
-                    const apps = snap.docs.map((doc) => ({
-                        id: doc.id,
-                        ...doc.data(),
-                    })) as ExportApplication[];
-                    setApplications(apps);
-                    setIsLoading(false);
-                },
-                (err) => {
-                    console.error("Firestore error:", err);
-                    setError("Failed to load applications. Check Firestore indexes.");
-                    setIsLoading(false);
-                }
-            );
         } catch (err) {
-            setError("Failed to subscribe to applications.");
+            setError("Error fetching applications.");
+        } finally {
             setIsLoading(false);
         }
+    };
 
-        return () => {
-            if (unsubscribeRef.current) unsubscribeRef.current();
-        };
+    useEffect(() => {
+        fetchData();
     }, [statusFilter]);
 
-    const handleApprove = async (app: ExportApplication) => {
-        if (!confirm(`Approve application for ${getDisplayName(app)}?`)) return;
+    const handleApprove = async (app: StandardPendingForm<ExportApplication>) => {
+        if (!confirm(`Approve application for ${app.user.name}?`)) return;
         setProcessingId(app.id);
-        const appId = app.applicationId || app.id;
+        const appId = app.data.applicationId || app.id;
         const result = await approveExportOnboardingAction(appId);
         if (result.success) {
             showToast("Application approved successfully", "success");
+            await fetchData();
         } else {
             showToast(result.error || "Failed to approve", "error");
         }
@@ -184,11 +171,12 @@ export default function AdminExportApplicationsPage() {
     const handleRejectConfirm = async (reason: string) => {
         if (!rejectingAppId) return;
         const app = applications.find((a) => a.id === rejectingAppId);
-        const appId = app?.applicationId || rejectingAppId;
+        const appId = app?.data.applicationId || rejectingAppId;
         setProcessingId(rejectingAppId);
         const result = await rejectExportApplicationAction(appId, reason);
         if (result.success) {
             showToast("Application rejected", "success");
+            await fetchData();
         } else {
             showToast(result.error || "Failed to reject", "error");
         }
@@ -197,9 +185,9 @@ export default function AdminExportApplicationsPage() {
         setRejectingAppId(null);
     };
 
-    const handleOpenEdit = (app: ExportApplication) => {
-        setEditingApp(app);
-        setRevisionNote(app.revisionNote || "");
+    const handleOpenEdit = (app: StandardPendingForm<ExportApplication>) => {
+        setEditingApp(app.data);
+        setRevisionNote(app.data.revisionNote || "");
     };
 
     async function handleSaveRevision() {
@@ -214,6 +202,7 @@ export default function AdminExportApplicationsPage() {
             showToast("Revision note sent. Application marked for correction.", "success");
             setEditingApp(null);
             setRevisionNote("");
+            await fetchData();
         } else {
             showToast(result.error || "Failed to send revision note", "error");
         }
@@ -223,12 +212,12 @@ export default function AdminExportApplicationsPage() {
     function handleExportCSV() {
         if (!applications.length) return;
         const rows = applications.map((a) => [
-            getDisplayName(a),
-            a.userEmail || "",
+            a.user.name,
+            a.user.email || "",
             a.status,
-            formatDate(a.createdAt),
-            a.bank?.bankName || "",
-            a.bank?.accountNumber || "",
+            formatDate(a.data.createdAt),
+            a.data.bank?.bankName || "",
+            a.data.bank?.accountNumber || "",
         ]);
         const header = ["Name", "Email", "Status", "Submitted", "Bank", "Account No"];
         const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
@@ -243,7 +232,7 @@ export default function AdminExportApplicationsPage() {
     const pendingCount = applications.filter(
         (a) => a.status === "pending_review" || a.status === "pending"
     ).length;
-    const resubmittedCount = applications.filter((a) => a.resubmittedAt).length;
+    const resubmittedCount = applications.filter((a) => a.data.resubmittedAt).length;
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
@@ -330,11 +319,13 @@ export default function AdminExportApplicationsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {applications.map((app) => (
-                                <tr key={app.id} className="hover:bg-slate-50 transition">
+                            {applications.map((standardApp) => {
+                                const app = standardApp.data;
+                                return (
+                                <tr key={standardApp.id} className="hover:bg-slate-50 transition">
                                     <td className="px-6 py-4">
-                                        <div className="font-semibold text-slate-900 text-sm">{getDisplayName(app)}</div>
-                                        <div className="text-xs text-slate-500">{app.userEmail}</div>
+                                        <div className="font-semibold text-slate-900 text-sm">{standardApp.user.name}</div>
+                                        <div className="text-xs text-slate-500">{standardApp.user.email}</div>
                                         {app.resubmittedAt && (
                                             <div className="flex items-center gap-1 mt-1">
                                                 <RefreshCw className="w-3 h-3 text-orange-500" />
@@ -347,8 +338,8 @@ export default function AdminExportApplicationsPage() {
                                         <div className="text-xs text-slate-500">{app.bank?.accountNumber || ""}</div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${statusBadge(app.status)}`}>
-                                            {app.status.replace("_", " ")}
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${statusBadge(standardApp.status)}`}>
+                                            {standardApp.status.replace("_", " ")}
                                         </span>
                                         {app.rejectionReason && (
                                             <p className="text-xs text-slate-500 mt-1 max-w-[200px] truncate" title={app.rejectionReason}>
@@ -363,7 +354,7 @@ export default function AdminExportApplicationsPage() {
                                         <div className="flex items-center justify-end gap-2">
                                             {/* Detail */}
                                             <button
-                                                onClick={() => setSelectedApp(app)}
+                                                onClick={() => setSelectedApp(standardApp)}
                                                 className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                                 title="View Details"
                                             >
@@ -371,9 +362,9 @@ export default function AdminExportApplicationsPage() {
                                             </button>
 
                                             {/* Edit / Request Revision */}
-                                            {(app.status === "pending_review" || app.status === "pending" || app.status === "revision_required") && (
+                                            {(standardApp.status === "pending_review" || standardApp.status === "pending" || standardApp.status === "revision_required") && (
                                                 <button
-                                                    onClick={() => handleOpenEdit(app)}
+                                                    onClick={() => handleOpenEdit(standardApp)}
                                                     disabled={!!processingId}
                                                     className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-lg transition disabled:opacity-50"
                                                     title="Request Correction / Add Note"
@@ -383,14 +374,14 @@ export default function AdminExportApplicationsPage() {
                                             )}
 
                                             {/* Approve */}
-                                            {(app.status === "pending_review" || app.status === "pending" || app.status === "revision_required") && (
+                                            {(standardApp.status === "pending_review" || standardApp.status === "pending" || standardApp.status === "revision_required") && (
                                                 <button
-                                                    onClick={() => handleApprove(app)}
-                                                    disabled={processingId === app.id}
+                                                    onClick={() => handleApprove(standardApp)}
+                                                    disabled={processingId === standardApp.id}
                                                     className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
                                                     title="Approve"
                                                 >
-                                                    {processingId === app.id ? (
+                                                    {processingId === standardApp.id ? (
                                                         <Loader2 className="w-4 h-4 animate-spin" />
                                                     ) : (
                                                         <CheckCircle className="w-4 h-4" />
@@ -399,10 +390,10 @@ export default function AdminExportApplicationsPage() {
                                             )}
 
                                             {/* Reject */}
-                                            {(app.status === "pending_review" || app.status === "pending" || app.status === "revision_required") && (
+                                            {(standardApp.status === "pending_review" || standardApp.status === "pending" || standardApp.status === "revision_required") && (
                                                 <button
                                                     onClick={() => {
-                                                        setRejectingAppId(app.id);
+                                                        setRejectingAppId(standardApp.id);
                                                         setRejectionModalOpen(true);
                                                     }}
                                                     disabled={!!processingId}
@@ -415,7 +406,7 @@ export default function AdminExportApplicationsPage() {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 )}

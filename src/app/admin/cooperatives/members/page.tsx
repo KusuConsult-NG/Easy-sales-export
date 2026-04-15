@@ -8,8 +8,9 @@ import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { editApplicationAction } from "@/app/actions/admin";
-import { getCooperativeStatsAction } from "@/app/actions/cooperative-admin";
+import { getCooperativeStatsAction, getStandardCooperativeMembersAction } from "@/app/actions/cooperative-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { StandardPendingForm } from "@/lib/types/admin";
 
 type MembershipApplication = {
     id: string;
@@ -42,11 +43,11 @@ type MembershipApplication = {
 
 export default function CooperativeMembersPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<MembershipApplication[]>([]);
+    const [applications, setApplications] = useState<StandardPendingForm<MembershipApplication>[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null);
+    const [selectedApplication, setSelectedApplication] = useState<StandardPendingForm<MembershipApplication> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "under_review" | "suspended">("all");
@@ -83,39 +84,35 @@ export default function CooperativeMembersPage() {
     const [hasMore, setHasMore] = useState(false);
 
     const fetchApplications = useCallback(async (loadMore = false) => {
-        if (loadMore) {
-            setIsLoadingMore(true);
-        } else {
-            setIsLoading(true);
-        }
+        setIsLoading(true);
 
         try {
-            const params = new URLSearchParams({
-                limit: "20",
-                status: statusFilter,
-                ...(paymentStatusFilter && paymentStatusFilter !== "all" && { paymentStatus: paymentStatusFilter }),
-                ...(stateFilter && { state: stateFilter }),
-                ...(lgaFilter && { lga: lgaFilter }),
-                ...(fromDate && { fromDate }),
-                ...(toDate && { toDate }),
-            });
+            const result = await getStandardCooperativeMembersAction(statusFilter);
 
-            if (loadMore && lastCreatedAt) {
-                params.append("lastCreatedAt", lastCreatedAt);
-            }
-
-            const response = await fetch(`/api/admin/cooperative/members?${params.toString()}`);
-            const data = await response.json();
-
-            if (data.success) {
-                if (loadMore) {
-                    setApplications(prev => [...prev, ...data.members]);
-                } else {
-                    setApplications(data.members);
+            if (result.success && result.data) {
+                // Apply local filters since Server Action fetches up to 500
+                let filtered = result.data as StandardPendingForm<MembershipApplication>[];
+                
+                if (paymentStatusFilter && paymentStatusFilter !== "all") {
+                    filtered = filtered.filter(a => a.data.paymentStatus === paymentStatusFilter);
+                }
+                if (stateFilter) {
+                    filtered = filtered.filter(a => a.data.stateOfOrigin === stateFilter);
+                }
+                if (lgaFilter) {
+                    filtered = filtered.filter(a => a.data.lga === lgaFilter);
+                }
+                if (fromDate) {
+                    filtered = filtered.filter(a => new Date(a.data.createdAt) >= new Date(fromDate));
+                }
+                if (toDate) {
+                    const end = new Date(toDate);
+                    end.setHours(23, 59, 59, 999);
+                    filtered = filtered.filter(a => new Date(a.data.createdAt) <= end);
                 }
 
-                setHasMore(data.hasMore);
-                setLastCreatedAt(data.lastCreatedAt);
+                setApplications(filtered);
+                setHasMore(false);
             }
         } catch (error) {
             logger.error("Failed to fetch applications:", error);
@@ -150,10 +147,9 @@ export default function CooperativeMembersPage() {
         if (!searchQuery) return true;
         const query = searchQuery.toLowerCase();
         return (
-            (app.firstName || "").toLowerCase().includes(query) ||
-            (app.lastName || "").toLowerCase().includes(query) ||
-            (app.email || "").toLowerCase().includes(query) ||
-            (app.phone || "").includes(query)
+            (app.user.name || "").toLowerCase().includes(query) ||
+            (app.user.email || "").toLowerCase().includes(query) ||
+            (app.data.phone || "").includes(query)
         );
     });
 
@@ -603,22 +599,48 @@ export default function CooperativeMembersPage() {
                                                         ? "bg-green-100 text-green-700"
                                                         : "bg-yellow-100 text-yellow-700"
                                                         } `}>
-                                                        {app.paymentStatus}
-                                                    </span>
+                                        <tr
+                                            key={app.id}
+                                            className="hover:bg-slate-50 transition cursor-pointer"
+                                            onClick={() => {
+                                                setSelectedApplication(app);
+                                                setIsDetailsModalOpen(true);
+                                            }}
+                                        >
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                                                        <Users className="w-5 h-5 text-slate-400" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-sm font-semibold text-slate-900">{app.user.name}</div>
+                                                        <div className="text-sm text-slate-500">{app.user.email}</div>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)} `}>
-                                                    {app.membershipStatus}
-                                                </span>
+                                                <div className="text-sm text-slate-900">{app.data.phone || "—"}</div>
+                                                <div className="text-xs text-slate-500">{app.data.stateOfOrigin || "—"}</div>
                                             </td>
                                             <td className="px-6 py-4">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border ${app.data.membershipTier === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                                    {app.data.membershipTier}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${app.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                                        (app.status === 'suspended' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800')
+                                                    }`}>
+                                                    {app.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                                 <button
-                                                    onClick={() => viewDetails(app)}
-                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+                                                    onClick={(e) => { e.stopPropagation(); setSelectedApplication(app); setIsDetailsModalOpen(true); }}
+                                                    className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-slate-100 rounded"
+                                                    title="View Details"
                                                 >
                                                     <Eye className="w-4 h-4" />
-                                                    View
                                                 </button>
                                             </td>
                                         </tr>
@@ -689,143 +711,6 @@ export default function CooperativeMembersPage() {
             >
                 {selectedApplication && (
                     <div className="space-y-6">
-                        {/* Personal Information */}
-                        <div>
-                            <h3 className="font-bold text-slate-900 mb-3">Personal Information</h3>
-                            {isEditMode ? (
-                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                    {(["firstName", "lastName", "otherName", "occupation"] as const).map((key) => (
-                                        <div key={key}>
-                                            <label className="text-xs font-semibold text-slate-500 mb-1 block capitalize">{key.replace(/([A-Z])/g, " $1")}</label>
-                                            <input
-                                                type="text"
-                                                value={editFields[key] ?? ""}
-                                                onChange={(e) => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
-                                                className="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-slate-500">Full Name</p>
-                                        <p className="font-semibold text-slate-900">
-                                            {[selectedApplication.firstName, selectedApplication.otherName, selectedApplication.lastName].filter(Boolean).join(" ")}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">Date of Birth</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.dateOfBirth}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">Gender</p>
-                                        <p className="font-semibold text-slate-900 capitalize">{selectedApplication.gender}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">Occupation</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.occupation}</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Contact Information */}
-                        <div>
-                            <h3 className="font-bold text-slate-900 mb-3">Contact Information</h3>
-                            {isEditMode ? (
-                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                    {(["email", "phone", "stateOfOrigin", "lga"] as const).map((key) => (
-                                        <div key={key}>
-                                            <label className="text-xs font-semibold text-slate-500 mb-1 block capitalize">{key.replace(/([A-Z])/g, " $1")}</label>
-                                            <input
-                                                type="text"
-                                                value={editFields[key] ?? ""}
-                                                onChange={(e) => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
-                                                className="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                            />
-                                        </div>
-                                    ))}
-                                    <div className="col-span-2">
-                                        <label className="text-xs font-semibold text-slate-500 mb-1 block">Residential Address</label>
-                                        <input
-                                            type="text"
-                                            value={editFields["residentialAddress"] ?? ""}
-                                            onChange={(e) => setEditFields(prev => ({ ...prev, residentialAddress: e.target.value }))}
-                                            className="w-full px-2.5 py-1.5 border border-blue-300 rounded-lg text-sm bg-blue-50 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                        />
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-slate-500">Email</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.email}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">Phone</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.phone}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                        <p className="text-slate-500">Address</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.residentialAddress}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">State of Origin</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.stateOfOrigin}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">LGA</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.lga}</p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Next of Kin */}
-                        <div>
-                            <h3 className="font-bold text-slate-900 mb-3">Next of Kin</h3>
-                            {selectedApplication.nextOfKin?.name ? (
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-slate-500">Name</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.name}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-slate-500">Phone</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.phone || "—"}</p>
-                                    </div>
-                                    <div className="col-span-2">
-                                        <p className="text-slate-500">Address</p>
-                                        <p className="font-semibold text-slate-900">{selectedApplication.nextOfKin.address || "—"}</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-amber-600 italic">Not yet provided (onboarding incomplete)</p>
-                            )}
-                        </div>
-
-                        {/* Membership Details */}
-                        <div>
-                            <h3 className="font-bold text-slate-900 mb-3">Membership Details</h3>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <p className="text-slate-500">Tier</p>
-                                    <p className="font-semibold text-slate-900 capitalize">{selectedApplication.membershipTier}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500">Registration Fee</p>
-                                    <p className="font-semibold text-primary">₦{selectedApplication.registrationFee.toLocaleString()}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500">Payment Status</p>
-                                    <p className="font-semibold text-slate-900 capitalize">{selectedApplication.paymentStatus}</p>
-                                </div>
-                                <div>
-                                    <p className="text-slate-500">Application Status</p>
-                                    <p className="font-semibold text-slate-900 capitalize">{selectedApplication.membershipStatus}</p>
-                                </div>
-                            </div>
                         </div>
 
                         {/* Actions */}

@@ -1,18 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download, Pencil, X, Save } from "lucide-react";
+import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download, Pencil, X, Save, RefreshCw } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
-import {
-    approveWaveApplicationAction,
-    rejectWaveApplicationAction,
-    editApplicationAction
-} from "@/app/actions/admin";
+import { approveWaveApplicationAction, rejectWaveApplicationAction, editApplicationAction } from "@/app/actions/admin";
+import { getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
 import RejectionModal from "@/components/admin/RejectionModal";
+import { StandardPendingForm } from "@/lib/types/admin";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
+
 
 interface WaveApplication {
     id: string;
@@ -49,12 +47,11 @@ function getDisplayName(app: WaveApplication): string {
 
 export default function AdminWaveApplicationsPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<WaveApplication[]>([]);
+    const [applications, setApplications] = useState<StandardPendingForm<WaveApplication>[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
 
@@ -64,62 +61,25 @@ export default function AdminWaveApplicationsPage() {
     const [editNote, setEditNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
 
-    useEffect(() => {
-        // Clean up previous listener
-        if (unsubscribeRef.current) {
-            unsubscribeRef.current();
-        }
-
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+    const fetchData = async () => {
         setIsLoading(true);
         setError(null);
-
         try {
-            const col = collection(db, "wave_applications");
-
-            // Build query based on filter
-            const q = statusFilter !== "all"
-                ? query(col, where("status", "==", statusFilter), orderBy("createdAt", "desc"))
-                : query(col, orderBy("createdAt", "desc"));
-
-            // Real-time listener — updates automatically when Firestore changes
-            const unsubscribe = onSnapshot(
-                q,
-                (snapshot) => {
-                    const docs = snapshot.docs.map((doc) => {
-                        const data = doc.data();
-                        return {
-                            id: doc.id,
-                            ...data,
-                            createdAt: data.createdAt?.toDate() || new Date(),
-                            reviewedAt: data.reviewedAt?.toDate(),
-                            approvalTimestamp: data.approvalTimestamp?.toDate(),
-                        } as WaveApplication;
-                    });
-                    setApplications(docs);
-                    setIsLoading(false);
-                },
-                (err) => {
-                    console.error("[WAVE Admin] Snapshot error:", err);
-                    setError("Failed to load applications. Check your permissions.");
-                    setIsLoading(false);
-                }
-            );
-
-            unsubscribeRef.current = unsubscribe;
+            const result = await getStandardWaveApplicationsAction(statusFilter);
+            if (result.success) {
+                setApplications(result.data || []);
+            } else {
+                setError(result.error || "Failed to load applications");
+            }
         } catch (err) {
-            console.error("[WAVE Admin] Setup error:", err);
-            setError("Failed to initialize real-time listener.");
+            setError("Error fetching applications");
+        } finally {
             setIsLoading(false);
         }
+    };
 
-        // Cleanup on unmount or filter change
-        return () => {
-            if (unsubscribeRef.current) {
-                unsubscribeRef.current();
-                unsubscribeRef.current = null;
-            }
-        };
+    useEffect(() => {
+        fetchData();
     }, [statusFilter]);
 
     const handleApprove = async (applicationId: string) => {
@@ -128,7 +88,7 @@ export default function AdminWaveApplicationsPage() {
 
         if (result.success) {
             showToast("Application approved successfully", "success");
-            // No need to manually update state — onSnapshot will fire automatically
+            await fetchData();
         } else {
             showToast(result.error || "Failed to approve application", "error");
         }
@@ -149,6 +109,7 @@ export default function AdminWaveApplicationsPage() {
         const result = await rejectWaveApplicationAction(rejectingAppId, reason);
         if (result.success) {
             showToast("Application rejected successfully", "success");
+            await fetchData();
         } else {
             showToast(result.error || "Failed to reject application", "error");
         }
@@ -156,14 +117,13 @@ export default function AdminWaveApplicationsPage() {
         setRejectingAppId(null);
     };
 
-    const handleOpenEdit = (app: WaveApplication) => {
-        setEditingApp(app);
+    const handleOpenEdit = (app: StandardPendingForm<WaveApplication>) => {
+        setEditingApp(app.data);
         setEditDraft({
-            surname: app.surname || "",
-            firstName: app.firstName || "",
-            phone: app.phone || "",
-            stateOfResidence: app.stateOfResidence || "",
-            lgaOfResidence: app.lgaOfResidence || "",
+            surname: app.data.surname || "",
+            firstName: app.data.firstName || "",
+            otherNames: app.data.otherNames || "",
+            phone: app.data.phone || "",
         });
         setEditNote("");
     };
@@ -180,6 +140,7 @@ export default function AdminWaveApplicationsPage() {
         if (result.success) {
             showToast("Application updated with audit trail.", "success");
             setEditingApp(null);
+            await fetchData();
         } else {
             showToast(result.error || "Failed to update application", "error");
         }
@@ -261,11 +222,11 @@ export default function AdminWaveApplicationsPage() {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
-                {/* Live indicator */}
-                <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-xs text-slate-500">Live</span>
-                </div>
+                {/* Refresh indicator */}
+                <button onClick={fetchData} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                    <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
+                    <span className="text-xs font-semibold text-slate-600">Refresh</span>
+                </button>
                 {/* CSV Export */}
                 {applications.length > 0 && (
                     <button
@@ -324,16 +285,16 @@ export default function AdminWaveApplicationsPage() {
                                         </div>
                                         <div>
                                             <h3 className="text-lg font-bold text-slate-900">
-                                                {getDisplayName(app)}
+                                                {app.user.name}
                                             </h3>
                                             <p className="text-sm text-slate-500">
-                                                {app.email || app.userEmail || '—'} • {app.phone || '—'}
+                                                {app.user.email} • {app.data.phone || '—'}
                                             </p>
-                                            {app.stateOfResidence && (
+                                            {app.data.stateOfResidence && (
                                                 <p className="text-sm text-slate-600 mt-1">
-                                                    State: <span className="font-semibold">{app.stateOfResidence}</span>
-                                                    {app.lgaOfResidence && ` • LGA: `}
-                                                    {app.lgaOfResidence && <span className="font-semibold">{app.lgaOfResidence}</span>}
+                                                    State: <span className="font-semibold">{app.data.stateOfResidence}</span>
+                                                    {app.data.lgaOfResidence && ` • LGA: `}
+                                                    {app.data.lgaOfResidence && <span className="font-semibold">{app.data.lgaOfResidence}</span>}
                                                 </p>
                                             )}
 
@@ -342,25 +303,25 @@ export default function AdminWaveApplicationsPage() {
                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-slate-500 mb-0.5">NIN</p>
                                                     <p className="text-sm font-mono font-semibold text-slate-800">
-                                                        {app.nin ? `${app.nin.slice(0, 3)}****${app.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                        {app.data.nin ? `${app.data.nin.slice(0, 3)}****${app.data.nin.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
                                                     </p>
                                                 </div>
                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-slate-500 mb-0.5">Voter&apos;s Card (PVC)</p>
                                                     <p className="text-sm font-mono font-semibold text-slate-800">
-                                                        {app.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                        {app.data.votersCardNumber || <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
                                                     </p>
                                                 </div>
                                                 <div className="bg-slate-50 rounded-lg px-3 py-2">
                                                     <p className="text-xs text-slate-500 mb-0.5">BVN</p>
                                                     <p className="text-sm font-mono font-semibold text-slate-800">
-                                                        {app.bvn ? `${app.bvn.slice(0, 3)}****${app.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
+                                                        {app.data.bvn ? `${app.data.bvn.slice(0, 3)}****${app.data.bvn.slice(-3)}` : <span className="text-red-500 font-sans font-normal text-xs">Not provided</span>}
                                                     </p>
                                                 </div>
                                             </div>
-                                            {app.bankName && (
+                                            {app.data.bankName && (
                                                 <p className="text-xs text-slate-500 mt-2">
-                                                    🏦 {app.bankName} {app.accountNumber ? `• ****${app.accountNumber.slice(-4)}` : ''}
+                                                    🏦 {app.data.bankName} {app.data.accountNumber ? `• ****${app.data.accountNumber.slice(-4)}` : ''}
                                                 </p>
                                             )}
                                         </div>
@@ -372,7 +333,7 @@ export default function AdminWaveApplicationsPage() {
 
                                 <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                                     <p className="text-xs text-slate-500">
-                                        Applied: {formatDate(app.createdAt)}
+                                        Applied: {formatDate(app.data.createdAt)}
                                     </p>
 
                                     {app.status === "pending" && (

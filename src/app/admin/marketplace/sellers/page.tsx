@@ -11,7 +11,8 @@ import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import RejectionModal from "@/components/admin/RejectionModal";
-import { editApplicationAction, toggleVerifiedBadgeAction } from "@/app/actions/admin";
+import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction } from "@/app/actions/admin";
+import { StandardPendingForm } from "@/lib/types/admin";
 
 type SellerVerification = {
     id: string;
@@ -43,15 +44,14 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminSellersPage() {
     const { showToast } = useToast();
-    const [verifications, setVerifications] = useState<SellerVerification[]>([]);
-    const [filteredVerifications, setFilteredVerifications] = useState<SellerVerification[]>([]);
+    const [verifications, setVerifications] = useState<StandardPendingForm<SellerVerification>[]>([]);
+    const [filteredVerifications, setFilteredVerifications] = useState<StandardPendingForm<SellerVerification>[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<FilterType>("all");
-    const [selectedVerification, setSelectedVerification] = useState<SellerVerification | null>(null);
+    const [selectedVerification, setSelectedVerification] = useState<StandardPendingForm<SellerVerification> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectionMode, setRejectionMode] = useState<"reject" | "suspend">("reject");
     const [rejectionTargetId, setRejectionTargetId] = useState<string | null>(null);
@@ -65,38 +65,25 @@ export default function AdminSellersPage() {
     // Badge toggle state
     const [isBadgeProcessing, setIsBadgeProcessing] = useState(false);
 
-    // Real-time listener
-    useEffect(() => {
-        if (unsubscribeRef.current) unsubscribeRef.current();
-
+    const fetchData = async () => {
         setIsLoading(true);
-
-        const q = query(collection(db, "seller_verifications"), orderBy("createdAt", "desc"));
-
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const docs = snapshot.docs.map((doc) => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        ...data,
-                        createdAt: data.createdAt?.toDate() || new Date(),
-                        approvedAt: data.approvedAt?.toDate(),
-                    } as SellerVerification;
-                });
-                setVerifications(docs);
-                setIsLoading(false);
-            },
-            (err) => {
-                logger.error("Seller verifications snapshot error:", err);
+        try {
+            const result = await getStandardSellerVerificationsAction("all");
+            if (result.success) {
+                setVerifications(result.data || []);
+            } else {
                 showToast("Failed to load seller verifications", "error");
-                setIsLoading(false);
             }
-        );
+        } catch (err) {
+            logger.error("Fetch verifications error:", err);
+            showToast("Failed to load seller verifications", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-        unsubscribeRef.current = unsubscribe;
-        return () => { unsubscribeRef.current?.(); };
+    useEffect(() => {
+        fetchData();
     }, [showToast]);
 
     // Local filter
@@ -106,10 +93,10 @@ export default function AdminSellersPage() {
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             filtered = filtered.filter(v =>
-                v.businessName?.toLowerCase().includes(q) ||
-                v.userName?.toLowerCase().includes(q) ||
-                v.userEmail?.toLowerCase().includes(q) ||
-                v.phone?.toLowerCase().includes(q)
+                v.data.businessName?.toLowerCase().includes(q) ||
+                v.user.name?.toLowerCase().includes(q) ||
+                v.user.email?.toLowerCase().includes(q) ||
+                v.data.phone?.toLowerCase().includes(q)
             );
         }
         setFilteredVerifications(filtered);
@@ -123,11 +110,11 @@ export default function AdminSellersPage() {
             "Status", "Applied Date"
         ];
         const rows = verifications.map(v => [
-            v.businessName || "", v.businessType || "",
-            v.userName || "", v.email || v.userEmail || "", v.phone || "",
-            v.state || "", v.lga || "", v.address || "",
-            v.bankDetails?.bankName || "", v.bankDetails?.accountNumber || "", v.bankDetails?.accountName || "",
-            v.status, new Date(v.createdAt).toLocaleDateString("en-NG")
+            v.data.businessName || "", v.data.businessType || "",
+            v.user.name || "", v.user.email || "", v.data.phone || "",
+            v.data.state || "", v.data.lga || "", v.data.address || "",
+            v.data.bankDetails?.bankName || "", v.data.bankDetails?.accountNumber || "", v.data.bankDetails?.accountName || "",
+            v.status, new Date(v.data.createdAt || Date.now()).toLocaleDateString("en-NG")
         ]);
         const csv = [
             headers.join(","),
@@ -155,6 +142,7 @@ export default function AdminSellersPage() {
             if (data.success) {
                 showToast("Seller approved successfully!", "success");
                 setIsDetailsModalOpen(false);
+                await fetchData();
             } else {
                 showToast(data.message || "Failed to approve seller", "error");
             }
@@ -194,6 +182,7 @@ export default function AdminSellersPage() {
             if (data.success) {
                 showToast(rejectionMode === "reject" ? "Seller verification rejected" : "Seller suspended", "success");
                 setIsDetailsModalOpen(false);
+                await fetchData();
             } else {
                 showToast(data.message || "Operation failed", "error");
             }
@@ -205,13 +194,14 @@ export default function AdminSellersPage() {
         }
     };
 
-    const handleOpenEdit = (v: SellerVerification) => {
+    const handleOpenEdit = (standardApp: StandardPendingForm<SellerVerification>) => {
+        const v = standardApp.data;
         setEditingVerification(v);
         setEditDraft({
             businessName: v.businessName || "",
             phone: v.phone || "",
-            residentialAddress: v.address || "",
-            stateOfOrigin: v.state || "",
+            address: v.address || "",
+            state: v.state || "",
             lga: v.lga || "",
         });
         setEditNote("");
@@ -229,6 +219,7 @@ export default function AdminSellersPage() {
         if (result.success) {
             showToast("Seller updated with audit trail.", "success");
             setEditingVerification(null);
+            await fetchData();
         } else {
             showToast(result.error || "Failed to update seller", "error");
         }
@@ -247,6 +238,7 @@ export default function AdminSellersPage() {
             const result = await toggleVerifiedBadgeAction(verification.id);
             if (result.success) {
                 showToast(result.message || `Badge ${action}ed`, "success");
+                await fetchData();
             } else {
                 showToast(result.error || "Failed to update badge", "error");
             }
@@ -355,8 +347,10 @@ export default function AdminSellersPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {filteredVerifications.map((v) => (
-                                    <tr key={v.id} className="hover:bg-slate-50">
+                                {filteredVerifications.map((standardV) => {
+                                    const v = standardV.data;
+                                    return(
+                                    <tr key={standardV.id} className="hover:bg-slate-50">
                                         <td className="px-6 py-4">
                                             <p className="font-semibold text-slate-900">{v.businessName}</p>
                                             <p className="text-sm text-slate-500 capitalize">{v.businessType}</p>
@@ -378,33 +372,33 @@ export default function AdminSellersPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-sm text-slate-900">{v.phone}</p>
-                                            <p className="text-sm text-slate-500">{v.email}</p>
+                                            <p className="text-sm text-slate-500">{v.email || standardV.user.email}</p>
                                         </td>
                                         <td className="px-6 py-4">
                                             <p className="text-sm text-slate-900">{v.state}</p>
                                             <p className="text-sm text-slate-500">{v.lga}</p>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${v.status === "pending" ? "bg-yellow-100 text-yellow-700"
-                                                : v.status === "approved" ? "bg-green-100 text-green-700"
+                                            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${standardV.status === "pending" ? "bg-yellow-100 text-yellow-700"
+                                                : standardV.status === "approved" ? "bg-green-100 text-green-700"
                                                     : "bg-red-100 text-red-700"
                                                 }`}>
-                                                {v.status.charAt(0).toUpperCase() + v.status.slice(1)}
+                                                {standardV.status.charAt(0).toUpperCase() + standardV.status.slice(1)}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600">
-                                            {new Date(v.createdAt).toLocaleDateString()}
+                                            {new Date(v.createdAt || Date.now()).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
                                             <button
-                                                onClick={() => { setSelectedVerification(v); setIsDetailsModalOpen(true); }}
+                                                onClick={() => { setSelectedVerification(standardV); setIsDetailsModalOpen(true); }}
                                                 className="text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                                             >
                                                 <Eye className="w-4 h-4" /> View Details
                                             </button>
                                         </td>
                                     </tr>
-                                ))}
+                                )})}
                             </tbody>
                         </table>
                     </div>
@@ -424,9 +418,9 @@ export default function AdminSellersPage() {
                                     <Store className="w-5 h-5" /> Business Information
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><p className="text-sm text-slate-600">Business Name</p><p className="font-semibold">{selectedVerification.businessName}</p></div>
-                                    <div><p className="text-sm text-slate-600">Type</p><p className="font-semibold capitalize">{selectedVerification.businessType}</p></div>
-                                    <div className="col-span-2"><p className="text-sm text-slate-600">Description</p><p className="text-slate-900">{selectedVerification.businessDescription}</p></div>
+                                    <div><p className="text-sm text-slate-600">Business Name</p><p className="font-semibold">{selectedVerification.data.businessName}</p></div>
+                                    <div><p className="text-sm text-slate-600">Type</p><p className="font-semibold capitalize">{selectedVerification.data.businessType}</p></div>
+                                    <div className="col-span-2"><p className="text-sm text-slate-600">Description</p><p className="text-slate-900">{selectedVerification.data.businessDescription}</p></div>
                                 </div>
                             </div>
                             <div>
@@ -434,11 +428,11 @@ export default function AdminSellersPage() {
                                     <MapPin className="w-5 h-5" /> Contact & Location
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><p className="text-sm text-slate-600">Phone</p><p className="font-semibold">{selectedVerification.phone}</p></div>
-                                    <div><p className="text-sm text-slate-600">Email</p><p className="font-semibold">{selectedVerification.email}</p></div>
-                                    <div className="col-span-2"><p className="text-sm text-slate-600">Address</p><p className="text-slate-900">{selectedVerification.address}</p></div>
-                                    <div><p className="text-sm text-slate-600">State</p><p className="font-semibold">{selectedVerification.state}</p></div>
-                                    <div><p className="text-sm text-slate-600">LGA</p><p className="font-semibold">{selectedVerification.lga}</p></div>
+                                    <div><p className="text-sm text-slate-600">Phone</p><p className="font-semibold">{selectedVerification.data.phone}</p></div>
+                                    <div><p className="text-sm text-slate-600">Email</p><p className="font-semibold">{selectedVerification.data.email || selectedVerification.user.email}</p></div>
+                                    <div className="col-span-2"><p className="text-sm text-slate-600">Address</p><p className="text-slate-900">{selectedVerification.data.address}</p></div>
+                                    <div><p className="text-sm text-slate-600">State</p><p className="font-semibold">{selectedVerification.data.state}</p></div>
+                                    <div><p className="text-sm text-slate-600">LGA</p><p className="font-semibold">{selectedVerification.data.lga}</p></div>
                                 </div>
                             </div>
                             <div>
@@ -446,9 +440,9 @@ export default function AdminSellersPage() {
                                     <CreditCard className="w-5 h-5" /> Bank Details
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><p className="text-sm text-slate-600">Bank</p><p className="font-semibold">{selectedVerification.bankDetails?.bankName || "N/A"}</p></div>
-                                    <div><p className="text-sm text-slate-600">Account No</p><p className="font-semibold">{selectedVerification.bankDetails?.accountNumber || "N/A"}</p></div>
-                                    <div className="col-span-2"><p className="text-sm text-slate-600">Account Name</p><p className="font-semibold">{selectedVerification.bankDetails?.accountName || "N/A"}</p></div>
+                                    <div><p className="text-sm text-slate-600">Bank</p><p className="font-semibold">{selectedVerification.data.bankDetails?.bankName || "N/A"}</p></div>
+                                    <div><p className="text-sm text-slate-600">Account No</p><p className="font-semibold">{selectedVerification.data.bankDetails?.accountNumber || "N/A"}</p></div>
+                                    <div className="col-span-2"><p className="text-sm text-slate-600">Account Name</p><p className="font-semibold">{selectedVerification.data.bankDetails?.accountName || "N/A"}</p></div>
                                 </div>
                             </div>
                             <div>
@@ -456,15 +450,15 @@ export default function AdminSellersPage() {
                                     <FileText className="w-5 h-5" /> Documents
                                 </h3>
                                 <div className="space-y-2 text-sm text-slate-600">
-                                    <p>• Business: {selectedVerification.documents?.businessDoc || "Not uploaded"}</p>
-                                    <p>• ID: {selectedVerification.documents?.idDoc || "Not uploaded"}</p>
-                                    <p>• Address Proof: {selectedVerification.documents?.addressProof || "Not uploaded"}</p>
+                                    <p>• Business: {selectedVerification.data.documents?.businessDoc || "Not uploaded"}</p>
+                                    <p>• ID: {selectedVerification.data.documents?.idDoc || "Not uploaded"}</p>
+                                    <p>• Address Proof: {selectedVerification.data.documents?.addressProof || "Not uploaded"}</p>
                                 </div>
                             </div>
-                            {selectedVerification.rejectionReason && (
+                            {selectedVerification.data.rejectionReason && (
                                 <div className="p-4 bg-red-50 rounded-lg">
                                     <p className="text-sm font-semibold text-red-900 mb-1">Rejection Reason:</p>
-                                    <p className="text-sm text-red-700">{selectedVerification.rejectionReason}</p>
+                                    <p className="text-sm text-red-700">{selectedVerification.data.rejectionReason}</p>
                                 </div>
                             )}
                         </div>
@@ -489,20 +483,20 @@ export default function AdminSellersPage() {
                                     </button>
                                     {/* Verified Badge Toggle */}
                                     <button
-                                        onClick={() => handleToggleBadge(selectedVerification)}
+                                        onClick={() => handleToggleBadge(selectedVerification.data)}
                                         disabled={isBadgeProcessing}
-                                        className={`px-5 py-3 font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 ${selectedVerification.isVerifiedBadge
+                                        className={`px-5 py-3 font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 ${selectedVerification.data.isVerifiedBadge
                                                 ? "bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100"
                                                 : "bg-amber-500 hover:bg-amber-600 text-white"
                                             }`}
                                     >
                                         {isBadgeProcessing
                                             ? <Loader2 className="w-4 h-4 animate-spin" />
-                                            : selectedVerification.isVerifiedBadge
+                                            : selectedVerification.data.isVerifiedBadge
                                                 ? <BadgeX className="w-4 h-4" />
                                                 : <BadgeCheck className="w-4 h-4" />
                                         }
-                                        {selectedVerification.isVerifiedBadge ? "Revoke Badge" : "Grant Badge"}
+                                        {selectedVerification.data.isVerifiedBadge ? "Revoke Badge" : "Grant Badge"}
                                     </button>
                                 </>
                             )}

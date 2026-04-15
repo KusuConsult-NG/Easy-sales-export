@@ -971,3 +971,68 @@ export async function requestCooperativeRevisionAction(
         return { success: false, error: 'Failed to request revision' };
     }
 }
+
+export async function getStandardCooperativeMembersAction(statusFilter?: "pending" | "approved" | "suspended" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc").limit(500);
+        if (statusFilter && statusFilter !== "all" && statusFilter !== "pending") {
+            q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("membershipStatus", "==", statusFilter)
+                .orderBy("createdAt", "desc")
+                .limit(500);
+        } else if (statusFilter === "pending") {
+            // Support backwards compatibility pending status queries
+            q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("membershipStatus", "==", "pending")
+                .orderBy("createdAt", "desc")
+                .limit(500);
+        }
+
+        const snapshot = await q.get();
+        const applications = serializeDocs(snapshot.docs);
+
+        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
+            }
+        }
+
+        const standardForms = applications.map(app => {
+            const uData = userMap.get(app.userId) || {};
+            const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
+            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
+            
+            return {
+                id: app.id,
+                user: {
+                    id: app.userId,
+                    name: userName,
+                    email: uData.email || app.email || "Unknown",
+                },
+                status: app.membershipStatus || "pending",
+                data: app
+            };
+        });
+
+        return { success: true, data: standardForms };
+    } catch (error) {
+        logger.error("Get standard cooperative members error:", error);
+        return { success: false, error: "Failed to fetch normalized applications" };
+    }
+}
+

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { updateUserRolesAction } from "@/app/actions/admin";
-import { getFarmNationRegistrantsAction } from "@/app/actions/farm-nation-admin";
+import { getStandardFarmNationRegistrantsAction } from "@/app/actions/farm-nation-admin";
+import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
@@ -33,7 +34,7 @@ interface SellerProfile {
 
 export default function FarmNationSellersPage() {
     const { showToast } = useToast();
-    const [selectedSeller, setSelectedSeller] = useState<SellerProfile | null>(null);
+    const [selectedSeller, setSelectedSeller] = useState<StandardPendingForm<SellerProfile> | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -51,20 +52,40 @@ export default function FarmNationSellersPage() {
         pageIndex,
         setData,
         refresh
-    } = useAdminData<SellerProfile>({
+    } = useAdminData<StandardPendingForm<SellerProfile>>({
         fetchAction: async (params) => {
-            const result = await getFarmNationRegistrantsAction(params);
+            const result = await getStandardFarmNationRegistrantsAction((params.status as any) || "all");
+            let filteredData = result.data || [];
+            
+            // Apply standard search filter
+            if (params.search) {
+                const q = params.search.toLowerCase();
+                filteredData = filteredData.filter(u => 
+                    u.user.name?.toLowerCase().includes(q) ||
+                    u.user.email?.toLowerCase().includes(q) ||
+                    u.data.phone?.toLowerCase().includes(q) ||
+                    u.data.name?.toLowerCase().includes(q)
+                );
+            }
+
+            const page = params.page || 0;
+            const limit = params.limit || 20;
+            const offset = page * limit;
+            const paged = filteredData.slice(offset, offset + limit);
+            const hasMore = offset + limit < filteredData.length;
+
             return {
-                ...result,
-                data: result.data?.users || [],
-                hasMore: result.meta?.hasMore,
-                lastDocId: result.meta?.cursor || undefined,
+                success: result.success,
+                error: result.error,
+                data: paged,
+                hasMore,
+                lastDocId: hasMore ? String(page + 1) : undefined,
             };
         },
         limit: 20
     });
 
-    const handleApproveSeller = async (seller: SellerProfile) => {
+    const handleApproveSeller = async (seller: StandardPendingForm<SellerProfile>) => {
         if (!confirm("Approve this seller and grant posting rights?")) return;
         setProcessingId(seller.id);
 
@@ -85,7 +106,7 @@ export default function FarmNationSellersPage() {
         setProcessingId(null);
     };
 
-    const handleRejectSeller = async (seller: SellerProfile) => {
+    const handleRejectSeller = async (seller: StandardPendingForm<SellerProfile>) => {
         const reason = prompt("Enter rejection reason:");
         if (!reason?.trim()) return;
         setProcessingId(seller.id + "_reject");
@@ -120,33 +141,33 @@ export default function FarmNationSellersPage() {
     const columns = [
         {
             header: "Seller",
-            accessor: (item: SellerProfile) => (
+            accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
                         <Users className="w-5 h-5 text-orange-600" />
                     </div>
                     <div>
-                        <div className="font-bold text-slate-900">{item.name}</div>
-                        <div className="text-xs text-slate-500">{item.email}</div>
+                        <div className="font-bold text-slate-900">{item.user.name}</div>
+                        <div className="text-xs text-slate-500">{item.user.email}</div>
                     </div>
                 </div>
             )
         },
         {
             header: "Role",
-            accessor: (item: SellerProfile) => (
+            accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <span className="text-sm text-slate-700 capitalize">
-                    {item.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
+                    {item.data.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
                 </span>
             ),
             hideOnMobile: true
         },
         {
             header: "Location",
-            accessor: (item: SellerProfile) => (
+            accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="text-sm text-slate-600">
-                    {item.farmNation?.profile?.state
-                        ? `${item.farmNation.profile.state}${item.farmNation.profile.lga ? `, ${item.farmNation.profile.lga}` : ""}`
+                    {item.data.farmNation?.profile?.state
+                        ? `${item.data.farmNation.profile.state}${item.data.farmNation.profile.lga ? `, ${item.data.farmNation.profile.lga}` : ""}`
                         : "—"}
                 </div>
             ),
@@ -154,8 +175,8 @@ export default function FarmNationSellersPage() {
         },
         {
             header: "Status",
-            accessor: (item: SellerProfile) => {
-                const status = item.serviceRegistrations?.farmNation?.status || "unknown";
+            accessor: (item: StandardPendingForm<SellerProfile>) => {
+                const status = item.status;
                 return (
                     <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(status)}`}>
                         {status.replace(/_/g, " ")}
@@ -165,9 +186,16 @@ export default function FarmNationSellersPage() {
         },
         {
             header: "Submitted",
-            accessor: (item: SellerProfile) => {
-                const ts = item.serviceRegistrations?.farmNation?.submittedAt;
-                const date = ts?.seconds ? new Date(ts.seconds * 1000) : item.createdAt;
+            accessor: (item: StandardPendingForm<SellerProfile>) => {
+                let date = new Date();
+                const ts = item.data.serviceRegistrations?.farmNation?.submittedAt;
+                if (ts?.seconds) date = new Date(ts.seconds * 1000);
+                else if (ts) date = new Date(ts as string);
+                else if (item.data.createdAt) {
+                    if ((item.data.createdAt as any).seconds) date = new Date((item.data.createdAt as any).seconds * 1000);
+                    else date = new Date(item.data.createdAt);
+                }
+                
                 return (
                     <span className="text-sm text-slate-500">
                         {new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(date)}
@@ -178,7 +206,7 @@ export default function FarmNationSellersPage() {
         },
         {
             header: "Actions",
-            accessor: (item: SellerProfile) => (
+            accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <div className="flex items-center gap-2 justify-end">
                     <button
                         onClick={(e) => { e.stopPropagation(); setSelectedSeller(item); setIsDetailOpen(true); }}
@@ -187,7 +215,7 @@ export default function FarmNationSellersPage() {
                     >
                         <Shield className="w-4 h-4" />
                     </button>
-                    {item.serviceRegistrations?.farmNation?.status === "pending" && (
+                    {item.status === "pending" && (
                         <>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleRejectSeller(item); }}
@@ -262,30 +290,30 @@ export default function FarmNationSellersPage() {
                             <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl text-sm">
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Name</span>
-                                    <p className="font-medium text-slate-900">{selectedSeller.name}</p>
+                                    <p className="font-medium text-slate-900">{selectedSeller.user.name}</p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Email</span>
-                                    <p className="font-medium text-slate-900">{selectedSeller.email}</p>
+                                    <p className="font-medium text-slate-900">{selectedSeller.user.email}</p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Phone</span>
                                     <p className="font-medium text-slate-900">
-                                        {selectedSeller.farmNation?.profile?.phone || selectedSeller.phone || "—"}
+                                        {selectedSeller.data.farmNation?.profile?.phone || selectedSeller.data.phone || "—"}
                                     </p>
                                 </div>
                                 <div>
                                     <span className="text-slate-500 block text-xs mb-0.5">Location</span>
                                     <p className="font-medium text-slate-900">
-                                        {selectedSeller.farmNation?.profile?.state
-                                            ? `${selectedSeller.farmNation.profile.state}, ${selectedSeller.farmNation.profile.lga || ""}`
+                                        {selectedSeller.data.farmNation?.profile?.state
+                                            ? `${selectedSeller.data.farmNation.profile.state}, ${selectedSeller.data.farmNation.profile.lga || ""}`
                                             : "—"}
                                     </p>
                                 </div>
-                                {selectedSeller.farmNation?.profile?.address && (
+                                {selectedSeller.data.farmNation?.profile?.address && (
                                     <div className="col-span-2">
                                         <span className="text-slate-500 block text-xs mb-0.5">Address</span>
-                                        <p className="font-medium text-slate-900">{selectedSeller.farmNation.profile.address}</p>
+                                        <p className="font-medium text-slate-900">{selectedSeller.data.farmNation.profile.address}</p>
                                     </div>
                                 )}
                             </div>
@@ -298,43 +326,43 @@ export default function FarmNationSellersPage() {
                                 <div className="flex justify-between">
                                     <span className="text-slate-500">Role Applied For</span>
                                     <span className="font-medium capitalize">
-                                        {selectedSeller.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
+                                        {selectedSeller.data.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-slate-500">Status</span>
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${getStatusBadge(selectedSeller.serviceRegistrations?.farmNation?.status || "unknown")}`}>
-                                        {(selectedSeller.serviceRegistrations?.farmNation?.status || "unknown").replace(/_/g, " ")}
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${getStatusBadge(selectedSeller.status)}`}>
+                                        {selectedSeller.status.replace(/_/g, " ")}
                                     </span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Interests — shown as readable tags, not raw JSON */}
-                        {selectedSeller.farmNation?.interests && (
+                        {selectedSeller.data.farmNation?.interests && (
                             <div>
                                 <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Farm Interests</h4>
                                 <div className="flex flex-wrap gap-2">
-                                    {Array.isArray(selectedSeller.farmNation.interests)
-                                        ? selectedSeller.farmNation.interests.map((interest: string, i: number) => (
+                                    {Array.isArray(selectedSeller.data.farmNation.interests)
+                                        ? selectedSeller.data.farmNation.interests.map((interest: string, i: number) => (
                                             <span key={i} className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium">
                                                 {interest}
                                             </span>
                                         ))
-                                        : typeof selectedSeller.farmNation.interests === "object"
-                                            ? Object.entries(selectedSeller.farmNation.interests).map(([k, v]) => (
+                                        : typeof selectedSeller.data.farmNation.interests === "object"
+                                            ? Object.entries(selectedSeller.data.farmNation.interests).map(([k, v]) => (
                                                 <span key={k} className="px-2 py-1 bg-orange-50 text-orange-700 rounded-lg text-xs font-medium capitalize">
                                                     {k.replace(/_/g, " ")}: {String(v)}
                                                 </span>
                                             ))
-                                            : <span className="text-sm text-slate-600">{String(selectedSeller.farmNation.interests)}</span>
+                                            : <span className="text-sm text-slate-600">{String(selectedSeller.data.farmNation.interests)}</span>
                                     }
                                 </div>
                             </div>
                         )}
 
                         <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-                            {selectedSeller.serviceRegistrations?.farmNation?.status === "pending" && (
+                            {selectedSeller.status === "pending" && (
                                 <>
                                     <button
                                         onClick={() => { handleRejectSeller(selectedSeller); setIsDetailOpen(false); }}

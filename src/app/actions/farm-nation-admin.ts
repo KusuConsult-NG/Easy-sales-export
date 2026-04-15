@@ -105,3 +105,54 @@ export async function getFarmNationRegistrantsAction(options: {
         };
     }
 }
+
+export async function getStandardFarmNationRegistrantsAction(statusFilter?: "pending" | "approved" | "rejected" | "revision_required" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let q = db.collection(COLLECTIONS.USERS).where('registeredServices', 'array-contains', 'farmNation');
+        const snapshot = await q.get();
+        const users = serializeDocs(snapshot.docs);
+
+        // Filter and map out the standard forms
+        const applications = users.filter((user: any) => {
+            const status = user.serviceRegistrations?.farmNation?.status || "pending";
+            if (statusFilter && statusFilter !== "all" && status !== statusFilter) return false;
+            return true;
+        }).map((user: any) => {
+            const userName = user.name || user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.email || "Unknown User");
+            const status = user.serviceRegistrations?.farmNation?.status || "pending";
+            return {
+                id: user.id, // Using the user ID since Farm Nation ties reg straight to user
+                user: {
+                    id: user.id,
+                    name: userName,
+                    email: user.email || "Unknown",
+                },
+                status: status,
+                data: user // Returning complete user profile including nested farmNation data
+            };
+        });
+
+        // We sort manually since array-contains restricts our compound ordering options generically
+        applications.sort((a, b) => {
+            const tA = new Date(a.data.serviceRegistrations?.farmNation?.submittedAt || a.data.createdAt).getTime();
+            const tB = new Date(b.data.serviceRegistrations?.farmNation?.submittedAt || b.data.createdAt).getTime();
+            return tB - tA;
+        });
+
+        return { success: true, data: applications };
+    } catch (error) {
+        logger.error("Get standard Farm Nation registrants error:", error);
+        return { success: false, error: "Failed to fetch normalized Farm Nation applications" };
+    }
+}
+

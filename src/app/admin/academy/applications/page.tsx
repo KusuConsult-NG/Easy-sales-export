@@ -12,8 +12,9 @@ import {
     markAcademyApplicationUnderReviewAction
 } from "@/app/actions/admin";
 import { db } from "@/lib/firebase";
-import { collection, onSnapshot, query, limit, where } from "firebase/firestore";
+import { collection, query, limit, where, getDocs } from "firebase/firestore";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
+import { getStandardAcademyApplicationsAction } from "@/app/actions/academy-admin";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -122,53 +123,43 @@ export default function AdminAcademyApplicationsPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
-    // ── Real-time listener 1: academy_applications (form/review flow)
-    useEffect(() => {
-        const q = query(collection(db, "academy_applications"));
-        const unsub = onSnapshot(q, (snap) => {
-            const apps: AcademyApplication[] = snap.docs.map(doc => {
-                const d = doc.data();
-                const pi = d.personalInfo || {};
-                // Derive fullName: support both new (firstName/lastName) and legacy (fullName) schema
-                const derivedFullName = pi.firstName
-                    ? [pi.firstName, pi.otherName, pi.lastName].filter(Boolean).join(" ").trim()
-                    : (pi.fullName ?? d.name ?? "Unknown");
-                return {
-                    id: doc.id,
-                    personalInfo: {
-                        fullName: derivedFullName,
-                        firstName: pi.firstName,
-                        lastName: pi.lastName,
-                        otherName: pi.otherName,
-                        email: pi.email ?? d.email ?? "—",
-                        phone: pi.phone ?? d.phone ?? "",
-                    },
-                    education: d.education,
-                    status: (d.status ?? "pending") as ApplicationStatus,
-                    submittedAt: toIso(d.submittedAt),
-                    rejectionReason: d.rejectionReason,
-                    paymentStatus: d.paymentStatus,
-                    paymentAmount: d.paymentAmount ? Number(d.paymentAmount) : undefined,
-                    plan: d.plan,
-                    paymentReference: d.paymentReference,
-                    source: d.source,
-                    hasApplicationDoc: true,
-                };
-            });
-            setAppDocs(apps);
-            setLoadedCount(c => c + 1);
-        }, () => setLoadedCount(c => c + 1));
-        return () => unsub();
-    }, []);
+    const fetchData = async () => {
+        try {
+            // 1. fetch standard applications
+            const result = await getStandardAcademyApplicationsAction();
+            if (result.success && result.data) {
+                const apps = result.data.map(stdApp => {
+                    const d = stdApp.data;
+                    const pi = d.personalInfo || {};
+                    return {
+                        id: stdApp.id,
+                        personalInfo: {
+                            fullName: stdApp.user.name,
+                            firstName: pi.firstName,
+                            lastName: pi.lastName,
+                            otherName: pi.otherName,
+                            email: stdApp.user.email,
+                            phone: pi.phone ?? d.phone ?? "",
+                        },
+                        education: d.education,
+                        status: stdApp.status,
+                        submittedAt: toIso(d.submittedAt || d.createdAt),
+                        rejectionReason: d.rejectionReason,
+                        paymentStatus: d.paymentStatus,
+                        paymentAmount: d.paymentAmount ? Number(d.paymentAmount) : undefined,
+                        plan: d.plan,
+                        paymentReference: d.paymentReference,
+                        source: d.source,
+                        hasApplicationDoc: true,
+                    } as AcademyApplication;
+                });
+                setAppDocs(apps);
+            }
 
-    // ── Real-time listener 2: processedPayments where type=academy_registration
-    useEffect(() => {
-        const q = query(
-            collection(db, "processedPayments"),
-            where("type", "==", "academy_registration")
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            const apps: AcademyApplication[] = snap.docs.map(doc => {
+            // 2. Payments fetch
+            const payQ = query(collection(db, "processedPayments"), where("type", "==", "academy_registration"));
+            const paySnap = await getDocs(payQ);
+            const pApps: AcademyApplication[] = paySnap.docs.map(doc => {
                 const d = doc.data();
                 return {
                     id: doc.id,
@@ -187,23 +178,13 @@ export default function AdminAcademyApplicationsPage() {
                     hasApplicationDoc: false,
                 };
             });
-            setPaymentDocs(apps);
-            setLoadedCount(c => c + 1);
-        }, () => setLoadedCount(c => c + 1));
-        return () => unsub();
-    }, []);
+            setPaymentDocs(pApps);
 
-    // ── Real-time listener 3: users with academy_participant role
-    // Catches enrolled users who never created a standalone academy_applications doc
-    useEffect(() => {
-        const q = query(
-            collection(db, "users"),
-            where("roles", "array-contains", "academy_participant")
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            const apps: AcademyApplication[] = snap.docs.map(doc => {
+            // 3. Users fetch
+            const userQ = query(collection(db, "users"), where("roles", "array-contains", "academy_participant"));
+            const uSnap = await getDocs(userQ);
+            const uApps: AcademyApplication[] = uSnap.docs.map(doc => {
                 const d = doc.data();
-                // Derive fullName from split fields (new schema) or legacy fullName
                 const derivedFullName = d.firstName
                     ? [d.firstName, d.otherName, d.lastName].filter(Boolean).join(" ").trim()
                     : (d.fullName ?? d.name ?? d.kyc?.fullName ?? "—");
@@ -226,23 +207,24 @@ export default function AdminAcademyApplicationsPage() {
                     hasApplicationDoc: false,
                 };
             });
-            setEnrolledUsers(apps);
-            setLoadedCount(c => c + 1);
-        }, () => setLoadedCount(c => c + 1));
-        return () => unsub();
-    }, []);
+            setEnrolledUsers(uApps);
+        } catch (err) {
+            console.error("Failed to fetch academy data", err);
+        } finally {
+            setLoaded(true);
+        }
+    };
 
-    // Loaded when any of the 3 listeners has fired — data shows immediately
-    // and subsequent listeners add to the view incrementally
     useEffect(() => {
-        if (loadedCount >= 1) queueMicrotask(() => setLoaded(true));
-    }, [loadedCount]);
+        fetchData();
+    }, []);
 
     const handleApprove = async (id: string) => {
         setProcessingId(id);
         const result = await approveAcademyApplicationAction(id);
         if (result.success) {
             showToast("Application approved", "success");
+            await fetchData();
         } else {
             showToast(result.error || "Failed to approve", "error");
         }
@@ -256,6 +238,7 @@ export default function AdminAcademyApplicationsPage() {
         const result = await rejectAcademyApplicationAction(id, reason);
         if (result.success) {
             showToast("Application rejected", "success");
+            await fetchData();
         } else {
             showToast(result.error || "Failed to reject", "error");
         }
@@ -266,9 +249,10 @@ export default function AdminAcademyApplicationsPage() {
         setProcessingId(id + "_review");
         const result = await markAcademyApplicationUnderReviewAction(id);
         if (result.success) {
-            showToast("Marked as under review", "success");
+            showToast("Application marked under review", "success");
+            await fetchData();
         } else {
-            showToast(result.error || "Failed to update", "error");
+            showToast(result.error || "Failed to mark under review", "error");
         }
         setProcessingId(null);
     };

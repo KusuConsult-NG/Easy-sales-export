@@ -1973,6 +1973,67 @@ export async function requestExportApplicationRevisionAction(
         return { error: "Failed to send revision request", success: false };
     }
 }
+export async function getStandardExportApplicationsAction(statusFilter?: "pending_review" | "approved" | "rejected" | "revision_required" | "pending" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let q = db.collection(COLLECTIONS.EXPORT_ONBOARDING_APPLICATIONS).orderBy("createdAt", "desc").limit(500);
+        if (statusFilter && statusFilter !== "all") {
+            q = db.collection(COLLECTIONS.EXPORT_ONBOARDING_APPLICATIONS)
+                .where("status", "==", statusFilter)
+                .orderBy("createdAt", "desc")
+                .limit(500);
+        }
+
+        const snapshot = await q.get();
+        const applications = serializeDocs(snapshot.docs);
+
+        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
+            }
+        }
+
+        const standardForms = applications.map(app => {
+            const uData = userMap.get(app.userId) || {};
+            const kycName = app.kyc?.kycData?.firstName ? `${app.kyc.kycData.firstName} ${app.kyc.kycData.lastName || ''}`.trim() : null;
+            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.profile?.fullName || kycName || "Unknown User");
+            
+            // Normalize status to map perfectly to UI rules (e.g. pending_review -> pending)
+            let status = app.status || "pending";
+            if (status === "pending_review") status = "pending";
+            
+            return {
+                id: app.id,
+                user: {
+                    id: app.userId,
+                    name: userName,
+                    email: uData.email || app.userEmail || "Unknown",
+                },
+                status: status,
+                data: app
+            };
+        });
+
+        return { success: true, data: standardForms };
+    } catch (error) {
+        logger.error("Get standard export apps error:", error);
+        return { success: false, error: "Failed to fetch normalized applications" };
+    }
+}
 
 export async function rejectExportApplicationAction(
 
@@ -2885,3 +2946,61 @@ export async function inviteLegacyMemberAction(
         return { error: error.message || "Failed to invite member", success: false };
     }
 }
+
+export async function getStandardSellerVerificationsAction(statusFilter?: "pending" | "approved" | "rejected" | "suspended" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", "desc").limit(500);
+        if (statusFilter && statusFilter !== "all") {
+            q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("status", "==", statusFilter)
+                .orderBy("createdAt", "desc")
+                .limit(500);
+        }
+
+        const snapshot = await q.get();
+        const applications = serializeDocs(snapshot.docs);
+
+        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldValue.documentId(), "in", chunk).get();
+                userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
+            }
+        }
+
+        const standardForms = applications.map(app => {
+            const uData = userMap.get(app.userId) || {};
+            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
+            
+            return {
+                id: app.id,
+                user: {
+                    id: app.userId,
+                    name: userName,
+                    email: uData.email || app.userEmail || app.email || "Unknown",
+                },
+                status: app.status || "pending",
+                data: app
+            };
+        });
+
+        return { success: true, data: standardForms };
+    } catch (error) {
+        logger.error("Get standard seller verifications error:", error);
+        return { success: false, error: "Failed to fetch normalized applications" };
+    }
+}
+
