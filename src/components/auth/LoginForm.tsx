@@ -93,9 +93,9 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 // No valid callback — use smart redirect based on user's roles
                 const redirectResult = await getPostLoginRedirect(formData.email);
 
-                if (redirectResult.success && redirectResult.redirectUrl) {
-                    console.log("Using smart redirect:", redirectResult.redirectUrl);
-                    router.push(redirectResult.redirectUrl);
+                if (redirectResult.success && redirectResult.data?.redirectUrl) {
+                    console.log("Using smart redirect:", redirectResult.data.redirectUrl);
+                    router.push(redirectResult.data.redirectUrl);
                 } else {
                     router.push("/auth/get-started");
                 }
