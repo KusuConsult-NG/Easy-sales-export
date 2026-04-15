@@ -49,7 +49,7 @@ interface ExportApplication {
     applicationId?: string;
     userId: string;
     userEmail?: string;
-    status: AppStatus;
+    status: string;
     createdAt: any;
     updatedAt?: any;
     reviewedAt?: any;
