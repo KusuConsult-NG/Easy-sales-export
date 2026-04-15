@@ -200,7 +200,7 @@ export default function QuizBuilderPage(props: QuizBuilderPageProps) {
                 showToast("Quiz saved successfully", "success");
                 router.push(`/ admin / academy / courses / ${params.courseId} `);
             } else {
-                showToast(data.data?.message || "Failed to save quiz", "error");
+                showToast(data.message || "Failed to save quiz", "error");
             }
         } catch (error) {
             showToast("An error occurred while saving the quiz", "error");

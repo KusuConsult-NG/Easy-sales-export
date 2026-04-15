@@ -392,8 +392,8 @@ export default function ExportBuyerPage() {
         fetch("/api/export/catalog")
             .then(res => res.json())
             .then(data => {
-                if (data.success && data.data?.products?.length) {
-                    setLiveProducts(data.data.products as ExportProduct[]);
+                if (data.success && data.products?.length) {
+                    setLiveProducts(data.products as ExportProduct[]);
                 } else {
                     setCatalogError("Using cached product list — live catalog unavailable.");
                 }

@@ -40,7 +40,7 @@ export default function WAVECompliancePage() {
             const data = await response.json();
 
             if (data.success) {
-                setStats(data.data?.stats);
+                setStats(data.stats);
                 setDemographics(data.demographics);
             }
         } catch (error) {

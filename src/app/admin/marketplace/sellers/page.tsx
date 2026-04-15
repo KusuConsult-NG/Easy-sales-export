@@ -156,7 +156,7 @@ export default function AdminSellersPage() {
                 showToast("Seller approved successfully!", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.data?.message || "Failed to approve seller", "error");
+                showToast(data.message || "Failed to approve seller", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");
@@ -195,7 +195,7 @@ export default function AdminSellersPage() {
                 showToast(rejectionMode === "reject" ? "Seller verification rejected" : "Seller suspended", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.data?.message || "Operation failed", "error");
+                showToast(data.message || "Operation failed", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");

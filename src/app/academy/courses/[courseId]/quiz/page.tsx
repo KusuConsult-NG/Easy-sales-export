@@ -170,7 +170,7 @@ export default function StudentQuizPage(props: StudentQuizPageProps) {
             if (data.success) {
                 router.push(`/academy/courses/${params.courseId}/quiz/results?attemptId=${data.attemptId}`);
             } else {
-                showToast(data.data?.message || "Failed to submit quiz", "error");
+                showToast(data.message || "Failed to submit quiz", "error");
             }
         } catch (error) {
             showToast("An error occurred while submitting the quiz", "error");

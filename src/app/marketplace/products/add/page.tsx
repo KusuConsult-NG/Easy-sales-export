@@ -133,7 +133,7 @@ export default function AddProductPage() {
                 showToast("Product listed successfully!", "success");
                 setTimeout(() => router.push("/marketplace/sell"), 1000);
             } else {
-                showToast(data.data?.message || "Failed to create product", "error");
+                showToast(data.message || "Failed to create product", "error");
             }
         } catch (error) {
             showToast("An error occurred while creating the product", "error");

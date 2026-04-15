@@ -42,7 +42,7 @@ export default function LoanProductsPage() {
             const data = await response.json();
 
             if (data.success) {
-                setProducts(data.data?.products || []);
+                setProducts(data.products || []);
             }
         } catch (error) {
             logger.error("Failed to fetch products:", error);
@@ -112,7 +112,7 @@ export default function LoanProductsPage() {
                 handleCloseModal();
                 fetchProducts();
             } else {
-                showToast(data.data?.message || "Failed to save product", "error");
+                showToast(data.message || "Failed to save product", "error");
             }
         } catch (error) {
             showToast("An error occurred while saving the product", "error");
@@ -137,7 +137,7 @@ export default function LoanProductsPage() {
                 showToast("Product deleted successfully", "success");
                 fetchProducts();
             } else {
-                showToast(data.data?.message || "Failed to delete product", "error");
+                showToast(data.message || "Failed to delete product", "error");
             }
         } catch (error) {
             showToast("An error occurred while deleting the product", "error");

@@ -100,7 +100,7 @@ export default function AdminLandVerificationPage() {
                 showToast("Land listing approved!", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.data?.message || "Failed to approve", "error");
+                showToast(data.message || "Failed to approve", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");
@@ -124,7 +124,7 @@ export default function AdminLandVerificationPage() {
                 showToast("Land listing rejected", "success");
                 setIsDetailsModalOpen(false);
             } else {
-                showToast(data.data?.message || "Failed to reject", "error");
+                showToast(data.message || "Failed to reject", "error");
             }
         } catch (error) {
             showToast("An error occurred", "error");

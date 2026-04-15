@@ -170,7 +170,7 @@ export default function AdminExportCatalogPage() {
         try {
             const res = await fetch("/api/export/catalog");
             const data = await res.json();
-            if (data.success) setProducts(data.data?.products || []);
+            if (data.success) setProducts(data.products || []);
         } catch {
             showToast("Failed to load catalog", "error");
         } finally {
