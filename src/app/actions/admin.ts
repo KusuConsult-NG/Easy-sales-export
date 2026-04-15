@@ -1985,9 +1985,9 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = db.collection(COLLECTIONS.EXPORT_ONBOARDING_APPLICATIONS).orderBy("createdAt", "desc").limit(500);
+        let q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).orderBy("createdAt", "desc").limit(500);
         if (statusFilter && statusFilter !== "all") {
-            q = db.collection(COLLECTIONS.EXPORT_ONBOARDING_APPLICATIONS)
+            q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where("status", "==", statusFilter)
                 .orderBy("createdAt", "desc")
                 .limit(500);
