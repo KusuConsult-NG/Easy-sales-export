@@ -155,12 +155,12 @@ export default function AdminWaveApplicationsPage() {
             "Bank Name", "Account Number", "Status", "Applied Date"
         ];
         const rows = applications.map(app => [
-            app.id, app.surname || "", app.firstName || "",
-            app.email || "", app.phone || "",
-            app.stateOfResidence || "", app.lgaOfResidence || "",
-            app.nin || "", app.bvn || "", app.votersCardNumber || "",
-            app.bankName || "", app.accountNumber || "",
-            app.status, new Date(app.createdAt).toLocaleDateString("en-NG")
+            app.id, app.data.surname || "", app.data.firstName || "",
+            app.user.email || "", app.data.phone || "",
+            app.data.stateOfResidence || "", app.data.lgaOfResidence || "",
+            app.data.nin || "", app.data.bvn || "", app.data.votersCardNumber || "",
+            app.data.bankName || "", app.data.accountNumber || "",
+            app.status, new Date(app.data.createdAt).toLocaleDateString("en-NG")
         ]);
         const csvContent = [
             headers.join(","),
@@ -326,7 +326,7 @@ export default function AdminWaveApplicationsPage() {
                                             )}
                                         </div>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(app.status)}`}>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${getStatusColor(app.status as ApplicationStatus)}`}>
                                         {app.status.replace('_', ' ')}
                                     </span>
                                 </div>
@@ -372,15 +372,15 @@ export default function AdminWaveApplicationsPage() {
                                         </div>
                                     )}
 
-                                    {app.status === "approved" && app.approvedBy && (
+                                    {app.status === "approved" && app.data.approvedBy && (
                                         <p className="text-xs text-green-600 font-semibold">
-                                            ✓ Approved {app.approvalTimestamp ? `• ${formatDate(app.approvalTimestamp)}` : ''}
+                                            ✓ Approved {app.data.approvalTimestamp ? `• ${formatDate(app.data.approvalTimestamp)}` : ''}
                                         </p>
                                     )}
 
-                                    {app.status === "rejected" && app.rejectionReason && (
+                                    {app.status === "rejected" && app.data.rejectionReason && (
                                         <p className="text-sm text-red-600">
-                                            Reason: {app.rejectionReason}
+                                            Reason: {app.data.rejectionReason}
                                         </p>
                                     )}
                                 </div>

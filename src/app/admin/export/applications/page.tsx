@@ -78,15 +78,11 @@ interface ExportApplication {
     };
 }
 
-function getDisplayName(app: ExportApplication): string {
-    if (app.profile?.fullName) return app.profile.fullName;
-    if (app.kyc?.kycData?.firstName) {
-        return `${app.kyc.kycData.firstName} ${app.kyc.kycData.lastName || ""}`.trim();
-    }
-    return app.userEmail || "Unknown Applicant";
+function getDisplayName(app: StandardPendingForm<ExportApplication>): string {
+    return app.user.name || app.data.userEmail || "Unknown Applicant";
 }
 
-function statusBadge(status: AppStatus) {
+function statusBadge(status: string) {
     const map: Record<string, string> = {
         pending_review: "bg-yellow-100 text-yellow-800",
         pending: "bg-yellow-100 text-yellow-800",
@@ -422,7 +418,7 @@ export default function AdminExportApplicationsPage() {
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase mb-0.5">Email</p>
-                                    <p className="font-medium">{selectedApp.userEmail || "—"}</p>
+                                    <p className="font-medium">{selectedApp.user.email || "—"}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase mb-0.5">Status</p>
@@ -432,42 +428,42 @@ export default function AdminExportApplicationsPage() {
                                 </div>
                                 <div>
                                     <p className="text-xs text-slate-400 uppercase mb-0.5">Submitted</p>
-                                    <p className="font-medium">{formatDate(selectedApp.createdAt)}</p>
+                                    <p className="font-medium">{formatDate(selectedApp.data.createdAt)}</p>
                                 </div>
                             </div>
 
-                            {selectedApp.profile && (
+                            {selectedApp.data.profile && (
                                 <div className="bg-slate-50 rounded-xl p-4">
                                     <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Investment Profile</p>
                                     <div className="grid grid-cols-2 gap-2 text-xs">
-                                        <div><span className="text-slate-400">Experience:</span> {selectedApp.profile.investmentExperience || "—"}</div>
-                                        <div><span className="text-slate-400">Risk:</span> {selectedApp.profile.riskTolerance || "—"}</div>
+                                        <div><span className="text-slate-400">Experience:</span> {selectedApp.data.profile.investmentExperience || "—"}</div>
+                                        <div><span className="text-slate-400">Risk:</span> {selectedApp.data.profile.riskTolerance || "—"}</div>
                                     </div>
                                 </div>
                             )}
 
-                            {selectedApp.bank && (
+                            {selectedApp.data.bank && (
                                 <div className="bg-slate-50 rounded-xl p-4">
                                     <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Bank Account</p>
                                     <div className="space-y-1 text-xs">
-                                        <div><span className="text-slate-400">Bank:</span> {selectedApp.bank.bankName}</div>
-                                        <div><span className="text-slate-400">Account:</span> {selectedApp.bank.accountNumber}</div>
-                                        <div><span className="text-slate-400">Name:</span> {selectedApp.bank.accountName}</div>
+                                        <div><span className="text-slate-400">Bank:</span> {selectedApp.data.bank.bankName}</div>
+                                        <div><span className="text-slate-400">Account:</span> {selectedApp.data.bank.accountNumber}</div>
+                                        <div><span className="text-slate-400">Name:</span> {selectedApp.data.bank.accountName}</div>
                                     </div>
                                 </div>
                             )}
 
-                            {selectedApp.rejectionReason && (
+                            {selectedApp.data.rejectionReason && (
                                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                                     <p className="text-xs font-semibold text-red-500 uppercase mb-1">Rejection Reason</p>
-                                    <p className="text-red-700">{selectedApp.rejectionReason}</p>
+                                    <p className="text-red-700">{selectedApp.data.rejectionReason}</p>
                                 </div>
                             )}
 
-                            {selectedApp.resubmittedAt && (
+                            {selectedApp.data.resubmittedAt && (
                                 <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 flex items-center gap-2">
                                     <RefreshCw className="w-4 h-4 text-orange-500 shrink-0" />
-                                    <p className="text-orange-700 text-xs">Resubmitted on {formatDate(selectedApp.resubmittedAt)}</p>
+                                    <p className="text-orange-700 text-xs">Resubmitted on {formatDate(selectedApp.data.resubmittedAt)}</p>
                                 </div>
                             )}
                         </div>
@@ -523,7 +519,7 @@ export default function AdminExportApplicationsPage() {
                         <div className="flex items-center justify-between mb-5">
                             <div>
                                 <h2 className="text-lg font-bold text-slate-900">Request Correction</h2>
-                                <p className="text-xs text-slate-500 mt-0.5">{getDisplayName(editingApp)}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">{editingApp.profile?.fullName || editingApp.userEmail || "Applicant"}</p>
                             </div>
                             <button onClick={() => setEditingApp(null)} className="text-slate-400 hover:text-slate-700">
                                 <X className="w-5 h-5" />
