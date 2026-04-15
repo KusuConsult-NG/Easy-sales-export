@@ -3,11 +3,12 @@
 import { Fragment, ReactNode } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { X } from "lucide-react";
+import React from "react";
 
 interface ModalProps {
     isOpen: boolean;
     onClose: () => void;
-    title?: string;
+    title?: React.ReactNode;
     children: ReactNode;
     maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl";
 }
