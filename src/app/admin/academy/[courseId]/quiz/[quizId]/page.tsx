@@ -33,8 +33,8 @@ export default function QuizEditorPage() {
         async function load() {
             const result = await getQuizAction(quizId);
             if (result.success && result.data) {
-                setQuizTitle(result.title || "Module Quiz");
-                setQuestions((result.questions || []) as any);
+                setQuizTitle(result.data.title || "Module Quiz");
+                setQuestions((result.data.questions || []) as any);
             } else {
                 toast.error(result.error || "Failed to load quiz");
             }

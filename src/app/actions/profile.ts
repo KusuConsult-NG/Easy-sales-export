@@ -16,7 +16,7 @@ const profileUpdateSchema = z.object({
     firstName: z.string().max(50).optional(),
     lastName: z.string().max(50).optional(),
     email: z.string().email("Please enter a valid email address").optional(),
-    phone: z.string().optional(),
+    phone: z.string().min(10, "Phone number must be at least 10 digits"),
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
 });

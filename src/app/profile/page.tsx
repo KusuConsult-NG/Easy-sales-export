@@ -304,6 +304,7 @@ export default function ProfilePage() {
                                                 onChange={(e) => setUserData({ ...userData, phone: e.target.value })}
                                                 placeholder="+234 000 000 0000"
                                                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                                required
                                             />
                                         </div>
                                         <div className="space-y-2">

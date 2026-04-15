@@ -340,6 +340,7 @@ function ModuleRegisterContent({
                                         className={`w-full pl-11 pr-4 py-3 bg-slate-50 border ${errors.phone ? "border-red-500" : "border-slate-200"} rounded-xl focus:outline-none focus:ring-2 ${theme.borderFocus} transition-all`}
                                         placeholder="+234..."
                                         disabled={isPending}
+                                        required
                                     />
                                 </div>
                                 {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
