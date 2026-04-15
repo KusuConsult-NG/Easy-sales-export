@@ -2009,7 +2009,8 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
 
         const standardForms = applications.map(app => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
-            const kycName = app.kyc?.kycData?.firstName ? `${app.kyc.kycData.firstName} ${app.kyc.kycData.lastName || ''}`.trim() : null;
+            const kyc = (app.kyc || {}) as any;
+            const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.profile?.fullName || kycName || "Unknown User");
             
             // Normalize status to map perfectly to UI rules (e.g. pending_review -> pending)
