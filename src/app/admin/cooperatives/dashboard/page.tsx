@@ -97,9 +97,10 @@ export default function AdminCooperativeDashboardPage() {
                                 View all
                             </Link>
                         </div>
-                        <p className="text-sm text-gray-600 mb-1">Total Members</p>
+                        <p className="text-sm text-gray-600 mb-1">Paid Members</p>
                         <p className="text-3xl font-bold text-gray-900">
-                            {stats?.totalMembers || 0}
+                            {stats?.paidMembers || 0}
+                            <span className="text-lg font-medium text-gray-400 ml-2">/ {stats?.totalMembers || 0} Apps</span>
                         </p>
                         <div className="flex items-center gap-2 mt-2 text-sm">
                             <span className="text-green-600">Active: {stats?.activeMembers || 0}</span>
@@ -262,7 +263,7 @@ export default function AdminCooperativeDashboardPage() {
                                 </p>
                                 {stats?.totalMembers > 0 && (
                                     <p className="text-xs text-emerald-600 font-semibold mt-3">
-                                        {stats.totalMembers} member{stats.totalMembers !== 1 ? 's' : ''} registered
+                                        {stats.paidMembers} paid member{stats.paidMembers !== 1 ? 's' : ''} registered
                                     </p>
                                 )}
                             </div>

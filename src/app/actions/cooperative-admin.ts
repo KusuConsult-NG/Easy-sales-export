@@ -56,6 +56,7 @@ export async function getCooperativeStatsAction(): Promise<{
     data?: {
         stats: {
             totalMembers: number;
+            paidMembers: number;
             activeMembers: number;
             pendingMembers: number;
             suspendedMembers: number;
@@ -95,15 +96,21 @@ export async function getCooperativeStatsAction(): Promise<{
         if (adminScope) {
             membersQuery = membersQuery.where("cooperativeId", "==", adminScope);
         }
-        const membersSnap = await membersQuery.get();
-        // 🐛 FIX: Exclude abandoned/unpaid registrations
-        const allMembers = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        const members = allMembers.filter((m: any) => m.paymentStatus === "completed");
+        // EXACT DATABASE COUNT
+        const totalMembersSnap = await membersQuery.count().get();
+        const totalMembers = totalMembersSnap.data().count;
 
-        const totalMembers = members.length;
-        const activeMembers = members.filter((m: any) => m.membershipStatus === "active").length;
-        const pendingMembers = members.filter((m: any) => m.membershipStatus === "pending").length;
-        const suspendedMembers = members.filter((m: any) => m.membershipStatus === "suspended").length;
+        // Fetch remaining data for granular stats (with higher limit to avoid severe truncation)
+        const membersSnap = await membersQuery.limit(5000).get();
+        const allMembers = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        
+        // Members that PAID are the only ones properly wired for loans and active status
+        const paidMembersList = allMembers.filter((m: any) => m.paymentStatus === "completed");
+        const paidMembersCount = paidMembersList.length;
+
+        const activeMembers = paidMembersList.filter((m: any) => m.membershipStatus === "active").length;
+        const pendingMembers = paidMembersList.filter((m: any) => m.membershipStatus === "pending").length;
+        const suspendedMembers = paidMembersList.filter((m: any) => m.membershipStatus === "suspended").length;
 
         // Get transactions (Scoped)
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
@@ -139,8 +146,8 @@ export async function getCooperativeStatsAction(): Promise<{
         let loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
         if (adminScope) {
-            const memberIds = new Set(members.map(m => m.id));
-            loans = loans.filter((l: any) => memberIds.has(l.memberId));
+            const validMemberIds = new Set(paidMembersList.map(m => m.id));
+            loans = loans.filter((l: any) => validMemberIds.has(l.memberId));
         }
 
         const totalLoans = loans.reduce((sum: number, l: any) => sum + (l.amount || 0), 0);
@@ -182,6 +189,7 @@ export async function getCooperativeStatsAction(): Promise<{
             data: {
                 stats: {
                     totalMembers,
+                    paidMembers: paidMembersCount,
                     activeMembers,
                     pendingMembers,
                     suspendedMembers,

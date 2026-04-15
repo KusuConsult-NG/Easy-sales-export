@@ -26,8 +26,8 @@ export default function OrderConfirmationPage() {
     async function loadOrder() {
         try {
             const result = await getOrderByIdAction(orderId);
-            if (result.success && result.data?.order) {
-                setOrder(result.data.order);
+            if (result.success && result.order) {
+                setOrder(result.order);
             } else {
                 router.push("/marketplace");
             }

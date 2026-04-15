@@ -64,7 +64,7 @@ export default function AdminReviewsPage() {
         try {
             const result = await getAdminReviewsAction();
             if (result.success) {
-                setReviews(result.data?.reviews || []);
+                setReviews(result.reviews || []);
             } else {
                 showToast(result.error || "Failed to load reviews", "error");
             }

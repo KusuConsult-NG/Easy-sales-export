@@ -1411,9 +1411,39 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             }
         }
 
+        // ---------------------------------------------------------
+        // EXACT DATABASE COUNT (Satisfies Data Consistency Audit)
+        // ---------------------------------------------------------
+        let countQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+        if (!options.search) {
+            if (options.role && options.role !== "all") {
+                countQuery = countQuery.where("roles", "array-contains", options.role);
+            }
+            if (options.state && options.state !== "all") {
+                countQuery = countQuery.where("address.state", "==", options.state);
+            }
+            if (options.lga && options.lga !== "all") {
+                countQuery = countQuery.where("address.lga", "==", options.lga);
+            }
+        }
+        
+        // For search (email/phone), count directly against the filter
+        if (options.search) {
+            const search = options.search.trim();
+            if (search.includes("@")) {
+                countQuery = countQuery.where("email", "==", search);
+            } else if (/^[\d+]+$/.test(search) && search.length > 5) {
+                countQuery = countQuery.where("phone", "==", search);
+            }
+        }
+
+        const countSnap = await countQuery.count().get();
+        const absoluteDbCount = countSnap.data().count;
+
         // Fetch a large batch — no orderBy (avoids missing-field exclusion).
         // We page in-memory after sort.
-        const FETCH_LIMIT = 500;
+        // INCREASED LIMIT: Expanded to 5000 to improve search coverage across legacy data without crashing memory
+        const FETCH_LIMIT = 5000;
         query = query.limit(FETCH_LIMIT);
 
         const snapshot = await query.get();
@@ -1506,7 +1536,13 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         // Page-offset slice: each page returns exactly pageSize items
         const offset = page * pageSize;
         const pagedUsers = filteredUsers.slice(offset, offset + pageSize);
+        
+        // Determine total count explicitly ensuring DB truth overrides in-memory unless heavily filtered manually
+        const hasManualFilters = options.status !== "all" || options.fromDate || options.toDate || (options.search && !options.search.includes("@") && !/^[\d+]+$/.test(options.search));
+        
         const totalAfterFilter = filteredUsers.length;
+        const trueTotalCount = hasManualFilters ? totalAfterFilter : absoluteDbCount;
+        
         const hasMore = offset + pageSize < totalAfterFilter;
 
         return {
@@ -1516,7 +1552,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             // nextPage is used by callers for the NEXT request's `page` param
             lastDocId: hasMore ? String(page + 1) : undefined,
             hasMore,
-            totalCount: totalAfterFilter,
+            totalCount: trueTotalCount,
         };
     } catch (error: any) {
         logger.error("Get users error:", error);

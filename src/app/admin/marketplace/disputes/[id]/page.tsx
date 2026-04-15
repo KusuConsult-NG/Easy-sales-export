@@ -112,9 +112,9 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
             if (d.orderId) {
                 // ── Marketplace order-origin dispute ──────────────────────
                 const orderResult = await getOrderByIdAction(d.orderId);
-                if (orderResult.success && orderResult.data?.order) {
-                    setOrder(orderResult.data.order);
-                    setRefundAmount(orderResult.data.order.totalAmount.toString());
+                if (orderResult.success && orderResult.order) {
+                    setOrder(orderResult.order);
+                    setRefundAmount(orderResult.order.totalAmount.toString());
                 }
             } else if (d.escrowId) {
                 // ── Escrow-origin dispute (standalone escrow) ─────────────

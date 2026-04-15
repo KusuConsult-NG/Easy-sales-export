@@ -44,7 +44,7 @@ export default function CooperativeMembersPage() {
     const { showToast } = useToast();
     const [applications, setApplications] = useState<MembershipApplication[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [stats, setStats] = useState<{ totalMembers: number; pendingMembers: number; activeMembers: number; } | null>(null);
+    const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -60,6 +60,7 @@ export default function CooperativeMembersPage() {
     const [editFields, setEditFields] = useState<Record<string, string>>({});
     const [editNote, setEditNote] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Advanced filters
     const [stateFilter, setStateFilter] = useState("");
@@ -215,39 +216,16 @@ export default function CooperativeMembersPage() {
         }
     };
 
-    function handleExportCSV() {
-        if (filteredApplications.length === 0) return;
-        const headers = [
-            "Name", "Email", "Phone", "Tier", "Registration Fee (NGN)",
-            "Payment Status", "Membership Status", "State", "LGA",
-            "Occupation", "Date Applied"
-        ];
-        const rows = filteredApplications.map(app => [
-            `${app.firstName || ""} ${app.lastName || ""}`.trim(),
-            app.email || "",
-            app.phone || "",
-            app.membershipTier || "",
-            (app.registrationFee || 0).toString(),
-            app.paymentStatus || "",
-            app.membershipStatus || "",
-            app.stateOfOrigin || "",
-            app.lga || "",
-            app.occupation || "",
-            new Date(app.createdAt).toLocaleDateString("en-NG"),
-        ]);
-        const csv = [
-            headers.join(","),
-            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-        ].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `cooperative_members_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+    const handleExportCSV = async () => {
+        setIsExporting(true);
+        try {
+            window.location.href = "/api/admin/export/cooperative-members";
+        } catch (error) {
+            showToast("Failed to initiate export", "error");
+        } finally {
+            setTimeout(() => setIsExporting(false), 2000);
+        }
     };
-
     const viewDetails = (application: MembershipApplication) => {
         setSelectedApplication(application);
         setIsEditMode(false);
@@ -343,11 +321,11 @@ export default function CooperativeMembersPage() {
                     </button>
                     <button
                         onClick={handleExportCSV}
-                        disabled={filteredApplications.length === 0}
+                        disabled={isExporting}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                     >
                         <Download className="w-4 h-4" />
-                        Export CSV ({filteredApplications.length})
+                        {isExporting ? "Exporting..." : "Export Full CSV"}
                     </button>
                 </div>
             </div>
@@ -485,10 +463,11 @@ export default function CooperativeMembersPage() {
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="text-sm text-slate-600 mb-1">Total</p>
+                            <p className="text-sm text-slate-600 mb-1">Total Paid Members</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {stats ? stats.totalMembers : applications.length}
+                                {stats ? stats.paidMembers : applications.filter(a => a.paymentStatus === "completed").length}
                             </p>
+                            <p className="text-xs text-slate-500 mt-1">Out of {stats ? stats.totalMembers : applications.length} applications</p>
                         </div>
                         <Users className="w-12 h-12 text-slate-400 opacity-50" />
                     </div>

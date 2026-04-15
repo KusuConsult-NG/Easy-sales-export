@@ -57,6 +57,7 @@ export default function AdminUsersPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [kycProcessingId, setKycProcessingId] = useState<string | null>(null);
     const [bulkProcessing, setBulkProcessing] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isEnrollingAcademy, setIsEnrollingAcademy] = useState(false);
@@ -171,44 +172,16 @@ export default function AdminUsersPage() {
         }).format(new Date(date));
     };
 
-    const handleExportCSV = () => {
-        if (users.length === 0) return;
-        const headers = [
-            "Name", "Email", "Phone", "Role", "Verified",
-            "BVN", "BVN Verified", "NIN", "NIN Verified",
-            "TIN", "TIN Verified", "CAC", "CAC Verified",
-            "KYC Status", "State", "LGA", "Date Joined"
-        ];
-        const rows = users.map(u => [
-            u.name || "",
-            u.email || "",
-            u.phone || "",
-            u.role || "",
-            u.isVerified ? "Yes" : "No",
-            u.bvn ? "Provided" : "No",
-            u.bvnVerified ? "Yes" : "No",
-            u.nin ? "Provided" : "No",
-            u.ninVerified ? "Yes" : "No",
-            u.taxId ? "Provided" : "No",
-            u.tinVerified ? "Yes" : "No",
-            u.cacNumber ? "Provided" : "No",
-            u.cacVerified ? "Yes" : "No",
-            u.kycStatus || "pending",
-            u.state || "",
-            u.lga || "",
-            formatDate(u.createdAt),
-        ]);
-        const csv = [
-            headers.join(","),
-            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-        ].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+    const handleExportCSV = async () => {
+        setIsExporting(true);
+        try {
+            // Use the full DB exact endpoint instead of local pagination to satisfy Data Consistency 
+            window.location.href = "/api/admin/export/users";
+        } catch (error) {
+            showToast("Failed to initiate export", "error");
+        } finally {
+            setTimeout(() => setIsExporting(false), 2000);
+        }
     };
 
     const getRoleBadge = (role: string) => {
@@ -410,11 +383,11 @@ export default function AdminUsersPage() {
                         )}
                         <button
                             onClick={handleExportCSV}
-                            disabled={users.length === 0}
+                            disabled={isExporting}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50"
                         >
-                            <Download className="w-4 h-4" />
-                            Export CSV ({users.length})
+                            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            Export CSV
                         </button>
                     </div>
                 }

@@ -81,10 +81,18 @@ export async function createReviewAction(params: {
             return { success: false, error: "You have already reviewed this product from this order" };
         }
 
+        // Get the specific product to ensure we attribute the review to the ACTUAL seller
+        // This eliminates the single-seller cart assumption bug
+        const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
+        if (!productDoc.exists) {
+           return { success: false, error: "Product no longer exists on the platform" };
+        }
+        const productActualSellerId = productDoc.data()?.sellerId || order.sellerId;
+
         // Create review
         const reviewData: Partial<ProductReview> = {
             productId,
-            sellerId: order.sellerId, // Get from order, not item
+            sellerId: productActualSellerId, // Fetched explicitly from the product DB
             userId,
             orderId,
             rating,
@@ -133,7 +141,7 @@ export async function getProductReviewsAction(
             ? reviews.filter((r) => r.verified === filters.verified)
             : reviews;
 
-        return { success: true, data: { reviews: filteredReviews } };
+        return { success: true, reviews: filteredReviews };
     } catch (error: any) {
         logger.error("Get product reviews error:", error);
         return { success: false, error: error.message };
@@ -157,7 +165,7 @@ export async function getUserReviewsAction() {
 
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
-        return { success: true, data: { reviews } };
+        return { success: true, reviews };
     } catch (error: any) {
         logger.error("Get user reviews error:", error);
         return { success: false, error: error.message };
@@ -292,11 +300,10 @@ export async function getSellerRatingAction(sellerId: string) {
         const reviews: ProductReview[] = snapshot.docs.map((doc) => doc.data()) as ProductReview[];
 
         if (reviews.length === 0) {
-            return { success: true, data: { stats: {
+            return { success: true, stats: {
                     averageRating: 0,
                     totalReviews: 0,
                     distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
-                },
             };
         }
 
@@ -313,10 +320,10 @@ export async function getSellerRatingAction(sellerId: string) {
             1: reviews.filter((r) => r.rating === 1).length,
         };
 
-        return { success: true, data: { stats: {
+        return { success: true, stats: {
                 averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
                 totalReviews: reviews.length,
-                distribution, } },
+                distribution, }
         };
     } catch (error: any) {
         logger.error("Get seller rating error:", error);
@@ -355,7 +362,7 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
         const snapshot = await query.get();
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
-        return { success: true, data: { reviews } };
+        return { success: true, reviews };
     } catch (error: any) {
         logger.error("Get admin reviews error:", error);
         return { success: false, error: error.message };

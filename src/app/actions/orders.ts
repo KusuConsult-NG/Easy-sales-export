@@ -174,7 +174,7 @@ export async function getOrderByIdAction(orderId: string) {
             return { success: false, error: "Unauthorized" };
         }
 
-        return { success: true, data: { order } };
+        return { success: true, order };
     } catch (error: any) {
         logger.error("Get order error:", error);
         return { success: false, error: error.message };

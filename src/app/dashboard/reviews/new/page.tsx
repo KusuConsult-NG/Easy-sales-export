@@ -44,12 +44,12 @@ function NewReviewContent() {
         if (!orderId) return;
 
         try {
-            const result = await getOrderByIdAction(orderId);
-            if (result.success && result.data?.order) {
-                setOrder(result.data.order);
+            const result = await getOrderByIdAction(orderId) as any;
+            if (result.success && result.order) {
+                setOrder(result.order);
                 // Auto-select first item if only one
-                if (result.data.order.items.length === 1) {
-                    setSelectedProductId(result.data.order.items[0].productId);
+                if (result.order.items.length === 1) {
+                    setSelectedProductId(result.order.items[0].productId);
                 }
             } else {
                 showToast("Order not found", "error");
