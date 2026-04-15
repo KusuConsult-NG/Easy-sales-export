@@ -459,7 +459,7 @@ export async function getStandardWaveApplicationsAction(statusFilter?: "pending"
         }
 
         const standardForms = applications.map(app => {
-            const uData = userMap.get(app.userId) || {};
+            const uData = userMap.get(app.userId as string) || {};
             // Attempt to glean name from user doc, fallback to application doc, fallback to unknown
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.surname ? `${app.firstName} ${app.surname}`.trim() : "Unknown User");
             return {

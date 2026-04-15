@@ -2008,7 +2008,7 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
         }
 
         const standardForms = applications.map(app => {
-            const uData = userMap.get(app.userId) || {};
+            const uData = userMap.get(app.userId as string) || {};
             const kycName = app.kyc?.kycData?.firstName ? `${app.kyc.kycData.firstName} ${app.kyc.kycData.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.profile?.fullName || kycName || "Unknown User");
             
@@ -2982,7 +2982,7 @@ export async function getStandardSellerVerificationsAction(statusFilter?: "pendi
         }
 
         const standardForms = applications.map(app => {
-            const uData = userMap.get(app.userId) || {};
+            const uData = userMap.get(app.userId as string) || {};
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
             
             return {
