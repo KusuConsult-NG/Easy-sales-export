@@ -337,8 +337,8 @@ export async function getStandardAcademyApplicationsAction(statusFilter?: "pendi
         }
 
         const standardForms = applications.map(app => {
-            const uData = userMap.get(app.userId as string) || {};
-            const pi = app.personalInfo || {};
+            const uData = (userMap.get(app.userId as string) || {}) as any;
+            const pi = (app.personalInfo || {}) as any;
             const localName = pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : pi.fullName;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
             

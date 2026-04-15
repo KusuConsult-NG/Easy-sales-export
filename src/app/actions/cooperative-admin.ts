@@ -1013,7 +1013,7 @@ export async function getStandardCooperativeMembersAction(statusFilter?: "pendin
         }
 
         const standardForms = applications.map(app => {
-            const uData = userMap.get(app.userId as string) || {};
+            const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
             
