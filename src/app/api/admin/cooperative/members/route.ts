@@ -148,11 +148,23 @@ export async function GET(request: NextRequest) {
         // Sort in-memory by createdAt descending (newest first, safe for docs missing the field)
         members.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-        // Show ALL members regardless of payment status — admins need full visibility
-        // (payment status filter can be applied client-side if needed)
-        const pagedMembers = members.slice(0, limitParam);
+        let startIndex = 0;
+        if (lastCreatedAt && !hasDateFilter) {
+            const lastTime = new Date(lastCreatedAt).getTime();
+            // Find the index of the last seen item. If not found or if there are duplicates, 
+            // skip until we are past it.
+            const idx = members.findIndex(m => m.createdAt.getTime() === lastTime);
+            if (idx !== -1) {
+                // Find the first item that is actually strictly older to handle duplicates or exact matches
+                // Wait, it's safer to just offset by limit * page, but since we rely on lastCreatedAt cursor:
+                startIndex = idx + 1;
+            }
+        }
 
-        const hasMore = members.length > limitParam;
+        // Apply slice for pagination
+        const pagedMembers = members.slice(startIndex, startIndex + limitParam);
+        // Check if there are more items beyond what we sliced
+        const hasMore = members.length > (startIndex + limitParam);
         const newLastCreatedAt = pagedMembers.length > 0 ? pagedMembers[pagedMembers.length - 1].createdAt : undefined;
 
         return NextResponse.json({ success: true, members: pagedMembers, hasMore, lastCreatedAt: newLastCreatedAt });

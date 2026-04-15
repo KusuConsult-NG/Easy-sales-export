@@ -358,6 +358,8 @@ async function processCooperativeRegistration(reference: string, amount: number,
 
     await db.runTransaction(async (t) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const transactionRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
 
         t.set(memberRef, {
             paymentStatus: "completed",
@@ -366,6 +368,33 @@ async function processCooperativeRegistration(reference: string, amount: number,
             paymentVerifiedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Update the central USERS document
+        t.set(userRef, {
+            serviceRegistrations: {
+                cooperatives: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: amount,
+                    membershipTier: normalisedTier,
+                    status: "legacy_pending_onboarding", // Sentinel to show the form but hide payment
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
+            updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        // Create the registration fee transaction so it shows in their history
+        t.set(transactionRef, {
+            userId,
+            cooperativeId: "default",
+            type: "registration_fee",
+            amount,
+            date: FieldValue.serverTimestamp(),
+            status: "completed",
+            description: "Cooperative Registration Fee",
+            reference
+        });
 
         t.set(processedRef, {
             reference,
