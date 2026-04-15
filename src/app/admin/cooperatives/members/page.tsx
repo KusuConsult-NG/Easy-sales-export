@@ -224,7 +224,7 @@ export default function CooperativeMembersPage() {
             setTimeout(() => setIsExporting(false), 2000);
         }
     };
-    const viewDetails = (application: MembershipApplication) => {
+    const viewDetails = (application: StandardPendingForm<MembershipApplication>) => {
         setSelectedApplication(application);
         setIsEditMode(false);
         setEditFields({});
@@ -235,18 +235,18 @@ export default function CooperativeMembersPage() {
     function handleStartEdit() {
         if (!selectedApplication) return;
         setEditFields({
-            firstName: selectedApplication.firstName || "",
-            lastName: selectedApplication.lastName || "",
-            otherName: selectedApplication.otherName || "",
-            phone: selectedApplication.phone || "",
-            email: selectedApplication.email || "",
-            stateOfOrigin: selectedApplication.stateOfOrigin || "",
-            lga: selectedApplication.lga || "",
-            residentialAddress: selectedApplication.residentialAddress || "",
-            occupation: selectedApplication.occupation || "",
-            "nextOfKin.name": selectedApplication.nextOfKin?.name || "",
-            "nextOfKin.phone": selectedApplication.nextOfKin?.phone || "",
-            "nextOfKin.address": selectedApplication.nextOfKin?.address || "",
+            firstName: selectedApplication.data.firstName || "",
+            lastName: selectedApplication.data.lastName || "",
+            otherName: selectedApplication.data.otherName || "",
+            phone: selectedApplication.data.phone || "",
+            email: selectedApplication.data.email || "",
+            stateOfOrigin: selectedApplication.data.stateOfOrigin || "",
+            lga: selectedApplication.data.lga || "",
+            residentialAddress: selectedApplication.data.residentialAddress || "",
+            occupation: selectedApplication.data.occupation || "",
+            "nextOfKin.name": selectedApplication.data.nextOfKin?.name || "",
+            "nextOfKin.phone": selectedApplication.data.nextOfKin?.phone || "",
+            "nextOfKin.address": selectedApplication.data.nextOfKin?.address || "",
         });
         setIsEditMode(true);
     };
@@ -266,19 +266,22 @@ export default function CooperativeMembersPage() {
             setEditNote("");
             setSelectedApplication(prev => prev ? {
                 ...prev,
-                firstName: editFields.firstName ?? prev.firstName,
-                lastName: editFields.lastName ?? prev.lastName,
-                otherName: editFields.otherName ?? prev.otherName,
-                phone: editFields.phone ?? prev.phone,
-                email: editFields.email ?? prev.email,
-                stateOfOrigin: editFields.stateOfOrigin ?? prev.stateOfOrigin,
-                lga: editFields.lga ?? prev.lga,
-                residentialAddress: editFields.residentialAddress ?? prev.residentialAddress,
-                occupation: editFields.occupation ?? prev.occupation,
-                nextOfKin: {
-                    name: editFields["nextOfKin.name"] ?? prev.nextOfKin?.name ?? "",
-                    phone: editFields["nextOfKin.phone"] ?? prev.nextOfKin?.phone ?? "",
-                    address: editFields["nextOfKin.address"] ?? prev.nextOfKin?.address ?? "",
+                data: {
+                    ...prev.data,
+                    firstName: editFields.firstName ?? prev.data.firstName,
+                    lastName: editFields.lastName ?? prev.data.lastName,
+                    otherName: editFields.otherName ?? prev.data.otherName,
+                    phone: editFields.phone ?? prev.data.phone,
+                    email: editFields.email ?? prev.data.email,
+                    stateOfOrigin: editFields.stateOfOrigin ?? prev.data.stateOfOrigin,
+                    lga: editFields.lga ?? prev.data.lga,
+                    residentialAddress: editFields.residentialAddress ?? prev.data.residentialAddress,
+                    occupation: editFields.occupation ?? prev.data.occupation,
+                    nextOfKin: {
+                        name: editFields["nextOfKin.name"] ?? prev.data.nextOfKin?.name ?? "",
+                        phone: editFields["nextOfKin.phone"] ?? prev.data.nextOfKin?.phone ?? "",
+                        address: editFields["nextOfKin.address"] ?? prev.data.nextOfKin?.address ?? "",
+                    },
                 },
             } : null);
             fetchApplications(false);
@@ -673,7 +676,7 @@ export default function CooperativeMembersPage() {
                                 </button>
                             </div>
                         )}
-                    </div> as any
+                    </div>
                 }
             >
                 {selectedApplication && (
@@ -696,12 +699,12 @@ export default function CooperativeMembersPage() {
                             </div>
                         )}
 
-                        {!isEditMode && selectedApplication.membershipStatus === "pending" && (
+                        {!isEditMode && selectedApplication.data.membershipStatus === "pending" && (
                             <div className="pt-4 border-t border-slate-200 space-y-3">
-                                {selectedApplication.paymentStatus !== "completed" && (
+                                {selectedApplication.data.paymentStatus !== "completed" && (
                                     <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-medium">
                                         <Clock className="w-4 h-4 shrink-0" />
-                                        Payment not yet confirmed ({selectedApplication.paymentStatus}). Verify payment before approving.
+                                        Payment not yet confirmed ({selectedApplication.data.paymentStatus}). Verify payment before approving.
                                     </div>
                                 )}
                                 <div className="flex gap-3">
