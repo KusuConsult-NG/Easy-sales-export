@@ -972,7 +972,7 @@ export async function requestCooperativeRevisionAction(
     }
 }
 
-export async function getStandardCooperativeMembersAction(statusFilter?: "pending" | "approved" | "suspended" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardCooperativeMembersAction(statusFilter?: "pending" | "approved" | "suspended" | "under_review" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -1012,7 +1012,7 @@ export async function getStandardCooperativeMembersAction(statusFilter?: "pendin
             }
         }
 
-        const standardForms = applications.map(app => {
+        const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
