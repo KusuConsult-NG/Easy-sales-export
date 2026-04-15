@@ -30,7 +30,7 @@ export default function FarmNationListingsPage() {
             const result = await getPropertiesAction(params);
             return {
                 ...result,
-                data: result.properties || [],
+                data: result.data?.properties || [],
                 hasMore: result.meta?.hasMore,
                 lastDocId: result.meta?.cursor || undefined,
             };

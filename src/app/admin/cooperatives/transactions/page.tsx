@@ -64,8 +64,8 @@ export default function AdminTransactionsPage() {
                 getCooperativeStatsAction()
             ]);
 
-            if (result.success && result.transactions) {
-                setTransactions(result.transactions);
+            if (result.success && result.data?.transactions) {
+                setTransactions(result.data.transactions);
             } else {
                 toast.error(result.error || "Failed to load transactions");
             }

@@ -144,7 +144,7 @@ export default function VerifyIDPage() {
                                             Member Number
                                         </p>
                                         <p className="font-mono font-bold text-lg text-emerald-900">
-                                            {result.memberNumber}
+                                            {result.data.memberNumber}
                                         </p>
                                     </div>
                                     <div>
@@ -152,7 +152,7 @@ export default function VerifyIDPage() {
                                             Role
                                         </p>
                                         <p className="font-semibold text-lg text-emerald-900 uppercase">
-                                            {result.role.replace("_", " ")}
+                                            {result.data.role.replace("_", " ")}
                                         </p>
                                     </div>
                                 </div>
@@ -162,7 +162,7 @@ export default function VerifyIDPage() {
                                         Full Name
                                     </p>
                                     <p className="font-semibold text-lg text-emerald-900">
-                                        {result.fullName}
+                                        {result.data.fullName}
                                     </p>
                                 </div>
 
@@ -171,7 +171,7 @@ export default function VerifyIDPage() {
                                         Email
                                     </p>
                                     <p className="text-emerald-900">
-                                        {result.email}
+                                        {result.data.email}
                                     </p>
                                 </div>
 
@@ -180,7 +180,7 @@ export default function VerifyIDPage() {
                                         Valid Until
                                     </p>
                                     <p className="text-emerald-900">
-                                        {new Date(result.expiresAt).toLocaleDateString("en-GB", {
+                                        {new Date(result.data.expiresAt).toLocaleDateString("en-GB", {
                                             day: "2-digit",
                                             month: "long",
                                             year: "numeric",

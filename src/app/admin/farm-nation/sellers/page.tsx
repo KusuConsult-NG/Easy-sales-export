@@ -56,7 +56,7 @@ export default function FarmNationSellersPage() {
             const result = await getFarmNationRegistrantsAction(params);
             return {
                 ...result,
-                data: result.users || [],
+                data: result.data?.users || [],
                 hasMore: result.meta?.hasMore,
                 lastDocId: result.meta?.cursor || undefined,
             };
