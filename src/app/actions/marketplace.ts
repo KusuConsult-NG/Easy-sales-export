@@ -565,7 +565,7 @@ export async function createProductAction(
 
         await productRef.set(productData);
 
-        return { success: true, data: { productId, } };
+        return { success: true, productId };
     } catch (error: any) {
         logger.error("Create product error:", error);
         return {

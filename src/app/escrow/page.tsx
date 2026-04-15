@@ -212,8 +212,8 @@ export default function EscrowDashboardPage() {
     const loadTransactions = useCallback(async () => {
         setTimeout(() => setLoading(true), 0);
         const result = await getUserEscrowTransactions();
-        if (result.success && result.data?.transactions) {
-            setTransactions(result.data?.transactions);
+        if (result.success && result.transactions) {
+            setTransactions(result.transactions);
         }
         setLoading(false);
     }, []);

@@ -52,8 +52,8 @@ export default function EscalatedDisputesPage() {
                 getAdminDisputesAction({ escalated: true }),
                 getAdminUsersAction(),
             ]);
-            if (disputeRes && "disputes" in disputeRes) setDisputes(disputeRes.disputes ?? []);
-            if (adminRes.success && adminRes.data?.admins) setAdmins(adminRes.data?.admins);
+            if (disputeRes.success && disputeRes.data?.disputes) setDisputes(disputeRes.data.disputes);
+            if (adminRes.success && adminRes.admins) setAdmins(adminRes.admins);
         } catch {
             showToast("Failed to load data", "error");
         } finally {

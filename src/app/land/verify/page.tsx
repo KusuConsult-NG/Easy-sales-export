@@ -31,8 +31,8 @@ export default function LandVerificationPage() {
     async function loadListings() {
         setLoading(true);
         const result = await getLandListings({ status: 'pending_verification' });
-        if (result.success) {
-            setListings(result.listings);
+        if (result.success && result.data?.listings) {
+            setListings(result.data.listings);
         }
         setLoading(false);
     }

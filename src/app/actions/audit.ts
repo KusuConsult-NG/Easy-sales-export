@@ -12,8 +12,6 @@ import { getAuditLogsAction as coreGetAuditLogsAction } from './audit-log-action
  * Tracks all admin actions for compliance and security.
  */
 
-export type { AuditAction };
-
 export interface AuditLog {
     id: string;
     action: AuditAction;

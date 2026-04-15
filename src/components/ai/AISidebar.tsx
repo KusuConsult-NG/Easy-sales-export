@@ -43,7 +43,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
     async function loadChatHistory() {
         const result = await getAIChatHistory(20);
         if (result.success) {
-            setMessages(result.messages);
+            setMessages(result.messages || []);
         }
     }
 
@@ -53,7 +53,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
             userRole,
         });
         if (result.success) {
-            setSuggestions(result.suggestions);
+            setSuggestions(result.data?.suggestions || []);
         }
     }
 
@@ -82,13 +82,13 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
             },
         });
 
-        if (result.success && result.response) {
+        if (result.success && result.data?.response) {
             // Update with AI response
             const aiMessage: AIChatMessage = {
-                id: result.chatId || Date.now().toString(),
+                id: result.data.chatId || Date.now().toString(),
                 userId: 'current',
                 message: messageToSend,
-                response: result.response,
+                response: result.data.response,
                 createdAt: new Date(),
             };
             setMessages(prev => [...prev.slice(0, -1), aiMessage]);

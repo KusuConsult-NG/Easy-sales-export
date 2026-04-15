@@ -51,7 +51,7 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                 filterRating ? { rating: filterRating } : undefined
             );
             if (result.success) {
-                setReviews(result.reviews || []);
+                setReviews(result.data?.reviews || []);
             }
         } catch (error) {
             console.error("Failed to load reviews:", error);

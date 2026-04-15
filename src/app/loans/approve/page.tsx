@@ -29,8 +29,8 @@ export default function LoanApprovalPage() {
     async function loadLoans() {
         setLoading(true);
         const result = await getPendingLoanApplications();
-        if (result.success) {
-            setLoans(result.loans);
+        if (result.success && result.data?.loans) {
+            setLoans(result.data.loans);
         }
         setLoading(false);
     }

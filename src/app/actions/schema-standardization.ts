@@ -233,7 +233,7 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         reports.push(waveReport);
 
 
-        return { success: true, data: { reports } };
+        return { success: true, reports };
 
     } catch (error: any) {
         logger.error("[SCHEMA FIX] Failed:", error);

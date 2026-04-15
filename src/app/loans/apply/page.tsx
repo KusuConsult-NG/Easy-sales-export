@@ -11,7 +11,7 @@ export default function ApplyForLoanPage() {
         const result = await submitLoanApplication(data);
 
         if (result.success) {
-            router.push(`/loans/success?id=${result.loanId}`);
+            router.push(`/loans/success?id=${result.data?.loanId}`);
         }
         // If not success, error handling should be done in the component
     }

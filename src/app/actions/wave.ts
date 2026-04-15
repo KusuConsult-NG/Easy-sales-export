@@ -117,7 +117,7 @@ const waveApplicationSchema = z.object({
 export async function checkWaveStatusAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: "Unauthorized" };
 
@@ -163,7 +163,7 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
 export async function checkWaveEligibilityAction(userId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
         // Allow checking own eligibility or admin checking others
@@ -212,7 +212,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
 export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
         // Validate with Zod
@@ -451,7 +451,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
 export async function enrollInWaveAction(userId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
         if (session.user.id !== userId) {
@@ -460,8 +460,8 @@ export async function enrollInWaveAction(userId: string): Promise<{ success: boo
 
         const eligibility = await checkWaveEligibilityAction(userId);
 
-        if (!eligibility.eligible) {
-            return { success: false, error: eligibility.reason };
+        if (!eligibility.data?.eligible) {
+            return { success: false, error: eligibility.data?.reason || "Not eligible" };
         }
 
         await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userId).set({
@@ -536,7 +536,7 @@ export async function getWaveResourcesAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true, data: { data, meta: { cursor: nextCursor, hasMore } } };
+        return { success: true, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Failed to fetch WAVE resources:", error);
         return { success: false, error: "Failed to fetch resources", meta: { cursor: null, hasMore: false } };
@@ -579,7 +579,7 @@ export async function getWaveTrainingEventsAction(
             ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true, data: { data, meta: { cursor: nextCursor, hasMore } } };
+        return { success: true, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Get training events error:", error);
         return { success: false, error: "Failed to fetch training events", meta: { cursor: null, hasMore: false } };
@@ -616,7 +616,7 @@ export interface ShipmentTracking {
 export async function getShipmentTrackingAction(userId: string): Promise<{ success: boolean; data?: ShipmentTracking[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: "Unauthorized" };
 
@@ -652,7 +652,7 @@ export async function updateShipmentStatusAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
         // Check admin role
@@ -764,7 +764,7 @@ export interface MemberEarnings {
 export async function calculateEarningsAction(userId: string): Promise<{ success: boolean; data?: MemberEarnings; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
         if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
@@ -862,7 +862,7 @@ export async function generateCertificateAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
 
         // Check admin role
@@ -916,7 +916,7 @@ export async function generateCertificateAction(
 export async function getMemberCertificatesAction(userId: string): Promise<{ success: boolean; data?: WaveCertificate[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: "Unauthorized" };
 
@@ -940,7 +940,7 @@ export async function getMemberCertificatesAction(userId: string): Promise<{ suc
 export async function getCurrentUserCertificatesAction(): Promise<{ success: boolean; data?: WaveCertificate[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error || "Requires auth" };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -1098,7 +1098,7 @@ export async function withdrawEarningsAction(
 
         // Check available balance
         const earnings = await calculateEarningsAction(userId);
-        if (earnings.paidAmount < amount) {
+        if ((earnings.data?.paidAmount || 0) < amount) {
             return { success: false, error: "Insufficient available balance" };
         }
 

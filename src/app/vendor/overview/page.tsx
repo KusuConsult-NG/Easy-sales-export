@@ -36,12 +36,12 @@ export default function VendorOverviewPage() {
                     getVendorActivityFeedAction(10),
                 ]);
 
-                if (sales.success) setSalesStats(sales.stats);
-                if (trends.success) setRevenueTrends(trends.trends || []);
-                if (products.success) setTopProducts(products.products || []);
-                if (inventory.success) setInventoryStats(inventory.stats);
-                if (insights.success) setRevenueInsights(insights.insights);
-                if (activities.success) setActivityFeed(activities.activities || []);
+                if (sales.success) setSalesStats(sales.data?.stats);
+                if (trends.success) setRevenueTrends(trends.data?.trends || []);
+                if (products.success) setTopProducts(products.data?.products || []);
+                if (inventory.success) setInventoryStats(inventory.data?.stats);
+                if (insights.success) setRevenueInsights(insights.data?.insights);
+                if (activities.success) setActivityFeed(activities.data?.activities || []);
             } catch (error) {
                 logger.error("Dashboard load error:", error);
             } finally {

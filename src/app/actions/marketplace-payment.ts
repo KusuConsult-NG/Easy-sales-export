@@ -523,8 +523,8 @@ export async function createBankTransferOrderAction(
             });
         });
 
-        return { success: true, data: { orderId,
-            orderReference, } };
+        return { success: true, orderId,
+            orderReference };
     } catch (error: any) {
         logger.error("Bank transfer order creation error:", error);
         return {

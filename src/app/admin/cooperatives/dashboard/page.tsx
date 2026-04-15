@@ -44,7 +44,7 @@ export default function AdminCooperativeDashboardPage() {
             ]);
 
             if (statsRes.success && statsRes.data?.stats) {
-                setStats(statsRes.data.data?.stats);
+                setStats(statsRes.data.stats);
             }
 
             if (reportsRes.success && reportsRes.data?.reports) {

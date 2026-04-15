@@ -191,7 +191,7 @@ export async function verifyBankAccount(
             accountName: data.data.account_name
         });
 
-        return { success: true, data: { accountName: data.data.account_name, } };
+        return { success: true, accountName: data.data.account_name };
     } catch (error) {
         logger.error('verifyBankAccount: Unexpected error', error);
 

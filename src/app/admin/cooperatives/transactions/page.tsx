@@ -65,13 +65,13 @@ export default function AdminTransactionsPage() {
             ]);
 
             if (result.success && result.data?.transactions) {
-                setTransactions(result.data.data?.transactions);
+                setTransactions(result.data.transactions);
             } else {
                 toast.error(result.error || "Failed to load transactions");
             }
             
             if (statsResult.success && statsResult.data?.stats) {
-                setGlobalStats(statsResult.data.data?.stats as any);
+                setGlobalStats(statsResult.data.stats as any);
             }
         } catch (error) {
             logger.error("Failed to load transactions:", error);

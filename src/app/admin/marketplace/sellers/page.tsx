@@ -246,7 +246,7 @@ export default function AdminSellersPage() {
         try {
             const result = await toggleVerifiedBadgeAction(verification.id);
             if (result.success) {
-                showToast(result.data?.message || `Badge ${action}ed`, "success");
+                showToast(result.message || `Badge ${action}ed`, "success");
             } else {
                 showToast(result.error || "Failed to update badge", "error");
             }

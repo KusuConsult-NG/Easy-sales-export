@@ -135,7 +135,7 @@ export default function CooperativeMembersPage() {
     useEffect(() => {
         getCooperativeStatsAction().then(res => {
             if (res.success && res.data?.stats) {
-                setStats(res.data.data?.stats);
+                setStats(res.data.stats);
             }
         });
     }, []);

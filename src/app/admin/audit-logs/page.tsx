@@ -84,8 +84,8 @@ export default function AdminAuditLogsPage() {
 
             // Load stats
             const statsResult = await getAuditStatsAction(30);
-            if (statsResult.success && statsResult.data?.stats) {
-                setStats(statsResult.data?.stats);
+            if (statsResult.success && statsResult.stats) {
+                setStats(statsResult.stats);
             }
 
             setLoading(false);

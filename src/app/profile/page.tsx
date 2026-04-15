@@ -43,8 +43,8 @@ export default function ProfilePage() {
             setIsFetching(true);
             const result = await getUserProfileAction();
 
-            if (result.success && result.profile) {
-                const p = result.profile;
+            if (result.success && result.data?.profile) {
+                const p = result.data.profile;
                 const splitName = (n: string) => { const parts = (n || "").trim().split(/\s+/).filter(Boolean); return { first: parts[0] || "", last: parts.slice(1).join(" ") }; };
                 const nameFallback = splitName(session?.user?.name || "");
                 setUserData({

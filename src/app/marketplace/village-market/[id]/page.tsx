@@ -54,7 +54,7 @@ export default function VillageMarketEventPage() {
         setLoading(true);
         const res = await getVillageMarketEventAction(eventId);
         setEvent(res.event);
-        setProducts(res.data?.products);
+        setProducts(res.products);
         setLoading(false);
     };
 

@@ -98,23 +98,23 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
         try {
             // Load dispute
             const disputeResult = await getDisputeByIdAction(params.id);
-            if (!disputeResult.success || !disputeResult.dispute) {
+            if (!disputeResult.success || !disputeResult.data?.dispute) {
                 showToast("Dispute not found", "error");
                 router.push("/admin/marketplace/disputes");
                 return;
             }
 
-            setDispute(disputeResult.dispute);
-            const d = disputeResult.dispute;
+            setDispute(disputeResult.data.dispute);
+            const d = disputeResult.data.dispute;
             // Load notes for escalated disputes
             if ((d as any).escalated) loadNotes(d.id);
 
             if (d.orderId) {
                 // ── Marketplace order-origin dispute ──────────────────────
                 const orderResult = await getOrderByIdAction(d.orderId);
-                if (orderResult.success && orderResult.order) {
-                    setOrder(orderResult.order);
-                    setRefundAmount(orderResult.order.totalAmount.toString());
+                if (orderResult.success && orderResult.data?.order) {
+                    setOrder(orderResult.data.order);
+                    setRefundAmount(orderResult.data.order.totalAmount.toString());
                 }
             } else if (d.escrowId) {
                 // ── Escrow-origin dispute (standalone escrow) ─────────────

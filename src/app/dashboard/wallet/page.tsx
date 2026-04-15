@@ -65,7 +65,7 @@ export default function WalletPage() {
     const loadWallet = useCallback(async () => {
         setLoading(true);
         const res = await getWalletAction();
-        if (res.success && res.data?.wallet) setWallet(res.data?.wallet);
+        if (res.success && res.wallet) setWallet(res.wallet);
         else showToast(res.error || "Failed to load wallet", "error");
         setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,11 +75,11 @@ export default function WalletPage() {
         setTxLoading(true);
         const cursor = reset ? undefined : lastId;
         const res = await getWalletTransactionsAction({ limit: 15, startAfter: cursor });
-        if (res.success && res.data?.transactions) {
-            setTransactions(prev => reset ? res.data?.transactions! : [...prev, ...res.data?.transactions!]);
-            setHasMore(!!res.data?.hasMore);
-            if (res.data?.transactions.length > 0)
-                setLastId(res.data?.transactions[res.data?.transactions.length - 1].id);
+        if (res.success && res.transactions) {
+            setTransactions(prev => reset ? res.transactions! : [...prev, ...res.transactions!]);
+            setHasMore(!!res.hasMore);
+            if (res.transactions.length > 0)
+                setLastId(res.transactions[res.transactions.length - 1].id);
         }
         setTxLoading(false);
     }, [lastId]);
@@ -93,9 +93,9 @@ export default function WalletPage() {
         setFundLoading(true);
         const res = await fundWalletViaPaystackAction(amount);
         setFundLoading(false);
-        if (res.success && res.data?.authorizationUrl) {
+        if (res.success && res.authorizationUrl) {
             showToast("Redirecting to Paystack…", "info");
-            window.location.href = res.data?.authorizationUrl;
+            window.location.href = res.authorizationUrl;
         } else {
             showToast(res.error || "Failed", "error");
         }

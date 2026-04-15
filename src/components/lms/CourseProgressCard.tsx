@@ -19,11 +19,11 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
         async function fetchProgress() {
             setLoading(true);
             const result = await getCourseProgress(courseId);
-            if (result.success && result.progress) {
-                setProgress(result.progress);
+            if (result.success && result.data?.progress) {
+                setProgress(result.data.progress);
 
                 // Auto-generate certificate if completed and not already generated
-                if (result.progress.completed && result.progress.progressPercent >= 100) {
+                if (result.data.progress.completed && result.data.progress.progressPercent >= 100) {
                     handleGenerateCertificate();
                 }
             }

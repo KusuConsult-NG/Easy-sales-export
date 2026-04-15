@@ -29,7 +29,7 @@ export default function VendorProductsPage() {
             const result = await getVendorProductsAction(filters);
 
             if (result.success) {
-                setProducts(result.data?.products || []);
+                setProducts(result.products || []);
             } else {
                 showToast(result.error || "Failed to load products", "error");
             }
@@ -62,7 +62,7 @@ export default function VendorProductsPage() {
         try {
             const result = await deleteVendorProductAction(productId);
             if (result.success) {
-                showToast(result.data?.message || "Product deleted successfully", "success");
+                showToast(result.message || "Product deleted successfully", "success");
                 loadProducts();
             } else {
                 showToast(result.error || "Failed to delete product", "error");

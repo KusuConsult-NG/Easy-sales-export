@@ -100,8 +100,8 @@ export default function MarketplaceOnboarding() {
 
                     if (isEditParam) {
                         const verif = await getSellerVerificationAction();
-                        if (verif.success && verif.verification) {
-                            const v = verif.verification as any;
+                        if (verif.success && verif.data?.verification) {
+                            const v = verif.data.verification as any;
                             setFormData(prev => ({
                                 ...prev,
                                 businessName: v.businessName || prev.businessName,
@@ -124,8 +124,8 @@ export default function MarketplaceOnboarding() {
                 } else if (result?.status === "rejected" || result?.status === "suspended") {
                     // Prefill form from Firestore for rejected / suspended users
                     const verif = await getSellerVerificationAction();
-                    if (verif.success && verif.verification) {
-                        const v = verif.verification as any;
+                    if (verif.success && verif.data?.verification) {
+                        const v = verif.data.verification as any;
                         setFormData(prev => ({
                             ...prev,
                             businessName: v.businessName || prev.businessName,

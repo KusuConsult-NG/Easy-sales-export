@@ -70,7 +70,7 @@ export default function MyReviewsPage() {
         try {
             const result = await getUserReviewsAction();
             if (result.success) {
-                setReviews(result.reviews || []);
+                setReviews(result.data?.reviews || []);
             } else {
                 showToast(result.error || "Failed to load reviews", "error");
             }

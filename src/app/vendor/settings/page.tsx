@@ -61,39 +61,40 @@ export default function VendorSettingsPage() {
 
     async function loadSettings() {
         const result = await getVendorSettingsAction();
-        if (result.success && result.settings) {
-            setSettings(result.settings);
+        if (result.success && result.data?.settings) {
+            setSettings(result.data.settings);
 
-            if (result.settings.storeInfo) {
+            if (result.data.settings.storeInfo) {
                 setProfileForm({
-                    storeName: result.settings.storeInfo.name || "",
-                    description: result.settings.storeInfo.description || "",
-                    category: result.settings.storeInfo.category || "",
-                    contactEmail: result.settings.storeInfo.contactEmail || "",
-                    phone: result.settings.storeInfo.phone || "",
+                    storeName: result.data.settings.storeInfo.name || "",
+                    description: result.data.settings.storeInfo.description || "",
+                    category: result.data.settings.storeInfo.category || "",
+                    contactEmail: result.data.settings.storeInfo.contactEmail || "",
+                    phone: result.data.settings.storeInfo.phone || "",
                 });
             }
 
-            if (result.settings.paymentConfig) {
+            if (result.data.settings.paymentConfig) {
                 setPaymentForm({
-                    bankName: result.settings.paymentConfig.bankName || "",
-                    accountNumber: result.settings.paymentConfig.accountNumber || "",
-                    accountName: result.settings.paymentConfig.accountName || "",
-                    paymentSchedule: result.settings.paymentConfig.paymentSchedule || "monthly",
-                    minPayoutThreshold: result.settings.paymentConfig.minPayoutThreshold || 10000,
-                    taxId: result.settings.paymentConfig.taxId || "",
+                    bankName: result.data.settings.paymentConfig.bankName || "",
+                    accountNumber: result.data.settings.paymentConfig.accountNumber || "",
+                    accountName: result.data.settings.paymentConfig.accountName || "",
+                    paymentSchedule: result.data.settings.paymentConfig.paymentSchedule || "monthly",
+                    minPayoutThreshold: result.data.settings.paymentConfig.minPayoutThreshold || 10000,
+                    taxId: result.data.settings.paymentConfig.taxId || "",
                 });
             }
 
-            if (result.settings.notifications) {
-                setNotifPrefs(result.settings.notifications);
+            if (result.data.settings.notifications) {
+                setNotifPrefs(result.data.settings.notifications);
             }
 
-            if (result.settings.shipping) {
+            const dataAny = result.data as any;
+            if (dataAny.shipping) {
                 setShippingForm({
-                    processingDays: result.settings.shipping.processingDays || 2,
-                    returnPolicy: result.settings.shipping.returnPolicy || "",
-                    locations: result.settings.shipping.locations || [],
+                    processingDays: dataAny.shipping.processingDays || 2,
+                    returnPolicy: dataAny.shipping.returnPolicy || "",
+                    locations: dataAny.shipping.locations || [],
                 });
             }
         }
