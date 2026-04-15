@@ -459,7 +459,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-yellow-600 mb-1">Pending</p>
                             <p className="text-3xl font-bold text-yellow-700">
-                                {stats ? stats.pendingMembers : applications.filter(a => (a.membershipStatus || (a as any).status) === "pending").length}
+                                {stats ? stats.pendingMembers : applications.filter(a => a.status === "pending").length}
                             </p>
                         </div>
                         <Clock className="w-12 h-12 text-yellow-500 opacity-50" />
@@ -471,7 +471,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-green-600 mb-1">Approved</p>
                             <p className="text-3xl font-bold text-green-700">
-                                {stats ? stats.activeMembers : applications.filter(a => (a.membershipStatus || (a as any).status) === "approved").length}
+                                {stats ? stats.activeMembers : applications.filter(a => a.status === "approved").length}
                             </p>
                         </div>
                         <CheckCircle className="w-12 h-12 text-green-500 opacity-50" />
@@ -483,7 +483,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-slate-600 mb-1">Total Paid Members</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {stats ? stats.paidMembers : applications.filter(a => a.paymentStatus === "completed").length}
+                                {stats ? stats.paidMembers : applications.filter(a => a.data.paymentStatus === "completed").length}
                             </p>
                             <p className="text-xs text-slate-500 mt-1">Out of {stats ? stats.totalMembers : applications.length} applications</p>
                         </div>
@@ -513,22 +513,20 @@ export default function CooperativeMembersPage() {
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <p className="font-semibold text-slate-900 text-sm">
-                                                {app.firstName || app.lastName
-                                                    ? `${app.firstName} ${app.lastName}`.trim()
-                                                    : <span className="text-amber-600 italic text-xs">Incomplete</span>}
+                                                {app.user.name || <span className="text-amber-600 italic text-xs">Incomplete</span>}
                                             </p>
-                                            <p className="text-xs text-slate-500 mt-0.5">{app.email || "—"}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">{app.user.email || "—"}</p>
                                         </div>
-                                        <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.membershipStatus)}`}>
-                                            {app.membershipStatus}
+                                        <span className={`shrink-0 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold capitalize ${getStatusBadge(app.status)}`}>
+                                            {app.status}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 capitalize">
-                                            {app.membershipTier}
+                                            {app.data.membershipTier}
                                         </span>
                                         <span className="text-xs text-slate-500">
-                                            ₦{(app.registrationFee || 0).toLocaleString()}
+                                            ₦{(app.data.registrationFee || 0).toLocaleString()}
                                         </span>
                                     </div>
                                     <button
