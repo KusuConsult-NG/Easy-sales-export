@@ -115,8 +115,10 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
 
     const totalUsers =
         totalUsersSnap.status === "fulfilled" ? (totalUsersSnap.value.data().count ?? 0) : 0;
-    const activeUsers =
-        activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : totalUsers;
+    // Active users: try lastLoginAt, fall back to totalUsers if field rarely populated
+    const rawActiveUsers =
+        activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
+    const activeUsers = rawActiveUsers > 0 ? rawActiveUsers : totalUsers;
 
     const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
     const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
@@ -125,72 +127,107 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const pendingWithdrawals = pendingWithdrawalsCount.status === "fulfilled" ? pendingWithdrawalsCount.value : 0;
     const totalOrders = totalOrdersCount.status === "fulfilled" ? totalOrdersCount.value : 0;
     const totalEscrows = totalEscrowsCount.status === "fulfilled" ? totalEscrowsCount.value : 0;
-    const totalTransactions = totalOrders + totalEscrows;
+
+    // Total transactions: marketplace orders + escrow entries + processed payments + cooperative payments
+    const [processedPaymentsCount, coopTxnCount, paymentsCount] = await Promise.allSettled([
+        safeCount(db.collection(COLLECTIONS.PROCESSED_PAYMENTS)),
+        safeCount(db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)),
+        safeCount(db.collection(COLLECTIONS.PAYMENTS)),
+    ]);
+    const processedPayments = processedPaymentsCount.status === "fulfilled" ? processedPaymentsCount.value : 0;
+    const coopTxns = coopTxnCount.status === "fulfilled" ? coopTxnCount.value : 0;
+    const paymentsTxns = paymentsCount.status === "fulfilled" ? paymentsCount.value : 0;
+    const totalTransactions = totalOrders + totalEscrows + processedPayments + coopTxns + paymentsTxns;
     const pendingApprovals = pendingEscrows + pendingSellers + pendingWithdrawals + pendingLoans;
 
-    // ── Revenue: completed escrow commissions + cooperative fees ─────────────
+    // ── Revenue: aggregate ALL payment collections ──────────────────────────
     let totalRevenue = 0;
     let monthlyRevenue = 0;
     try {
-        const [allRevResult, monthRevResult, allCoopResult, monthCoopResult] = await Promise.allSettled([
-            db
-                .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .where("status", "==", "completed")
-                .aggregate({ total: AggregateField.sum("amount") })
-                .get(),
-            db
-                .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .where("status", "==", "completed")
-                .where("completedAt", ">=", thisMonthStart)
-                .aggregate({ total: AggregateField.sum("amount") })
-                .get(),
-            db
-                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        const [
+            allProcessedR, monthProcessedR,
+            allCoopMemberR, monthCoopMemberR,
+            allCoopTxnR, monthCoopTxnR,
+            allPaymentsR, monthPaymentsR,
+        ] = await Promise.allSettled([
+            // processedPayments = all Paystack webhook payments (primary source)
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("processedAt", ">=", thisMonthStart)
+                .aggregate({ total: AggregateField.sum("amount") }).get(),
+            // cooperative_members registrationFee (membership fees paid)
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("paymentStatus", "==", "completed")
-                .aggregate({ total: AggregateField.sum("registrationFee") })
-                .get(),
-            db
-                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("paymentStatus", "==", "completed")
                 .where("updatedAt", ">=", thisMonthStart)
-                .aggregate({ total: AggregateField.sum("registrationFee") })
-                .get(),
+                .aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+            // cooperative_transactions (contributions, savings)
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
+                .where("type", "in", ["contribution", "payment", "registration"])
+                .aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
+                .where("type", "in", ["contribution", "payment", "registration"])
+                .where("createdAt", ">=", thisMonthStart)
+                .aggregate({ total: AggregateField.sum("amount") }).get(),
+            // payments collection (general platform payments)
+            db.collection(COLLECTIONS.PAYMENTS)
+                .where("status", "==", "completed")
+                .aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.PAYMENTS)
+                .where("status", "==", "completed")
+                .where("createdAt", ">=", thisMonthStart)
+                .aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
-        
-        const escrowRev = allRevResult.status === "fulfilled" ? (allRevResult.value.data().total ?? 0) * 0.025 : 0;
-        const escrowMonthRev = monthRevResult.status === "fulfilled" ? (monthRevResult.value.data().total ?? 0) * 0.025 : 0;
-        const coopRev = allCoopResult.status === "fulfilled" ? (allCoopResult.value.data().total ?? 0) : 0;
-        const coopMonthRev = monthCoopResult.status === "fulfilled" ? (monthCoopResult.value.data().total ?? 0) : 0;
-        
-        totalRevenue = escrowRev + coopRev;
-        monthlyRevenue = escrowMonthRev + coopMonthRev;
+
+        const processedRev = allProcessedR.status === "fulfilled" ? (allProcessedR.value.data().total ?? 0) : 0;
+        const processedMonthRev = monthProcessedR.status === "fulfilled" ? (monthProcessedR.value.data().total ?? 0) : 0;
+        const coopMemberRev = allCoopMemberR.status === "fulfilled" ? (allCoopMemberR.value.data().total ?? 0) : 0;
+        const coopMemberMonthRev = monthCoopMemberR.status === "fulfilled" ? (monthCoopMemberR.value.data().total ?? 0) : 0;
+        const coopTxnRev = allCoopTxnR.status === "fulfilled" ? (allCoopTxnR.value.data().total ?? 0) : 0;
+        const coopTxnMonthRev = monthCoopTxnR.status === "fulfilled" ? (monthCoopTxnR.value.data().total ?? 0) : 0;
+        const paymentsRev = allPaymentsR.status === "fulfilled" ? (allPaymentsR.value.data().total ?? 0) : 0;
+        const paymentsMonthRev = monthPaymentsR.status === "fulfilled" ? (monthPaymentsR.value.data().total ?? 0) : 0;
+
+        totalRevenue = processedRev + coopMemberRev + coopTxnRev + paymentsRev;
+        monthlyRevenue = processedMonthRev + coopMemberMonthRev + coopTxnMonthRev + paymentsMonthRev;
     } catch {
         // collections may not exist yet — leave as 0
     }
 
-    // ── Revenue by month (last 6 months) ────────────────────────────────────
+    // ── Revenue by month (last 6 months — all payment sources) ─────────────
     const revenueByMonth = await Promise.all(
         months.map(async ({ label, start, end }) => {
             try {
-                const [snap, coopSnap] = await Promise.all([
-                    db
-                        .collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                        .where("status", "==", "completed")
-                        .where("completedAt", ">=", start)
-                        .where("completedAt", "<=", end)
-                        .aggregate({ total: AggregateField.sum("amount") })
-                        .get(),
-                    db
-                        .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                const [p1, p2, p3, p4] = await Promise.allSettled([
+                    db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                        .where("processedAt", ">=", start)
+                        .where("processedAt", "<=", end)
+                        .aggregate({ total: AggregateField.sum("amount") }).get(),
+                    db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                         .where("paymentStatus", "==", "completed")
                         .where("updatedAt", ">=", start)
                         .where("updatedAt", "<=", end)
-                        .aggregate({ total: AggregateField.sum("registrationFee") })
-                        .get()
+                        .aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+                    db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
+                        .where("type", "in", ["contribution", "payment", "registration"])
+                        .where("createdAt", ">=", start)
+                        .where("createdAt", "<=", end)
+                        .aggregate({ total: AggregateField.sum("amount") }).get(),
+                    db.collection(COLLECTIONS.PAYMENTS)
+                        .where("status", "==", "completed")
+                        .where("createdAt", ">=", start)
+                        .where("createdAt", "<=", end)
+                        .aggregate({ total: AggregateField.sum("amount") }).get(),
                 ]);
-                const escrowRev = (snap.data().total ?? 0) * 0.025;
-                const coopRev = coopSnap.data().total ?? 0;
-                return { month: label, revenue: escrowRev + coopRev };
+                const rev =
+                    (p1.status === "fulfilled" ? (p1.value.data().total ?? 0) : 0) +
+                    (p2.status === "fulfilled" ? (p2.value.data().total ?? 0) : 0) +
+                    (p3.status === "fulfilled" ? (p3.value.data().total ?? 0) : 0) +
+                    (p4.status === "fulfilled" ? (p4.value.data().total ?? 0) : 0);
+                return { month: label, revenue: rev };
             } catch {
                 return { month: label, revenue: 0 };
             }

@@ -207,31 +207,31 @@ export default function FarmNationSellersPage() {
         {
             header: "Actions",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center gap-2 justify-end flex-wrap">
                     <button
                         onClick={(e) => { e.stopPropagation(); setSelectedSeller(item); setIsDetailOpen(true); }}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="View Details"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
                     >
-                        <Shield className="w-4 h-4" />
+                        <Shield className="w-3.5 h-3.5" />
+                        View
                     </button>
                     {item.status === "pending" && (
                         <>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleRejectSeller(item); }}
                                 disabled={processingId === item.id || processingId === item.id + "_reject"}
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                                title="Reject"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition disabled:opacity-50"
                             >
-                                {processingId === item.id + "_reject" ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                                {processingId === item.id + "_reject" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                Reject
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleApproveSeller(item); }}
                                 disabled={processingId === item.id || processingId === item.id + "_reject"}
-                                className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
-                                title="Approve"
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition disabled:opacity-50"
                             >
-                                {processingId === item.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                {processingId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                Approve
                             </button>
                         </>
                     )}
