@@ -66,6 +66,9 @@ export default function AdminFinancePage() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [failedTx, setFailedTx] = useState<FailedTransaction[]>([]);
     const [totalRevenue, setTotalRevenue] = useState(0);
+    const [totalSuccessfulCount, setTotalSuccessfulCount] = useState<number | null>(null);
+    const [totalAbandonedCount, setTotalAbandonedCount] = useState<number | null>(null);
+    const [totalFailedCount, setTotalFailedCount] = useState<number | null>(null);
     const [activeTab, setActiveTab] = useState<"successful" | "failed" | "abandoned">("successful");
     const [visibleCount, setVisibleCount] = useState(50);
     const [selectedRefs, setSelectedRefs] = useState<Set<string>>(new Set());
@@ -98,6 +101,9 @@ export default function AdminFinancePage() {
             setTotalRevenue(res.totalRevenue ?? 0);
             setTransactions(res.recentTransactions as Transaction[]);
             setFailedTx(res.failedTransactions as FailedTransaction[]);
+            setTotalSuccessfulCount(res.totalSuccessfulCount ?? null);
+            setTotalAbandonedCount(res.totalAbandonedCount ?? null);
+            setTotalFailedCount(res.totalFailedCount ?? null);
         }
         setLoading(false);
     };
@@ -223,7 +229,7 @@ export default function AdminFinancePage() {
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                   <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
+                    <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
                                 <DollarSign className="w-5 h-5" />
@@ -231,7 +237,7 @@ export default function AdminFinancePage() {
                             <p className="text-sm font-medium opacity-90">Total Revenue</p>
                         </div>
                         <p className="text-3xl font-bold">{formatCurrency(totalRevenue)}</p>
-                        <p className="text-xs opacity-75 mt-1">{transactions.length} successful payments</p>
+                        <p className="text-xs opacity-75 mt-1">{totalSuccessfulCount ?? transactions.length} successful payments</p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-lg">
@@ -241,7 +247,7 @@ export default function AdminFinancePage() {
                             </div>
                             <p className="text-sm text-slate-600">Successful</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900">{transactions.length}</p>
+                        <p className="text-3xl font-bold text-slate-900">{totalSuccessfulCount ?? transactions.length}</p>
                         <p className="text-xs text-slate-500 mt-1">Confirmed payments</p>
                     </div>
 
@@ -252,7 +258,7 @@ export default function AdminFinancePage() {
                             </div>
                             <p className="text-sm text-slate-600">Abandoned</p>
                         </div>
-                        <p className="text-3xl font-bold text-yellow-600">{abandonedTx.length}</p>
+                        <p className="text-3xl font-bold text-yellow-600">{totalAbandonedCount ?? abandonedTx.length}</p>
                         <p className="text-xs text-slate-500 mt-1">Left checkout</p>
                     </div>
 
@@ -263,7 +269,7 @@ export default function AdminFinancePage() {
                             </div>
                             <p className="text-sm text-slate-600">Failed</p>
                         </div>
-                        <p className="text-3xl font-bold text-red-600">{errorTx.length}</p>
+                        <p className="text-3xl font-bold text-red-600">{totalFailedCount ?? errorTx.length}</p>
                         <p className="text-xs text-slate-500 mt-1">Card / network errors</p>
                     </div>
                 </div>
@@ -286,7 +292,7 @@ export default function AdminFinancePage() {
                                         }`}
                                     >
                                         {tab.charAt(0).toUpperCase() + tab.slice(1)}&nbsp;
-                                        ({tab === "successful" ? transactions.length : tab === "abandoned" ? abandonedTx.length : errorTx.length})
+                                        ({tab === "successful" ? (totalSuccessfulCount ?? transactions.length) : tab === "abandoned" ? (totalAbandonedCount ?? abandonedTx.length) : (totalFailedCount ?? errorTx.length)})
                                     </button>
                                 ))}
                             </div>

@@ -15,20 +15,30 @@ export async function getPlatformMetricsAction() {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error };
 
-        // 1. Transactions - Universal Table Check and Cross-Platform Aggregation
-        const [txnTotalSnap, completedRevSnap, allUsersSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.TRANSACTIONS).count().get(),
-            db.collection(COLLECTIONS.TRANSACTIONS)
-                .where("status", "==", "completed")
-                .aggregate({ total: AggregateField.sum("amount") })
-                .get(),
-            db.collection(COLLECTIONS.USERS).count().get()
+        // 1. Transactions - Aggregate from actual historical collections 
+        const [paystackSnap, escrowsR, coopRevR, allUsersSnap, usersSnap2] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").limit(10000).get(), // Using .get to manually sum without composite index, and fast enough for ~5000 docs
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+            db.collection(COLLECTIONS.USERS).count().get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).count().get()
         ]);
 
-        const totalTransactions = (txnTotalSnap.status === 'fulfilled' ? txnTotalSnap.value.data().count || 0 : 0);
-        const totalRevenue = (completedRevSnap.status === 'fulfilled' ? completedRevSnap.value.data().total || 0 : 0);
-        const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
+        let totalRevenue = 0;
+        let totalTransactions = 0;
+        
+        if (paystackSnap.status === 'fulfilled') {
+            paystackSnap.value.docs.forEach(d => {
+                totalRevenue += (Number(d.data().amount) || 0);
+            });
+            totalTransactions += paystackSnap.value.docs.length;
+        }
 
+        const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
+        
+        // Excluded Escrow and Coop revenues from literal addition because they were paid through Paystack,
+        // so `PROCESSED_PAYMENTS` ALREADY has them. Adding them would double-count.
+        
         return {
             success: true,
             data: {

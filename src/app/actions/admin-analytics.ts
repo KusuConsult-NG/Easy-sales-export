@@ -157,13 +157,14 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const revenueByMonth = await Promise.all(
         months.map(async ({ label, start, end }) => {
             try {
-                const p1 = await db.collection(COLLECTIONS.TRANSACTIONS)
+                const p1 = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                         .where("status", "==", "completed")
-                        .where("date", ">=", start)
-                        .where("date", "<=", end)
-                        .aggregate({ total: AggregateField.sum("amount") }).get();
+                        .where("processedAt", ">=", start)
+                        .where("processedAt", "<=", end)
+                        .get();
 
-                let rev = p1.data().total ?? 0;
+                let rev = 0;
+                p1.docs.forEach(d => { rev += (Number(d.data().amount) || 0); });
 
                 return { month: label, revenue: rev };
             } catch (_e) {
@@ -230,7 +231,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
 
     try {
         const [txSnap, coopSnap, escrowSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.TRANSACTIONS).orderBy("date", "desc").limit(15).get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(15).get(),
             db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get()
         ]);
@@ -243,8 +244,10 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
 
         // Sort unified pool by date descending
         allDocs.sort((a, b) => {
-            const ta = a.date?.toDate ? a.date.toDate().getTime() : new Date(a.date || 0).getTime();
-            const tb = b.date?.toDate ? b.date.toDate().getTime() : new Date(b.date || 0).getTime();
+            const tsa = a.processedAt ?? a.createdAt ?? a.date ?? 0;
+            const tsb = b.processedAt ?? b.createdAt ?? b.date ?? 0;
+            const ta = tsa?.toDate ? tsa.toDate().getTime() : new Date(tsa).getTime();
+            const tb = tsb?.toDate ? tsb.toDate().getTime() : new Date(tsb).getTime();
             return tb - ta;
         });
 
@@ -252,12 +255,12 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         let collected = 0;
         for (const d of allDocs) {
             if (collected >= 8) break;
-            const ts = d.date ?? null;
-            if (Number(d.amount) > 0 || d.amount === undefined) {
+            const ts = d.processedAt ?? d.createdAt ?? d.date ?? null;
+            if (Number(d.amount) > 0 || d.amount === undefined || d.registrationFee !== undefined) {
                 recentTransactions.push({
                     id: d.id || Math.random().toString(),
-                    type: d.type ?? "Transaction",
-                    amount: Number(d.amount) || 0,
+                    type: d.type ?? d.action ?? "Transaction",
+                    amount: Number(d.amount ?? d.registrationFee) || 0,
                     date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString())
                 });
                 collected++;
@@ -317,6 +320,9 @@ export interface FinancialOverview {
         gatewayResponse: string | null;
         timestamp: string | null;
     }>;
+    totalSuccessfulCount?: number;
+    totalAbandonedCount?: number;
+    totalFailedCount?: number;
 }
 
 
@@ -347,12 +353,20 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     let totalLoansDisbursed = 0;
     const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
-    const [allEscrowsR, allTxnsR] = await Promise.allSettled([
+    const [allEscrowsR, allTxnsR, countSuccessR, countAbandonedR, countFailedR] = await Promise.allSettled([
         db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
-        db.collection(COLLECTIONS.TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
+        db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").limit(10000).get(),
+        db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
+        db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
+        db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
     ]);
     totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
-    totalRevenue = allTxnsR.status === "fulfilled" ? (allTxnsR.value.data().total ?? 0) : 0;
+    if (allTxnsR.status === "fulfilled") {
+        allTxnsR.value.docs.forEach(d => { totalRevenue += (Number(d.data().amount) || 0); });
+    }
+    const totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
+    const totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
+    const totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
 
     const loanR = await Promise.allSettled([
         db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "disbursed").aggregate({ total: AggregateField.sum("amount") }).get(),
@@ -362,7 +376,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     try {
         // PRIMARY: processedPayments = NO, fetching directly from TRANSACTIONS avoids exact duplication
         const [txSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.TRANSACTIONS).orderBy("date", "desc").limit(100).get()
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(100).get()
         ]);
 
         const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
@@ -429,7 +443,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         // Silently skip — collection may not exist yet
     }
 
-    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions };
+    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions, totalSuccessfulCount, totalAbandonedCount, totalFailedCount };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
