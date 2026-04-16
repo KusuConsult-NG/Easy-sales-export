@@ -13,7 +13,7 @@ import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/fi
 import RejectionModal from "@/components/admin/RejectionModal";
 import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction } from "@/app/actions/admin";
-import { authenticatedFetch } from "@/lib/api-utils";
+
 import { StandardPendingForm } from "@/lib/types/admin";
 
 type SellerVerification = {
@@ -123,7 +123,7 @@ export default function AdminSellersPage() {
         if (!confirm("Approve this seller?")) return;
         setIsProcessing(true);
         try {
-            const response = await authenticatedFetch("/api/admin/marketplace/approve-seller", {
+            const response = await fetch("/api/admin/marketplace/approve-seller", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ verificationId }),
@@ -163,7 +163,7 @@ export default function AdminSellersPage() {
             const endpoint = rejectionMode === "reject"
                 ? "/api/admin/marketplace/reject-seller"
                 : "/api/admin/marketplace/suspend-seller";
-            const response = await authenticatedFetch(endpoint, {
+            const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ verificationId: rejectionTargetId, reason }),
