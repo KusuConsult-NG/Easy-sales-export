@@ -37,7 +37,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 .select('email')
                 .stream();
             let count = 0;
-            for await (const doc of stream) {
+            for await (const doc of stream as any) {
                 const data = doc.data();
                 if (data.email) emails.push(data.email);
                 count++;
@@ -58,7 +58,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 case 'wave': {
                     const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select('email', 'userEmail').stream();
                     let waveCount = 0;
-                    for await (const doc of waveStream) {
+                    for await (const doc of waveStream as any) {
                         const data = doc.data();
                         const email = data.email || data.userEmail;
                         if (email) emails.push(email);
@@ -74,7 +74,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
             }
 
             let mainCount = 0;
-            for await (const doc of stream) {
+            for await (const doc of stream as any) {
                 const data = doc.data();
                 if (data.email) {
                     emails.push(data.email);
