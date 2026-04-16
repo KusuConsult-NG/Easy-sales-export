@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/lib/logger';
 
 interface UseAdminDataOptions<T> {
-    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[]; lastDocId?: string; hasMore?: boolean }>;
+    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[]; lastDocId?: string; hasMore?: boolean; meta?: any; }>;
     limit?: number;
     dependencies?: any[];
 }
@@ -31,6 +31,7 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     const [search, setSearch] = useState('');
     const [filters, setFilters] = useState<Record<string, any>>({});
     const [hasMore, setHasMore] = useState(false);
+    const [meta, setMeta] = useState<any>(null);
 
     // Cursor stack: cursors[i] is the lastDocId to use when fetching page i+1.
     const cursorStack = useRef<(string | undefined)[]>([undefined]);
@@ -70,6 +71,8 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
             if (result.success) {
                 const items = result.data || result.loans || result.properties || result.users || [];
                 setData(items);
+
+                if (result.meta) setMeta(result.meta);
 
                 if (result.lastDocId) {
                     const newStack = resetCursors ? [undefined] : [...cursorStack.current];
@@ -161,5 +164,6 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
         pageIndex,
         setData,
         refresh,
+        meta,
     };
 }
