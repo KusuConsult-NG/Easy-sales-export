@@ -383,10 +383,14 @@ export async function processCooperativeRegistration(reference: string, amount: 
             .orderBy("createdAt", "desc")
             .limit(1)
             .get();
-        if (querySnap.empty) {
-            throw new Error(`[Paystack Webhook] No cooperative_members doc found for userId ${userId}`);
+        if (!querySnap.empty) {
+            memberRef = querySnap.docs[0].ref;
+        } else {
+            // Legacy payment: no member doc exists yet (old portal never created one).
+            // Create a new record so this payment is fully accounted for.
+            memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+            logger.info(`[Cooperative] Creating new member doc for legacy payment userId=${userId} ref=${reference}`);
         }
-        memberRef = querySnap.docs[0].ref;
     }
 
     await db.runTransaction(async (t) => {
@@ -395,10 +399,13 @@ export async function processCooperativeRegistration(reference: string, amount: 
         const transactionRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
 
         t.set(memberRef, {
+            userId,          // ensure legacy-created docs always carry the userId field
             paymentStatus: "completed",
             paymentReference: reference,
             membershipTier: normalisedTier,
+            membershipStatus: "pending", // awaiting admin approval
             paymentVerifiedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 

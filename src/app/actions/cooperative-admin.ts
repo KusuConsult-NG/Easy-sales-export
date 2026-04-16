@@ -542,7 +542,15 @@ export async function getContributionReportsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // Get all contributions (includes membership registration fees)
+        // ── AUTHORITATIVE paid-member count from Paystack ledger ─────────────
+        const paidCountSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("type", "==", "cooperative_membership_registration")
+            .where("status", "==", "completed")
+            .count()
+            .get();
+        const memberCount = paidCountSnap.data().count ?? 0;
+
+        // Get all completed cooperative transactions for amount/trend reporting
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .where("status", "==", "completed");
 
@@ -555,17 +563,16 @@ export async function getContributionReportsAction(options?: {
         // Filter to contribution types in memory
         const contributions = transactionsSnap.docs
             .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter((t: any) => t.type === "contribution" || t.type === "membership_registration");
+            .filter((t: any) => t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee");
 
-        // Calculate totals
-        const totalContributions = contributions.reduce(
-            (sum: number, c: any) => sum + (c.amount || 0),
-            0
+        // Calculate totals — use PROCESSED_PAYMENTS total for accuracy
+        const processedPaymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("type", "==", "cooperative_membership_registration")
+            .where("status", "==", "completed")
+            .get();
+        const totalContributions = processedPaymentsSnap.docs.reduce(
+            (sum, doc) => sum + (Number(doc.data().amount) || 0), 0
         );
-
-        // Get unique members
-        const uniqueMembers = new Set(contributions.map((c: any) => c.userId));
-        const memberCount = uniqueMembers.size;
 
         const averageContribution = memberCount > 0 ? totalContributions / memberCount : 0;
 
@@ -581,11 +588,11 @@ export async function getContributionReportsAction(options?: {
             .slice(0, 10)
             .map(([userId, total]) => ({
                 userId,
-                name: "Member", // Would need to join with members collection
+                name: "Member",
                 total,
             }));
 
-        // Monthly trend (last 6 months)
+        // Monthly trend (last 6 months) — from COOPERATIVE_TRANSACTIONS for granularity
         const monthlyTrend: Array<{ month: string; amount: number }> = [];
         const today = new Date();
         for (let i = 5; i >= 0; i--) {
