@@ -1060,21 +1060,40 @@ export async function getStandardCooperativeMembersAction(
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
-            
+
+            // Merge USERS data into app.data as fallback for fields that were never filled via onboarding.
+            // Legacy members who only paid (never submitted the form) will have blank phone/gender/dob etc.
+            // on the cooperative_members doc — so we surface it from the USERS profile instead.
+            const mergedData = {
+                ...app,
+                // Personal details — prefer cooperative_members doc, fall back to users profile
+                phone:               app.phone               || uData.phone              || uData.phoneNumber || null,
+                gender:              app.gender              || uData.gender             || null,
+                dateOfBirth:         app.dateOfBirth         || uData.dateOfBirth        || uData.dob        || null,
+                occupation:          app.occupation          || uData.occupation         || null,
+                stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
+                lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
+                residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
+                // Name fields
+                firstName:           app.firstName           || uData.firstName          || null,
+                lastName:            app.lastName            || uData.lastName           || null,
+                email:               app.email               || uData.email              || null,
+            };
+
             return {
                 id: app.id,
                 user: {
                     id: app.userId,
                     name: userName,
-                    email: uData.email || app.email || "Unknown",
-                    phone: uData.phone || app.phone || app.phoneNumber || "Unknown",
-                    dob: uData.dob || app.dateOfBirth || "Unknown",
-                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
-                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
-                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
+                    email: mergedData.email || "Unknown",
+                    phone: mergedData.phone || "Unknown",
+                    dob: mergedData.dateOfBirth || "Unknown",
+                    address: mergedData.residentialAddress || "Unknown",
+                    state: mergedData.stateOfOrigin || "Unknown",
+                    lga: mergedData.lga || "Unknown",
                 },
                 status: app.membershipStatus || "pending",
-                data: app
+                data: mergedData
             };
         });
 
