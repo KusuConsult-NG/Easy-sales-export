@@ -91,22 +91,33 @@ export async function getCooperativeStatsAction(): Promise<{
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // Get members (Scoped)
-        let membersQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        if (adminScope) {
-            membersQuery = membersQuery.where("cooperativeId", "==", adminScope);
-        }
-        // EXACT DATABASE COUNT
-        const totalMembersSnap = await membersQuery.count().get();
-        const totalMembers = totalMembersSnap.data().count;
+        // ── PAID MEMBERS COUNT (Paystack-authoritative) ──────────────────────
+        // Read from PROCESSED_PAYMENTS where type is cooperative_membership_registration
+        // and status is completed. This matches exactly what Paystack reports, because
+        // the sync and webhook both write here. COOPERATIVE_MEMBERS.paymentStatus can
+        // be stale for legacy registrations from the old cooperative portal.
+        const [paidCoopCountR, membersSnapR] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "cooperative_membership_registration")
+                .where("status", "==", "completed")
+                .count()
+                .get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .limit(adminScope ? 5000 : 5000)
+                .get(),
+        ]);
 
-        // Fetch remaining data for granular stats (with higher limit to avoid severe truncation)
-        const membersSnap = await membersQuery.limit(5000).get();
-        const allMembers = membersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        
-        // Members that PAID are the only ones properly wired for loans and active status
+        const paidMembersCount = paidCoopCountR.status === "fulfilled"
+            ? (paidCoopCountR.value.data().count ?? 0)
+            : 0;
+
+        const allMembers = membersSnapR.status === "fulfilled"
+            ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+            : [];
+
+        const totalMembers = allMembers.length;
+        // For status breakdown, still use COOPERATIVE_MEMBERS paymentStatus (best effort)
         const paidMembersList = allMembers.filter((m: any) => m.paymentStatus === "completed");
-        const paidMembersCount = paidMembersList.length;
 
         // Count approved members across both field names (membershipStatus and status)
         // Some docs use membershipStatus="active", others use status="approved" — check both
