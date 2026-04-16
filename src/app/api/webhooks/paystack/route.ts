@@ -222,6 +222,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             amount: amount,
             type: "marketplace_order",
             reference,
+            status: "completed",
             source: "webhook"
         });
 
@@ -311,6 +312,7 @@ export async function processExportInvestment(reference: string, amount: number,
             roi: roiLabel,
             returnMultiplier,
             expectedReturn,
+            status: "completed",
             source: "webhook"
         });
 
@@ -331,6 +333,7 @@ export async function processExportInvestment(reference: string, amount: number,
             exportId,
             amount,
             processedAt: FieldValue.serverTimestamp(),
+            status: "completed",
             source: "webhook"
         });
 
@@ -434,6 +437,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
             amount,
             tier,
             processedAt: FieldValue.serverTimestamp(),
+            status: "completed",
             source: "webhook"
         });
 
@@ -518,6 +522,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
             amount,
             plan,
             processedAt: FieldValue.serverTimestamp(),
+            status: "completed",
             source: "webhook"
         });
 

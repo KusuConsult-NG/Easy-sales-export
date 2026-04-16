@@ -184,6 +184,9 @@ export default function AdminFinancePage() {
             if (!silent) setSyncResult(`✗ Sync error: ${err.message}`);
         } finally {
             setIsSyncing(false);
+            // Always reload finance data after sync — counts + tables reflect the latest Firestore state
+            // without requiring a manual page refresh.
+            await loadFinanceData(true);
         }
     }
 
