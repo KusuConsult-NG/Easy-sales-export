@@ -1,3 +1,4 @@
+import { iterateStream } from '@/lib/firestore-stream';
 /**
  * In-App Notification Broadcast — Server Action
  *
@@ -91,12 +92,12 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.USERS)
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && userState !== filters.state) return;
                 add(d.id, u.fullName || u.name || "User");
-            }
+            });
             break;
         }
         case "buyers": {
@@ -105,12 +106,12 @@ export async function collectRecipientUserIds(
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && userState !== filters.state) return;
                 add(d.id, u.fullName || u.name || "User");
-            }
+            });
             break;
         }
         case "sellers":
@@ -137,12 +138,12 @@ export async function collectRecipientUserIds(
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && userState !== filters.state) return;
                 add(d.id, u.fullName || u.name || "User");
-            }
+            });
             break;
         }
         case "cooperative_members": {
@@ -171,46 +172,46 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .select("userId", "firstName", "surname", "state", "residentialState")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const a = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
-            }
+            });
             break;
         }
         case "academy_users": {
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .select("userId", "personalInfo", "state")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const a = d.data();
                 const userState = a.personalInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && userState !== filters.state) return;
                 if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
-            }
+            });
             break;
         }
         case "export_users": {
             const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .select("userId", "profile", "companyInfo", "state")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const a = d.data();
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && userState !== filters.state) return;
                 if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
-            }
+            });
             break;
         }
         case "farm_nation_users": {
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)
                 .select("userId", "firstName", "lastName", "state")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const a = d.data();
-                if (filters.state && a.state !== filters.state) continue;
+                if (filters.state && a.state !== filters.state) return;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
-            }
+            });
             break;
         }
         case "wave_briefing_registrants": {
@@ -219,11 +220,11 @@ export async function collectRecipientUserIds(
                 .where("status", "==", "registered")
                 .select("userId", "name", "firstName", "surname", "state")
                 .stream();
-            for await (const d of stream as any) {
+            await iterateStream(stream, async (d: any) => {
                 const r = d.data();
-                if (filters.state && r.state !== filters.state) continue;
+                if (filters.state && r.state !== filters.state) return;
                 if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
-            }
+            });
             break;
         }
         case "abandoned_failed_transactions": {
