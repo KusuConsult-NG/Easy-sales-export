@@ -91,7 +91,7 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.USERS)
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -105,7 +105,7 @@ export async function collectRecipientUserIds(
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -137,7 +137,7 @@ export async function collectRecipientUserIds(
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -171,7 +171,7 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .select("userId", "firstName", "surname", "state", "residentialState")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a = d.data();
                 if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
@@ -182,7 +182,7 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .select("userId", "personalInfo", "state")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a = d.data();
                 const userState = a.personalInfo?.state || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -194,7 +194,7 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .select("userId", "profile", "companyInfo", "state")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a = d.data();
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -206,7 +206,7 @@ export async function collectRecipientUserIds(
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)
                 .select("userId", "firstName", "lastName", "state")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a = d.data();
                 if (filters.state && a.state !== filters.state) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
@@ -219,7 +219,7 @@ export async function collectRecipientUserIds(
                 .where("status", "==", "registered")
                 .select("userId", "name", "firstName", "surname", "state")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const r = d.data();
                 if (filters.state && r.state !== filters.state) continue;
                 if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");

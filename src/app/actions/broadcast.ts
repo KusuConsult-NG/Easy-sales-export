@@ -136,7 +136,7 @@ export async function collectRecipients(
         case "all": {
             console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
             const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -153,7 +153,7 @@ export async function collectRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -195,7 +195,7 @@ export async function collectRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -212,7 +212,7 @@ export async function collectRecipients(
             
             const userIds: string[] = [];
             const members: any[] = [];
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const m: any = d.data();
                 members.push(m);
                 if (m.userId) userIds.push(m.userId);
@@ -236,7 +236,7 @@ export async function collectRecipients(
         }
         case "wave_applicants": {
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "name", "firstName", "surname").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const applicantEmail = a.email || a.userEmail;
@@ -250,7 +250,7 @@ export async function collectRecipients(
                 .where("status", "==", "registered")
                 .select("state", "email", "userEmail", "name", "firstName", "surname")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const r: any = d.data();
                 if (filters.state && r.state !== filters.state) continue;
                 const regEmail = r.email || r.userEmail;
@@ -260,7 +260,7 @@ export async function collectRecipients(
         }
         case "academy_users": {
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -271,7 +271,7 @@ export async function collectRecipients(
         }
         case "export_users": {
             const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "userEmail", "email").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -282,7 +282,7 @@ export async function collectRecipients(
         }
         case "farm_nation_users": {
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 if (filters.state && a.state !== filters.state) continue;
                 const email = a.email;
@@ -294,7 +294,7 @@ export async function collectRecipients(
             const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerEmail", "customerName").stream();
             const userIds: string[] = [];
             const failedPayments: any[] = [];
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const f: any = d.data();
                 failedPayments.push(f);
                 if (f.userId) userIds.push(f.userId);

@@ -573,7 +573,7 @@ export async function getContributionReportsAction(options?: {
         }
 
         const stream = q.select("type", "amount", "userId", "date").stream();
-        for await (const doc of stream) {
+        for await (const doc of stream as any) {
             const t = doc.data();
             if (t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee") {
                 const amount = Number(t.amount) || 0;

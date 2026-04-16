@@ -178,7 +178,7 @@ async function collectSmsRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -216,7 +216,7 @@ async function collectSmsRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -228,7 +228,7 @@ async function collectSmsRecipients(
             const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name").stream();
             const userIds: string[] = [];
             const members: any[] = [];
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const m: any = d.data();
                 members.push(m);
                 if (m.userId) userIds.push(m.userId);
@@ -253,7 +253,7 @@ async function collectSmsRecipients(
         }
         case "wave_applicants": {
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || a.name || "Applicant");
@@ -263,7 +263,7 @@ async function collectSmsRecipients(
         case "academy_users": {
             // Primary: academy_applications collection
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -295,7 +295,7 @@ async function collectSmsRecipients(
         }
         case "export_users": {
             const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -317,7 +317,7 @@ async function collectSmsRecipients(
         }
         case "farm_nation_users": {
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 if (filters.state && a.state !== filters.state) continue;
                 add(a.phone || a.phoneNumber, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
@@ -338,7 +338,7 @@ async function collectSmsRecipients(
             const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerPhone", "phone", "customerName").stream();
             const userIds: string[] = [];
             const failedPayments: any[] = [];
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const f: any = d.data();
                 failedPayments.push(f);
                 if (f.userId) userIds.push(f.userId);
@@ -369,7 +369,7 @@ async function collectSmsRecipients(
                 .where("status", "==", "registered")
                 .select("state", "phone", "phoneNumber", "name", "firstName", "surname")
                 .stream();
-            for await (const d of stream) {
+            for await (const d of stream as any) {
                 const r: any = d.data();
                 if (filters.state && r.state !== filters.state) continue;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
