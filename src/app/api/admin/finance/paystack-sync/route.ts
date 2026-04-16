@@ -129,7 +129,8 @@ async function paystackSyncHandler(_req: NextRequest) {
                         const isAbandoned = tx.status === "abandoned";
                         const amountNGN = tx.amount / 100;
                         const metadata = tx.metadata || {};
-                        const type = metadata.type ?? "payment";
+                        // COMPATIBILITY: Old cooperative portal used `purpose` instead of `type`.
+                        const type = metadata.type || metadata.purpose || "payment";
                         const userId = metadata.userId ?? null;
 
                         if (isSuccess) {
@@ -150,7 +151,10 @@ async function paystackSyncHandler(_req: NextRequest) {
                             } else if (type === "export_investment") {
                                 await processExportInvestment(reference, amountNGN, userId, metadata.exportId);
                             } else if (type === "cooperative_membership_registration") {
-                                await processCooperativeRegistration(reference, amountNGN, userId, metadata.membershipTier, metadata.membershipId);
+                                const tier = metadata.membershipTier || metadata.plan || "basic";
+                                // Legacy payments from old portal may not have membershipId — fall back to userId
+                                const membershipId = metadata.membershipId || userId;
+                                await processCooperativeRegistration(reference, amountNGN, userId, tier, membershipId);
                             } else if (type === "academy_registration") {
                                 await processAcademyRegistration(reference, amountNGN, userId, metadata.plan);
                             } else if (type === "farm_nation_registration" || type === "farm_nation_subscription") {

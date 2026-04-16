@@ -34,7 +34,9 @@ export async function POST(req: NextRequest) {
             const amountPaidv = data.amount / 100; // Paystack sends kobo
             const metadata = data.metadata || {};
             const userId = metadata.userId; // user who initiated payment
-            const type = metadata.type;
+            // COMPATIBILITY: Old cooperative portal used `purpose` instead of `type`.
+            // Always prefer `type`, fall back to `purpose` so legacy payments are handled correctly.
+            const type = metadata.type || metadata.purpose || null;
 
             logger.info(`[Paystack Webhook] Processing success for ${reference}`, { type, amount: amountPaidv });
 
@@ -57,8 +59,9 @@ export async function POST(req: NextRequest) {
                     const exportId = metadata.exportId;
                     await processExportInvestment(reference, amountPaidv, userId, exportId);
                 } else if (type === "cooperative_membership_registration") {
-                    const tier = metadata.membershipTier;
-                    const membershipId = metadata.membershipId;
+                    const tier = metadata.membershipTier || metadata.plan || "basic";
+                    // Legacy payments from old portal may not have membershipId — fall back to userId
+                    const membershipId = metadata.membershipId || userId;
                     await processCooperativeRegistration(reference, amountPaidv, userId, tier, membershipId);
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
