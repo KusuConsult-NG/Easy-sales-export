@@ -68,7 +68,7 @@ export default function AdminMessagesPage() {
 
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS, activeConversationId, "messages"),
-            orderBy("timestamp", "asc"),
+            orderBy("timestamp", "desc"),
             limit(100)
         );
 
@@ -78,7 +78,7 @@ export default function AdminMessagesPage() {
                 ...doc.data(),
                 timestamp: doc.data().timestamp?.toDate(),
             })) as Message[];
-            setMessages(msgs);
+            setMessages(msgs.reverse());
             scrollToBottom();
         });
 

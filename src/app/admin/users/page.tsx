@@ -32,6 +32,7 @@ interface User {
     state?: string;
     lga?: string;
     address?: any;
+    accountType?: string;
 }
 
 const ROLES_LIST = [
@@ -218,9 +219,20 @@ export default function AdminUsersPage() {
         {
             header: "Role",
             accessor: (user: User) => (
-                <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${getRoleBadge(user.role)}`}>
-                    {user.role}
-                </span>
+                <div className="flex flex-col gap-1 items-start">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold capitalize ${getRoleBadge(user.role)}`}>
+                        {user.role}
+                    </span>
+                    {user.accountType && (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border capitalize ${
+                            user.accountType === 'seller' ? 'border-orange-200 text-orange-600 bg-orange-50' : 
+                            user.accountType === 'buyer' ? 'border-blue-200 text-blue-600 bg-blue-50' : 
+                            'border-indigo-200 text-indigo-600 bg-indigo-50'
+                        }`}>
+                            Mkt: {user.accountType}
+                        </span>
+                    )}
+                </div>
             ),
             hideOnMobile: true
         },

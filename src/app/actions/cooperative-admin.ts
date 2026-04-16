@@ -96,20 +96,11 @@ export async function getCooperativeStatsAction(): Promise<{
         // and status is completed. This matches exactly what Paystack reports, because
         // the sync and webhook both write here. COOPERATIVE_MEMBERS.paymentStatus can
         // be stale for legacy registrations from the old cooperative portal.
-        const [paidCoopCountR, membersSnapR] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("type", "==", "cooperative_membership_registration")
-                .where("status", "==", "completed")
-                .count()
-                .get(),
+        const [membersSnapR] = await Promise.allSettled([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .limit(adminScope ? 5000 : 5000)
                 .get(),
         ]);
-
-        const paidMembersCount = paidCoopCountR.status === "fulfilled"
-            ? (paidCoopCountR.value.data().count ?? 0)
-            : 0;
 
         const allMembers = membersSnapR.status === "fulfilled"
             ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
@@ -118,6 +109,7 @@ export async function getCooperativeStatsAction(): Promise<{
         const totalMembers = allMembers.length;
         // For status breakdown, still use COOPERATIVE_MEMBERS paymentStatus (best effort)
         const paidMembersList = allMembers.filter((m: any) => m.paymentStatus === "completed");
+        const paidMembersCount = paidMembersList.length;
 
         // Count approved members across both field names (membershipStatus and status)
         // Some docs use membershipStatus="active", others use status="approved" — check both
@@ -137,72 +129,79 @@ export async function getCooperativeStatsAction(): Promise<{
         if (adminScope) {
             txnQuery = txnQuery.where("cooperativeId", "==", adminScope);
         }
-        const transactionsSnap = await txnQuery.get();
-        const transactions = transactionsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-        // Calculate contribution totals (contributions + membership registration fees)
-        const contributionTxns = transactions.filter(
-            (t: any) => (t.type === "contribution" || t.type === "membership_registration") && t.status === "completed"
-        );
-        const totalContributions = contributionTxns.reduce(
-            (sum: number, t: any) => sum + (t.amount || 0),
-            0
-        );
+        let totalTransactions = 0;
+        let totalTransactionAmount = 0;
+        let completedTransactions = 0;
+        let pendingTransactions = 0;
+        let failedTransactions = 0;
 
-        // Monthly contributions (last 30 days)
+        let totalContributions = 0;
+        let monthlyContributions = 0;
+        let previousMonthContributions = 0;
+        let totalSavings = 0;
+
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const monthlyContributions = contributionTxns
-            .filter((t: any) => {
-                const date = t.date?.toDate ? t.date.toDate() : new Date(t.date);
-                return date >= thirtyDaysAgo;
-            })
-            .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+        
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        const txnStream = txnQuery.select("type", "status", "amount", "date").stream();
+        for await (const doc of txnStream) {
+            const t = doc.data();
+            totalTransactions++;
+            
+            const amount = Number(t.amount) || 0;
+            totalTransactionAmount += amount;
+
+            if (t.status === "completed") completedTransactions++;
+            else if (t.status === "pending") pendingTransactions++;
+            else if (t.status === "failed") failedTransactions++;
+
+            if (t.status === "completed") {
+                if (t.type === "fixed_savings") {
+                    totalSavings += amount;
+                } else if (t.type === "contribution" || t.type === "membership_registration") {
+                    totalContributions += amount;
+                    
+                    if (t.date) {
+                        const date = t.date.toDate ? t.date.toDate() : new Date(t.date);
+                        if (date >= thirtyDaysAgo) {
+                            monthlyContributions += amount;
+                        } else if (date >= sixtyDaysAgo && date < thirtyDaysAgo) {
+                            previousMonthContributions += amount;
+                        }
+                    }
+                }
+            }
+        }
 
         // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
         // Ideally loans should have cooperativeId. Checking Schema...
         // If not, we filter in memory against the 'members' list we already fetched.
-        const loansSnap = await db.collection(COLLECTIONS.COOPERATIVE_LOANS).limit(5000).get();
-        let loans = loansSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const loansStream = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status").stream();
+        let totalLoans = 0;
+        let activeLoans = 0;
+        let pendingLoans = 0;
+        const validMemberIds = adminScope ? new Set(paidMembersList.map((m: any) => m.id)) : null;
 
-        if (adminScope) {
-            const validMemberIds = new Set(paidMembersList.map(m => m.id));
-            loans = loans.filter((l: any) => validMemberIds.has(l.memberId));
+        for await (const doc of loansStream) {
+            const l = doc.data();
+            if (validMemberIds && !validMemberIds.has(l.memberId)) continue;
+            
+            totalLoans += Number(l.amount) || 0;
+            if (l.status === "disbursed" || l.status === "approved") {
+                activeLoans++;
+            } else if (l.status === "pending") {
+                pendingLoans++;
+            }
         }
-
-        const totalLoans = loans.reduce((sum: number, l: any) => sum + (l.amount || 0), 0);
-        const activeLoans = loans.filter(
-            (l: any) => l.status === "disbursed" || l.status === "approved"
-        ).length;
-        const pendingLoans = loans.filter((l: any) => l.status === "pending").length;
-
-        // Calculate total savings
-        const savingsTxns = transactions.filter(
-            (t: any) => t.type === "fixed_savings" && t.status === "completed"
-        );
-        const totalSavings = savingsTxns.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-
-        // Calculate monthly growth (compare last 30 days vs previous 30 days)
-        const sixtyDaysAgo = new Date();
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-        const previousMonthContributions = contributionTxns
-            .filter((t: any) => {
-                const date = t.date?.toDate ? t.date.toDate() : new Date(t.date);
-                return date >= sixtyDaysAgo && date < thirtyDaysAgo;
-            })
-            .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
         const monthlyGrowth =
             previousMonthContributions > 0
                 ? ((monthlyContributions - previousMonthContributions) / previousMonthContributions) * 100
                 : 0;
-
-        // NEW: Global Transaction Stats
-        const totalTransactions = transactions.length;
-        const totalTransactionAmount = transactions.reduce((sum: number, t: any) => sum + (Number(t.amount) || 0), 0);
-        const completedTransactions = transactions.filter((t: any) => t.status === "completed").length;
-        const pendingTransactions = transactions.filter((t: any) => t.status === "pending").length;
-        const failedTransactions = transactions.filter((t: any) => t.status === "failed").length;
 
         return {
             success: true,
@@ -542,10 +541,9 @@ export async function getContributionReportsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // ── AUTHORITATIVE paid-member count from Paystack ledger ─────────────
-        const paidCountSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("type", "==", "cooperative_membership_registration")
-            .where("status", "==", "completed")
+        // ── AUTHORITATIVE paid-member count ─────────────
+        const paidCountSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where("paymentStatus", "==", "completed")
             .count()
             .get();
         const memberCount = paidCountSnap.data().count ?? 0;
@@ -558,30 +556,43 @@ export async function getContributionReportsAction(options?: {
             q = q.where("cooperativeId", "==", adminScope);
         }
 
-        const transactionsSnap = await q.get();
+        let totalContributions = 0;
+        const contributorMap = new Map<string, number>();
+        const monthlyTrendData: Array<{ month: string; mKey: number; yKey: number; amount: number }> = [];
 
-        // Filter to contribution types in memory
-        const contributions = transactionsSnap.docs
-            .map((doc) => ({ id: doc.id, ...doc.data() }))
-            .filter((t: any) => t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee");
+        // Initialize last 6 months buckets
+        const today = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            monthlyTrendData.push({
+                month: date.toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+                mKey: date.getMonth(),
+                yKey: date.getFullYear(),
+                amount: 0
+            });
+        }
 
-        // Calculate totals — use PROCESSED_PAYMENTS total for accuracy
-        const processedPaymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("type", "==", "cooperative_membership_registration")
-            .where("status", "==", "completed")
-            .get();
-        const totalContributions = processedPaymentsSnap.docs.reduce(
-            (sum, doc) => sum + (Number(doc.data().amount) || 0), 0
-        );
+        const stream = q.select("type", "amount", "userId", "date").stream();
+        for await (const doc of stream) {
+            const t = doc.data();
+            if (t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee") {
+                const amount = Number(t.amount) || 0;
+                totalContributions += amount;
+
+                if (t.userId) {
+                    const current = contributorMap.get(t.userId) || 0;
+                    contributorMap.set(t.userId, current + amount);
+                }
+
+                if (t.date) {
+                    const cDate = t.date.toDate ? t.date.toDate() : new Date(t.date);
+                    const bucket = monthlyTrendData.find(b => b.mKey === cDate.getMonth() && b.yKey === cDate.getFullYear());
+                    if (bucket) bucket.amount += amount;
+                }
+            }
+        }
 
         const averageContribution = memberCount > 0 ? totalContributions / memberCount : 0;
-
-        // Calculate top contributors
-        const contributorMap = new Map<string, number>();
-        for (const c of contributions as unknown as { userId: string; amount: number }[]) {
-            const current = contributorMap.get(c.userId) || 0;
-            contributorMap.set(c.userId, current + c.amount);
-        }
 
         const topContributors = Array.from(contributorMap.entries())
             .sort((a, b) => b[1] - a[1])
@@ -592,23 +603,7 @@ export async function getContributionReportsAction(options?: {
                 total,
             }));
 
-        // Monthly trend (last 6 months) — from COOPERATIVE_TRANSACTIONS for granularity
-        const monthlyTrend: Array<{ month: string; amount: number }> = [];
-        const today = new Date();
-        for (let i = 5; i >= 0; i--) {
-            const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const monthName = date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-
-            const monthContributions = contributions.filter((c: any) => {
-                const cDate = c.date?.toDate ? c.date.toDate() : new Date(c.date);
-                return (
-                    cDate.getMonth() === date.getMonth() && cDate.getFullYear() === date.getFullYear()
-                );
-            });
-
-            const amount = monthContributions.reduce((sum: number, c: any) => sum + (c.amount || 0), 0);
-            monthlyTrend.push({ month: monthName, amount });
-        }
+        const monthlyTrend = monthlyTrendData.map(b => ({ month: b.month, amount: b.amount }));
 
         return {
             success: true,

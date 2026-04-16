@@ -33,7 +33,8 @@ export async function getAuditLogsAction(filters: {
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.roles?.includes("admin") === false && userData.roles?.includes("super_admin") === false && userData.role !== "admin") {
+        const hasAdminRole = userData.roles?.includes("admin") || userData.roles?.includes("super_admin") || userData.role === "admin";
+        if (!hasAdminRole) {
             return { success: false, error: "Admin access required" };
         }
 
@@ -115,7 +116,8 @@ export async function exportAuditLogsCSV(filters: {
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        const hasAdminRole = userData.roles?.includes("admin") || userData.roles?.includes("super_admin") || userData.role === "admin";
+        if (!hasAdminRole) {
             return { success: false, error: "Admin access required" };
         }
 
@@ -185,7 +187,8 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        const hasAdminRole = userData.roles?.includes("admin") || userData.roles?.includes("super_admin") || userData.role === "admin";
+        if (!hasAdminRole) {
             return { success: false, error: "Admin access required" };
         }
 

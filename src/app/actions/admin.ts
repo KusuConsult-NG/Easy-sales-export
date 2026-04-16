@@ -900,14 +900,14 @@ export async function getAllExportRequestsAction(
             return { error: "Unauthorized: Permission required - finance:read", success: false };
         }
 
-        let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
-            .orderBy("createdAt", "desc")
-            .limit(limit);
+        let query: any = db.collection(COLLECTIONS.EXPORT_WINDOWS);
 
         if (statusFilter && statusFilter !== "all") {
-            query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
-                .where("status", "==", statusFilter)
-                .limit(limit);
+            query = query.where("status", "==", statusFilter)
+                         .limit(limit);
+        } else {
+            query = query.orderBy("createdAt", "desc")
+                         .limit(limit);
         }
 
         if (lastCreatedAt) {
@@ -1491,7 +1491,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
                 // Other
                 bankDetails: data.bankDetails,
                 metadata: data.metadata,
-                accountType: data.accountType
+                accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType
             };
         });
 
@@ -1641,7 +1641,7 @@ export async function approveSellerVerificationAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
             // Fallback for super_admin if specific role missing, or strict check
-            if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
+            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
                 return { error: "Unauthorized: Permission required - users:verify_sellers", success: false };
             }
         }
@@ -1769,7 +1769,7 @@ export async function approveExportOnboardingAction(
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
+            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
                 return { error: "Unauthorized: Permission required - users:update", success: false };
             }
         }
@@ -1991,12 +1991,15 @@ export async function getStandardExportApplicationsAction(options: {
         }
 
         const fetchLimit = options.limit || 50;
-        let q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).orderBy("createdAt", "desc");
+        let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
         
         if (options.status && options.status !== "all") {
-            q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                .where("status", "==", options.status)
-                .orderBy("createdAt", "desc");
+            // Cannot use orderBy without a composite index when using 'where'
+            q = q.where("status", "==", options.status)
+                 .limit(fetchLimit);
+        } else {
+            q = q.orderBy("createdAt", "desc")
+                 .limit(fetchLimit);
         }
 
         if (options.lastDocId) {
@@ -2005,8 +2008,6 @@ export async function getStandardExportApplicationsAction(options: {
                 q = q.startAfter(lastDoc);
             }
         }
-        
-        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
@@ -2106,7 +2107,7 @@ export async function rejectExportApplicationAction(
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles.includes("super_admin") && !session?.user?.roles.includes("admin")) {
+            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
                 return { error: "Unauthorized: Permission required - users:update", success: false };
             }
         }
@@ -3124,15 +3125,11 @@ export async function getMarketplaceUsersAction(options: {
         let users = snapshot.docs.map(doc => {
             const data = doc.data();
             const hasSellerRole = (data.roles || []).includes("seller");
-            const hasBuyerRole = (data.roles || []).includes("buyer");
-            const isRegisteredInMarketplace = data.serviceRegistrations?.marketplace === true;
             
-            if (!hasSellerRole && !hasBuyerRole && !isRegisteredInMarketplace) return null;
-
-            let buyerRole = "invalid";
-            if (hasSellerRole && hasBuyerRole) buyerRole = "both";
-            else if (hasSellerRole) buyerRole = "seller_only";
-            else buyerRole = "buyer_only";
+            // In ESE, all registered users are buyers. Only those with the seller role are sellers.
+            // If they have the seller role, they are inherently both a buyer and a seller.
+            let buyerRole = "buyer_only";
+            if (hasSellerRole) buyerRole = "both";
 
             return {
                 id: doc.id,
@@ -3147,7 +3144,15 @@ export async function getMarketplaceUsersAction(options: {
         }).filter(Boolean) as any[];
 
         if (options.roleFilter && options.roleFilter !== "all") {
-            users = users.filter((u: any) => u.buyerRole === options.roleFilter);
+            users = users.filter((u: any) => {
+                if (options.roleFilter === "seller_only") {
+                    return u.buyerRole === "seller_only" || u.buyerRole === "both";
+                }
+                if (options.roleFilter === "buyer_only") {
+                    return u.buyerRole === "buyer_only";
+                }
+                return u.buyerRole === options.roleFilter;
+            });
         }
 
         if (options.search) {

@@ -138,4 +138,32 @@ export const FEATURE_METADATA: Record<string, FeatureMetadata> = {
         category: "BETA",
         defaultEnabled: false,
     },
+    chatbot_persistence: {
+        id: "chatbot_persistence",
+        name: "Chatbot Persistence",
+        description: "Save AI Assistant conversations to Firebase",
+        category: "BETA",
+        defaultEnabled: true,
+    },
+    mobile_app_integration: {
+        id: "mobile_app_integration",
+        name: "Mobile App Integration",
+        description: "Connect APIs to the companion mobile application",
+        category: "BETA",
+        defaultEnabled: false,
+    },
+    blockchain_verification: {
+        id: "blockchain_verification",
+        name: "Blockchain Verification",
+        description: "Ethereum-based decentralized ledger for properties",
+        category: "EXPERIMENTAL",
+        defaultEnabled: false,
+    },
+    ml_credit_scoring: {
+        id: "ml_credit_scoring",
+        name: "ML Credit Scoring",
+        description: "Machine learning algorithms for cooperative loan assessments",
+        category: "EXPERIMENTAL",
+        defaultEnabled: false,
+    },
 };

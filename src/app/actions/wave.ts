@@ -346,8 +346,9 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             // Sync other PII for Communication Hub
             phone: applicantPhone,
             gender: "female", // WAVE is exclusive to females
-            stateOfOrigin: validatedData.stateOfResidence,
-            lga: validatedData.lgaOfResidence,
+            stateOfOrigin: validatedData.stateOfOrigin,       // ← correct: origin state
+            residentialState: validatedData.stateOfResidence, // ← separate residence field
+            lga: validatedData.lgaOfOrigin,
             residentialAddress: validatedData.residentialAddress,
             updatedAt: FieldValue.serverTimestamp(),
         });

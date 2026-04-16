@@ -609,12 +609,27 @@ export async function submitExportOnboardingAction(
         const onboardingRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc();
         batch.set(onboardingRef, fullApplication);
 
-        // Update user document to mark export service registration with safe dot notation
+        // Update user document to mark export service registration with safe dot notation.
+        // ALSO mirror PII from the profile object to the root User doc so admin broadcasts,
+        // Communication Hub queries, and user listings can find this user's data.
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const profileFirstName = profile.firstName || kycData.firstName || "";
+        const profileLastName  = profile.lastName  || kycData.lastName  || "";
+        const profileOtherName = profile.otherName || kycData.otherNames || null;
+        const computedFullName = [profileFirstName, profileOtherName, profileLastName]
+            .filter(Boolean).join(" ").trim() || profile.fullName || kycData.fullName || "";
+
         batch.update(userRef, {
             "serviceRegistrations.export.status": "pending_approval",
             "serviceRegistrations.export.applicationId": applicationId,
             "serviceRegistrations.export.appliedAt": FieldValue.serverTimestamp(),
+            // Mirror PII to root (dot-notation keeps all other fields intact)
+            ...(profileFirstName  && { firstName: profileFirstName }),
+            ...(profileLastName   && { lastName: profileLastName }),
+            ...(profileOtherName  !== null && { otherName: profileOtherName }),
+            ...(computedFullName  && { fullName: computedFullName }),
+            ...(profile.phone     && { phone: profile.phone }),
+            ...(profile.state     && { stateOfOrigin: profile.state }),
             updatedAt: FieldValue.serverTimestamp(),
         });
 

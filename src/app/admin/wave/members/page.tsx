@@ -44,7 +44,8 @@ export default function AdminWaveMembersPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: loadMembers
+        refresh: loadMembers,
+        meta
     } = useAdminData<WaveMember>({
         fetchAction: async (opts) => {
             const result = await getStandardWaveApplicationsAction({
@@ -176,7 +177,7 @@ export default function AdminWaveMembersPage() {
                     {/* Stats badge */}
                     <div className="bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
                         <span className="text-slate-500 block text-xs uppercase font-bold tracking-wider mb-0.5">Total Members</span>
-                        <span className="text-xl font-black text-slate-900">{members.length}</span>
+                        <span className="text-xl font-black text-slate-900">{(meta as any)?.totalCount ?? members.length}</span>
                     </div>
                     {/* CSV Export */}
                     <button

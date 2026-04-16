@@ -88,26 +88,29 @@ export async function collectRecipientUserIds(
 
     switch (filters.audience) {
         case "all": {
-            const snap = await db.collection(COLLECTIONS.USERS).get();
-            snap.forEach((d) => {
+            const stream = db.collection(COLLECTIONS.USERS)
+                .select("name", "fullName", "stateOfOrigin", "state", "address")
+                .stream();
+            for await (const d of stream) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(d.id, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "buyers": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
-                .get();
-            snap.forEach((d) => {
+                .select("name", "fullName", "stateOfOrigin", "state", "address")
+                .stream();
+            for await (const d of stream) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(d.id, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "sellers":
@@ -129,20 +132,24 @@ export async function collectRecipientUserIds(
             break;
         }
         case "marketplace_onboarded": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
-                .get();
-            snap.forEach((d) => {
+                .select("name", "fullName", "stateOfOrigin", "state", "address")
+                .stream();
+            for await (const d of stream) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(d.id, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "cooperative_members": {
-            const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
+            // We use .get() for smaller auxiliary queries but we select minimum fields
+            const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .select("userId", "firstName", "lastName", "state", "address")
+                .get();
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
@@ -161,57 +168,66 @@ export async function collectRecipientUserIds(
             break;
         }
         case "wave_applicants": {
-            const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
-            snap.forEach((d) => {
+            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .select("userId", "firstName", "surname", "state", "residentialState")
+                .stream();
+            for await (const d of stream) {
                 const a = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
-            });
+            }
             break;
         }
         case "academy_users": {
-            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
-            snap.forEach((d) => {
+            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .select("userId", "personalInfo", "state")
+                .stream();
+            for await (const d of stream) {
                 const a = d.data();
                 const userState = a.personalInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
-            });
+            }
             break;
         }
         case "export_users": {
-            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
-            snap.forEach((d) => {
+            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .select("userId", "profile", "companyInfo", "state")
+                .stream();
+            for await (const d of stream) {
                 const a = d.data();
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
-            });
+            }
             break;
         }
         case "farm_nation_users": {
-            const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
-            snap.forEach((d) => {
+            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)
+                .select("userId", "firstName", "lastName", "state")
+                .stream();
+            for await (const d of stream) {
                 const a = d.data();
-                if (filters.state && a.state !== filters.state) return;
+                if (filters.state && a.state !== filters.state) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
-            });
+            }
             break;
         }
         case "wave_briefing_registrants": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                 .where("status", "==", "registered")
-                .get();
-            snap.forEach((d) => {
+                .select("userId", "name", "firstName", "surname", "state")
+                .stream();
+            for await (const d of stream) {
                 const r = d.data();
-                if (filters.state && r.state !== filters.state) return;
+                if (filters.state && r.state !== filters.state) continue;
                 if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
-            });
+            }
             break;
         }
         case "abandoned_failed_transactions": {
-            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerName").get();
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const f = d.data();
@@ -219,7 +235,7 @@ export async function collectRecipientUserIds(
 
                 if (filters.state) {
                     const u = uMap.get(f.userId);
-                    const userState = u.stateOfOrigin || u.state || u.address?.state;
+                    const userState = u?.stateOfOrigin || u?.state || u?.address?.state;
                     if (!u || userState !== filters.state) continue;
                 }
 

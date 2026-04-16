@@ -15,6 +15,7 @@ import { z } from "zod";
 const profileUpdateSchema = z.object({
     firstName: z.string().max(50).optional(),
     lastName: z.string().max(50).optional(),
+    otherName: z.string().max(50).optional(),
     email: z.string().email("Please enter a valid email address").optional(),
     phone: z.string().min(10, "Phone number must be at least 10 digits"),
     location: z.string().optional(),
@@ -58,8 +59,11 @@ export async function getUserProfileAction() {
         return { success: true, data: { profile: {
                 firstName: userData.firstName || nameSplit.first,
                 lastName: userData.lastName || nameSplit.last,
+                otherName: userData.otherName || "",
                 email: userData.email || "",
                 phone: userData.phone || "",
+                stateOfOrigin: userData.stateOfOrigin || "",
+                lga: userData.lga || "",
                 location: userData.location || "",
                 bio: userData.bio || "",
                 notifications: userData.notifications || {
@@ -85,6 +89,7 @@ export async function getUserProfileAction() {
 export async function updateUserProfileAction(data: {
     firstName?: string;
     lastName?: string;
+    otherName?: string;
     email?: string;
     phone?: string;
     location?: string;
@@ -118,12 +123,13 @@ export async function updateUserProfileAction(data: {
             ...validated,
             updatedAt: new Date(),
         };
-        if (validated.firstName || validated.lastName) {
+        if (validated.firstName || validated.lastName || validated.otherName) {
             const existingDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const existing = existingDoc.data() || {};
             const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
             const last = validated.lastName ?? existing.lastName ?? existing.fullName?.split(' ').slice(1).join(' ') ?? "";
-            updatePayload.fullName = `${first} ${last}`.trim();
+            const other = validated.otherName ?? existing.otherName ?? "";
+            updatePayload.fullName = [first, other, last].filter(Boolean).join(' ').trim();
         }
         await db.collection(COLLECTIONS.USERS).doc(userId).update(updatePayload);
 

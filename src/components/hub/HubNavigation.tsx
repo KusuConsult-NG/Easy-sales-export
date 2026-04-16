@@ -5,12 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X, LayoutDashboard, LogIn, LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
+import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 
 export default function HubNavigation() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isEcosystemOpen, setIsEcosystemOpen] = useState(false);
     const pathname = usePathname();
     const { data: session } = useSession();
+    const toggles = useFeatureToggles(["wave_program", "academy_courses", "cooperative_loans", "farm_nation_purchases"]);
 
     const navItems = [
         // Home removed per user request
@@ -19,14 +21,14 @@ export default function HubNavigation() {
             label: "Ecosystem",
             href: "#",
             dropdown: [
-                { label: "Cooperatives", href: "/cooperatives" },
+                ...(toggles.cooperative_loans !== false ? [{ label: "Cooperatives", href: "/cooperatives" }] : []),
                 { label: "Marketplace", href: "/marketplace" },
                 { label: "Export Windows", href: "/export" },
-                { label: "Farm Nation", href: "/farm-nation" },
-                { label: "Academy", href: "/academy" },
+                ...(toggles.farm_nation_purchases !== false ? [{ label: "Farm Nation", href: "/farm-nation" }] : []),
+                ...(toggles.academy_courses !== false ? [{ label: "Academy", href: "/academy" }] : []),
             ],
         },
-        { label: "WAVE Program", href: "/wave/landing" },
+        ...(toggles.wave_program !== false ? [{ label: "WAVE Program", href: "/wave/landing" }] : []),
         { label: "Export", href: "/export" },
         { label: "Contact", href: "/contact" },
     ];

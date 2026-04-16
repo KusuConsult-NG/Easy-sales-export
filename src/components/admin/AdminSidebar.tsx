@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { logoutAction } from "@/app/actions/auth";
+import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 
 
 const NAV_ITEMS = [
@@ -43,17 +44,17 @@ const NAV_ITEMS = [
     { label: "Disputes", href: "/admin/disputes", icon: ShieldAlert, section: "platform" },
     { label: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText, section: "platform" },
     { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },
-    { label: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck, section: "platform" },
+    { label: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck, section: "platform", featureToggle: "digital_id_system" },
     { label: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft, section: "platform" },
     // ── Modules ─────────────────────────────────────────────────────────────
-    { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules" },
-    { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules" },
+    { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules", featureToggle: "wave_program" },
+    { label: "Cooperatives", href: "/admin/cooperatives", icon: Building2, section: "modules", featureToggle: "cooperative_loans" },
     { label: "Marketplace", href: "/admin/marketplace", icon: ShoppingBag, section: "modules" },
-    { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules" },
+    { label: "Escrow Management", href: "/admin/marketplace/escrow", icon: ShieldCheck, section: "modules", featureToggle: "escrow_messaging" },
     { label: "Export Windows", href: "/admin/export", icon: Container, section: "modules" },
     { label: "Export Applications", href: "/admin/export/applications", icon: FileText, section: "modules" },
-    { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules" },
-    { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules" },
+    { label: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, section: "modules", featureToggle: "farm_nation_purchases" },
+    { label: "Academy", href: "/admin/academy", icon: GraduationCap, section: "modules", featureToggle: "academy_courses" },
     // ── Finance & Settings ───────────────────────────────────────────────────
     { label: "Finance", href: "/admin/finance", icon: Wallet, section: "finance" },
     { label: "Settings", href: "/admin/settings", icon: Settings, section: "finance" },
@@ -62,6 +63,7 @@ const NAV_ITEMS = [
 export default function AdminSidebar() {
     const pathname = usePathname();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
+    const toggles = useFeatureToggles(["wave_program", "cooperative_loans", "escrow_messaging", "farm_nation_purchases", "academy_courses", "digital_id_system"]);
 
     return (
         <>
@@ -106,6 +108,9 @@ export default function AdminSidebar() {
                                             {label}
                                         </p>
                                         {items.map((item) => {
+                                            if (item.featureToggle && toggles[item.featureToggle] === false) {
+                                                return null;
+                                            }
                                             const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
                                             const Icon = item.icon;
                                             return (

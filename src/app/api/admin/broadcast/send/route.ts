@@ -11,6 +11,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "firebase-admin/firestore";
+import { collectRecipients } from "@/app/actions/broadcast";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -67,140 +68,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
         }
 
-        // Collect recipients
-        const recipients: Map<string, { name: string; email: string }> = new Map();
-        const add = (email: string, name: string) => {
-            if (email && !recipients.has(email)) recipients.set(email, { name, email });
-        };
-
-        switch (filters.audience) {
-            case "csv_upload": {
-                if (filters.csvEmails && filters.csvEmails.length > 0) {
-                    for (const email of filters.csvEmails) {
-                        add(email.trim(), "CSV User");
-                    }
-                }
-                break;
-            }
-            case "all": {
-                const snap = await db.collection(COLLECTIONS.USERS).get();
-                snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
-                    const u = d.data();
-                    if (filters.state && u.state !== filters.state) return;
-                    add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "User");
-                });
-                break;
-            }
-            case "buyers": {
-                const snap = await db.collection(COLLECTIONS.USERS)
-                    .where("marketplaceAccountType", "in", ["buyer", "both"]).get();
-                snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
-                    const u = d.data();
-                    if (filters.state && u.state !== filters.state) return;
-                    const uName = (u.firstName || u.lastName)
-                        ? [u.firstName, u.otherName, u.lastName].filter(Boolean).join(" ")
-                        : (u.fullName || u.name || u.displayName || "User");
-                    add(u.email || u.emailAddress, uName);
-                });
-                break;
-            }
-            case "sellers":
-            case "wholesale_sellers":
-            case "retail_sellers": {
-                let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                    .where("status", "==", filters.sellerStatus || "approved");
-                if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
-                if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
-                const snap = await q.get();
-                for (const d of snap.docs) {
-                    const v = d.data();
-                    if (filters.state && v.address?.state !== filters.state) continue;
-                    const userSnap = await db.collection(COLLECTIONS.USERS).doc(v.userId).get();
-                    const u = userSnap.data();
-                    if (u) {
-                        const uName = (u.firstName || u.lastName)
-                            ? [u.firstName, u.otherName, u.lastName].filter(Boolean).join(" ")
-                            : (u.fullName || u.name || u.displayName || "Seller");
-                        add(u.email || u.emailAddress, uName);
-                    }
-                }
-                break;
-            }
-            case "marketplace_onboarded": {
-                const snap = await db.collection(COLLECTIONS.USERS)
-                    .where("marketplaceAccountType", "in", ["buyer", "seller", "both"]).get();
-                snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
-                    const u = d.data();
-                    if (filters.state && u.state !== filters.state) return;
-                    const uName = (u.firstName || u.lastName)
-                        ? [u.firstName, u.otherName, u.lastName].filter(Boolean).join(" ")
-                        : (u.fullName || u.name || u.displayName || "User");
-                    add(u.email || u.emailAddress, uName);
-                });
-                break;
-            }
-            case "cooperative_members": {
-                const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .where("status", "==", "active").get();
-                for (const d of snap.docs) {
-                    const m = d.data();
-                    // Derive name: prefer structured fields, fall back to legacy flat name
-                    const memberName = (m.firstName || m.lastName)
-                        ? [m.firstName, m.otherName, m.lastName].filter(Boolean).join(" ")
-                        : (m.fullName || m.name || "Member");
-                    if (m.email) add(m.email, memberName);
-                }
-                break;
-            }
-            case "wave_applicants": {
-                const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
-                for (const d of snap.docs) {
-                    const a = d.data();
-                    const applicantEmail = a.email || a.userEmail;
-                    if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
-                }
-                break;
-            }
-            case "academy_users": {
-                const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
-                for (const d of snap.docs) {
-                    const a = d.data();
-                    const email = a.personalInfo?.email || a.email || a.userEmail;
-                    if (email) add(email, a.personalInfo?.fullName || "Academy User");
-                }
-                break;
-            }
-            case "export_users": {
-                const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
-                for (const d of snap.docs) {
-                    const a = d.data();
-                    const email = a.userEmail || a.profile?.email || a.email;
-                    if (email) add(email, a.profile?.fullName || "Export User");
-                }
-                break;
-            }
-            case "farm_nation_users": {
-                const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
-                for (const d of snap.docs) {
-                    const a = d.data();
-                    const email = a.email;
-                    if (email) add(email, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
-                }
-                break;
-            }
-            case "wave_briefing_registrants": {
-                const snap = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
-                    .where("status", "==", "registered").get();
-                for (const d of snap.docs) {
-                    const r = d.data();
-                    const regEmail = r.email || r.userEmail;
-                    if (regEmail) add(regEmail, r.name || r.fullName || `${r.firstName || ''} ${r.surname || ''}`.trim() || "Registrant");
-                }
-                break;
-            }
-        }
-
-        const allRecipients = Array.from(recipients.values());
+        // Collect recipients using centralized stream-safe logic
+        const allRecipients = await collectRecipients(filters);
         if (allRecipients.length === 0) {
             return NextResponse.json({ success: false, sent: 0, failed: 0, error: "No recipients matched the selected filters." });
         }

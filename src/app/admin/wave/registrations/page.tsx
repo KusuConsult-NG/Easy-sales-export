@@ -30,7 +30,8 @@ export default function BriefingRegistrationsPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: load
+        refresh: load,
+        meta
     } = useAdminData<BriefingRegistration>({
         fetchAction: async (opts) => {
             const result = await getBriefingRegistrationsAction(opts.lastDocId, opts.limit || 25);
@@ -125,7 +126,7 @@ export default function BriefingRegistrationsPage() {
                 <div className="flex items-center gap-3">
                     <div className="bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
                         <span className="text-slate-500 block text-xs uppercase font-bold tracking-wider mb-0.5">Total Registrants</span>
-                        <span className="text-xl font-black text-slate-900">{registrations.length}</span>
+                        <span className="text-xl font-black text-slate-900">{(meta as any)?.totalCount ?? registrations.length}</span>
                     </div>
                     <button
                         onClick={handleExportCSV}

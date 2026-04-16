@@ -26,6 +26,7 @@ import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
+import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 
 interface NavItem {
     label: string;
@@ -129,6 +130,7 @@ export default function DashboardNav() {
     }, [userId]);
 
     const moduleLinks = getModuleLinks(roles, serviceRegs);
+    const toggles = useFeatureToggles(["digital_id_system", "escrow_messaging"]);
 
     // ── Role-gated nav items ──────────────────────────────────────────────────
     // ONLY show module-specific links to users who have actually enrolled AND are approved.
@@ -150,11 +152,15 @@ export default function DashboardNav() {
         { label: "Messages",       href: "/messages",                   icon: MessageCircle, badge: unreadMessages || null },
         { label: "Notifications",  href: "/dashboard/notifications",    icon: Bell,          badge: unreadCount || null },
         // Digital ID — universal
-        { label: "Digital ID",     href: "/dashboard/digital-id",       icon: IdCard },
+        ...(toggles.digital_id_system !== false ? [
+            { label: "Digital ID",     href: "/dashboard/digital-id",       icon: IdCard },
+        ] : []),
         // Marketplace-only items
         ...(isMarketplaceUser ? [
             { label: "My Orders",  href: "/marketplace/buyer/orders",   icon: Package },
-            { label: "Disputes",   href: "/dashboard/disputes",         icon: AlertTriangle },
+            ...(toggles.escrow_messaging !== false ? [
+                { label: "Disputes",   href: "/dashboard/disputes",         icon: AlertTriangle },
+            ] : []),
         ] : []),
         // Reviews — marketplace or farm nation users
         ...((isMarketplaceUser || isFarmNationUser) ? [

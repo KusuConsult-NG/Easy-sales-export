@@ -248,8 +248,10 @@ export async function startConversationAction(participantUid: string, productId?
                 if (productId) {
                     if (conversation.productId === productId) return { conversationId: doc.id, error: null };
                 } else {
-                    // For generic support chat, just return the existing 1-on-1
-                    return { conversationId: doc.id, error: null };
+                    // For generic support chat, ensure it's not a product/order-specific chat
+                    if (!conversation.productId && !conversation.orderId) {
+                        return { conversationId: doc.id, error: null };
+                    }
                 }
             }
         }
@@ -359,7 +361,7 @@ export async function startSupportConversationAction() {
 
         // Find an admin user
         const adminSnapshot = await db.collection(COLLECTIONS.USERS)
-            .where("roles", "array-contains", "admin")
+            .where("roles", "array-contains-any", ["admin", "super_admin"])
             .limit(1)
             .get();
 

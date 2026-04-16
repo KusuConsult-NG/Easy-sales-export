@@ -45,6 +45,7 @@ export interface NavigationItem {
     app?: AppIdentifier; // Optional, defaults to current module context
     requiredRole?: UserRole;
     exact?: boolean; // If true, matches exact path only
+    featureToggle?: string; // Optional feature toggle to hide the item
 }
 
 export const GLOBAL_NAV_ITEMS: NavigationItem[] = [
@@ -79,7 +80,7 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         { name: "Market Overview", href: "/marketplace", icon: Store, exact: true },
         { name: "Browse Products", href: "/marketplace/buyer/products", icon: Search },
         { name: "My Orders", href: "/marketplace/buyer/orders", icon: Package },
-        { name: "Escrow", href: "/escrow", icon: Lock },
+        { name: "Escrow", href: "/escrow", icon: Lock, featureToggle: "escrow_messaging" },
         { name: "Seller Dashboard", href: "/marketplace/sell", icon: Store, requiredRole: "seller" },
         { name: "My Products", href: "/marketplace/products", icon: Package, requiredRole: "seller" },
     ],
@@ -90,7 +91,7 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     "cooperatives": [
         { name: "Dashboard", href: "/cooperatives/dashboard", icon: LayoutDashboard },
         { name: "My Savings", href: "/cooperatives/my-savings", icon: Wallet },
-        { name: "Loans", href: "/cooperatives/loans", icon: ScrollText },
+        { name: "Loans", href: "/cooperatives/loans", icon: ScrollText, featureToggle: "cooperative_loans" },
         { name: "Contribute", href: "/cooperatives/contribute", icon: TrendingUp },
         { name: "Directory", href: "/cooperatives/directory", icon: Users },
         { name: "History", href: "/cooperatives/history", icon: ClipboardList },
@@ -100,9 +101,9 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     // FARM NATION (Module: /farm-nation)
     // ------------------------------------------------------------------
     "farm-nation": [
-        { name: "Properties", href: "/farm-nation/properties", icon: Map },
+        { name: "Properties", href: "/farm-nation/properties", icon: Map, featureToggle: "farm_nation_purchases" },
         { name: "My Properties", href: "/farm-nation/my-properties", icon: Tractor },
-        { name: "My Purchases", href: "/farm-nation/my-purchases", icon: Home },
+        { name: "My Purchases", href: "/farm-nation/my-purchases", icon: Home, featureToggle: "farm_nation_purchases" },
         { name: "Map View", href: "/farm-nation/map", icon: Map },
         { name: "List Land", href: "/farm-nation/list-land", icon: Leaf },
     ],
@@ -111,21 +112,21 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
     // WAVE (Module: /wave) — pages inside /wave/(member)/
     // ------------------------------------------------------------------
     "wave": [
-        { name: "Dashboard", href: "/wave/dashboard", icon: LayoutDashboard },
-        { name: "Training", href: "/wave/training", icon: BookOpen },
-        { name: "Resources", href: "/wave/resources", icon: FileText },
-        { name: "Earnings", href: "/wave/earnings", icon: TrendingUp },
-        { name: "Shipments", href: "/wave/shipments", icon: Truck },
-        { name: "Certificates", href: "/wave/certificates", icon: Award },
+        { name: "Dashboard", href: "/wave/dashboard", icon: LayoutDashboard, featureToggle: "wave_program" },
+        { name: "Training", href: "/wave/training", icon: BookOpen, featureToggle: "wave_program" },
+        { name: "Resources", href: "/wave/resources", icon: FileText, featureToggle: "wave_program" },
+        { name: "Earnings", href: "/wave/earnings", icon: TrendingUp, featureToggle: "wave_program" },
+        { name: "Shipments", href: "/wave/shipments", icon: Truck, featureToggle: "wave_program" },
+        { name: "Certificates", href: "/wave/certificates", icon: Award, featureToggle: "wave_program" },
     ],
 
     // ------------------------------------------------------------------
     // ACADEMY (Module: /academy) — pages in /academy/ and /academy/(learner)/
     // ------------------------------------------------------------------
     "academy": [
-        { name: "Learning Home", href: "/academy/dashboard", icon: GraduationCap },
-        { name: "My Courses", href: "/academy/my-courses", icon: BookOpen },
-        { name: "My Progress", href: "/academy/progress", icon: TrendingUp },
+        { name: "Learning Home", href: "/academy/dashboard", icon: GraduationCap, featureToggle: "academy_courses" },
+        { name: "My Courses", href: "/academy/my-courses", icon: BookOpen, featureToggle: "academy_courses" },
+        { name: "My Progress", href: "/academy/progress", icon: TrendingUp, featureToggle: "academy_courses" },
     ],
 
     // ------------------------------------------------------------------
@@ -141,21 +142,21 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         { name: "Disputes", href: "/admin/disputes", icon: ShieldAlert },
         { name: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText },
         { name: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX },
-        { name: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck },
+        { name: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck, featureToggle: "digital_id_system" },
         { name: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft },
         // ── Modules ──────────────────────────────────────────────────────
-        { name: "WAVE Program", href: "/admin/wave", icon: Waves },
-        { name: "Cooperatives", href: "/admin/cooperatives", icon: Building2 },
+        { name: "WAVE Program", href: "/admin/wave", icon: Waves, featureToggle: "wave_program" },
+        { name: "Cooperatives", href: "/admin/cooperatives", icon: Building2, featureToggle: "cooperative_loans" },
         { name: "Marketplace", href: "/admin/marketplace", icon: Store },
         { name: "Export Windows", href: "/admin/export", icon: Container },
         { name: "Export Applications", href: "/admin/export/applications", icon: FileText },
-        { name: "Farm Nation", href: "/admin/farm-nation", icon: Tractor },
-        { name: "Academy", href: "/admin/academy", icon: GraduationCap },
+        { name: "Farm Nation", href: "/admin/farm-nation", icon: Tractor, featureToggle: "farm_nation_purchases" },
+        { name: "Academy", href: "/admin/academy", icon: GraduationCap, featureToggle: "academy_courses" },
         // ── Finance & Settings ────────────────────────────────────────────
         { name: "Finance", href: "/admin/finance", icon: Wallet },
         { name: "Settings", href: "/admin/settings", icon: Settings },
         // ── AI Tools ─────────────────────────────────────────────────────
-        { name: "AI Chatbot", href: "/admin/chatbot", icon: MessageCircle },
+        { name: "AI Chatbot", href: "/admin/chatbot", icon: MessageCircle, featureToggle: "ai_assistant" },
     ],
 };
 

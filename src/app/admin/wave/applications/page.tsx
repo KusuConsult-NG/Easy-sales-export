@@ -61,7 +61,8 @@ export default function AdminWaveApplicationsPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: fetchData
+        refresh: fetchData,
+        meta
     } = useAdminData<StandardPendingForm<WaveApplication>>({
         fetchAction: getStandardWaveApplicationsAction,
         limit: 50
@@ -238,7 +239,7 @@ export default function AdminWaveApplicationsPage() {
                         className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all"
                     >
                         <Download className="w-4 h-4" />
-                        Export CSV ({applications.length})
+                        Export CSV ({(meta as any)?.totalCount ?? applications.length})
                     </button>
                 )}
             </div>

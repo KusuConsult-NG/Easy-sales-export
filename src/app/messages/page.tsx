@@ -37,24 +37,40 @@ export default function MessagesPage() {
         }, 100);
     };
 
-    // Load conversations on mount
+    // Load conversations on mount using Real-time Listener
     useEffect(() => {
-        async function loadConversations() {
-            setLoading(true);
-            const result = await getConversationsAction();
-            if (!isSessionExpired(result) && result.conversations) {
-                setConversations(result.conversations as Conversation[]);
-                if (defaultConv && !result.conversations.find((c: any) => c.id === defaultConv)) {
-                    // Start an additional fetch for the requested conversation if it's new
-                }
-            }
-            setLoading(false);
-        }
+        if (!session?.user?.id) return;
 
-        if (session?.user) {
-            loadConversations();
-        }
-    }, [session, defaultConv]);
+        setLoading(true);
+        // Let's use the explicit where clause and locally sort.
+
+        // It is safer to re-implement getConversationsAction's query logic here:
+        import("firebase/firestore").then(({ query, collection, where, onSnapshot }) => {
+            const convsQuery = query(
+                collection(db, "conversations"),
+                where("participants", "array-contains", session.user.id)
+            );
+
+            const unsubscribe = onSnapshot(convsQuery, (snapshot) => {
+                const convs = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                })) as Conversation[];
+                
+                // Sort locally by updatedAt descending
+                convs.sort((a, b) => {
+                    const tA = a.updatedAt ? (typeof (a.updatedAt as any).toDate === 'function' ? (a.updatedAt as any).toDate().getTime() : new Date(a.updatedAt as any).getTime()) : 0;
+                    const tB = b.updatedAt ? (typeof (b.updatedAt as any).toDate === 'function' ? (b.updatedAt as any).toDate().getTime() : new Date(b.updatedAt as any).getTime()) : 0;
+                    return tB - tA;
+                });
+
+                setConversations(convs);
+                setLoading(false);
+            });
+
+            return () => unsubscribe();
+        });
+    }, [session]);
 
     // Load messages for selected conversation
     useEffect(() => {

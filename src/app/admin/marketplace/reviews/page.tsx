@@ -52,7 +52,8 @@ export default function AdminReviewsPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: loadReviews
+        refresh: loadReviews,
+        meta
     } = useAdminData<ProductReview>({
         fetchAction: async (opts) => {
             const result = await getAdminReviewsAction({
@@ -63,7 +64,7 @@ export default function AdminReviewsPage() {
             return {
                 success: result.success,
                 data: (result as any).reviews || [],
-                meta: { lastDocId: (result as any).lastDocId, hasMore: (result as any).hasMore },
+                meta: { lastDocId: (result as any).lastDocId, hasMore: (result as any).hasMore, stats: (result as any).stats },
                 error: (result as any).error
             };
         },
@@ -113,7 +114,10 @@ export default function AdminReviewsPage() {
         }
     }
 
-    const stats = {
+    // Global stats derived from server action meta
+    const totalStats = meta?.stats || null;
+
+    const stats = totalStats || {
         pending: reviews.filter((r) => r.status === "pending").length,
         approved: reviews.filter((r) => r.status === "approved").length,
         rejected: reviews.filter((r) => r.status === "rejected").length,

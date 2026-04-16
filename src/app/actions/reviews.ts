@@ -377,9 +377,27 @@ export async function getAdminReviewsAction(options: {
         const reviews = serializeDocs(docs) as unknown as ProductReview[];
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
+        // Fetch exact counts if no lastDocId (first page)
+        let stats = undefined;
+        if (!options.lastDocId) {
+            const allRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS);
+            const [pendingCount, approvedCount, rejectedCount] = await Promise.all([
+                allRef.where("status", "==", "pending").count().get(),
+                allRef.where("status", "==", "approved").count().get(),
+                allRef.where("status", "==", "rejected").count().get(),
+            ]);
+
+            stats = {
+                pending: pendingCount.data().count,
+                approved: approvedCount.data().count,
+                rejected: rejectedCount.data().count,
+            };
+        }
+
         return { 
             success: true, 
             reviews,
+            stats,
             lastDocId: nextCursor,
             hasMore
         };

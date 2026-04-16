@@ -5,18 +5,20 @@ import Link from "next/link";
 import Image from "next/image";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 
 export default function WebsiteNav() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const router = useRouter();
+    const toggles = useFeatureToggles(["wave_program", "academy_courses", "cooperative_loans", "farm_nation_purchases"]);
 
     const navLinks = [
         { name: "Export Windows", href: "/export" },
         { name: "Marketplace", href: "/marketplace" },
-        { name: "Cooperatives", href: "/cooperatives" },
-        { name: "WAVE Program", href: "/wave" },
-        { name: "Academy", href: "/academy" },
-        { name: "Farm Nation", href: "/farm-nation" },
+        ...(toggles.cooperative_loans !== false ? [{ name: "Cooperatives", href: "/cooperatives" }] : []),
+        ...(toggles.wave_program !== false ? [{ name: "WAVE Program", href: "/wave" }] : []),
+        ...(toggles.academy_courses !== false ? [{ name: "Academy", href: "/academy" }] : []),
+        ...(toggles.farm_nation_purchases !== false ? [{ name: "Farm Nation", href: "/farm-nation" }] : []),
     ];
 
     return (

@@ -26,6 +26,7 @@ export default function ProfilePage() {
     const [userData, setUserData] = useState({
         firstName: "",
         lastName: "",
+        otherName: "",
         email: "",
         phone: "",
         location: "",
@@ -50,6 +51,7 @@ export default function ProfilePage() {
                 setUserData({
                     firstName: p.firstName || nameFallback.first,
                     lastName: p.lastName || nameFallback.last,
+                    otherName: p.otherName || "",
                     email: p.email || session?.user?.email || "",
                     phone: p.phone || "",
                     location: p.location || "",
@@ -63,6 +65,7 @@ export default function ProfilePage() {
                     ...prev,
                     firstName: first,
                     lastName: last,
+                    otherName: "",
                     email: session?.user?.email || "",
                 }));
             }
@@ -85,6 +88,7 @@ export default function ProfilePage() {
             const result = await guardRun(updateUserProfileAction({
                 firstName: userData.firstName,
                 lastName: userData.lastName,
+                otherName: userData.otherName,
                 email: userData.email,
                 phone: userData.phone,
                 location: userData.location,
@@ -272,6 +276,16 @@ export default function ProfilePage() {
                                                 value={userData.firstName}
                                                 onChange={(e) => setUserData({ ...userData, firstName: e.target.value })}
                                                 placeholder="First name"
+                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-900">Middle / Other Name</label>
+                                            <input
+                                                type="text"
+                                                value={userData.otherName}
+                                                onChange={(e) => setUserData({ ...userData, otherName: e.target.value })}
+                                                placeholder="Other name (optional)"
                                                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                                             />
                                         </div>

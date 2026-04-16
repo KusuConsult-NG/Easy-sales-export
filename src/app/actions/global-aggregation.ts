@@ -12,14 +12,10 @@ import { logger } from "@/lib/logger";
  */
 export async function getPlatformMetricsAction() {
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error };
 
         // 1. Transactions - Aggregate from actual historical collections 
-        const [paystackSnap, escrowsR, coopRevR, allUsersSnap, usersSnap2] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").limit(10000).get(), // Using .get to manually sum without composite index, and fast enough for ~5000 docs
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+        const [paystackSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").limit(10000).get(),
             db.collection(COLLECTIONS.USERS).count().get(),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS).count().get()
         ]);
@@ -35,9 +31,6 @@ export async function getPlatformMetricsAction() {
         }
 
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
-        
-        // Excluded Escrow and Coop revenues from literal addition because they were paid through Paystack,
-        // so `PROCESSED_PAYMENTS` ALREADY has them. Adding them would double-count.
         
         return {
             success: true,

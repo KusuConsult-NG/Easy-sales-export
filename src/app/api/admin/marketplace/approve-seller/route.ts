@@ -95,12 +95,17 @@ export async function POST(request: NextRequest) {
             const userSnap = await userRef.get();
             if (userSnap.exists) {
                 const existingRoles: string[] = userSnap.data()?.roles || [];
+                const updateData: any = {
+                    updatedAt: FieldValue.serverTimestamp(),
+                    sellerVerificationStatus: "approved",
+                    "serviceRegistrations.marketplace.status": "approved",
+                };
+
                 if (!existingRoles.includes("seller")) {
-                    await userRef.update({
-                        roles: [...existingRoles, "seller"],
-                        updatedAt: FieldValue.serverTimestamp(),
-                    });
+                    updateData.roles = FieldValue.arrayUnion("seller");
                 }
+                
+                await userRef.update(updateData);
             }
         } catch (roleErr) {
             logger.error("Failed to grant seller role:", roleErr);

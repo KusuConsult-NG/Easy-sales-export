@@ -9,8 +9,10 @@ import {
     ArrowRight, ArrowLeft, Rocket, Loader2, Clock, XCircle, Home, CreditCard, Shield
 } from "lucide-react";
 import { checkAcademyStatusAction, submitAcademyApplicationAction, AcademyApplicationData, initiateAcademyPaymentAction, checkAcademyPaymentStatusAction } from "@/app/actions/academy";
+import { getUserProfileAction } from "@/app/actions/profile";
 import { useToast } from "@/contexts/ToastContext";
 import { logger } from "@/lib/logger";
+import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
 
 type SkillLevel = "beginner" | "intermediate" | "advanced";
 type LearningPreference = "video" | "text" | "interactive" | "mixed";
@@ -28,6 +30,11 @@ export default function AcademyOnboardingPage() {
     const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [applicationStatus, setApplicationStatus] = useState<string | null>(null);
     const [paymentStatus, setPaymentStatus] = useState<string>("pending");
+
+    // Resolved structured name from Firestore (not JWT string split)
+    const [resolvedFirstName, setResolvedFirstName] = useState("");
+    const [resolvedLastName, setResolvedLastName] = useState("");
+    const [resolvedOtherName, setResolvedOtherName] = useState("");
 
     // Form state
     const [phone, setPhone] = useState("");
@@ -54,10 +61,23 @@ export default function AcademyOnboardingPage() {
 
         const checkStatus = async () => {
             try {
-                // Check payment status first
+                // 1. Load structured name from Firestore root (NOT from JWT split)
+                const profileResult = await getUserProfileAction();
+                if (profileResult.success && "data" in profileResult && profileResult.data?.profile) {
+                    const p = profileResult.data.profile;
+                    setResolvedFirstName(p.firstName || "");
+                    setResolvedLastName(p.lastName || "");
+                    setResolvedOtherName(p.otherName || "");
+                    // Pre-fill phone if already on profile
+                    if (p.phone) setPhone(p.phone);
+                    if (p.stateOfOrigin) setState(p.stateOfOrigin);
+                }
+
+                // 2. Check payment status
                 const pStatus = await checkAcademyPaymentStatusAction();
                 setPaymentStatus(pStatus.data || "unpaid");
 
+                // 3. Check application status
                 const status = await checkAcademyStatusAction();
                 setApplicationStatus(status.data || "none");
 
@@ -66,7 +86,6 @@ export default function AcademyOnboardingPage() {
                 } else if (status.data === "pending" || status.data === "rejected") {
                     setIsLoading(false);
                 } else {
-                    // No application yet
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -107,11 +126,16 @@ export default function AcademyOnboardingPage() {
         setIsSubmitting(true);
 
         try {
+            // Compute fullName from structured Firestore names — NOT from session.user.name split
+            const computedFullName = [resolvedFirstName, resolvedOtherName, resolvedLastName]
+                .filter(Boolean).join(" ").trim() || session.user.name || "";
+
             const applicationData: AcademyApplicationData = {
                 personalInfo: {
-                    firstName: session.user.name?.split(' ')[0] || "",
-                    lastName: session.user.name?.split(' ').slice(1).join(' ') || "",
-                    fullName: session.user.name || "",
+                    firstName: resolvedFirstName || session.user.name?.split(" ")[0] || "",
+                    lastName: resolvedLastName || "",
+                    otherName: resolvedOtherName || undefined,
+                    fullName: computedFullName,
                     email: session.user.email || "",
                     phone: phone,
                     dateOfBirth: dateOfBirth,
@@ -466,23 +490,30 @@ export default function AcademyOnboardingPage() {
                                     </div>
                                     <div className="space-y-2">
                                         <label className="block text-sm font-semibold text-slate-900">State of Residence</label>
-                                        <input
-                                            type="text"
+                                        <select
                                             value={state}
-                                            onChange={(e) => setState(e.target.value)}
+                                            onChange={(e) => { setState(e.target.value); setLga(""); }}
                                             className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                            placeholder="e.g. Lagos"
-                                        />
+                                        >
+                                            <option value="">Select state...</option>
+                                            {STATES.map((s) => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="block text-sm font-semibold text-slate-900">LGA</label>
-                                        <input
-                                            type="text"
+                                        <select
                                             value={lga}
                                             onChange={(e) => setLga(e.target.value)}
-                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                                            placeholder="e.g. Ikeja"
-                                        />
+                                            disabled={!state}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:opacity-50"
+                                        >
+                                            <option value="">Select LGA...</option>
+                                            {state && NIGERIAN_LOCATIONS[state]?.map((l) => (
+                                                <option key={l} value={l}>{l}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>

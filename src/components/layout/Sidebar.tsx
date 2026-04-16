@@ -23,9 +23,15 @@ import { logoutAction } from "@/app/actions/auth";
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
 import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/sidebar-config";
+import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+
+const ALL_SIDEBAR_TOGGLES = Array.from(new Set([
+    ...Object.values(MODULE_NAVIGATION).flat().map(i => i.featureToggle),
+    ...GLOBAL_NAV_ITEMS.map(i => i.featureToggle)
+].filter(Boolean) as string[]));
 
 const COLLAPSED_STORAGE_KEY = "sidebar_collapsed_v1";
 
@@ -38,6 +44,8 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const pathname = usePathname();
     const { data: session } = useSession();
     const userId = session?.user?.id;
+
+    const featureToggles = useFeatureToggles(ALL_SIDEBAR_TOGGLES);
 
     // ── Collapse state (desktop only) — persisted ─────────────────────────
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -159,6 +167,9 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
 
             if (item.app && !hasAppAccess(userRoles, item.app as AppIdentifier)) return false;
             if (item.requiredRole && !userRoles.includes(item.requiredRole) && !isAdmin) {
+                return false;
+            }
+            if (item.featureToggle && featureToggles[item.featureToggle] === false) {
                 return false;
             }
             return true;

@@ -445,10 +445,13 @@ export async function getStandardWaveApplicationsAction(options: {
         const fetchLimit = options.limit || 50;
         let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", "desc");
         
+        let countQ: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("status", "==", options.status)
                 .orderBy("createdAt", "desc");
+            countQ = countQ.where("status", "==", options.status);
         }
 
         if (options.lastDocId) {
@@ -460,8 +463,12 @@ export async function getStandardWaveApplicationsAction(options: {
         
         q = q.limit(fetchLimit);
 
-        const snapshot = await q.get();
+        const [snapshot, countSnap] = await Promise.all([
+            q.get(),
+            countQ.count().get()
+        ]);
         const applications = serializeDocs(snapshot.docs);
+        const totalCount = countSnap.data().count;
 
         // Fetch all connected users
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
@@ -531,6 +538,7 @@ export async function getStandardWaveApplicationsAction(options: {
             hasMore: !!nextCursor,
             meta: {
                 totalFetched: applications.length,
+                totalCount: totalCount,
                 hasMore: !!nextCursor
             }
         };

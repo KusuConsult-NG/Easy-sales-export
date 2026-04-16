@@ -295,6 +295,8 @@ export async function registerCooperativeMemberAction(
                 proofOfAddress: documents.proofOfAddress,
             },
             bvn: bvn,
+            // Flat state field for SMS geo-filter broadcast queries
+            state: validatedData.stateOfOrigin,
             // Keep status as pending (admin review needed)
             membershipStatus: "pending",
             // Flag to distinguish "form submitted" from "payment initiated"
@@ -344,6 +346,9 @@ export async function registerCooperativeMemberAction(
             // Sync other PII for cross-module functionality
             phone: validatedData.phone,
             gender: validatedData.gender,
+            stateOfOrigin: validatedData.stateOfOrigin,     // flat field for broadcast geo-filter
+            lga: validatedData.lga,
+            residentialAddress: validatedData.residentialAddress,
             "address.state": validatedData.stateOfOrigin,
             "address.lga": validatedData.lga,
             "address.street": validatedData.residentialAddress,

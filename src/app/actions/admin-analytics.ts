@@ -154,24 +154,26 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     }
 
     // ── Revenue by month (last 6 months — all payment sources) ─────────────
-    const revenueByMonth = await Promise.all(
-        months.map(async ({ label, start, end }) => {
-            try {
-                const p1 = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                        .where("status", "==", "completed")
-                        .where("processedAt", ">=", start)
-                        .where("processedAt", "<=", end)
-                        .get();
+    // Fetch recent completed payments once to avoid composite index requirements
+    let recentPayments: any[] = [];
+    try {
+        const pSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("status", "==", "completed")
+            .limit(5000)
+            .get();
+        recentPayments = pSnap.docs.map(d => d.data());
+    } catch (_e) {}
 
-                let rev = 0;
-                p1.docs.forEach(d => { rev += (Number(d.data().amount) || 0); });
-
-                return { month: label, revenue: rev };
-            } catch (_e) {
-                return { month: label, revenue: 0 };
+    const revenueByMonth = months.map(({ label, start, end }) => {
+        let rev = 0;
+        recentPayments.forEach(d => {
+            const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt);
+            if (pAt >= start && pAt <= end) {
+                rev += (Number(d.amount) || 0);
             }
-        })
-    );
+        });
+        return { month: label, revenue: rev };
+    });
 
     // ── User growth by month (last 6 months) ────────────────────────────────
     const userGrowthByMonth = await Promise.all(

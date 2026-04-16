@@ -112,7 +112,7 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
 }
 
 /** Collect recipients based on audience filter — returns unique email list */
-async function collectRecipients(
+export async function collectRecipients(
     filters: BroadcastFilters
 ): Promise<{ name: string; email: string }[]> {
     console.log("[Broadcast] collectRecipients called with filters:", JSON.stringify(filters));
@@ -135,32 +135,30 @@ async function collectRecipients(
         }
         case "all": {
             console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
-            const snap = await db.collection(COLLECTIONS.USERS).get();
-            console.log(`[Broadcast] 'all' audience: ${snap.size} docs found in '${COLLECTIONS.USERS}'`);
-            snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+            const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").stream();
+            for await (const d of stream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
                 const resolvedEmail = u.email || u.emailAddress;
                 const resolvedName = u.fullName || u.name || u.displayName || "User";
-                if (!resolvedEmail) {
-                    console.log(`[Broadcast] Skipping user doc ${d.id} — no email field`);
-                }
+                if (!resolvedEmail) continue;
                 add(resolvedEmail, resolvedName);
-            });
+            }
             break;
         }
         case "buyers": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
-                .get();
-            snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
+                .stream();
+            for await (const d of stream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
-            });
+            }
             break;
         }
         case "sellers":
@@ -171,37 +169,57 @@ async function collectRecipients(
                 .where("status", "==", filters.sellerStatus || "approved");
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
-            const snap = await q.get();
-            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
-            for (const d of snap.docs) {
-                const v = d.data();
-                if (filters.state && v.address?.state !== filters.state) continue;
-                const u = uMap.get(v.userId);
+            
+            const sellerStream = q.select("userId", "address").stream();
+            const userIds: string[] = [];
+            const sellerDataMap = new Map<string, any>();
+            for await (const d of sellerStream) {
+                const v: any = d.data();
+                if (filters.state && v.address && v.address.state !== filters.state) continue;
+                if (v.userId) {
+                    userIds.push(v.userId);
+                    sellerDataMap.set(v.userId, v);
+                }
+            }
+            
+            const uMap = await resolveUsers(db, userIds);
+            for (const userId of userIds) {
+                const u = uMap.get(userId);
                 if (u) add(u.email || u.emailAddress, u.name || u.displayName || "Seller");
             }
             break;
         }
         case "marketplace_onboarded": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
-                .get();
-            snap.forEach((d: FirebaseFirestore.QueryDocumentSnapshot) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
+                .stream();
+            for await (const d of stream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
-            });
+            }
             break;
         }
         case "cooperative_members": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("status", "==", "active")
-                .get();
-            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
-            for (const d of snap.docs) {
-                const m = d.data();
+                .select("userId", "state", "address", "email", "name", "firstName", "lastName", "fullName")
+                .stream();
+            
+            const userIds: string[] = [];
+            const members: any[] = [];
+            for await (const d of stream) {
+                const m: any = d.data();
+                members.push(m);
+                if (m.userId) userIds.push(m.userId);
+            }
+
+            const uMap = await resolveUsers(db, userIds);
+            for (const m of members) {
                 let userState = m.state || (m.address && m.address.state);
                 const uData = m.userId ? uMap.get(m.userId) : null;
                 if (!userState && uData) userState = uData.state;
@@ -209,7 +227,7 @@ async function collectRecipients(
                 if (filters.state && userState !== filters.state) continue;
 
                 if (m.email) {
-                    add(m.email, m.name || "Member");
+                    add(m.email, m.name || m.fullName || "Member");
                 } else if (uData && (uData.email || uData.emailAddress)) {
                     add(uData.email || uData.emailAddress, uData.fullName || uData.name || "Member");
                 }
@@ -217,9 +235,9 @@ async function collectRecipients(
             break;
         }
         case "wave_applicants": {
-            const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
-            for (const d of snap.docs) {
-                const a = d.data();
+            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "name", "firstName", "surname").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
                 if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const applicantEmail = a.email || a.userEmail;
                 if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
@@ -227,12 +245,13 @@ async function collectRecipients(
             break;
         }
         case "wave_briefing_registrants": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                 .where("status", "==", "registered")
-                .get();
-            for (const d of snap.docs) {
-                const r = d.data();
+                .select("state", "email", "userEmail", "name", "firstName", "surname")
+                .stream();
+            for await (const d of stream) {
+                const r: any = d.data();
                 if (filters.state && r.state !== filters.state) continue;
                 const regEmail = r.email || r.userEmail;
                 if (regEmail) add(regEmail, r.name || `${r.firstName || ''} ${r.surname || ''}`.trim() || "Registrant");
@@ -240,31 +259,31 @@ async function collectRecipients(
             break;
         }
         case "academy_users": {
-            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
-            for (const d of snap.docs) {
-                const a = d.data();
-                const userState = a.personalInfo?.state || a.state;
+            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
+                const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
-                const email = a.personalInfo?.email || a.email || a.userEmail;
-                if (email) add(email, a.personalInfo?.fullName || "Academy User");
+                const email = (a.personalInfo && a.personalInfo.email) || a.email || a.userEmail;
+                if (email) add(email, (a.personalInfo && a.personalInfo.fullName) || "Academy User");
             }
             break;
         }
         case "export_users": {
-            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
-            for (const d of snap.docs) {
-                const a = d.data();
-                const userState = a.profile?.state || a.companyInfo?.state || a.state;
+            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "userEmail", "email").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
+                const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
-                const email = a.userEmail || a.profile?.email || a.email;
-                if (email) add(email, a.profile?.fullName || "Export User");
+                const email = a.userEmail || (a.profile && a.profile.email) || a.email;
+                if (email) add(email, (a.profile && a.profile.fullName) || "Export User");
             }
             break;
         }
         case "farm_nation_users": {
-            const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
-            for (const d of snap.docs) {
-                const a = d.data();
+            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
                 if (filters.state && a.state !== filters.state) continue;
                 const email = a.email;
                 if (email) add(email, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
@@ -272,14 +291,21 @@ async function collectRecipients(
             break;
         }
         case "abandoned_failed_transactions": {
-            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
-            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
-            for (const d of snap.docs) {
-                const f = d.data();
+            const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerEmail", "customerName").stream();
+            const userIds: string[] = [];
+            const failedPayments: any[] = [];
+            for await (const d of stream) {
+                const f: any = d.data();
+                failedPayments.push(f);
+                if (f.userId) userIds.push(f.userId);
+            }
+            
+            const uMap = await resolveUsers(db, userIds);
+            for (const f of failedPayments) {
                 const u = f.userId ? uMap.get(f.userId) : null;
                 
                 if (filters.state) {
-                    const userState = u.stateOfOrigin || u.state || u.address?.state;
+                    const userState = u ? (u.stateOfOrigin || u.state || (u.address && u.address.state)) : null;
                     if (!f.userId || !u || userState !== filters.state) continue;
                 }
                 

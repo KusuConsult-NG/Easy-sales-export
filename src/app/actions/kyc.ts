@@ -281,6 +281,9 @@ export async function saveKYCProfileAction(payload: {
             'kyc.idNumber': payload.idNumber || null,
             'kyc.profileSavedAt': FieldValue.serverTimestamp(),
             // Sync PII to root user doc for Communication Hub queries
+            firstName: payload.firstName,
+            lastName: payload.lastName,
+            otherName: payload.otherNames || null,
             phone: payload.phoneNumber,
             fullName: computedFullName,
             stateOfOrigin: payload.state,

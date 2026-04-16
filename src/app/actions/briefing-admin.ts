@@ -22,6 +22,7 @@ export interface BriefingRegistrationsResult {
     meta: {
         cursor: string | null;
         hasMore: boolean;
+        totalCount?: number;
     };
 }
 
@@ -64,9 +65,14 @@ export async function getBriefingRegistrationsAction(
             }
         }
 
-        const snapshot = await query.get();
+        const [snapshot, countSnap] = await Promise.all([
+            query.get(),
+            db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).count().get()
+        ]);
+        
         const hasMore = snapshot.docs.length > pageSize;
         const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
+        const totalCount = countSnap.data().count;
 
         const data: BriefingRegistration[] = docs.map(doc => {
             const d = doc.data();
@@ -86,9 +92,9 @@ export async function getBriefingRegistrationsAction(
             : null;
 
         return { success: true, data,
-            meta: { cursor: nextCursor, hasMore } };
+            meta: { cursor: nextCursor, hasMore, totalCount } };
     } catch (error) {
         logger.error("getBriefingRegistrationsAction error:", error);
-        return { success: false, error: "Failed to fetch registrations", meta: { cursor: null, hasMore: false } };
+        return { success: false, error: "Failed to fetch registrations", meta: { cursor: null, hasMore: false, totalCount: 0 } };
     }
 }

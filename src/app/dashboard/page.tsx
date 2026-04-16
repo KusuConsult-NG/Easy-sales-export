@@ -9,7 +9,7 @@ import {
     TrendingUp, Users, BookOpen, Landmark, ExternalLink,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
-import { collection, doc, query, where, onSnapshot, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, doc, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 
@@ -215,23 +215,24 @@ function DashboardHomeContent() {
         return () => unsub();
     }, [userId]);
 
-    // Orders count
+    // Active orders count — real-time onSnapshot (avoids getDocs stale count and composite index crash).
+    // ⚠️ Firestore requires a composite index for (buyerId + orderStatus IN [...]) which may not exist.
+    // Safe alternative: listen on buyerId only, then filter client-side (resultset is small per-user).
     useEffect(() => {
         if (!userId) return;
-
-        async function fetchOrders() {
-            try {
-                const snap = await getDocs(
-                    query(
-                        collection(db, COLLECTIONS.MARKETPLACE_ORDERS),
-                        where("buyerId", "==", userId),
-                        where("orderStatus", "in", ["pending", "confirmed", "processing", "shipped"])
-                    )
-                );
-                setStats(s => ({ ...s, activeOrders: snap.size }));
-            } catch { /* silently ignore */ }
-        }
-        fetchOrders();
+        const q = query(
+            collection(db, COLLECTIONS.MARKETPLACE_ORDERS),
+            where("buyerId", "==", userId)
+        );
+        const ACTIVE_STATUSES = new Set(["pending", "confirmed", "processing", "shipped"]);
+        const unsub = onSnapshot(q, (snap) => {
+            const activeCount = snap.docs.filter(d => ACTIVE_STATUSES.has(d.data().orderStatus)).length;
+            setStats(s => ({ ...s, activeOrders: activeCount, loading: false }));
+        }, () => {
+            // On error (e.g. missing index) silently set loading done, count stays 0
+            setStats(s => ({ ...s, loading: false }));
+        });
+        return () => unsub();
     }, [userId]);
 
 

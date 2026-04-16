@@ -664,10 +664,14 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{ 
         const inProgressCourses = enrolledCourses.length - completedCourses;
         const totalCompletedLessons = enrolledCourses.reduce((sum, p) => sum + p.completedLessons.length, 0);
 
-        // Calculate total lessons across all enrolled courses
+        // Calculate total lessons: batch all course reads in parallel (N+1 → 1 burst)
+        const courseSnapshots = await Promise.all(
+            enrolledCourses.map(p =>
+                db.collection(COLLECTIONS.ACADEMY_COURSES).doc(p.courseId).get()
+            )
+        );
         let totalLessons = 0;
-        for (const progress of enrolledCourses) {
-            const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(progress.courseId).get();
+        for (const courseDoc of courseSnapshots) {
             if (courseDoc.exists) {
                 const course = courseDoc.data() as Course;
                 totalLessons += course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);

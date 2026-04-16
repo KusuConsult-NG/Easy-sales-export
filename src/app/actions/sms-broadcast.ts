@@ -103,86 +103,87 @@ async function collectSmsRecipients(
         // ─────────────────────────────────────────────────────────────────
         case "all": {
             // 1. Primary: root users collection
-            const usersSnap = await db.collection(COLLECTIONS.USERS).get();
+            const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name").stream();
             const seenUserIds = new Set<string>();
-            usersSnap.forEach((d) => {
-                const u = d.data();
-                seenUserIds.add(d.id);
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
-                add(u.phone || u.phoneNumber || u.kyc?.phoneNumber, u.fullName || u.name || "User");
-            });
+            for await (const d of usersStream) {
+                const u: any = d.data();
+                seenUserIds.add(u.id || d.id);
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
+                add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "User");
+            }
 
             // 2. Supplement: cooperative_members (phone may be stored here only)
-            const cmSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
-            cmSnap.forEach((d) => {
-                const m = d.data();
-                const userState = m.state || m.address?.state;
-                if (filters.state && userState !== filters.state) return;
+            const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("state", "address", "phone", "phoneNumber", "firstName", "lastName").stream();
+            for await (const d of cmStream) {
+                const m: any = d.data();
+                const userState = m.state || (m.address && m.address.state);
+                if (filters.state && userState !== filters.state) continue;
                 const phone = m.phone || m.phoneNumber;
                 const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || "Member";
                 add(phone, name);
-            });
+            }
 
             // 3. Supplement: wave_applications
-            const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
-            waveSnap.forEach((d) => {
-                const a = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
+            const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName").stream();
+            for await (const d of waveStream) {
+                const a: any = d.data();
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const phone = a.phone || a.alternativePhone || a.phoneNumber;
                 const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
                 add(phone, name);
-            });
+            }
 
             // 4. Supplement: academy_applications
-            const academySnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
-            academySnap.forEach((d) => {
-                const a = d.data();
-                const userState = a.personalInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) return;
-                const phone = a.personalInfo?.phone || a.phone || a.phoneNumber;
-                const name = a.personalInfo?.fullName || [a.personalInfo?.firstName, a.personalInfo?.lastName].filter(Boolean).join(" ") || "Academy User";
+            const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").stream();
+            for await (const d of academyStream) {
+                const a: any = d.data();
+                const userState = (a.personalInfo && a.personalInfo.state) || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                const phone = (a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber;
+                const name = (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User";
                 add(phone, name);
-            });
+            }
 
             // 5. Supplement: wave_briefing_registrations
-            const briefSnap = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).get();
-            briefSnap.forEach((d) => {
-                const r = d.data();
-                if (filters.state && r.state !== filters.state) return;
+            const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("state", "phone", "phoneNumber", "name", "firstName", "surname").stream();
+            for await (const d of briefStream) {
+                const r: any = d.data();
+                if (filters.state && r.state !== filters.state) continue;
                 add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
-            });
+            }
 
             // 6. Supplement: farm_nation_inquiries
-            const fnSnap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
-            fnSnap.forEach((d) => {
-                const a = d.data();
-                if (filters.state && a.state !== filters.state) return;
+            const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").stream();
+            for await (const d of fnStream) {
+                const a: any = d.data();
+                if (filters.state && a.state !== filters.state) continue;
                 add(a.phone || a.phoneNumber, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
-            });
+            }
 
             // 7. Supplement: export_onboarding_applications
-            const exportSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
-            exportSnap.forEach((d) => {
-                const a = d.data();
-                const userState = a.profile?.state || a.companyInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) return;
-                add(a.profile?.phone || a.phone || a.phoneNumber, a.profile?.fullName || "Export User");
-            });
+            const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").stream();
+            for await (const d of exportStream) {
+                const a: any = d.data();
+                const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
+            }
 
             break;
         }
         case "buyers": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
-                .get();
-            snap.forEach((d) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
+                .stream();
+            for await (const d of stream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "sellers":
@@ -193,34 +194,48 @@ async function collectSmsRecipients(
                 .where("status", "==", filters.sellerStatus || "approved");
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
-            const snap = await q.get();
-            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
-            for (const d of snap.docs) {
-                const v = d.data();
-                if (filters.state && v.address?.state !== filters.state) continue;
-                const u = uMap.get(v.userId);
+            
+            const sellerStream = q.select("userId", "address").stream();
+            const userIds: string[] = [];
+            for await (const d of sellerStream) {
+                const v: any = d.data();
+                if (filters.state && v.address && v.address.state !== filters.state) continue;
+                if (v.userId) userIds.push(v.userId);
+            }
+            
+            const uMap = await resolveUsers(db, userIds);
+            for (const userId of userIds) {
+                const u = uMap.get(userId);
                 if (u) add(u.phone || u.phoneNumber, u.fullName || u.name || "Seller");
             }
             break;
         }
         case "marketplace_onboarded": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
-                .get();
-            snap.forEach((d) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
+                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
+                .stream();
+            for await (const d of stream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "cooperative_members": {
-            const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
-            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
-            for (const d of snap.docs) {
-                const m = d.data();
+            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name").stream();
+            const userIds: string[] = [];
+            const members: any[] = [];
+            for await (const d of stream) {
+                const m: any = d.data();
+                members.push(m);
+                if (m.userId) userIds.push(m.userId);
+            }
+            
+            const uMap = await resolveUsers(db, userIds);
+            for (const m of members) {
                 let userState = m.state || (m.address && m.address.state);
                 const uData = m.userId ? uMap.get(m.userId) : null;
                 
@@ -237,90 +252,100 @@ async function collectSmsRecipients(
             break;
         }
         case "wave_applicants": {
-            const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
-            snap.forEach((d) => {
-                const a = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
-                add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || "Applicant");
-            });
+            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
+                add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || a.name || "Applicant");
+            }
             break;
         }
         case "academy_users": {
             // Primary: academy_applications collection
-            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get();
-            snap.forEach((d) => {
-                const a = d.data();
-                const userState = a.personalInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) return;
-                add(a.personalInfo?.phone || a.phone || a.phoneNumber, a.personalInfo?.fullName || [a.personalInfo?.firstName, a.personalInfo?.lastName].filter(Boolean).join(" ") || "Academy User");
-            });
+            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
+                const userState = (a.personalInfo && a.personalInfo.state) || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                add((a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber, (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User");
+            }
 
             // Supplement: users with academy_participant role (enrolled but no standalone application doc)
-            const usersSnap = await db.collection(COLLECTIONS.USERS)
+            const usersStream = db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "academy_participant")
-                .get();
-            usersSnap.forEach((d) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
-                add(u.phone || u.phoneNumber || u.kyc?.phoneNumber, u.fullName || u.name || "Academy User");
-            });
+                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name")
+                .stream();
+            for await (const d of usersStream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
+                add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Academy User");
+            }
 
             // Supplement: processedPayments for academy registration
-            const ppSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            const ppStream = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "academy_registration")
-                .get();
-            ppSnap.forEach((d) => {
-                const p = d.data();
+                .select("phone", "customerPhone", "customerName", "fullName")
+                .stream();
+            for await (const d of ppStream) {
+                const p: any = d.data();
                 add(p.phone || p.customerPhone, p.customerName || p.fullName || "Academy User");
-            });
+            }
             break;
         }
         case "export_users": {
-            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).get();
-            snap.forEach((d) => {
-                const a = d.data();
-                const userState = a.profile?.state || a.companyInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) return;
-                add(a.profile?.phone || a.phone || a.phoneNumber, a.profile?.fullName || "Export User");
-            });
+            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
+                const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
+            }
 
             // Supplement: users with export roles
-            const usersSnap = await db.collection(COLLECTIONS.USERS)
+            const usersStream = db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "export_member")
-                .get();
-            usersSnap.forEach((d) => {
-                const u = d.data();
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) return;
-                add(u.phone || u.phoneNumber || u.kyc?.phoneNumber, u.fullName || u.name || "Export User");
-            });
+                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name")
+                .stream();
+            for await (const d of usersStream) {
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
+                add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Export User");
+            }
             break;
         }
         case "farm_nation_users": {
-            const snap = await db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).get();
-            snap.forEach((d) => {
-                const a = d.data();
-                if (filters.state && a.state !== filters.state) return;
+            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").stream();
+            for await (const d of stream) {
+                const a: any = d.data();
+                if (filters.state && a.state !== filters.state) continue;
                 add(a.phone || a.phoneNumber, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
-            });
+            }
 
             // Supplement: processedPayments for farm_nation
-            const ppSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            const ppStream = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "farm_nation")
-                .get();
-            ppSnap.forEach((d) => {
-                const p = d.data();
+                .select("phone", "customerPhone", "customerName")
+                .stream();
+            for await (const d of ppStream) {
+                const p: any = d.data();
                 add(p.phone || p.customerPhone, p.customerName || "Farm Nation User");
-            });
+            }
             break;
         }
         case "abandoned_failed_transactions": {
-            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
-            const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
-            for (const d of snap.docs) {
-                const f = d.data();
-                // Handle records with and without userId
+            const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerPhone", "phone", "customerName").stream();
+            const userIds: string[] = [];
+            const failedPayments: any[] = [];
+            for await (const d of stream) {
+                const f: any = d.data();
+                failedPayments.push(f);
+                if (f.userId) userIds.push(f.userId);
+            }
+            
+            const uMap = await resolveUsers(db, userIds);
+            for (const f of failedPayments) {
                 const phone = f.customerPhone || f.phone;
                 const name = f.customerName || "User";
                 if (phone) {
@@ -330,7 +355,7 @@ async function collectSmsRecipients(
                 if (!f.userId) continue;
                 const u = uMap.get(f.userId);
                 if (!u) continue;
-                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
                 if (u.phone || u.phoneNumber) {
                     add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
@@ -339,15 +364,16 @@ async function collectSmsRecipients(
             break;
         }
         case "wave_briefing_registrants": {
-            const snap = await db
+            const stream = db
                 .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                 .where("status", "==", "registered")
-                .get();
-            snap.forEach((d) => {
-                const r = d.data();
-                if (filters.state && r.state !== filters.state) return;
+                .select("state", "phone", "phoneNumber", "name", "firstName", "surname")
+                .stream();
+            for await (const d of stream) {
+                const r: any = d.data();
+                if (filters.state && r.state !== filters.state) continue;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
-            });
+            }
             break;
         }
         case "custom": {

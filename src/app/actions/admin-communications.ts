@@ -32,52 +32,56 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
         const emails: string[] = [];
 
         if (segment === 'cooperative') {
-            const coopQuery = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where('paymentStatus', '==', 'completed');
-            const coopSnap = await coopQuery.get();
-            console.log(`[AdminComms] cooperative segment: ${coopSnap.size} docs found`);
-            coopSnap.docs.forEach(doc => {
+            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where('paymentStatus', '==', 'completed')
+                .select('email')
+                .stream();
+            let count = 0;
+            for await (const doc of stream) {
                 const data = doc.data();
-                if (data.email) {
-                    emails.push(data.email);
-                }
-            });
+                if (data.email) emails.push(data.email);
+                count++;
+            }
+            console.log(`[AdminComms] cooperative segment: ${count} docs found`);
         } else {
-            let snapshot;
+            let stream: NodeJS.ReadableStream;
             switch (segment) {
                 case 'active':
-                    snapshot = await query.where('status', '==', 'active').get();
+                    stream = query.where('status', '==', 'active').select('email').stream();
                     break;
                 case 'verified':
-                    snapshot = await query.where('verified', '==', true).get();
+                    stream = query.where('verified', '==', true).select('email').stream();
                     break;
                 case 'sellers':
-                    snapshot = await query.where('roles', 'array-contains', 'seller').get();
+                    stream = query.where('roles', 'array-contains', 'seller').select('email').stream();
                     break;
                 case 'wave': {
-                    const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).get();
-                    console.log(`[AdminComms] wave segment: ${waveSnap.size} docs found`);
-                    waveSnap.docs.forEach(doc => {
+                    const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select('email', 'userEmail').stream();
+                    let waveCount = 0;
+                    for await (const doc of waveStream) {
                         const data = doc.data();
                         const email = data.email || data.userEmail;
                         if (email) emails.push(email);
-                    });
+                        waveCount++;
+                    }
+                    console.log(`[AdminComms] wave segment: ${waveCount} docs found`);
                     return [...new Set(emails)];
                 }
                 case 'all':
                 default:
-                    snapshot = await query.get();
+                    stream = query.select('email').stream();
                     break;
             }
 
-            console.log(`[AdminComms] segment '${segment}': ${snapshot.size} docs found in '${COLLECTIONS.USERS}'`);
-            snapshot.docs.forEach(doc => {
+            let mainCount = 0;
+            for await (const doc of stream) {
                 const data = doc.data();
                 if (data.email) {
                     emails.push(data.email);
-                } else {
-                    console.log(`[AdminComms] User doc ${doc.id} has no 'email' field. Fields: ${Object.keys(data).join(', ')}`);
                 }
-            });
+                mainCount++;
+            }
+            console.log(`[AdminComms] segment '${segment}': ${mainCount} docs processed`);
         }
 
         console.log(`[AdminComms] Returning ${emails.length} emails (deduped: ${[...new Set(emails)].length})`);

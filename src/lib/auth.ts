@@ -135,6 +135,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         throw new Error("Your account has been suspended. Please contact support.");
                     }
 
+                    // ── STEP 8.5: Track Active Users ─────────────────────────────
+                    try {
+                        const { FieldValue } = await import("firebase-admin/firestore");
+                        await adminDb.collection(COLLECTIONS.USERS).doc(uid).update({
+                            lastLoginAt: FieldValue.serverTimestamp()
+                        });
+                    } catch (e: any) {
+                        logger.error(`${authCtx} Failed to update lastLoginAt: ${e.message}`);
+                    }
+
                     // ── STEP 9: Update profile cache ──────────────────────────
                     const { setCache, CacheKeys, CACHE_TTL } = await import("@/lib/redis");
                     await setCache(
@@ -148,6 +158,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             serviceRegistrations: (userData as any).serviceRegistrations || {},
                             createdAt: userData.createdAt,
                             updatedAt: userData.updatedAt,
+                            lastLoginAt: new Date().toISOString()
                         },
                         CACHE_TTL.USER_PROFILE
                     );

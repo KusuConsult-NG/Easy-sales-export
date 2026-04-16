@@ -240,7 +240,15 @@ export async function registerAction(prevState: any, formData: FormData) {
         // eliminating the legacy data gap for all future registrations.
         const nameParts = validatedData.fullName.trim().split(/\s+/).filter(Boolean);
         const registrationFirstName = nameParts[0] || "";
-        const registrationLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+        let registrationOtherName = "";
+        let registrationLastName = "";
+        
+        if (nameParts.length > 2) {
+             registrationOtherName = nameParts.slice(1, -1).join(" ");
+             registrationLastName = nameParts[nameParts.length - 1];
+        } else if (nameParts.length === 2) {
+             registrationLastName = nameParts[1];
+        }
 
         // Create Firestore user profile
         const userProfile: Omit<FirestoreUser, "createdAt" | "updatedAt"> = {
@@ -248,6 +256,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             fullName: validatedData.fullName,
             firstName: registrationFirstName,
             lastName: registrationLastName,
+            otherName: registrationOtherName || undefined,
             email: validatedData.email,
             roles: userRoles,
             isVerified: true,  // canonical field
