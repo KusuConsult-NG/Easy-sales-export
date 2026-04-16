@@ -8,6 +8,8 @@ import {
     ChevronDown, ChevronUp, Tag, Globe, Award
 } from "lucide-react";
 import Link from "next/link";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getAdminExportCatalogAction, createExportCatalogAction, deleteExportCatalogAction } from "@/app/actions/export-admin";
 
 interface CatalogProduct {
     id?: string;
@@ -153,57 +155,64 @@ function ProductForm({ initial, onSave, onCancel }: {
 export default function AdminExportCatalogPage() {
     const { data: session } = useSession();
     const { showToast } = useToast();
-    const [products, setProducts] = useState<CatalogProduct[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
 
     const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
 
-    useEffect(() => {
-        loadProducts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    async function loadProducts() {
-        setIsLoading(true);
-        try {
-            const res = await fetch("/api/export/catalog");
-            const data = await res.json();
-            if (data.success) setProducts(data.products || []);
-        } catch {
-            showToast("Failed to load catalog", "error");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const {
+        data: products,
+        loading: isLoading,
+        hasMore,
+        refresh: loadProducts,
+        onNextPage,
+        onPrevPage,
+        pageIndex
+    } = useAdminData<CatalogProduct>({
+        fetchAction: async (opts) => {
+            const result = await getAdminExportCatalogAction({
+                limit: opts.limit || 50,
+                lastDocId: opts.lastDocId
+            });
+            if (!result.success) {
+                showToast(result.error || "Failed to load catalog", "error");
+                return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+            }
+            return {
+                success: true,
+                data: result.data || [],
+                meta: {
+                    lastDocId: result.meta?.lastDocId,
+                    hasMore: result.meta?.hasMore
+                }
+            };
+        },
+        limit: 50,
+        dependencies: []
+    });
 
     const saveProduct = async (p: CatalogProduct) => {
-        const res = await fetch("/api/export/catalog", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(p),
-        });
-        const data = await res.json();
-        if (data.success) {
+        const result = await createExportCatalogAction(p);
+        
+        if (result.success) {
             showToast(p.id ? "Product updated" : "Product added", "success");
             setShowForm(false);
             setEditingProduct(null);
             await loadProducts();
         } else {
-            showToast(data.error || "Save failed", "error");
+            showToast(result.error || "Save failed", "error");
         }
     };
 
     const deleteProduct = async (id: string) => {
         if (!confirm("Remove this product from the catalog?")) return;
-        const res = await fetch(`/api/export/catalog?id=${id}`, { method: "DELETE" });
-        const data = await res.json();
-        if (data.success) {
+        const result = await deleteExportCatalogAction(id);
+        
+        if (result.success) {
             showToast("Product removed", "success");
             await loadProducts();
         } else {
-            showToast("Delete failed", "error");
+            showToast(result.error || "Delete failed", "error");
         }
     };
 
@@ -341,6 +350,29 @@ export default function AdminExportCatalogPage() {
                             )}
                         </div>
                     ))}
+                </div>
+            )}
+            
+            {/* Pagination Controls */}
+            {!isLoading && products.length > 0 && (
+                <div className="flex items-center justify-between mt-6 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

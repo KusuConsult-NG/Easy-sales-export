@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { DollarSign, CheckCircle, XCircle, Loader2, AlertCircle, Clock, User } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getStandardWaveWithdrawalsAction } from "@/app/actions/wave-admin";
 
 interface WaveWithdrawal {
     withdrawalId: string;
@@ -31,29 +33,36 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function AdminWaveWithdrawalsPage() {
     const { showToast } = useToast();
-    const [withdrawals, setWithdrawals] = useState<WaveWithdrawal[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected">("pending");
+
+    const {
+        data: withdrawals,
+        loading: isLoading,
+        error,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: fetchWithdrawals
+    } = useAdminData<WaveWithdrawal>({
+        fetchAction: async (opts) => {
+            const result = await getStandardWaveWithdrawalsAction({
+                status: statusFilter,
+                limit: opts.limit || 25,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: result.data as any,
+                meta: { ...result.meta, lastDocId: result.lastDocId, hasMore: result.hasMore },
+                error: result.error
+            };
+        },
+        limit: 25,
+        dependencies: [statusFilter]
+    });
+
     const [processingId, setProcessingId] = useState<string | null>(null);
-
-    async function fetchWithdrawals() {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`/api/admin/wave/withdrawals?status=${statusFilter}`);
-            if (!res.ok) throw new Error("Failed to load withdrawals");
-            const data = await res.json();
-            setWithdrawals(data.withdrawals || []);
-        } catch (err: any) {
-            setError(err.message || "Failed to fetch withdrawal requests");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { fetchWithdrawals(); }, [statusFilter]);
 
     async function handleAction(withdrawalId: string, action: "approve" | "reject" | "complete") {
         const notes = action === "reject"
@@ -215,6 +224,29 @@ export default function AdminWaveWithdrawalsPage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Pagination Controls */}
+            {withdrawals.length > 0 && !isLoading && !error && (
+                <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

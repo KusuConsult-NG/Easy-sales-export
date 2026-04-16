@@ -27,6 +27,7 @@ import {
     getAuditStatsAction,
 } from "@/app/actions/audit-log-actions";
 import type { AuditLogEntry, AuditSeverity } from "@/lib/audit-log";
+import { useAdminData } from "@/hooks/useAdminData";
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -38,18 +39,29 @@ export default function AdminAuditLogsPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
     const { showToast } = useToast();
-    const [logs, setLogs] = useState<AuditLogEntry[]>([]);
-    const [loading, setLoading] = useState(true);
+    
+    // Filters hook through useAdminData ensures pagination resync on filter change
+    const {
+        data: logs,
+        loading,
+        error: fetchError,
+        search,
+        setSearch,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setLogs,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadLogs
+    } = useAdminData<AuditLogEntry>({
+        fetchAction: getAuditLogsAction,
+        limit: 50
+    });
+
     const [exporting, setExporting] = useState(false);
     const [expandedRow, setExpandedRow] = useState<string | null>(null);
-
-    // Filters
-    const [filters, setFilters] = useState({
-        userEmail: "",
-        severity: "" as AuditSeverity | "",
-        startDate: "",
-        endDate: "",
-    });
 
     // Stats
     const [stats, setStats] = useState<{
@@ -64,47 +76,24 @@ export default function AdminAuditLogsPage() {
     }, [status, router]);
 
     useEffect(() => {
-        async function loadData() {
+        async function loadStats() {
             if (status !== "authenticated") return;
-
-            setLoading(true);
-
-            // Load logs
-            const logsResult = await getAuditLogsAction({
-                userEmail: filters.userEmail || undefined,
-                severity: filters.severity || undefined,
-                startDate: filters.startDate || undefined,
-                endDate: filters.endDate || undefined,
-                limit: 100,
-            });
-
-            if (logsResult.success && logsResult.logs) {
-                setLogs(logsResult.logs);
-            } else if (!logsResult.success) {
-                // Show the actual error so admins can diagnose (e.g. missing Firestore index)
-                showToast(`Audit log error: ${logsResult.error || "Failed to load logs. Check Firestore indexes."}`, "error");
-            }
-
-            // Load stats
             const statsResult = await getAuditStatsAction(30);
             if (statsResult.success && statsResult.stats) {
                 setStats(statsResult.stats);
             }
-
-            setLoading(false);
         }
-
-        loadData();
-    }, [status, filters]);
+        loadStats();
+    }, [status]);
 
     async function handleExport() {
         setExporting(true);
 
         const result = await exportAuditLogsCSV({
-            userEmail: filters.userEmail || undefined,
-            severity: filters.severity || undefined,
-            startDate: filters.startDate || undefined,
-            endDate: filters.endDate || undefined,
+            userEmail: filters.userEmail as string || undefined,
+            severity: filters.severity as AuditSeverity || undefined,
+            startDate: filters.startDate as string || undefined,
+            endDate: filters.endDate as string || undefined,
         });
 
         if (result.success && result.csv) {
@@ -211,8 +200,8 @@ export default function AdminAuditLogsPage() {
                             <label className="block text-sm text-blue-200 mb-2">User Email</label>
                             <input
                                 type="text"
-                                value={filters.userEmail}
-                                onChange={(e) => setFilters({ ...filters, userEmail: e.target.value })}
+                                value={(filters.userEmail as string) || ""}
+                                onChange={(e) => updateFilter("userEmail", e.target.value)}
                                 placeholder="user@example.com"
                                 className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white placeholder:text-blue-200/50 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
                             />
@@ -222,8 +211,8 @@ export default function AdminAuditLogsPage() {
                         <div>
                             <label className="block text-sm text-blue-200 mb-2">Severity</label>
                             <select
-                                value={filters.severity}
-                                onChange={(e) => setFilters({ ...filters, severity: e.target.value as "info" | "warning" | "critical" | "" })}
+                                value={(filters.severity as string) || ""}
+                                onChange={(e) => updateFilter("severity", e.target.value)}
                                 className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
                             >
                                 <option value="">All</option>
@@ -238,8 +227,8 @@ export default function AdminAuditLogsPage() {
                             <label className="block text-sm text-blue-200 mb-2">Start Date</label>
                             <input
                                 type="date"
-                                value={filters.startDate}
-                                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                                value={(filters.startDate as string) || ""}
+                                onChange={(e) => updateFilter("startDate", e.target.value)}
                                 className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
                             />
                         </div>
@@ -249,8 +238,8 @@ export default function AdminAuditLogsPage() {
                             <label className="block text-sm text-blue-200 mb-2">End Date</label>
                             <input
                                 type="date"
-                                value={filters.endDate}
-                                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                                value={(filters.endDate as string) || ""}
+                                onChange={(e) => updateFilter("endDate", e.target.value)}
                                 className="w-full px-3 py-2 bg-white/5 border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
                             />
                         </div>
@@ -258,7 +247,12 @@ export default function AdminAuditLogsPage() {
                         {/* Clear Filters */}
                         <div className="flex items-end">
                             <button
-                                onClick={() => setFilters({ userEmail: "", severity: "", startDate: "", endDate: "" })}
+                                onClick={() => {
+                                    updateFilter("userEmail", "");
+                                    updateFilter("severity", "");
+                                    updateFilter("startDate", "");
+                                    updateFilter("endDate", "");
+                                }}
                                 className="w-full px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition text-sm"
                             >
                                 Clear Filters
@@ -273,7 +267,7 @@ export default function AdminAuditLogsPage() {
 
                 {/* Logs Table */}
                 <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl overflow-hidden">
-                    {loading ? (
+                    {loading && logs.length === 0 ? (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-8 h-8 text-blue-300 animate-spin" />
                         </div>
@@ -368,6 +362,29 @@ export default function AdminAuditLogsPage() {
                                     })}
                                 </tbody>
                             </table>
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {logs.length > 0 && (
+                        <div className="flex items-center justify-between p-4 border-t border-white/10">
+                            <span className="text-sm font-medium text-blue-300">Page {pageIndex + 1}</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={onPrevPage}
+                                    disabled={pageIndex === 0 || loading}
+                                    className="px-4 py-2 bg-white/5 border border-white/10 text-white font-medium rounded-lg hover:bg-white/10 disabled:opacity-50 transition"
+                                >
+                                    Previous
+                                </button>
+                                <button
+                                    onClick={onNextPage}
+                                    disabled={!hasMore || loading}
+                                    className="px-4 py-2 bg-white/5 border border-white/10 text-white font-medium rounded-lg hover:bg-white/10 disabled:opacity-50 transition flex items-center gap-2"
+                                >
+                                    {loading ? <Loader2 className="w-4 h-4 animate-spin text-blue-300" /> : "Next Page"}
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

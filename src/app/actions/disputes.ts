@@ -183,10 +183,13 @@ export async function getSellerDisputesAction() {
 /**
  * Get all disputes (Admin only)
  */
-export async function getAdminDisputesAction(filters?: {
-    status?: "open" | "under_review" | "resolved" | "closed";
+export async function getAdminDisputesAction(options: {
+    status?: "open" | "under_review" | "resolved" | "closed" | "all";
     escalated?: boolean;
-}) {
+    limit?: number;
+    search?: string;
+    lastDocId?: string;
+} = {}) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -200,22 +203,32 @@ export async function getAdminDisputesAction(filters?: {
             return { success: false, error: "Not authorized as admin" };
         }
 
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
+        const fetchLimit = options.limit || 50;
+        let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
 
-        if (filters?.status) {
+        if (options.status && options.status !== "all") {
             queryRef = db.collection(COLLECTIONS.DISPUTES)
-                .where("status", "==", filters.status)
+                .where("status", "==", options.status)
                 .orderBy("createdAt", "desc");
         }
 
-        if (filters?.escalated !== undefined) {
+        if (options.escalated !== undefined) {
+            // Note: firestore requires composite index for escalated + status. 
+            // In case of error, we can catch it or we might need index.
             queryRef = db.collection(COLLECTIONS.DISPUTES)
-                .where("escalated", "==", filters.escalated)
+                .where("escalated", "==", options.escalated)
                 .orderBy("createdAt", "desc");
         }
 
-        const snapshot = await queryRef.get();
-        const disputes: Dispute[] = snapshot.docs.map(doc => {
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.DISPUTES).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                queryRef = queryRef.startAfter(lastDoc);
+            }
+        }
+
+        const snapshot = await queryRef.limit(fetchLimit).get();
+        let disputes: Dispute[] = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 ...data,
@@ -226,7 +239,24 @@ export async function getAdminDisputesAction(filters?: {
             };
         }) as Dispute[];
 
-        return { success: true, disputes };
+        if (options.search) {
+            const q = options.search.toLowerCase();
+            disputes = disputes.filter(d => 
+                d.id?.toLowerCase().includes(q) ||
+                d.orderId?.toLowerCase().includes(q) ||
+                d.reason?.toLowerCase().includes(q) ||
+                d.description?.toLowerCase().includes(q)
+            );
+        }
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            disputes,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor
+        };
     } catch (error: any) {
         logger.error("Get admin disputes error:", error);
         return { success: false, error: error.message };

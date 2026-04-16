@@ -285,7 +285,7 @@ function PropertiesContent() {
                                             <div className="text-right">
                                                 <p className="text-xs text-slate-500 mb-1">Price</p>
                                                 <p className="text-xl font-bold text-teal-600">
-                                                    ₦{(property.price / 1000000).toFixed(1)}M
+                                                    ₦{property.price.toLocaleString()}
                                                 </p>
                                             </div>
                                         </div>

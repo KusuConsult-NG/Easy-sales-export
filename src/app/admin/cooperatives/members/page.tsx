@@ -7,6 +7,7 @@ import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
+import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction } from "@/app/actions/admin";
 import { getCooperativeStatsAction, getStandardCooperativeMembersAction } from "@/app/actions/cooperative-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -43,16 +44,45 @@ type MembershipApplication = {
 
 export default function CooperativeMembersPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<StandardPendingForm<MembershipApplication>[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    
+    // Advanced filters purely on UI
+    const [stateFilter, setStateFilter] = useState("");
+    const [lgaFilter, setLgaFilter] = useState("");
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
+
+    const {
+        data: applications,
+        loading: isLoading,
+        error: fetchError,
+        search: searchQuery,
+        setSearch: setSearchQuery,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setApplications,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadApplications
+    } = useAdminData<StandardPendingForm<MembershipApplication>>({
+        fetchAction: async (opts) => {
+            return getStandardCooperativeMembersAction(
+                (opts.status as any) || "all",
+                opts.lastDocId,
+                opts.limit || 50
+            );
+        },
+        limit: 50
+    });
+
+    const statusFilter = (filters.status as any) || "all";
+    const paymentStatusFilter = (filters.payment || "all") as any;
+
     const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [selectedApplication, setSelectedApplication] = useState<StandardPendingForm<MembershipApplication> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "under_review" | "suspended">("all");
-    const [paymentStatusFilter, setPaymentStatusFilter] = useState<"all" | "pending" | "completed" | "failed">("completed");
-    const [searchQuery, setSearchQuery] = useState("");
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingId, setRejectingId] = useState<string | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -64,11 +94,6 @@ export default function CooperativeMembersPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
 
-    // Advanced filters
-    const [stateFilter, setStateFilter] = useState("");
-    const [lgaFilter, setLgaFilter] = useState("");
-    const [fromDate, setFromDate] = useState("");
-    const [toDate, setToDate] = useState("");
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
     const NIGERIAN_STATES = [
@@ -79,57 +104,27 @@ export default function CooperativeMembersPage() {
         "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara"
     ];
 
-    // Pagination State
-    const [lastCreatedAt, setLastCreatedAt] = useState<string | undefined>(undefined);
-    const [hasMore, setHasMore] = useState(false);
+    // Local filter on top of fetched items
+    let filteredApplications = applications;
 
-    const fetchApplications = useCallback(async (loadMore = false) => {
-        setIsLoading(true);
 
-        try {
-            const result = await getStandardCooperativeMembersAction(statusFilter);
-
-            if (result.success ) {
-                // Apply local filters since Server Action fetches up to 500
-                let filtered = (result.data || []) as StandardPendingForm<MembershipApplication>[];
-                
-                if (paymentStatusFilter && paymentStatusFilter !== "all") {
-                    filtered = filtered.filter(a => a.data.paymentStatus === paymentStatusFilter);
-                }
-                if (stateFilter) {
-                    filtered = filtered.filter(a => a.data.stateOfOrigin === stateFilter);
-                }
-                if (lgaFilter) {
-                    filtered = filtered.filter(a => a.data.lga === lgaFilter);
-                }
-                if (fromDate) {
-                    filtered = filtered.filter(a => new Date(a.data.createdAt) >= new Date(fromDate));
-                }
-                if (toDate) {
-                    const end = new Date(toDate);
-                    end.setHours(23, 59, 59, 999);
-                    filtered = filtered.filter(a => new Date(a.data.createdAt) <= end);
-                }
-
-                setApplications(filtered);
-                setHasMore(false);
-            }
-        } catch (error) {
-            logger.error("Failed to fetch applications:", error);
-            showToast("Failed to load members", "error");
-        } finally {
-            setIsLoading(false);
-            setIsLoadingMore(false);
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter, paymentStatusFilter, lastCreatedAt, stateFilter, lgaFilter, fromDate, toDate]);
-
-    // Initial Load & Filter Change
-    useEffect(() => {
-        setLastCreatedAt(undefined);
-        fetchApplications(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter, paymentStatusFilter, stateFilter, lgaFilter, fromDate, toDate]);
+    if (paymentStatusFilter && paymentStatusFilter !== "all") {
+        filteredApplications = filteredApplications.filter(a => a.data.paymentStatus === paymentStatusFilter);
+    }
+    if (stateFilter) {
+        filteredApplications = filteredApplications.filter(a => a.data.stateOfOrigin === stateFilter);
+    }
+    if (lgaFilter) {
+        filteredApplications = filteredApplications.filter(a => a.data.lga?.toLowerCase().includes(lgaFilter.toLowerCase()));
+    }
+    if (fromDate) {
+        filteredApplications = filteredApplications.filter(a => new Date(a.data.createdAt) >= new Date(fromDate));
+    }
+    if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        filteredApplications = filteredApplications.filter(a => new Date(a.data.createdAt) <= end);
+    }
 
     // Load Global Stats
     useEffect(() => {
@@ -139,19 +134,6 @@ export default function CooperativeMembersPage() {
             }
         });
     }, []);
-
-    // Client-side search (still useful for the current batch)
-    // For true scalability, search should also be server-side, but that requires full text search service (e.g. Algolia)
-    // or simple Firestore prefixes. For now, we filter the *loaded* users.
-    const filteredApplications = applications.filter(app => {
-        if (!searchQuery) return true;
-        const query = searchQuery.toLowerCase();
-        return (
-            (app.user.name || "").toLowerCase().includes(query) ||
-            (app.user.email || "").toLowerCase().includes(query) ||
-            (app.data.phone || "").includes(query)
-        );
-    });
 
     async function handleApprove(applicationId: string) {
         if (!confirm("Are you sure you want to approve this membership application?")) {
@@ -170,7 +152,7 @@ export default function CooperativeMembersPage() {
 
             if (data.success) {
                 showToast("Membership approved successfully", "success");
-                fetchApplications();
+                await loadApplications();
                 setIsDetailsModalOpen(false);
             } else {
                 showToast(data.message || "Failed to approve membership", "error");
@@ -201,7 +183,7 @@ export default function CooperativeMembersPage() {
             const data = await response.json();
             if (data.success) {
                 showToast("Membership rejected successfully", "success");
-                fetchApplications();
+                await loadApplications();
                 setIsDetailsModalOpen(false);
             } else {
                 showToast(data.message || "Failed to reject membership", "error");
@@ -284,7 +266,7 @@ export default function CooperativeMembersPage() {
                     },
                 },
             } : null);
-            fetchApplications(false);
+            await loadApplications();
         } else {
             showToast(result.error || "Failed to update", "error");
         }
@@ -351,7 +333,7 @@ export default function CooperativeMembersPage() {
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <select
                             value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value as "all" | "pending" | "approved" | "under_review" | "suspended")}
+                            onChange={(e) => updateFilter("status", e.target.value)}
                             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="all">All Applications</option>
@@ -370,7 +352,7 @@ export default function CooperativeMembersPage() {
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <select
                             value={paymentStatusFilter}
-                            onChange={(e) => setPaymentStatusFilter(e.target.value as "all" | "pending" | "completed" | "failed")}
+                            onChange={(e) => updateFilter("payment", e.target.value)}
                             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="all">All Payment Statuses</option>
@@ -603,13 +585,33 @@ export default function CooperativeMembersPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setSelectedApplication(app); setIsDetailsModalOpen(true); }}
-                                                    className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-slate-100 rounded"
-                                                    title="View Details"
-                                                >
-                                                    <Eye className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {!isEditMode && (app.status === "pending" || app.data.membershipStatus === "pending") && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }}
+                                                                className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded"
+                                                                title="Inline Approve"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleReject(app.id); }}
+                                                                className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded"
+                                                                title="Inline Reject"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setSelectedApplication(app); setIsDetailsModalOpen(true); }}
+                                                        className="text-slate-400 hover:text-blue-600 transition p-1.5 hover:bg-slate-100 rounded"
+                                                        title="View Details"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -618,29 +620,29 @@ export default function CooperativeMembersPage() {
                         </div>
                     </>
                 )}
+                {/* Pagination Controls */}
+                {filteredApplications.length > 0 && (
+                    <div className="flex items-center justify-between mt-4 p-4 border-t border-slate-200 bg-white">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" /> : "Next Page"}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
-
-            {/* Load More Button */}
-            {hasMore && (
-                <div className="mt-8 flex justify-center">
-                    <button
-                        onClick={() => fetchApplications(true)}
-                        disabled={isLoadingMore}
-                        className="px-6 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
-                    >
-                        {isLoadingMore ? (
-                            <>
-                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                                Loading...
-                            </>
-                        ) : (
-                            <>
-                                Load More Users
-                            </>
-                        )}
-                    </button>
-                </div>
-            )}
 
 
             {/* Details Modal */}
@@ -876,7 +878,7 @@ export default function CooperativeMembersPage() {
             <ImportLegacyModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
-                onSuccess={() => fetchApplications()}
+                onSuccess={() => loadApplications()}
             />
         </div>
     );

@@ -4,33 +4,35 @@ import { useState, useEffect, useCallback } from "react";
 import { CheckCircle, XCircle, Clock, Eye, FileText, Package, Home, GraduationCap, BookOpen, Loader2 } from "lucide-react";
 import { getPendingContentAction, approveContentAction, rejectContentAction, type PendingContentItem, type ContentType } from "@/app/actions/admin-content";
 import { toast } from "sonner";
+import { useAdminData } from "@/hooks/useAdminData";
 
 type ApprovalStatus = "pending" | "approved" | "rejected";
 
 export default function ContentApprovalPage() {
     const [contentFilter, setContentFilter] = useState<ContentType | "all">("all");
-    const [pendingItems, setPendingItems] = useState<PendingContentItem[]>([]);
     const [selectedItem, setSelectedItem] = useState<PendingContentItem | null>(null);
-    const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
 
-    const loadContent = useCallback(async () => {
-        setLoading(true);
-        try {
+    const {
+        data: pendingItems,
+        loading,
+        refresh: loadContent
+    } = useAdminData<PendingContentItem>({
+        fetchAction: async () => {
             const result = await getPendingContentAction();
-            if (result.success) {
-                setPendingItems((result.data ?? []) as any);
-            } else {
+            if (!result.success) {
                 toast.error(result.error || "Failed to load content");
+                return { success: false, data: [], meta: { hasMore: false }, error: result.error };
             }
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        loadContent();
-    }, [loadContent]);
+            return {
+                success: true,
+                data: (result.data ?? []) as any,
+                meta: { hasMore: false }
+            };
+        },
+        limit: 500, // Effectively load all since the backend caps it
+        dependencies: []
+    });
 
     async function handleApprove(item: PendingContentItem) {
         if (!confirm(`Are you sure you want to approve "${item.title}"?`)) return;

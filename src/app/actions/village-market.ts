@@ -328,3 +328,57 @@ export async function removeFlashSaleProductAction(
         return { success: false, error: err.message || "Failed to remove product" };
     }
 }
+
+// ---------------------------------------------------------------------------
+// Admin: Get Paginated Village Market Events
+// ---------------------------------------------------------------------------
+
+export async function getAdminVillageMarketEventsAction(options: {
+    limit?: number;
+    lastDocId?: string;
+} = {}): Promise<{
+    success: boolean;
+    data?: VillageMarketEvent[];
+    error?: string;
+    lastDocId?: string;
+    hasMore?: boolean;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const userId = sessionResult.session.user.id;
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const roles: string[] = userDoc.data()?.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 25;
+        let query = db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).orderBy("createdAt", "desc");
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        const snap = await query.limit(fetchLimit + 1).get();
+        const hasMore = snap.docs.length > fetchLimit;
+        const docs = hasMore ? snap.docs.slice(0, fetchLimit) : snap.docs;
+
+        const events = serializeDocs(docs) as unknown as VillageMarketEvent[];
+        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: events,
+            lastDocId: nextCursor,
+            hasMore
+        };
+    } catch (err: any) {
+        logger.error("getAdminVillageMarketEventsAction error:", err);
+        return { success: false, error: err.message || "Failed to fetch market events" };
+    }
+}

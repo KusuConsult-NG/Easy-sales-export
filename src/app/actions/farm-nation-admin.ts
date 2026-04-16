@@ -107,7 +107,12 @@ export async function getFarmNationRegistrantsAction(options: {
     }
 }
 
-export async function getStandardFarmNationRegistrantsAction(statusFilter?: "pending" | "approved" | "rejected" | "revision_required" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardFarmNationRegistrantsAction(options: {
+    limit?: number;
+    search?: string;
+    status?: "pending" | "approved" | "rejected" | "revision_required" | "all";
+    lastDocId?: string;
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -119,14 +124,31 @@ export async function getStandardFarmNationRegistrantsAction(statusFilter?: "pen
             return { success: false, error: "Unauthorized" };
         }
 
+        const fetchLimit = options.limit || 50;
         let q = db.collection(COLLECTIONS.USERS).where('registeredServices', 'array-contains', 'farmNation');
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                // Since we sort manually in memory for chronological, we must just use default ID pagination if no index exists
+                // We order by document ID to make cursors consistent
+                q = q.orderBy("__name__").startAfter(lastDoc);
+            } else {
+                q = q.orderBy("__name__");
+            }
+        } else {
+            q = q.orderBy("__name__");
+        }
+        
+        q = q.limit(fetchLimit);
+
         const snapshot = await q.get();
         const users = serializeDocs(snapshot.docs);
 
         // Filter and map out the standard forms
-        const applications = users.filter((user: any) => {
+        let applications = users.filter((user: any) => {
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
-            if (statusFilter && statusFilter !== "all" && status !== statusFilter) return false;
+            if (options.status && options.status !== "all" && status !== options.status) return false;
             return true;
         }).map((user: any) => {
             const userName = user.name || user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.email || "Unknown User");
@@ -148,17 +170,104 @@ export async function getStandardFarmNationRegistrantsAction(statusFilter?: "pen
             };
         });
 
-        // We sort manually since array-contains restricts our compound ordering options generically
-        applications.sort((a, b) => {
+        if (options.search) {
+            const s = options.search.toLowerCase();
+            applications = applications.filter((app: any) => 
+                app.user.name?.toLowerCase().includes(s) || 
+                app.user.email?.toLowerCase().includes(s) || 
+                app.user.phone?.includes(s)
+            );
+        }
+
+        // We sort manually for this specific page, but note that across multiple pages, it sorts within the page buffer.
+        // Array-contains restricts our compound ordering options generically.
+        applications.sort((a: any, b: any) => {
             const tA = new Date(a.data.serviceRegistrations?.farmNation?.submittedAt || a.data.createdAt).getTime();
             const tB = new Date(b.data.serviceRegistrations?.farmNation?.submittedAt || b.data.createdAt).getTime();
             return tB - tA;
         });
 
-        return { success: true, data: applications };
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: applications,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor,
+            meta: {
+                totalFetched: users.length,
+                hasMore: !!nextCursor
+            }
+        };
     } catch (error) {
         logger.error("Get standard Farm Nation registrants error:", error);
         return { success: false, error: "Failed to fetch normalized Farm Nation applications" };
+    }
+}
+
+export async function getAdminLandVerificationsAction(options: {
+    limit?: number;
+    search?: string;
+    status?: string;
+    lastDocId?: string;
+} = {}) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 50;
+        let queryRef = db.collection("land_listings").orderBy("createdAt", "desc");
+
+        if (options.status && options.status !== "all") {
+            queryRef = db.collection("land_listings")
+                .where("verificationStatus", "==", options.status)
+                .orderBy("createdAt", "desc");
+        }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection("land_listings").doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                queryRef = queryRef.startAfter(lastDoc);
+            }
+        }
+
+        const snapshot = await queryRef.limit(fetchLimit).get();
+        let verifications = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate() || new Date(),
+                verifiedAt: data.verifiedAt?.toDate() || undefined,
+            };
+        }) as any[];
+
+        if (options.search) {
+            const q = options.search.toLowerCase();
+            verifications = verifications.filter(v => 
+                v.ownerName?.toLowerCase().includes(q) ||
+                v.title?.toLowerCase().includes(q) ||
+                v.state?.toLowerCase().includes(q)
+            );
+        }
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: verifications,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor
+        };
+    } catch (error: any) {
+        logger.error("Get admin land verifications error:", error);
+        return { success: false, error: error.message };
     }
 }
 

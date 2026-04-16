@@ -41,6 +41,7 @@ import {
 } from "@/app/actions/admin";
 import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
+import { useAdminData } from "@/hooks/useAdminData";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -101,10 +102,25 @@ function formatDate(ts: any): string {
 
 export default function AdminExportApplicationsPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<StandardPendingForm<ExportApplication>[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [statusFilter, setStatusFilter] = useState<AppStatus | "all">("pending");
+    const {
+        data: applications,
+        loading: isLoading,
+        error,
+        search,
+        setSearch,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setApplications,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: fetchData
+    } = useAdminData<StandardPendingForm<ExportApplication>>({
+        fetchAction: getStandardExportApplicationsAction,
+        limit: 50
+    });
+
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
@@ -115,27 +131,14 @@ export default function AdminExportApplicationsPage() {
     const [revisionNote, setRevisionNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
 
-    const fetchData = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const result = await getStandardExportApplicationsAction(statusFilter);
-            if (result.success) {
-                setApplications(result.data || []);
-            } else {
-                setError(result.error || "Failed to load applications.");
-            }
-        } catch (err) {
-            setError("Error fetching applications.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const statusFilter = (filters.status as AppStatus | "all") || "pending";
 
+    // Set initial filter to pending if not set
     useEffect(() => {
-        fetchData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter]);
+        if (!filters.status) {
+            updateFilter("status", "pending");
+        }
+    }, [filters.status, updateFilter]);
 
     async function handleApprove(app: StandardPendingForm<ExportApplication>) {
         if (!confirm(`Approve application for ${app.user.name}?`)) return;
@@ -259,7 +262,7 @@ export default function AdminExportApplicationsPage() {
                 {(["pending_review", "approved", "rejected", "revision_required", "all"] as const).map((f) => (
                     <button
                         key={f}
-                        onClick={() => setStatusFilter(f)}
+                        onClick={() => updateFilter("status", f)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition ${statusFilter === f
                             ? "bg-orange-600 text-white"
                             : "text-slate-600 hover:bg-slate-100"
@@ -392,6 +395,28 @@ export default function AdminExportApplicationsPage() {
                             )})}
                         </tbody>
                     </table>
+                )}
+                
+                {applications.length > 0 && (
+                    <div className="flex items-center justify-between p-4 border-t border-slate-200 bg-slate-50">
+                        <span className="text-sm text-slate-500 font-medium">Page {pageIndex + 1}</span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 transition drop-shadow-sm"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2 drop-shadow-sm"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Next Page"}
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
 

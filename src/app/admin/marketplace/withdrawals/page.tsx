@@ -11,8 +11,9 @@ import { useState, useEffect } from "react";
 import {
     DollarSign, CheckCircle, XCircle, Loader2, Clock, User, AlertCircle,
 } from "lucide-react";
-import { processWalletWithdrawalAction } from "@/app/actions/wallet";
+import { processWalletWithdrawalAction, getAdminWalletWithdrawalsAction } from "@/app/actions/wallet";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
 
 const STATUS_COLORS: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -33,29 +34,36 @@ const fmtDate = (val: any) => {
 
 export default function AdminWalletWithdrawalsPage() {
     const { showToast } = useToast();
-    const [withdrawals, setWithdrawals] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState("pending");
+
+    const {
+        data: withdrawals,
+        loading,
+        error,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: fetchWithdrawals
+    } = useAdminData<any>({
+        fetchAction: async (opts) => {
+            const result = await getAdminWalletWithdrawalsAction({
+                status: statusFilter,
+                limit: opts.limit || 25,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: result.data || [],
+                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
+                error: result.error
+            };
+        },
+        limit: 25,
+        dependencies: [statusFilter]
+    });
+
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
-
-    async function fetchWithdrawals() {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`/api/admin/marketplace/withdrawals?status=${statusFilter}`);
-            if (!res.ok) throw new Error("Failed to fetch");
-            const data = await res.json();
-            setWithdrawals(data.withdrawals || []);
-        } catch (err: any) {
-            setError(err.message || "Failed to load withdrawal requests");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { fetchWithdrawals(); }, [statusFilter]);
 
     async function handleAction(withdrawalId: string, action: "approve" | "reject") {
         const notes = action === "reject"
@@ -168,6 +176,29 @@ export default function AdminWalletWithdrawalsPage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Pagination Controls */}
+            {withdrawals.length > 0 && !loading && !error && (
+                <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || loading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || loading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>

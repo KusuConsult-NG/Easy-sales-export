@@ -17,9 +17,11 @@ import {
     getActiveVillageMarketEventsAction,
     updateVillageMarketEventStatusAction,
     addExternalMerchantAction,
+    getAdminVillageMarketEventsAction
 } from "@/app/actions/village-market";
 import type { VillageMarketEvent } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
 
 const fmtDate = (val: any) => {
     if (!val) return "—";
@@ -211,21 +213,34 @@ function AddMerchantModal({ eventId, onClose, onAdded }: { eventId: string; onCl
 
 export default function AdminVillageMarketPage() {
     const { showToast } = useToast();
-    const [events, setEvents] = useState<VillageMarketEvent[]>([]);
-    const [loading, setLoading] = useState(true);
+
+    const {
+        data: events,
+        loading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: load
+    } = useAdminData<VillageMarketEvent>({
+        fetchAction: async (opts) => {
+            const result = await getAdminVillageMarketEventsAction({
+                limit: opts.limit || 20,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: result.data || [],
+                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
+                error: result.error
+            };
+        },
+        limit: 20
+    });
+
     const [showCreate, setShowCreate] = useState(false);
     const [addMerchantEventId, setAddMerchantEventId] = useState<string | null>(null);
     const [processingId, setProcessingId] = useState<string | null>(null);
-
-    async function load() {
-        setLoading(true);
-        const data = await getActiveVillageMarketEventsAction();
-        setEvents(data);
-        setLoading(false);
-    };
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    useEffect(() => { load(); }, []);
 
     async function handleStatus(eventId: string, status: "active" | "ended" | "cancelled") {
         setProcessingId(eventId);
@@ -334,6 +349,29 @@ export default function AdminVillageMarketPage() {
                             )}
                         </div>
                     ))}
+                </div>
+            )}
+            
+            {/* Pagination Controls */}
+            {events.length > 0 && !loading && (
+                <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || loading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || loading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
                 </div>
             )}
 

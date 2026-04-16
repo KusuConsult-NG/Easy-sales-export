@@ -8,8 +8,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getAdminLoanApplicationsAction } from "@/app/actions/loans";
+import { Loader2 } from "lucide-react";
 
 type LoanApplication = {
     id: string;
@@ -34,57 +35,43 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminLoansPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<LoanApplication[]>([]);
-    const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<FilterType>("all");
+
+    const {
+        data: applications,
+        loading: isLoading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadApplications
+    } = useAdminData<LoanApplication>({
+        fetchAction: async (opts) => {
+            const result = await getAdminLoanApplicationsAction({
+                statusFilter: filterStatus,
+                limit: opts.limit || 20,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: result.data || [],
+                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
+                error: result.error
+            };
+        },
+        limit: 20,
+        dependencies: [filterStatus]
+    });
+
     const [selectedApplication, setSelectedApplication] = useState<LoanApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-    // Real-time listener — replaces manual fetch
-    useEffect(() => {
-        if (unsubscribeRef.current) unsubscribeRef.current();
-
-        setIsLoading(true);
-
-        const q = query(collection(db, "loan_applications"), orderBy("appliedAt", "desc"));
-
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const docs = snapshot.docs.map((doc) => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        ...data,
-                        appliedAt: data.appliedAt?.toDate() || new Date(),
-                        approvedAt: data.approvedAt?.toDate(),
-                    } as LoanApplication;
-                });
-                setApplications(docs);
-                setIsLoading(false);
-            },
-            (err) => {
-                logger.error("Loan applications snapshot error:", err);
-                showToast("Failed to load loan applications", "error");
-                setIsLoading(false);
-            }
-        );
-
-        unsubscribeRef.current = unsubscribe;
-
-        return () => { unsubscribeRef.current?.(); };
-    }, [showToast]);
-
-    // Filter locally (no re-fetch needed)
+    // Apply local search filtering on top of server data
+    const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
     useEffect(() => {
         let filtered = applications;
-        if (filterStatus !== "all") {
-            filtered = filtered.filter(app => app.status === filterStatus);
-        }
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             filtered = filtered.filter(app =>
@@ -95,7 +82,7 @@ export default function AdminLoansPage() {
             );
         }
         setFilteredApplications(filtered);
-    }, [applications, searchQuery, filterStatus]);
+    }, [applications, searchQuery]);
 
     async function handleApprove(applicationId: string) {
         if (!confirm("Approve this loan application?")) return;
@@ -111,7 +98,7 @@ export default function AdminLoansPage() {
             if (data.success) {
                 showToast("Loan application approved!", "success");
                 setIsDetailsModalOpen(false);
-                // onSnapshot auto-updates the list
+                loadApplications();
             } else {
                 showToast(data.message || "Failed to approve loan", "error");
             }
@@ -137,6 +124,7 @@ export default function AdminLoansPage() {
             if (data.success) {
                 showToast("Loan application rejected", "success");
                 setIsDetailsModalOpen(false);
+                loadApplications();
             } else {
                 showToast(data.message || "Failed to reject loan", "error");
             }
@@ -157,6 +145,7 @@ export default function AdminLoansPage() {
             if (result.success) {
                 showToast("Loan funds disbursed!", "success");
                 setIsDetailsModalOpen(false);
+                loadApplications();
             } else {
                 showToast(result.error || "Failed to disburse", "error");
             }
@@ -208,10 +197,7 @@ export default function AdminLoansPage() {
                     <h1 className="text-3xl font-bold text-slate-900 mb-2">Loan Applications</h1>
                     <p className="text-slate-600">Review and manage cooperative loan applications</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="text-xs text-slate-500">Live</span>
-                </div>
+                {/* Export button */}
                 <button
                     onClick={handleExportCSV}
                     disabled={applications.length === 0}
@@ -324,17 +310,62 @@ export default function AdminLoansPage() {
                                             {new Date(app.appliedAt).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => { setSelectedApplication(app); setIsDetailsModalOpen(true); }}
-                                                className="text-primary hover:text-primary/80 font-medium flex items-center gap-1"
-                                            >
-                                                <Eye className="w-4 h-4" /> View
-                                            </button>
+                                            <div className="flex items-center gap-3">
+                                                {app.status === "pending" && (
+                                                    <>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }}
+                                                            disabled={isProcessing}
+                                                            className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded disabled:opacity-50"
+                                                            title="Approve Loan"
+                                                        >
+                                                            <CheckCircle className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleReject(app.id); }}
+                                                            disabled={isProcessing}
+                                                            className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded disabled:opacity-50"
+                                                            title="Reject Loan"
+                                                        >
+                                                            <XCircle className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                <button
+                                                    onClick={() => { setSelectedApplication(app); setIsDetailsModalOpen(true); }}
+                                                    className="text-primary hover:text-primary/80 font-medium flex items-center gap-1 p-1.5 hover:bg-slate-50 rounded transition-colors"
+                                                >
+                                                    <Eye className="w-4 h-4" /> View
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+                
+                {/* Pagination Controls */}
+                {filteredApplications.length > 0 && !isLoading && (
+                    <div className="flex items-center justify-between p-4 bg-white border-t border-slate-200">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

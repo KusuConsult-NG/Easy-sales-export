@@ -17,6 +17,7 @@ import { getAdminDisputesAction } from "@/app/actions/disputes";
 import type { Dispute, DisputeStatus } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
     not_received: "Item Not Received",
@@ -30,63 +31,42 @@ export default function AdminDisputesPage() {
     const router = useRouter();
     const { showToast } = useToast();
 
-    const [disputes, setDisputes] = useState<Dispute[]>([]);
-    const [filteredDisputes, setFilteredDisputes] = useState<Dispute[]>([]);
-    const [loading, setLoading] = useState(true);
-
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<DisputeStatus | "all">("all");
 
-    useEffect(() => {
-        loadDisputes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const {
+        data: filteredDisputes,
+        loading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadDisputes
+    } = useAdminData<Dispute>({
+        fetchAction: async (opts) => {
+            const result = await getAdminDisputesAction({
+                status: statusFilter,
+                limit: opts.limit || 20,
+                search: searchQuery,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: ((result as any).disputes || []) as any,
+                meta: { lastDocId: (result as any).lastDocId, hasMore: (result as any).hasMore },
+                error: (result as any).error || (result as any).message
+            };
+        },
+        limit: 20,
+        dependencies: [statusFilter, searchQuery]
+    });
 
-    useEffect(() => {
-        filterDisputes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, statusFilter, disputes]);
-
-    async function loadDisputes() {
-        setLoading(true);
-        try {
-            const result = await getAdminDisputesAction();
-            if (result.success) {
-                setDisputes(result.disputes || []);
-            } else {
-                showToast(result.error || "Failed to load disputes", "error");
-            }
-        } catch (error) {
-            showToast("Failed to load disputes", "error");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function filterDisputes() {
-        let filtered = [...disputes];
-
-        if (statusFilter !== "all") {
-            filtered = filtered.filter((d) => d.status === statusFilter);
-        }
-
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase().trim();
-            filtered = filtered.filter(
-                (d) =>
-                    d.orderId?.toLowerCase().includes(query) ||
-                    d.id.toLowerCase().includes(query) ||
-                    d.description?.toLowerCase().includes(query)
-            );
-        }
-
-        setFilteredDisputes(filtered);
-    }
-
+    // Note: To get accurate global stats you would need a separate stats endpoint
+    // since we use cursor pagination which only returns the current page
     const stats = {
-        open: disputes.filter((d) => d.status === "open").length,
-        under_review: disputes.filter((d) => d.status === "under_review").length,
-        resolved: disputes.filter((d) => d.status === "resolved").length,
+        open: filteredDisputes.filter((d) => d.status === "open").length,
+        under_review: filteredDisputes.filter((d) => d.status === "under_review").length,
+        resolved: filteredDisputes.filter((d) => d.status === "resolved").length,
     };
 
     const getStatusStyles = (status: DisputeStatus): { badge: string; icon: string } => {
@@ -322,6 +302,29 @@ export default function AdminDisputesPage() {
                                 ? "No disputes match your filters"
                                 : "No disputes found"}
                         </p>
+                    </div>
+                )}
+                
+                {/* Pagination Controls */}
+                {filteredDisputes.length > 0 && (
+                    <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-2xl shadow-lg border border-gray-100">
+                        <span className="text-sm font-medium text-gray-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin text-gray-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

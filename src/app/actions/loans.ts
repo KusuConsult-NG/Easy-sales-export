@@ -205,6 +205,66 @@ export async function getPendingLoanApplicationsAction(): Promise<LoanApplicatio
 }
 
 /**
+ * Admin: Get paginated loan applications
+ */
+export async function getAdminLoanApplicationsAction(options: {
+    statusFilter?: "all" | "pending" | "approved" | "rejected" | "disbursed" | "active" | "completed";
+    limit?: number;
+    lastDocId?: string;
+} = {}): Promise<{
+    success: boolean;
+    data?: LoanApplication[];
+    error?: string;
+    lastDocId?: string;
+    hasMore?: boolean;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const { session } = sessionResult;
+        
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 20;
+
+        let query = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+            .orderBy("appliedAt", "desc");
+
+        if (options.statusFilter && options.statusFilter !== "all") {
+            query = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("status", "==", options.statusFilter)
+                .orderBy("appliedAt", "desc");
+        }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        const snapshot = await query.limit(fetchLimit + 1).get();
+        const hasMore = snapshot.docs.length > fetchLimit;
+        const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
+
+        const applications = serializeDocs(docs) as unknown as LoanApplication[];
+        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: applications,
+            lastDocId: nextCursor,
+            hasMore
+        };
+    } catch (error: any) {
+        logger.error("Failed to fetch admin loan applications:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Admin: Approve loan
  */
 export async function approveLoanAction(

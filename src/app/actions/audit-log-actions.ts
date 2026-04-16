@@ -19,11 +19,12 @@ export async function getAuditLogsAction(filters: {
     startDate?: string;
     endDate?: string;
     limit?: number;
-}): Promise<{ success: boolean; logs?: AuditLogEntry[]; error?: string }> {
+    lastDocId?: string;
+}): Promise<{ success: boolean; logs?: AuditLogEntry[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
 
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -32,7 +33,7 @@ export async function getAuditLogsAction(filters: {
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-        if (!userDoc.exists || !userData || userData.role !== "admin") {
+        if (!userDoc.exists || !userData || userData.roles?.includes("admin") === false && userData.roles?.includes("super_admin") === false && userData.role !== "admin") {
             return { success: false, error: "Admin access required" };
         }
 
@@ -63,14 +64,28 @@ export async function getAuditLogsAction(filters: {
             q = q.where("timestamp", "<=", new Date(filters.endDate));
         }
 
+        if (filters.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.AUDIT_LOGS).doc(filters.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+
+        const fetchLimit = filters.limit || 50;
+        q = q.limit(fetchLimit);
+
         const snapshot = await q.get();
 
         const logs = serializeDocs(snapshot.docs) as unknown as AuditLogEntry[];
 
-        // Apply limit if specified
-        const limited = filters.limit ? logs.slice(0, filters.limit) : logs;
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { success: true, logs: limited };
+        return { 
+            success: true, 
+            logs,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor
+        };
     } catch (error: any) {
         logger.error("Failed to fetch audit logs:", error);
         return { success: false, error: error.message || "Failed to fetch audit logs" };

@@ -18,6 +18,7 @@ import { getAdminDisputesAction } from "@/app/actions/disputes";
 import { getAdminUsersAction, assignDisputeAction } from "@/app/actions/admin-users";
 import type { Dispute } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
 
 function fmtDate(val: any) {
     if (!val) return "—";
@@ -36,33 +37,48 @@ export default function EscalatedDisputesPage() {
     const router = useRouter();
     const { showToast } = useToast();
 
-    const [disputes, setDisputes] = useState<Dispute[]>([]);
-    const [loading, setLoading] = useState(true);
     const [admins, setAdmins] = useState<AdminUser[]>([]);
+
+    const {
+        data: disputes,
+        loading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadAll
+    } = useAdminData<Dispute>({
+        fetchAction: async (opts) => {
+            const disputeRes = await getAdminDisputesAction({
+                escalated: true,
+                limit: opts.limit || 20,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: disputeRes.success,
+                data: ((disputeRes as any).disputes || []) as any,
+                meta: { lastDocId: (disputeRes as any).lastDocId, hasMore: (disputeRes as any).hasMore },
+                error: (disputeRes as any).error || (disputeRes as any).message
+            };
+        },
+        limit: 20
+    });
 
     // Per-card state: which card has the dropdown open + currently selected assignee
     const [openDropdown, setOpenDropdown] = useState<string | null>(null);
     const [selectedAssignee, setSelectedAssignee] = useState<Record<string, string>>({});
     const [assigningId, setAssigningId] = useState<string | null>(null);
 
-    async function loadAll() {
-        setLoading(true);
-        try {
-            const [disputeRes, adminRes] = await Promise.all([
-                getAdminDisputesAction({ escalated: true }),
-                getAdminUsersAction(),
-            ]);
-            if (disputeRes.success && disputeRes.disputes) setDisputes(disputeRes.disputes);
-            if (adminRes.success && adminRes.admins) setAdmins(adminRes.admins);
-        } catch {
-            showToast("Failed to load data", "error");
-        } finally {
-            setLoading(false);
-        }
-    }
-
     useEffect(() => {
-        loadAll();
+        async function fetchAdmins() {
+            try {
+                const adminRes = await getAdminUsersAction();
+                if (adminRes.success && adminRes.admins) setAdmins(adminRes.admins);
+            } catch {
+                showToast("Failed to load admins", "error");
+            }
+        }
+        fetchAdmins();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -108,12 +124,9 @@ export default function EscalatedDisputesPage() {
                             High-priority cases flagged for senior review — assign to an admin for resolution
                         </p>
                     </div>
-                    <span className="px-4 py-2 bg-red-100 text-red-800 font-bold rounded-2xl text-sm">
-                        {disputes.length} escalated
-                    </span>
                 </div>
 
-                {/* Stats row */}
+                {/* Stats row (counts will be local to the current page data) */}
                 <div className="grid grid-cols-3 gap-4 mb-8">
                     {[
                         { label: "Unassigned", count: disputes.filter(d => !(d as any).assignedAdminId).length, color: "orange" },
@@ -262,8 +275,31 @@ export default function EscalatedDisputesPage() {
                                         </div>
                                     </div>
                                 </div>
-                            );
+                             );
                         })}
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {disputes.length > 0 && (
+                    <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-2xl shadow-lg border border-slate-200">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || loading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || loading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

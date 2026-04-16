@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, Download, Users, Search, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getBriefingRegistrationsAction } from "@/app/actions/briefing-admin";
 
 interface BriefingRegistration {
     id: string;
@@ -18,34 +20,32 @@ interface BriefingRegistration {
 
 export default function BriefingRegistrationsPage() {
     const { showToast } = useToast();
-    const [registrations, setRegistrations] = useState<BriefingRegistration[]>([]);
-    const [filtered, setFiltered] = useState<BriefingRegistration[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
-    const [isExporting, setIsExporting] = useState(false);
 
-    useEffect(() => {
-        async function load() {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const { getBriefingRegistrationsAction } = await import("@/app/actions/briefing-admin");
-                const result = await getBriefingRegistrationsAction();
-                if (result.success ) {
-                    setRegistrations(result as unknown as BriefingRegistration[]);
-                } else {
-                    setError(result.error || "Failed to load registrations");
-                }
-            } catch (err) {
-                console.error("[Registrations] Load error:", err);
-                setError("Unable to load registrations. Please try again.");
-            } finally {
-                setIsLoading(false);
-            }
-        }
-        load();
-    }, []);
+    const {
+        data: registrations,
+        loading: isLoading,
+        error,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: load
+    } = useAdminData<BriefingRegistration>({
+        fetchAction: async (opts) => {
+            const result = await getBriefingRegistrationsAction(opts.lastDocId, opts.limit || 25);
+            return {
+                success: result.success,
+                data: result.data as any,
+                meta: result.meta,
+                error: result.error
+            };
+        },
+        limit: 25
+    });
+
+    const [filtered, setFiltered] = useState<BriefingRegistration[]>([]);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Local search filter
     useEffect(() => {
@@ -169,7 +169,7 @@ export default function BriefingRegistrationsPage() {
                                 <p className="font-semibold text-red-900">Error Loading Registrations</p>
                                 <p className="text-sm text-red-700 mt-1">{error}</p>
                                 <button
-                                    onClick={() => window.location.reload()}
+                                    onClick={() => load()}
                                     className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition"
                                 >
                                     Retry
@@ -227,6 +227,29 @@ export default function BriefingRegistrationsPage() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {registrations.length > 0 && !isLoading && !error && (
+                    <div className="flex items-center justify-between mt-8 p-4 bg-white border-t border-slate-200">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

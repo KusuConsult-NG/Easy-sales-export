@@ -7,59 +7,36 @@ import Image from "next/image";
 import { getCoursesAction, type Course } from "@/app/actions/academy";
 import { toast } from "sonner";
 import { Timestamp } from "firebase/firestore";
+import { useAdminData } from "@/hooks/useAdminData";
 
 export default function AcademyAdminPage() {
-    const [courses, setCourses] = useState<Course[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [lastDocId, setLastDocId] = useState<string | null>(null);
-    const [hasMore, setHasMore] = useState(false);
+    const {
+        data: courses,
+        loading: isLoading,
+        error,
+        search: searchQuery,
+        setSearch: setSearchQuery,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadCourses
+    } = useAdminData<Course>({
+        fetchAction: async (opts) => {
+            const result = await getCoursesAction(opts.limit || 12, opts.lastDocId);
+            return {
+                success: result.success,
+                data: result.data as any,
+                meta: result.meta,
+                error: result.error
+            };
+        },
+        limit: 12
+    });
 
-    async function loadCourses(reset = true) {
-        if (reset) {
-            setIsLoading(true);
-            setCourses([]);
-        } else {
-            setIsLoadingMore(true);
-        }
-
-        try {
-            const currentLastDoc = reset ? undefined : lastDocId || undefined;
-            const result = await getCoursesAction(12, currentLastDoc);
-
-            if (result.success) {
-                const courses = (result.data ?? []) as Course[];
-                if (reset) {
-                    setCourses(courses);
-                } else {
-                    setCourses(prev => [...prev, ...courses]);
-                }
-                setLastDocId(result.meta?.lastDocId || null);
-                setHasMore(!!result.meta?.lastDocId);
-            } else {
-                toast.error("Failed to load courses");
-            }
-        } catch (error) {
-            console.error(error);
-            toast.error("Error loading courses");
-        } finally {
-            setIsLoading(false);
-            setIsLoadingMore(false);
-        }
-    }
-
-    useEffect(() => {
-        loadCourses();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    function handleLoadMore() {
-        if (!isLoadingMore && hasMore) {
-            loadCourses(false);
-        }
-    };
-
+    // Note: useAdminData already applies basic local search text filter,
+    // but its internal filter looks at generic text fields if we pass search.
+    // If we want to ensure instructor and title match purely locally we can still do a manual filter:
     const filteredCourses = courses.filter(course =>
         course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         course.instructor.toLowerCase().includes(searchQuery.toLowerCase())
@@ -191,27 +168,27 @@ export default function AcademyAdminPage() {
                         <p className="text-slate-600 mt-2">Get started by creating your first course.</p>
                     </div>
                 )}
-
-                {/* Load More Button */}
-                {hasMore && !isLoading && (
-                    <div className="mt-8 flex justify-center">
-                        <button
-                            onClick={handleLoadMore}
-                            disabled={isLoadingMore}
-                            className="flex items-center gap-2 px-6 py-3 bg-white text-slate-900 font-semibold rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 disabled:opacity-50 transition-all"
-                        >
-                            {isLoadingMore ? (
-                                <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    Loading more...
-                                </>
-                            ) : (
-                                <>
-                                    <RefreshCw className="w-4 h-4" />
-                                    Load More Courses
-                                </>
-                            )}
-                        </button>
+                
+                {/* Pagination Controls */}
+                {filteredCourses.length > 0 && (
+                    <div className="flex items-center justify-between mt-8 p-4 border-t border-slate-200">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

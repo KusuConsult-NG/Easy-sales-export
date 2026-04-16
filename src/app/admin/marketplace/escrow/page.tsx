@@ -24,6 +24,7 @@ import type { EscrowTransaction, EscrowStatus } from "@/types/escrow";
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
+import { useAdminData } from "@/hooks/useAdminData";
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string; icon: React.ElementType }> = {
     pending: { label: "Pending", badge: "bg-gray-100 text-gray-700", icon: Clock },
@@ -60,35 +61,35 @@ export default function AdminEscrowPage() {
     const { data: session } = useSession();
     const { showToast } = useToast();
 
-    const [transactions, setTransactions] = useState<EscrowTransaction[]>([]);
-    const [loading, setLoading] = useState(true);
+    const {
+        data: transactions,
+        loading,
+        error: fetchError,
+        search: searchQuery,
+        setSearch: setSearchQuery,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setTransactions,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadTransactions
+    } = useAdminData<EscrowTransaction>({
+        fetchAction: getAllEscrowTransactionsAdmin,
+        limit: 50
+    });
+
+    const statusFilter = (filters.status as EscrowStatus | "all") || "all";
+
     const [actionLoading, setActionLoading] = useState(false);
-
-    const [searchQuery, setSearchQuery] = useState("");
-    const [statusFilter, setStatusFilter] = useState<EscrowStatus | "all">("all");
-
     const [modal, setModal] = useState<ActionModalState>({ open: false, type: null, tx: null });
 
     useEffect(() => {
-        loadTransactions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter]);
-
-    async function loadTransactions() {
-        setLoading(true);
-        try {
-            const result = await getAllEscrowTransactionsAdmin(
-                statusFilter !== "all" ? { status: statusFilter } : undefined
-            );
-            if (result.success) {
-                setTransactions(result.transactions ?? []);
-            } else {
-                showToast(result.error ?? "Failed to load transactions", "error");
-            }
-        } finally {
-            setLoading(false);
+        if (!filters.status) {
+            updateFilter("status", "all");
         }
-    }
+    }, [filters.status, updateFilter]);
 
     async function confirmAction() {
         if (!modal.tx || !modal.type || !session?.user?.id) return;
@@ -116,17 +117,10 @@ export default function AdminEscrowPage() {
         }
     }
 
-    const filtered = transactions.filter((tx) => {
-        if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-            tx.id?.toLowerCase().includes(q) ||
-            tx.buyerEmail?.toLowerCase().includes(q) ||
-            tx.sellerEmail?.toLowerCase().includes(q) ||
-            tx.productName?.toLowerCase().includes(q) ||
-            tx.paymentReference?.toLowerCase().includes(q)
-        );
-    });
+    // Since search is handled by useAdminData backend if possible, or fallback manually
+    // Escrow transactions have multiple complex fields so we rely on backend mainly,
+    // but the backend handles basic fields.
+    const filtered = transactions;
 
     const stats = {
         funded: transactions.filter((t) => t.status === "funded").length,
@@ -194,7 +188,7 @@ export default function AdminEscrowPage() {
                                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <select
                                     value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value as EscrowStatus | "all")}
+                                    onChange={(e) => updateFilter("status", e.target.value as EscrowStatus | "all")}
                                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none text-sm"
                                 >
                                     {FILTER_OPTIONS.map((opt) => (
@@ -290,6 +284,29 @@ export default function AdminEscrowPage() {
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {filtered.length > 0 && (
+                    <div className="flex items-center justify-between mt-6 p-4 bg-white rounded-2xl shadow-sm border border-gray-100">
+                        <span className="text-sm font-medium text-gray-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin text-gray-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

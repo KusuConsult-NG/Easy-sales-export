@@ -15,9 +15,10 @@ import {
     X,
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getWaveResourcesAction } from "@/app/actions/wave";
 import {
     uploadResourceAction,
-    getResourcesAction,
     deleteResourceAction,
     type WaveResource,
 } from "@/app/actions/resource-actions";
@@ -33,8 +34,28 @@ export default function AdminWaveResourcesPage() {
     const router = useRouter();
     const { data: session, status } = useSession();
     const { showToast } = useToast();
-    const [resources, setResources] = useState<WaveResource[]>([]);
-    const [loading, setLoading] = useState(true);
+
+    const {
+        data: resources,
+        loading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadResources
+    } = useAdminData<WaveResource>({
+        fetchAction: async (opts) => {
+            const result = await getWaveResourcesAction(undefined, opts.lastDocId, opts.limit || 20);
+            return {
+                success: result.success,
+                data: result.data as any,
+                meta: result.meta,
+                error: result.error
+            };
+        },
+        limit: 20
+    });
+
     const [uploading, setUploading] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,22 +71,6 @@ export default function AdminWaveResourcesPage() {
             router.push("/auth/login");
         }
     }, [status, router]);
-
-    useEffect(() => {
-        async function loadResources() {
-            const data = await getResourcesAction();
-            if (data.success && data.data) {
-                setResources(data.data);
-            } else {
-                setResources([]);
-            }
-            setLoading(false);
-        }
-
-        if (status === "authenticated") {
-            loadResources();
-        }
-    }, [status]);
 
     async function handleUpload(e: React.FormEvent) {
         e.preventDefault();
@@ -97,10 +102,7 @@ export default function AdminWaveResourcesPage() {
             });
 
             // Reload resources
-            const updated = await getResourcesAction();
-            if (updated.success && updated.data) {
-                setResources(updated.data);
-            }
+            await loadResources();
         } else {
             showToast(result.error || "Failed to upload resource", "error");
         }
@@ -115,7 +117,7 @@ export default function AdminWaveResourcesPage() {
 
         if (result.success) {
             showToast("Resource deleted successfully", "success");
-            setResources((prev) => prev.filter((r) => r.id !== resourceId));
+            await loadResources();
         } else {
             showToast(result.error || "Failed to delete resource", "error");
         }
@@ -243,6 +245,29 @@ export default function AdminWaveResourcesPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Pagination Controls */}
+                {resources.length > 0 && (
+                    <div className="flex items-center justify-between mt-8 p-4 bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl">
+                        <span className="text-sm font-medium text-purple-200">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || loading}
+                                className="px-4 py-2 border border-white/20 text-white font-medium rounded-lg hover:bg-white/10 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || loading}
+                                className="px-4 py-2 border border-white/20 text-white font-medium rounded-lg hover:bg-white/10 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin text-purple-300" /> : "Next Page"}
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Upload Modal */}
                 {showUploadModal && (

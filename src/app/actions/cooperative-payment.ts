@@ -170,6 +170,33 @@ export async function verifyContributionPaymentAction(
                 reference,
             });
 
+            // Unified Ledger write
+            transaction.set(doc(db, COLLECTIONS.TRANSACTIONS, reference), {
+                id: reference,
+                userId,
+                type: "contribution",
+                module: "cooperative",
+                amount: amountInNaira,
+                currency: "NGN",
+                status: "completed",
+                date: serverTimestamp(),
+                reference,
+                description: "Cooperative savings contribution"
+            });
+
+            // Cooperative Ledger write
+            const coopTxRef = doc(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS); // Creates a new doc ref with auto ID
+            transaction.set(coopTxRef, {
+                userId,
+                cooperativeId: "default", // or fetch from membershipData if supported
+                type: "contribution",
+                amount: amountInNaira,
+                date: serverTimestamp(),
+                status: "completed",
+                description: "Cooperative Contribution",
+                reference
+            });
+
             return {
                 currentTotal,
                 newTotal,

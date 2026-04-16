@@ -7,8 +7,8 @@ import {
     Download, Eye, Mail, Phone, MapPin, Loader2
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -34,81 +34,70 @@ interface WaveMember {
 
 export default function AdminWaveMembersPage() {
     const { showToast } = useToast();
-    const [members, setMembers] = useState<WaveMember[]>([]);
-    const [filtered, setFiltered] = useState<WaveMember[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
+
+    const {
+        data: members,
+        loading: isLoading,
+        error,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadMembers
+    } = useAdminData<WaveMember>({
+        fetchAction: async (opts) => {
+            const result = await getStandardWaveApplicationsAction({
+                status: "approved",
+                limit: opts.limit || 25,
+                search: searchQuery,
+                lastDocId: opts.lastDocId
+            });
+            
+            if (!result.success) {
+                return { success: false, error: result.error };
+            }
+            
+            const docs: WaveMember[] = (result.data || []).map((item: any) => {
+                const data = item.data;
+                return {
+                    id: item.user.id || item.id,
+                    active: true,
+                    enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
+                    applicationId: item.id,
+                    fullName: data.fullName,
+                    surname: data.surname,
+                    firstName: data.firstName,
+                    email: item.user.email,
+                    phone: item.user.phone,
+                    stateOfResidence: item.user.state,
+                    lgaOfResidence: item.user.lga,
+                    bankName: data.bankName,
+                    accountNumber: data.accountNumber,
+                    farmSize: data.farmSize,
+                    nin: data.nin,
+                    bvn: data.bvn,
+                };
+            });
+            
+            return {
+                success: true,
+                data: docs as any,
+                meta: { ...result.meta, lastDocId: result.lastDocId, hasMore: result.hasMore }
+            };
+        },
+        limit: 25,
+        dependencies: [searchQuery]
+    });
+
+    const [filtered, setFiltered] = useState<WaveMember[]>([]);
     const [selectedMember, setSelectedMember] = useState<WaveMember | null>(null);
     const [isExporting, setIsExporting] = useState(false);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-    // Real-time listener on wave_applications (approved) for rich member data
+    // Filter using searchQuery inside useAdminData fetch action natively when search param expands
     useEffect(() => {
-        if (unsubscribeRef.current) unsubscribeRef.current();
-
-        setIsLoading(true);
-
-        // Listen on wave_applications where status == "approved" to get full member details
-        const q = query(
-            collection(db, "wave_applications"),
-            orderBy("createdAt", "desc")
-        );
-
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const docs: WaveMember[] = [];
-                snapshot.docs.forEach((doc) => {
-                    const data = doc.data();
-                    if (data.status === "approved") {
-                        docs.push({
-                            id: data.userId || doc.id,
-                            active: true,
-                            enrolledAt: data.approvalTimestamp?.toDate() || data.reviewedAt?.toDate() || data.createdAt?.toDate() || new Date(),
-                            applicationId: doc.id,
-                            fullName: data.fullName,
-                            surname: data.surname,
-                            firstName: data.firstName,
-                            email: data.email || data.userEmail,
-                            phone: data.phone,
-                            stateOfResidence: data.stateOfResidence,
-                            lgaOfResidence: data.lgaOfResidence,
-                            bankName: data.bankName,
-                            accountNumber: data.accountNumber,
-                            farmSize: data.farmSize,
-                            nin: data.nin,
-                            bvn: data.bvn,
-                        });
-                    }
-                });
-                setMembers(docs);
-                setIsLoading(false);
-            },
-            (err) => {
-                logger.error("WAVE members snapshot error:", err);
-                showToast("Failed to load WAVE members", "error");
-                setIsLoading(false);
-            }
-        );
-
-        unsubscribeRef.current = unsubscribe;
-        return () => { unsubscribeRef.current?.(); };
-    }, [showToast]);
-
-    // Local search filter
-    useEffect(() => {
-        if (!searchQuery.trim()) {
-            setFiltered(members);
-            return;
-        }
-        const q = searchQuery.toLowerCase();
-        setFiltered(members.filter(m =>
-            getDisplayName(m).toLowerCase().includes(q) ||
-            m.email?.toLowerCase().includes(q) ||
-            m.phone?.toLowerCase().includes(q) ||
-            m.stateOfResidence?.toLowerCase().includes(q)
-        ));
-    }, [members, searchQuery]);
+        setFiltered(members);
+    }, [members]);
 
     const getDisplayName = (m: WaveMember) => {
         if (m.surname || m.firstName) return `${m.surname || ""} ${m.firstName || ""}`.trim();
@@ -306,6 +295,29 @@ export default function AdminWaveMembersPage() {
                     </div>
                 )}
             </div>
+
+            {/* Pagination Controls */}
+            {filtered.length > 0 && !isLoading && (
+                <div className="flex items-center justify-between mt-8 p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Member Detail Modal */}
             {selectedMember && (

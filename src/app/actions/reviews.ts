@@ -334,7 +334,11 @@ export async function getSellerRatingAction(sellerId: string) {
 /**
  * Get all reviews for admin moderation
  */
-export async function getAdminReviewsAction(statusFilter?: "pending" | "approved" | "rejected") {
+export async function getAdminReviewsAction(options: {
+    statusFilter?: "all" | "pending" | "approved" | "rejected";
+    limit?: number;
+    lastDocId?: string;
+} = {}) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -348,21 +352,37 @@ export async function getAdminReviewsAction(statusFilter?: "pending" | "approved
             return { success: false, error: "Not authorized as admin" };
         }
 
-        let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .orderBy("createdAt", "desc")
-            .limit(100);
+        const fetchLimit = options.limit || 20;
 
-        if (statusFilter) {
+        let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+            .orderBy("createdAt", "desc");
+
+        if (options.statusFilter && options.statusFilter !== "all") {
             query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-                .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
-                .limit(100);
+                .where("status", "==", options.statusFilter)
+                .orderBy("createdAt", "desc");
         }
 
-        const snapshot = await query.get();
-        const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
 
-        return { success: true, reviews };
+        const snapshot = await query.limit(fetchLimit + 1).get();
+        const hasMore = snapshot.docs.length > fetchLimit;
+        const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
+
+        const reviews = serializeDocs(docs) as unknown as ProductReview[];
+        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            reviews,
+            lastDocId: nextCursor,
+            hasMore
+        };
     } catch (error: any) {
         logger.error("Get admin reviews error:", error);
         return { success: false, error: error.message };

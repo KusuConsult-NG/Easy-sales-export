@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 interface UseAdminDataOptions<T> {
     fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[]; lastDocId?: string; hasMore?: boolean }>;
     limit?: number;
+    dependencies?: any[];
 }
 
 /**
@@ -21,7 +22,7 @@ interface UseAdminDataOptions<T> {
  *  - useEffect depends only on searchKey/filtersKey (serialized) so it
  *    correctly re-triggers on every real change without the eslint suppress
  */
-export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions<T>) {
+export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: UseAdminDataOptions<T>) {
     const [data, setData] = useState<T[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -100,15 +101,16 @@ export function useAdminData<T>({ fetchAction, limit = 20 }: UseAdminDataOptions
     // Serialize search/filters so the effect correctly detects deep changes.
     const searchKey = search;
     const filtersKey = JSON.stringify(filters);
+    const depsKey = JSON.stringify(dependencies);
 
-    // Reset to page 0 whenever search or filters change.
+    // Reset to page 0 whenever search, filters, or explicit deps change.
     useEffect(() => {
         cursorStack.current = [undefined];
         setPageIndex(0);
         fetchData(0, true);
         // fetchData is stable (never changes) — this is intentional, see comment above.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchKey, filtersKey]);
+    }, [searchKey, filtersKey, depsKey]);
 
     const updateFilter = (key: string, value: any) => {
         setFilters(prev => ({ ...prev, [key]: value }));

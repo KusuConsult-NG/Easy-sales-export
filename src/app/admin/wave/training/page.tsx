@@ -24,6 +24,7 @@ import {
 } from "@/app/actions/wave-admin";
 import { getWaveTrainingEventsAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
 
 const STATUS_OPTIONS = [
     { id: "upcoming", label: "Upcoming", color: "blue" },
@@ -36,8 +37,27 @@ export default function AdminWaveTrainingPage() {
     const router = useRouter();
     const { showToast } = useToast();
 
-    const [events, setEvents] = useState<WaveTrainingEvent[]>([]);
-    const [loading, setLoading] = useState(true);
+    const {
+        data: events,
+        loading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadEvents
+    } = useAdminData<WaveTrainingEvent>({
+        fetchAction: async (opts) => {
+            const result = await getWaveTrainingEventsAction(opts.lastDocId, opts.limit || 20);
+            return {
+                success: result.success,
+                data: result.data as any,
+                meta: result.meta,
+                error: result.error
+            };
+        },
+        limit: 20
+    });
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<WaveTrainingEvent | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -56,27 +76,6 @@ export default function AdminWaveTrainingPage() {
         meetingLink: "",
         status: "upcoming" as "upcoming" | "ongoing" | "completed" | "cancelled",
     });
-
-    useEffect(() => {
-        loadEvents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    async function loadEvents() {
-        setLoading(true);
-        try {
-            const result = await getWaveTrainingEventsAction();
-            if (result.success ) {
-                setEvents(result.data ?? []);
-            } else {
-                showToast(result.error || "Failed to load events", "error");
-            }
-        } catch (error) {
-            showToast("Failed to load events", "error");
-        } finally {
-            setLoading(false);
-        }
-    }
 
     function openCreateModal() {
         setEditingEvent(null);
@@ -344,6 +343,29 @@ export default function AdminWaveTrainingPage() {
                         >
                             Create Event
                         </button>
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {events.length > 0 && (
+                    <div className="flex items-center justify-between mt-8 p-4 border-t border-gray-200">
+                        <span className="text-sm font-medium text-gray-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin text-gray-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
 

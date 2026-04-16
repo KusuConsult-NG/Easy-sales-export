@@ -1973,7 +1973,12 @@ export async function requestExportApplicationRevisionAction(
         return { error: "Failed to send revision request", success: false };
     }
 }
-export async function getStandardExportApplicationsAction(statusFilter?: "pending_review" | "approved" | "rejected" | "revision_required" | "pending" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardExportApplicationsAction(options: {
+    limit?: number;
+    search?: string;
+    status?: "pending_review" | "approved" | "rejected" | "revision_required" | "pending" | "all";
+    lastDocId?: string;
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -1985,13 +1990,23 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).orderBy("createdAt", "desc").limit(500);
-        if (statusFilter && statusFilter !== "all") {
+        const fetchLimit = options.limit || 50;
+        let q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).orderBy("createdAt", "desc");
+        
+        if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-                .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
-                .limit(500);
+                .where("status", "==", options.status)
+                .orderBy("createdAt", "desc");
         }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+        
+        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
@@ -2013,7 +2028,7 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
             const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.profile?.fullName || kycName || "Unknown User");
             
-            // Normalize status to map perfectly to UI rules (e.g. pending_review -> pending)
+            // Normalize status to map perfectly to UI rules
             let status = app.status || "pending";
             if (status === "pending_review") status = "pending";
             
@@ -2034,7 +2049,29 @@ export async function getStandardExportApplicationsAction(statusFilter?: "pendin
             };
         });
 
-        return { success: true, data: standardForms };
+        // Client-side search application if specified
+        let finalForms = standardForms;
+        if (options.search) {
+            const s = options.search.toLowerCase();
+            finalForms = standardForms.filter((f: any) => 
+                f.user.name?.toLowerCase().includes(s) || 
+                f.user.email?.toLowerCase().includes(s) || 
+                f.user.phone?.includes(s)
+            );
+        }
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: finalForms,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor,
+            meta: {
+                totalFetched: applications.length,
+                hasMore: !!nextCursor
+            }
+        };
     } catch (error) {
         logger.error("Get standard export apps error:", error);
         return { success: false, error: "Failed to fetch normalized applications" };
@@ -2953,7 +2990,11 @@ export async function inviteLegacyMemberAction(
     }
 }
 
-export async function getStandardSellerVerificationsAction(statusFilter?: "pending" | "approved" | "rejected" | "suspended" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardSellerVerificationsAction(
+    statusFilter?: "pending" | "approved" | "rejected" | "suspended" | "all",
+    cursorId?: string,
+    limitCount: number = 50
+): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -2965,16 +3006,27 @@ export async function getStandardSellerVerificationsAction(statusFilter?: "pendi
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", "desc").limit(500);
-        if (statusFilter && statusFilter !== "all") {
-            q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
-                .limit(500);
+        let cursorSnap = null;
+        if (cursorId) {
+            cursorSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(cursorId).get();
         }
+
+        let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", "desc");
+        
+        if (statusFilter && statusFilter !== "all") {
+            q = q.where("status", "==", statusFilter);
+        }
+
+        if (cursorSnap && cursorSnap.exists) {
+            q = q.startAfter(cursorSnap);
+        }
+        
+        q = q.limit(limitCount);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
+        const nextCursorId = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
@@ -3008,10 +3060,105 @@ export async function getStandardSellerVerificationsAction(statusFilter?: "pendi
             };
         });
 
-        return { success: true, data: standardForms };
+        return { success: true, data: standardForms, error: undefined, meta: { lastDocId: nextCursorId } };
     } catch (error) {
         logger.error("Get standard seller verifications error:", error);
-        return { success: false, error: "Failed to fetch normalized applications" };
+        return { success: false, error: "Failed to fetch normalized applications", meta: null };
     }
 }
 
+
+export async function getMarketplaceUsersAction(options: {
+    limit?: number;
+    search?: string;
+    roleFilter?: "all" | "buyer_only" | "seller_only" | "both";
+    lastDocId?: string;
+} = {}) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 50;
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+
+        // We paginate by document ID to handle the custom array-contains checks later if needed.
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.orderBy("__name__").startAfter(lastDoc);
+            } else {
+                q = q.orderBy("__name__");
+            }
+        } else {
+            q = q.orderBy("__name__");
+        }
+
+        q = q.limit(fetchLimit);
+
+        const snapshot = await q.get();
+
+        // Marketplace filter
+        let users = snapshot.docs.map(doc => {
+            const data = doc.data();
+            const hasSellerRole = (data.roles || []).includes("seller");
+            const hasBuyerRole = (data.roles || []).includes("buyer");
+            const isRegisteredInMarketplace = data.serviceRegistrations?.marketplace === true;
+            
+            if (!hasSellerRole && !hasBuyerRole && !isRegisteredInMarketplace) return null;
+
+            let buyerRole = "invalid";
+            if (hasSellerRole && hasBuyerRole) buyerRole = "both";
+            else if (hasSellerRole) buyerRole = "seller_only";
+            else buyerRole = "buyer_only";
+
+            return {
+                id: doc.id,
+                name: data.fullName || data.name || "Unknown",
+                email: data.email,
+                phone: data.phone || "",
+                roles: data.roles || [],
+                buyerRole,
+                status: data.status || "active",
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || null
+            };
+        }).filter(Boolean) as any[];
+
+        if (options.roleFilter && options.roleFilter !== "all") {
+            users = users.filter((u: any) => u.buyerRole === options.roleFilter);
+        }
+
+        if (options.search) {
+            const s = options.search.toLowerCase();
+            users = users.filter((u: any) => 
+                u.name?.toLowerCase().includes(s) || 
+                u.email?.toLowerCase().includes(s)
+            );
+        }
+
+        // Sort latest (mocking it via UI, since we're walking cursors)
+        users.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return dateB - dateA;
+        });
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: users,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor,
+        };
+
+    } catch (error: any) {
+        logger.error("Failed to fetch marketplace buyers:", error);
+        return { success: false, error: "Internal server error" };
+    }
+}

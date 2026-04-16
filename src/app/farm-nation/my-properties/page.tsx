@@ -242,7 +242,7 @@ export default function MyPropertiesPage() {
                                                 <span className="text-xs font-semibold">Price</span>
                                             </div>
                                             <p className="text-sm font-bold text-slate-900">
-                                                ₦{(property.price / 1000000).toFixed(1)}M
+                                                ₦{property.price.toLocaleString()}
                                             </p>
                                         </div>
 

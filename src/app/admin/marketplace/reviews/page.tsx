@@ -15,6 +15,7 @@ import {
 import { getAdminReviewsAction, moderateReviewAction } from "@/app/actions/reviews";
 import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -41,46 +42,46 @@ export default function AdminReviewsPage() {
     const router = useRouter();
     const { showToast } = useToast();
 
-    const [reviews, setReviews] = useState<ProductReview[]>([]);
-    const [filteredReviews, setFilteredReviews] = useState<ProductReview[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [processingId, setProcessingId] = useState<string | null>(null);
-
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
-    useEffect(() => {
-        loadReviews();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const {
+        data: reviews,
+        loading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadReviews
+    } = useAdminData<ProductReview>({
+        fetchAction: async (opts) => {
+            const result = await getAdminReviewsAction({
+                statusFilter: statusFilter,
+                limit: opts.limit || 20,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: (result as any).reviews || [],
+                meta: { lastDocId: (result as any).lastDocId, hasMore: (result as any).hasMore },
+                error: (result as any).error
+            };
+        },
+        limit: 20,
+        dependencies: [statusFilter]
+    });
+
+    const [processingId, setProcessingId] = useState<string | null>(null);
+
+    const [filteredReviews, setFilteredReviews] = useState<ProductReview[]>([]);
 
     useEffect(() => {
         filterReviews();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, statusFilter, reviews]);
-
-    async function loadReviews() {
-        setLoading(true);
-        try {
-            const result = await getAdminReviewsAction();
-            if (result.success) {
-                setReviews(result.reviews || []);
-            } else {
-                showToast(result.error || "Failed to load reviews", "error");
-            }
-        } catch (error) {
-            showToast("Failed to load reviews", "error");
-        } finally {
-            setLoading(false);
-        }
-    }
+    }, [searchQuery, reviews]);
 
     function filterReviews() {
         let filtered = [...reviews];
-
-        if (statusFilter !== "all") {
-            filtered = filtered.filter((r) => r.status === statusFilter);
-        }
 
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
@@ -299,6 +300,29 @@ export default function AdminReviewsPage() {
                                 ? "No reviews match your filters"
                                 : "No reviews found"}
                         </p>
+                    </div>
+                )}
+                
+                {/* Pagination Controls */}
+                {filteredReviews.length > 0 && (
+                    <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-2xl shadow-lg border border-gray-100">
+                        <span className="text-sm font-medium text-gray-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || loading}
+                                className="px-4 py-2 border border-gray-200 text-gray-600 font-medium rounded-lg hover:bg-gray-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin text-gray-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

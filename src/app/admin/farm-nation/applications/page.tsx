@@ -54,32 +54,19 @@ export default function FarmNationApplicationsPage() {
         refresh
     } = useAdminData<StandardPendingForm<SellerProfile>>({
         fetchAction: async (params) => {
-            const result = await getStandardFarmNationRegistrantsAction((params.status as any) || "all");
-            let filteredData = result.data || [];
-            
-            // Apply standard search filter
-            if (params.search) {
-                const q = params.search.toLowerCase();
-                filteredData = filteredData.filter(u => 
-                    u.user.name?.toLowerCase().includes(q) ||
-                    u.user.email?.toLowerCase().includes(q) ||
-                    u.data.phone?.toLowerCase().includes(q) ||
-                    u.data.name?.toLowerCase().includes(q)
-                );
-            }
-
-            const page = params.page || 0;
-            const limit = params.limit || 20;
-            const offset = page * limit;
-            const paged = filteredData.slice(offset, offset + limit);
-            const hasMore = offset + limit < filteredData.length;
+            const result = await getStandardFarmNationRegistrantsAction({
+                status: (params.status as any) || "all",
+                search: params.search,
+                limit: params.limit || 20,
+                lastDocId: params.lastDocId
+            });
 
             return {
                 success: result.success,
                 error: result.error,
-                data: paged,
-                hasMore,
-                lastDocId: hasMore ? String(page + 1) : undefined,
+                data: result.data || [],
+                hasMore: !!result.hasMore,
+                lastDocId: result.lastDocId,
             };
         },
         limit: 20

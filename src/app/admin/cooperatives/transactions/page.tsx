@@ -20,6 +20,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getAllTransactionsAction, getCooperativeStatsAction } from "@/app/actions/cooperative-admin";
 import { toast } from "sonner";
+import { useAdminData } from "@/hooks/useAdminData";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
@@ -39,7 +40,6 @@ interface Transaction {
 
 export default function AdminTransactionsPage() {
     const [loading, setLoading] = useState(true);
-    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [typeFilter, setTypeFilter] = useState<TransactionType>("all");
     const [statusFilter, setStatusFilter] = useState<TransactionStatus>("all");
     const [searchTerm, setSearchTerm] = useState("");
@@ -52,38 +52,55 @@ export default function AdminTransactionsPage() {
         failedTransactions: number;
     } | null>(null);
 
-    const loadTransactions = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [result, statsResult] = await Promise.all([
-                getAllTransactionsAction({
+    const {
+        data: transactions,
+        loading: isLoading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        refresh: loadTransactions,
+        pageIndex
+    } = useAdminData<Transaction>({
+        fetchAction: async (opts) => {
+            try {
+                // Determine limits: if we have search active, fetch larger initial block conceptually,
+                // but useAdminData relies on standard cursor. We'll use chunk of 50.
+                const limit = opts.limit || 50;
+
+                const result = await getAllTransactionsAction({
                     type: typeFilter,
                     status: statusFilter,
-                    limit: 100,
-                }),
-                getCooperativeStatsAction()
-            ]);
+                    limit,
+                    lastDocId: opts.lastDocId
+                });
 
-            if (result.success && result.data?.transactions) {
-                setTransactions(result.data.transactions);
-            } else {
-                toast.error(result.error || "Failed to load transactions");
-            }
-            
-            if (statsResult.success && statsResult.data?.stats) {
-                setGlobalStats(statsResult.data.stats as any);
-            }
-        } catch (error) {
-            logger.error("Failed to load transactions:", error);
-            toast.error("Failed to load transactions");
-        } finally {
-            setLoading(false);
-        }
-    }, [typeFilter, statusFilter]);
+                // Opportunistically load stats if on page 0
+                if (!opts.lastDocId) {
+                    getCooperativeStatsAction().then(statsResult => {
+                        if (statsResult.success && statsResult.data?.stats) {
+                            setGlobalStats(statsResult.data.stats as any);
+                        }
+                    }).catch(() => {}); // fire and forget
+                }
 
-    useEffect(() => {
-        loadTransactions();
-    }, [loadTransactions]);
+                if (!result.success) {
+                    toast.error(result.error || "Failed to load transactions");
+                    return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+                }
+
+                return {
+                    success: true,
+                    data: result.data?.transactions || [],
+                    meta: { lastDocId: result.meta?.lastDocId, hasMore: result.meta?.hasMore }
+                };
+
+            } catch (error: any) {
+                return { success: false, data: [], meta: { hasMore: false }, error: error.message };
+            }
+        },
+        limit: 50,
+        dependencies: [typeFilter, statusFilter]
+    });
 
     function getStatusIcon(status: string) {
         switch (status) {
@@ -318,7 +335,7 @@ export default function AdminTransactionsPage() {
                 </div>
 
                 {/* Transactions Table */}
-                {loading ? (
+                {isLoading && transactions.length === 0 ? (
                     <div className="flex items-center justify-center py-16">
                         <div className="text-center">
                             <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-3" />
@@ -451,6 +468,29 @@ export default function AdminTransactionsPage() {
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {/* Pagination Controls */}
+                        {!isLoading && transactions.length > 0 && (
+                            <div className="flex items-center justify-between p-4 bg-white border-t border-slate-100">
+                                <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={onPrevPage}
+                                        disabled={pageIndex === 0 || isLoading}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                                    >
+                                        Previous
+                                    </button>
+                                    <button
+                                        onClick={onNextPage}
+                                        disabled={!hasMore || isLoading}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                                    >
+                                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="bg-white rounded-2xl shadow-sm p-16 text-center">

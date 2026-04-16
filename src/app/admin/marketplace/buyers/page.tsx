@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { logger } from "@/lib/logger";
-import { Users, Search, Eye, ShoppingCart, Download, Filter } from "lucide-react";
+import { Users, Search, Eye, ShoppingCart, Download, Filter, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getMarketplaceUsersAction } from "@/app/actions/admin";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -24,40 +26,31 @@ type FilterTab = "all" | "buyer_only" | "seller_only" | "both";
 
 export default function MarketplaceBuyersPage() {
     const { showToast } = useToast();
-    const [users, setUsers] = useState<MarketplaceUser[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [roleFilter, setRoleFilter] = useState<FilterTab>("all");
+    
+    const {
+        data: users,
+        loading: isLoading,
+        error: fetchError,
+        search: searchQuery,
+        setSearch: setSearchQuery,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setUsers,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadUsers
+    } = useAdminData<MarketplaceUser>({
+        fetchAction: getMarketplaceUsersAction,
+        limit: 50
+    });
+
+    const roleFilter = (filters.roleFilter as FilterTab) || "all";
     const [selectedUser, setSelectedUser] = useState<MarketplaceUser | null>(null);
 
-    const fetchUsers = async () => {
-        setIsLoading(true);
-        try {
-            const response = await fetch("/api/admin/marketplace/buyers");
-            const data = await response.json();
-            if (data.success) {
-                setUsers(data.users || []);
-            } else {
-                showToast(data.message || "Failed to load marketplace users", "error");
-            }
-        } catch (err) {
-            logger.error("Fetch buyers error:", err);
-            showToast("Failed to load marketplace users", "error");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => { fetchUsers(); }, []);
-
-    const filtered = users.filter((u) => {
-        const matchesRole = roleFilter === "all" || u.buyerRole === roleFilter;
-        const matchesSearch = !searchQuery || (
-            u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            u.email.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        return matchesRole && matchesSearch;
-    });
+    // Filter logic is mostly handled at the database level now, but we'll apply it locally on fetched block
+    const filtered = users;
 
     const stats = {
         total: users.length,
@@ -144,7 +137,7 @@ export default function MarketplaceBuyersPage() {
                         ] as { value: FilterTab; label: string }[]).map(({ value, label }) => (
                             <button
                                 key={value}
-                                onClick={() => setRoleFilter(value)}
+                                onClick={() => updateFilter("roleFilter", value)}
                                 className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                                     roleFilter === value
                                         ? "bg-blue-600 text-white"
@@ -218,6 +211,29 @@ export default function MarketplaceBuyersPage() {
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                )}
+
+                {/* Pagination Controls */}
+                {filtered.length > 0 && (
+                    <div className="flex items-center justify-between mt-0 p-4 border-t border-slate-200">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

@@ -14,37 +14,37 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { getAdminDisputesAction, updateDisputeStatusAction } from "@/app/actions/disputes";
 import { useToast } from "@/contexts/ToastContext";
+import { useAdminData } from "@/hooks/useAdminData";
+import type { Dispute } from "@/lib/types/marketplace";
 
 export default function AdminDisputesPage() {
     const { showToast } = useToast();
-    const [disputes, setDisputes] = useState<any[]>([]);
+    
+    const {
+        data: disputes,
+        loading,
+        error: fetchError,
+        search: searchQuery,
+        setSearch: setSearchQuery,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setDisputes,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadDisputes
+    } = useAdminData<Dispute>({
+        fetchAction: getAdminDisputesAction,
+        limit: 50
+    });
+
     const [selectedDispute, setSelectedDispute] = useState<string | null>(null);
-    const [filterStatus, setFilterStatus] = useState("all");
-    const [searchQuery, setSearchQuery] = useState("");
-    const [loading, setLoading] = useState(true);
+    const filterStatus = (filters.status as string) || "all";
     const [resolving, setResolving] = useState(false);
     const [adminNotes, setAdminNotes] = useState("");
 
-    useEffect(() => {
-        loadDisputes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    async function loadDisputes() {
-        setLoading(true);
-        try {
-            const result = await getAdminDisputesAction();
-            if (result.success) {
-                setDisputes(result.disputes || []);
-            } else {
-                showToast(result.error || "Failed to load disputes", "error");
-            }
-        } catch {
-            showToast("Failed to load disputes", "error");
-        } finally {
-            setLoading(false);
-        }
-    }
+    // Use backend filtering for search and status, but backend handles options.status naturally.
 
     async function handleResolve(disputeId: string, resolution: "refund_buyer" | "release_seller" | "partial_refund") {
         if (!adminNotes.trim()) {
@@ -86,16 +86,8 @@ export default function AdminDisputesPage() {
         );
     };
 
-    const filteredDisputes = disputes.filter((d) => {
-        const matchesStatus = filterStatus === "all" || d.status === filterStatus;
-        const matchesSearch =
-            !searchQuery ||
-            d.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            d.orderId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            d.reason?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            d.description?.toLowerCase().includes(searchQuery.toLowerCase());
-        return matchesStatus && matchesSearch;
-    });
+    // useAdminData handles the filtering when the API is hit, but we'll show what's matching.
+    const filteredDisputes = disputes;
 
     const selected = disputes.find((d) => d.id === selectedDispute);
 
@@ -131,10 +123,10 @@ export default function AdminDisputesPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Filter className="w-5 h-5 text-slate-500" />
+                            <Filter className="w-5 h-5 text-slate-500" />
                         <select
                             value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
+                            onChange={(e) => updateFilter("status", e.target.value)}
                             className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary"
                         >
                             <option value="all">All Status</option>
@@ -184,12 +176,35 @@ export default function AdminDisputesPage() {
                                     {getStatusBadge(dispute.status)}
                                     <span className="text-xs text-slate-500">
                                         {dispute.createdAt
-                                            ? new Date(dispute.createdAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
+                                            ? new Date(dispute.createdAt as any).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
                                             : ""}
                                     </span>
                                 </div>
                             </div>
                         ))}
+                        
+                        {/* Pagination Controls */}
+                        {filteredDisputes.length > 0 && (
+                            <div className="flex items-center justify-between mt-4 p-4 bg-white rounded-xl shadow-sm border border-slate-100">
+                                <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={onPrevPage}
+                                        disabled={pageIndex === 0 || loading}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                                    >
+                                        Previous
+                                    </button>
+                                    <button
+                                        onClick={onNextPage}
+                                        disabled={!hasMore || loading}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                                    >
+                                        {loading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Dispute Detail */}
@@ -238,11 +253,11 @@ export default function AdminDisputesPage() {
                                         </div>
                                     )}
 
-                                    {selected.evidenceUrls?.length > 0 && (
+                                    {(selected.evidenceUrls?.length ?? 0) > 0 && (
                                         <div className="mt-4">
                                             <p className="text-xs font-semibold text-slate-600 mb-2">Evidence Files</p>
                                             <div className="flex flex-wrap gap-2">
-                                                {selected.evidenceUrls.map((url: string, i: number) => (
+                                                {selected.evidenceUrls?.map((url: string, i: number) => (
                                                     <a
                                                         key={i}
                                                         href={url}

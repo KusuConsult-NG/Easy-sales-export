@@ -7,22 +7,41 @@ import {
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
-
-type LoanProduct = {
-    id: string;
-    name: string;
-    description: string;
-    minAmount: number;
-    maxAmount: number;
-    interestRate: number;
-    durationMonths: number;
-    isActive: boolean;
-};
+import { useAdminData } from "@/hooks/useAdminData";
+import { 
+    getAdminLoanProductsAction, 
+    createAdminLoanProductAction, 
+    updateAdminLoanProductAction, 
+    deleteAdminLoanProductAction,
+    type LoanProduct 
+} from "@/app/actions/loan-products";
 
 export default function LoanProductsPage() {
     const { showToast } = useToast();
-    const [products, setProducts] = useState<LoanProduct[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+
+    const {
+        data: products,
+        loading: isLoading,
+        hasMore,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: fetchProducts
+    } = useAdminData<LoanProduct>({
+        fetchAction: async (opts) => {
+            const result = await getAdminLoanProductsAction({
+                limit: opts.limit || 20,
+                lastDocId: opts.lastDocId
+            });
+            return {
+                success: result.success,
+                data: result.data || [],
+                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
+                error: result.error
+            };
+        },
+        limit: 20
+    });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<LoanProduct | null>(null);
     const [formData, setFormData] = useState({
@@ -34,27 +53,6 @@ export default function LoanProductsPage() {
         durationMonths: 12,
         isActive: true
     });
-
-    const fetchProducts = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const response = await fetch("/api/admin/cooperative/loan-products");
-            const data = await response.json();
-
-            if (data.success) {
-                setProducts(data.products || []);
-            }
-        } catch (error) {
-            logger.error("Failed to fetch products:", error);
-            showToast("Failed to fetch products", "error");
-        } finally {
-            setIsLoading(false);
-        }
-    }, [showToast]);
-
-    useEffect(() => {
-        fetchProducts();
-    }, [fetchProducts]);
 
     function handleOpenModal(product?: LoanProduct) {
         if (product) {
@@ -92,27 +90,19 @@ export default function LoanProductsPage() {
         e.preventDefault();
 
         try {
-            const url = editingProduct
-                ? "/api/admin/cooperative/update-loan-product"
-                : "/api/admin/cooperative/create-loan-product";
-
-            const response = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    ...formData,
-                    productId: editingProduct?.id
-                }),
-            });
-
-            const data = await response.json();
+            let data;
+            if (editingProduct) {
+                data = await updateAdminLoanProductAction(editingProduct.id!, formData);
+            } else {
+                data = await createAdminLoanProductAction(formData);
+            }
 
             if (data.success) {
                 showToast("Product saved successfully", "success");
                 handleCloseModal();
                 fetchProducts();
             } else {
-                showToast(data.message || "Failed to save product", "error");
+                showToast(data.error || "Failed to save product", "error");
             }
         } catch (error) {
             showToast("An error occurred while saving the product", "error");
@@ -125,19 +115,13 @@ export default function LoanProductsPage() {
         }
 
         try {
-            const response = await fetch("/api/admin/cooperative/delete-loan-product", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ productId }),
-            });
-
-            const data = await response.json();
+            const data = await deleteAdminLoanProductAction(productId);
 
             if (data.success) {
                 showToast("Product deleted successfully", "success");
                 fetchProducts();
             } else {
-                showToast(data.message || "Failed to delete product", "error");
+                showToast(data.error || "Failed to delete product", "error");
             }
         } catch (error) {
             showToast("An error occurred while deleting the product", "error");
@@ -204,7 +188,7 @@ export default function LoanProductsPage() {
                                         <Pencil className="w-4 h-4 text-slate-600" />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(product.id)}
+                                        onClick={() => handleDelete(product.id!)}
                                         className="p-2 bg-red-100 hover:bg-red-200 rounded-lg transition-colors"
                                     >
                                         <Trash2 className="w-4 h-4 text-red-600" />
@@ -250,6 +234,29 @@ export default function LoanProductsPage() {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+            
+            {/* Pagination Controls */}
+            {products.length > 0 && !isLoading && (
+                <div className="flex items-center justify-between mt-8 p-4 bg-white rounded-xl shadow-lg border border-slate-100">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
                 </div>
             )}
 

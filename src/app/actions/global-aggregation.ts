@@ -15,8 +15,8 @@ export async function getPlatformMetricsAction() {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error };
 
-        // 1. Transactions - Universal Table Check
-        const [txnTotalSnap, completedRevSnap, allUsersSnap] = await Promise.all([
+        // 1. Transactions - Universal Table Check and Cross-Platform Aggregation
+        const [txnTotalSnap, completedRevSnap, allUsersSnap] = await Promise.allSettled([
             db.collection(COLLECTIONS.TRANSACTIONS).count().get(),
             db.collection(COLLECTIONS.TRANSACTIONS)
                 .where("status", "==", "completed")
@@ -25,9 +25,9 @@ export async function getPlatformMetricsAction() {
             db.collection(COLLECTIONS.USERS).count().get()
         ]);
 
-        const totalTransactions = txnTotalSnap.data().count || 0;
-        const totalRevenue = completedRevSnap.data().total || 0;
-        const totalUsers = allUsersSnap.data().count || 0;
+        const totalTransactions = (txnTotalSnap.status === 'fulfilled' ? txnTotalSnap.value.data().count || 0 : 0);
+        const totalRevenue = (completedRevSnap.status === 'fulfilled' ? completedRevSnap.value.data().total || 0 : 0);
+        const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
 
         return {
             success: true,

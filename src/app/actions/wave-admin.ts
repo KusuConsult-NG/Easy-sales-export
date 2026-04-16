@@ -425,7 +425,12 @@ export async function rejectWaveApplicationAction(
     }
 }
 
-export async function getStandardWaveApplicationsAction(statusFilter?: "pending" | "under_review" | "approved" | "rejected" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardWaveApplicationsAction(options: {
+    limit?: number;
+    search?: string;
+    status?: "pending" | "under_review" | "approved" | "rejected" | "all";
+    lastDocId?: string;
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -437,10 +442,23 @@ export async function getStandardWaveApplicationsAction(statusFilter?: "pending"
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", "desc").limit(500);
-        if (statusFilter && statusFilter !== "all") {
-            q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "==", statusFilter).orderBy("createdAt", "desc").limit(500);
+        const fetchLimit = options.limit || 50;
+        let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", "desc");
+        
+        if (options.status && options.status !== "all") {
+            q = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("status", "==", options.status)
+                .orderBy("createdAt", "desc");
         }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+        
+        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
@@ -479,9 +497,95 @@ export async function getStandardWaveApplicationsAction(statusFilter?: "pending"
             };
         });
 
-        return { success: true, data: standardForms };
+        // Client-side search application if specified
+        let finalForms = standardForms;
+        if (options.search) {
+            const s = options.search.toLowerCase();
+            finalForms = standardForms.filter((f: any) => 
+                f.user.name?.toLowerCase().includes(s) || 
+                f.user.email?.toLowerCase().includes(s) || 
+                f.user.phone?.includes(s)
+            );
+        }
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: finalForms,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor,
+            meta: {
+                totalFetched: applications.length,
+                hasMore: !!nextCursor
+            }
+        };
     } catch (error) {
-        logger.error("Get standard applications error:", error);
-        return { success: false, error: "Failed to fetch normalized applications" };
+        logger.error("Get standard WAVE applications error:", error);
+        return { success: false, error: "Failed to fetch normalized Wave applications" };
+    }
+}
+
+export async function getStandardWaveWithdrawalsAction(options: {
+    status?: "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected" | "all";
+    limit?: number;
+    lastDocId?: string;
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 25;
+        let q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).orderBy("requestedAt", "desc");
+        
+        if (options.status && options.status !== "all") {
+            q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
+                .where("status", "==", options.status)
+                .orderBy("requestedAt", "desc");
+        }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+        
+        q = q.limit(fetchLimit + 1);
+
+        const snapshot = await q.get();
+        const hasMore = snapshot.docs.length > fetchLimit;
+        const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
+
+        const withdrawals = docs.map(doc => ({
+            withdrawalId: doc.id,
+            ...doc.data(),
+            requestedAt: doc.data().requestedAt?.toDate?.()?.toISOString() ?? null,
+            processedAt: doc.data().processedAt?.toDate?.()?.toISOString() ?? null,
+            completedAt: doc.data().completedAt?.toDate?.()?.toISOString() ?? null,
+        }));
+
+        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: withdrawals,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor,
+            meta: {
+                totalFetched: withdrawals.length,
+                hasMore: !!nextCursor
+            }
+        };
+    } catch (error) {
+        logger.error("Get standard WAVE withdrawals error:", error);
+        return { success: false, error: "Failed to fetch WAVE withdrawals" };
     }
 }

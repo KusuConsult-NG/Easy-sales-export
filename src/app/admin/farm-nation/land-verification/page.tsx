@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
-import { MapPin, FileText, Check, X, Eye, Loader2, Download } from "lucide-react";
+import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
+import { useAdminData } from "@/hooks/useAdminData";
+import { getAdminLandVerificationsAction } from "@/app/actions/farm-nation-admin";
 
 type LandVerification = {
     id: string;
@@ -31,60 +31,30 @@ type LandVerification = {
 
 export default function AdminLandVerificationPage() {
     const { showToast } = useToast();
-    const [verifications, setVerifications] = useState<LandVerification[]>([]);
-    const [filteredVerifications, setFilteredVerifications] = useState<LandVerification[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState("pending");
+    
+    const {
+        data: verifications,
+        loading: isLoading,
+        error: fetchError,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setVerifications,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadVerifications
+    } = useAdminData<LandVerification>({
+        fetchAction: getAdminLandVerificationsAction,
+        limit: 50
+    });
+
+    const filterStatus = (filters.status as string) || "pending";
     const [selectedVerification, setSelectedVerification] = useState<LandVerification | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
 
-    // Real-time listener
-    useEffect(() => {
-        if (unsubscribeRef.current) unsubscribeRef.current();
-
-        setIsLoading(true);
-
-        const q = query(collection(db, "land_listings"), orderBy("createdAt", "desc"));
-
-        const unsubscribe = onSnapshot(
-            q,
-            (snapshot) => {
-                const docs = snapshot.docs.map((doc) => {
-                    const data = doc.data();
-                    return {
-                        id: doc.id,
-                        ...data,
-                        createdAt: data.createdAt?.toDate() || new Date(),
-                        verifiedAt: data.verifiedAt?.toDate(),
-                        images: data.images || [],
-                    } as LandVerification;
-                });
-                setVerifications(docs);
-                setIsLoading(false);
-            },
-            (err) => {
-                logger.error("Land verifications snapshot error:", err);
-                showToast("Failed to load land verifications", "error");
-                setIsLoading(false);
-            }
-        );
-
-        unsubscribeRef.current = unsubscribe;
-        return () => { unsubscribeRef.current?.(); };
-    }, [showToast]);
-
-    // Local filter
-    const filterVerificationsByStatus = useCallback(() => {
-        if (filterStatus === "all") {
-            setFilteredVerifications(verifications);
-        } else {
-            setFilteredVerifications(verifications.filter(v => v.verificationStatus === filterStatus));
-        }
-    }, [verifications, filterStatus]);
-
-    useEffect(() => { filterVerificationsByStatus(); }, [filterVerificationsByStatus]);
+    const filteredVerifications = verifications;
 
     async function handleApprove(verificationId: string) {
         if (!confirm("Approve this land listing?")) return;
@@ -161,6 +131,8 @@ export default function AdminLandVerificationPage() {
         document.body.removeChild(a); URL.revokeObjectURL(url);
     };
 
+    // We'll compute stats loosely locally based on loaded data.
+    // For standard dashboard counting, you might want a global stats call.
     const stats = {
         total: verifications.length,
         pending: verifications.filter(v => v.verificationStatus === "pending").length,
@@ -217,7 +189,7 @@ export default function AdminLandVerificationPage() {
                         ].map(({ value, label, activeClass }) => (
                             <button
                                 key={value}
-                                onClick={() => setFilterStatus(value)}
+                                onClick={() => updateFilter("status", value)}
                                 className={`px-4 py-2 rounded-lg font-semibold transition-all ${filterStatus === value ? activeClass : "bg-slate-100 text-slate-900"}`}
                             >
                                 {label}
@@ -278,18 +250,62 @@ export default function AdminLandVerificationPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <button
-                                                    onClick={() => { setSelectedVerification(verification); setIsDetailsModalOpen(true); }}
-                                                    className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-semibold transition-all flex items-center gap-2"
-                                                >
-                                                    <Eye className="w-4 h-4" /> Review
-                                                </button>
+                                                <div className="flex items-center gap-3">
+                                                    {verification.verificationStatus === "pending" && (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleApprove(verification.id); }}
+                                                                disabled={isProcessing}
+                                                                className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded disabled:opacity-50"
+                                                                title="Approve"
+                                                            >
+                                                                <Check className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleReject(verification.id); }}
+                                                                disabled={isProcessing}
+                                                                className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded disabled:opacity-50"
+                                                                title="Reject"
+                                                            >
+                                                                <X className="w-5 h-5" />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    <button
+                                                        onClick={() => { setSelectedVerification(verification); setIsDetailsModalOpen(true); }}
+                                                        className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-semibold transition-all flex items-center gap-2"
+                                                    >
+                                                        <Eye className="w-4 h-4" /> Review
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
+                        {/* Pagination Controls */}
+                        {filteredVerifications.length > 0 && (
+                            <div className="flex items-center justify-between mt-4 p-4 border-t border-slate-200">
+                                <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={onPrevPage}
+                                        disabled={pageIndex === 0 || isLoading}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                                    >
+                                        Previous
+                                    </button>
+                                    <button
+                                        onClick={onNextPage}
+                                        disabled={!hasMore || isLoading}
+                                        className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                                    >
+                                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

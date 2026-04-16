@@ -535,3 +535,69 @@ export async function processWalletWithdrawalAction(
         return { success: false, error: err.message || "Failed to process withdrawal" };
     }
 }
+
+// ---------------------------------------------------------------------------
+// ADMIN: Get Paginated Wallet Withdrawals
+// ---------------------------------------------------------------------------
+
+export async function getAdminWalletWithdrawalsAction(options: {
+    status?: string;
+    limit?: number;
+    lastDocId?: string;
+} = {}): Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+    lastDocId?: string;
+    hasMore?: boolean;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const userId = sessionResult.session.user.id;
+
+        // Verify admin
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const roles: string[] = userDoc.data()?.roles || [];
+        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 25;
+        let query = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+            .where("type", "==", "withdrawal")
+            .orderBy("createdAt", "desc");
+
+        if (options.status && options.status !== "all") {
+            query = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
+                .where("type", "==", "withdrawal")
+                .where("status", "==", options.status)
+                .orderBy("createdAt", "desc");
+        }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
+        }
+
+        const snap = await query.limit(fetchLimit + 1).get();
+        const hasMore = snap.docs.length > fetchLimit;
+        const docs = hasMore ? snap.docs.slice(0, fetchLimit) : snap.docs;
+
+        const withdrawals = serializeDocs(docs);
+
+        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: withdrawals,
+            lastDocId: nextCursor,
+            hasMore
+        };
+    } catch (err: any) {
+        logger.error("getAdminWalletWithdrawalsAction error:", err);
+        return { success: false, error: err.message || "Failed to fetch withdrawals" };
+    }
+}

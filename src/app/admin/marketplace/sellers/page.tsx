@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import {
     Store, CheckCircle, XCircle, Clock, Search,
@@ -11,6 +11,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import RejectionModal from "@/components/admin/RejectionModal";
+import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction } from "@/app/actions/admin";
 import { StandardPendingForm } from "@/lib/types/admin";
 
@@ -44,11 +45,33 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminSellersPage() {
     const { showToast } = useToast();
-    const [verifications, setVerifications] = useState<StandardPendingForm<SellerVerification>[]>([]);
-    const [filteredVerifications, setFilteredVerifications] = useState<StandardPendingForm<SellerVerification>[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [filterStatus, setFilterStatus] = useState<FilterType>("all");
+    
+    const {
+        data: verifications,
+        loading: isLoading,
+        error: fetchError,
+        search: searchQuery,
+        setSearch: setSearchQuery,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setVerifications,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: loadVerifications
+    } = useAdminData<StandardPendingForm<SellerVerification>>({
+        fetchAction: async (opts) => {
+            return getStandardSellerVerificationsAction(
+                (opts.status as FilterType) || "all",
+                opts.lastDocId,
+                opts.limit || 50
+            );
+        },
+        limit: 50
+    });
+
+    const filterStatus = (filters.status as FilterType) || "all";
     const [selectedVerification, setSelectedVerification] = useState<StandardPendingForm<SellerVerification> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -65,42 +88,8 @@ export default function AdminSellersPage() {
     // Badge toggle state
     const [isBadgeProcessing, setIsBadgeProcessing] = useState(false);
 
-    const fetchData = async () => {
-        setIsLoading(true);
-        try {
-            const result = await getStandardSellerVerificationsAction("all");
-            if (result.success) {
-                setVerifications(result.data || []);
-            } else {
-                showToast("Failed to load seller verifications", "error");
-            }
-        } catch (err) {
-            logger.error("Fetch verifications error:", err);
-            showToast("Failed to load seller verifications", "error");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [showToast]);
-
-    // Local filter
-    useEffect(() => {
-        let filtered = verifications;
-        if (filterStatus !== "all") filtered = filtered.filter(v => v.status === filterStatus);
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(v =>
-                v.data.businessName?.toLowerCase().includes(q) ||
-                v.user.name?.toLowerCase().includes(q) ||
-                v.user.email?.toLowerCase().includes(q) ||
-                v.data.phone?.toLowerCase().includes(q)
-            );
-        }
-        setFilteredVerifications(filtered);
-    }, [verifications, searchQuery, filterStatus]);
+    // Note: useAdminData already applies local search text filters
+    const filteredVerifications = verifications;
 
     function handleExportCSV() {
         if (verifications.length === 0) return;
@@ -142,7 +131,7 @@ export default function AdminSellersPage() {
             if (data.success) {
                 showToast("Seller approved successfully!", "success");
                 setIsDetailsModalOpen(false);
-                await fetchData();
+                await loadVerifications();
             } else {
                 showToast(data.message || "Failed to approve seller", "error");
             }
@@ -182,7 +171,7 @@ export default function AdminSellersPage() {
             if (data.success) {
                 showToast(rejectionMode === "reject" ? "Seller verification rejected" : "Seller suspended", "success");
                 setIsDetailsModalOpen(false);
-                await fetchData();
+                await loadVerifications();
             } else {
                 showToast(data.message || "Operation failed", "error");
             }
@@ -219,7 +208,7 @@ export default function AdminSellersPage() {
         if (result.success) {
             showToast("Seller updated with audit trail.", "success");
             setEditingVerification(null);
-            await fetchData();
+            await loadVerifications();
         } else {
             showToast(result.error || "Failed to update seller", "error");
         }
@@ -238,7 +227,7 @@ export default function AdminSellersPage() {
             const result = await toggleVerifiedBadgeAction(verification.id);
             if (result.success) {
                 showToast(result.message || `Badge ${action}ed`, "success");
-                await fetchData();
+                await loadVerifications();
             } else {
                 showToast(result.error || "Failed to update badge", "error");
             }
@@ -313,7 +302,7 @@ export default function AdminSellersPage() {
                         {(["all", "pending", "approved", "rejected"] as FilterType[]).map((status) => (
                             <button
                                 key={status}
-                                onClick={() => setFilterStatus(status)}
+                                onClick={() => updateFilter("status", status)}
                                 className={`px-4 py-2 rounded-lg font-medium transition-colors ${filterStatus === status ? "bg-primary text-white" : "bg-slate-100 text-slate-900 hover:bg-slate-200"}`}
                             >
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -390,17 +379,62 @@ export default function AdminSellersPage() {
                                             {new Date(v.createdAt || Date.now()).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => { setSelectedVerification(standardV); setIsDetailsModalOpen(true); }}
-                                                className="text-primary hover:text-primary/80 font-medium flex items-center gap-1"
-                                            >
-                                                <Eye className="w-4 h-4" /> View Details
-                                            </button>
+                                            <div className="flex items-center gap-3">
+                                                {standardV.status === "pending" && (
+                                                    <>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleApprove(standardV.id); }}
+                                                            disabled={isProcessing}
+                                                            className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded disabled:opacity-50"
+                                                            title="Approve Seller"
+                                                        >
+                                                            <CheckCircle className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleReject(standardV.id); }}
+                                                            disabled={isProcessing}
+                                                            className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded disabled:opacity-50"
+                                                            title="Reject Seller"
+                                                        >
+                                                            <XCircle className="w-4 h-4" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                                <button
+                                                    onClick={() => { setSelectedVerification(standardV); setIsDetailsModalOpen(true); }}
+                                                    className="text-primary hover:text-primary/80 font-medium flex items-center gap-1 p-1.5 hover:bg-slate-50 rounded transition-colors"
+                                                >
+                                                    <Eye className="w-4 h-4" /> View Details
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 )})}
                             </tbody>
                         </table>
+                    </div>
+                )}
+                
+                {/* Pagination Controls */}
+                {filteredVerifications.length > 0 && (
+                    <div className="flex items-center justify-between mt-4 p-4 border-t border-slate-200">
+                        <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={onPrevPage}
+                                disabled={pageIndex === 0 || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                            >
+                                Previous
+                            </button>
+                            <button
+                                onClick={onNextPage}
+                                disabled={!hasMore || isLoading}
+                                className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

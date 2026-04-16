@@ -366,6 +366,7 @@ export async function getAllTransactionsAction(options?: {
     type?: "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
     status?: "all" | "pending" | "completed" | "failed";
     limit?: number;
+    lastDocId?: string;
 }): Promise<{
     success: boolean;
     meta?: any;
@@ -413,12 +414,21 @@ export async function getAllTransactionsAction(options?: {
             q = q.where("status", "==", options.status);
         }
 
-        if (options?.limit) {
-            q = q.limit(options.limit);
+        const fetchLimit = options?.limit || 100;
+        let query = q;
+
+        if (options?.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                query = query.startAfter(lastDoc);
+            }
         }
 
-        const snapshot = await q.get();
-        const rawDocs = snapshot.docs.map((doc) => ({
+        const snapshot = await query.limit(fetchLimit + 1).get();
+        const hasMore = snapshot.docs.length > fetchLimit;
+        const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
+
+        const rawDocs = docs.map((doc) => ({
             id: doc.id,
             ...doc.data(),
         }));
@@ -476,7 +486,9 @@ export async function getAllTransactionsAction(options?: {
             }
         }
 
-        return { success: true, data: { transactions }, meta: { hasMore: false, cursor: null } };
+        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
+
+        return { success: true, data: { transactions }, meta: { hasMore, lastDocId: nextCursor } };
     } catch (error) {
         logger.error("Get all transactions error:", error);
         return { success: false, error: "Failed to fetch transactions" };
@@ -981,7 +993,11 @@ export async function requestCooperativeRevisionAction(
     }
 }
 
-export async function getStandardCooperativeMembersAction(statusFilter?: "pending" | "approved" | "suspended" | "under_review" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardCooperativeMembersAction(
+    statusFilter?: "pending" | "approved" | "suspended" | "under_review" | "all",
+    cursorId?: string,
+    limitCount: number = 50
+): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -993,22 +1009,30 @@ export async function getStandardCooperativeMembersAction(statusFilter?: "pendin
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc").limit(500);
+        let cursorSnap = null;
+        if (cursorId) {
+            cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
+        }
+
+        let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
+        
         if (statusFilter && statusFilter !== "all" && statusFilter !== "pending") {
-            q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("membershipStatus", "==", statusFilter)
-                .orderBy("createdAt", "desc")
-                .limit(500);
+            q = q.where("membershipStatus", "==", statusFilter);
         } else if (statusFilter === "pending") {
             // Support backwards compatibility pending status queries
-            q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("membershipStatus", "==", "pending")
-                .orderBy("createdAt", "desc")
-                .limit(500);
+            q = q.where("membershipStatus", "==", "pending");
         }
+
+        if (cursorSnap && cursorSnap.exists) {
+            q = q.startAfter(cursorSnap);
+        }
+        
+        q = q.limit(limitCount);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
+        const nextCursorId = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
@@ -1043,10 +1067,9 @@ export async function getStandardCooperativeMembersAction(statusFilter?: "pendin
             };
         });
 
-        return { success: true, data: standardForms };
+        return { success: true, data: standardForms, error: undefined, meta: { lastDocId: nextCursorId } };
     } catch (error) {
-        logger.error("Get standard cooperative members error:", error);
-        return { success: false, error: "Failed to fetch normalized applications" };
+        logger.error(`getStandardCooperativeMembersAction error:`, error);
+        return { success: false, error: "Failed to load applications", meta: null };
     }
 }
-

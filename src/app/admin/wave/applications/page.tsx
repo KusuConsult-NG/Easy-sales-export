@@ -8,6 +8,7 @@ import { approveWaveApplicationAction, rejectWaveApplicationAction, editApplicat
 import { getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
 import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
+import { useAdminData } from "@/hooks/useAdminData";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -47,10 +48,25 @@ function getDisplayName(app: WaveApplication): string {
 
 export default function AdminWaveApplicationsPage() {
     const { showToast } = useToast();
-    const [applications, setApplications] = useState<StandardPendingForm<WaveApplication>[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("pending");
+    const {
+        data: applications,
+        loading: isLoading,
+        error,
+        search,
+        setSearch,
+        filters,
+        updateFilter,
+        hasMore,
+        setData: setApplications,
+        onNextPage,
+        onPrevPage,
+        pageIndex,
+        refresh: fetchData
+    } = useAdminData<StandardPendingForm<WaveApplication>>({
+        fetchAction: getStandardWaveApplicationsAction,
+        limit: 50
+    });
+
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
@@ -61,26 +77,14 @@ export default function AdminWaveApplicationsPage() {
     const [editNote, setEditNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
 
-    const fetchData = async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const result = await getStandardWaveApplicationsAction(statusFilter);
-            if (result.success) {
-                setApplications(result.data || []);
-            } else {
-                setError(result.error || "Failed to load applications");
-            }
-        } catch (err) {
-            setError("Error fetching applications");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const statusFilter = (filters.status as ApplicationStatus | "all") || "pending";
 
+    // Set initial filter to pending if not set
     useEffect(() => {
-        fetchData();
-    }, [statusFilter]);
+        if (!filters.status) {
+            updateFilter("status", "pending");
+        }
+    }, [filters.status, updateFilter]);
 
     async function handleApprove(applicationId: string) {
         setProcessingId(applicationId);
@@ -213,7 +217,7 @@ export default function AdminWaveApplicationsPage() {
                 <Filter className="w-5 h-5 text-slate-500" />
                 <select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "all")}
+                    onChange={(e) => updateFilter("status", e.target.value)}
                     className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
                 >
                     <option value="all">All Applications</option>
@@ -386,6 +390,29 @@ export default function AdminWaveApplicationsPage() {
                                 </div>
                             </div>
                         ))
+                    )}
+                    {applications.length > 0 && (
+                        <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-200 pl-2">
+                            <span className="text-sm text-slate-500 font-medium">
+                                Page {pageIndex + 1}
+                            </span>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={onPrevPage}
+                                    disabled={pageIndex === 0 || isLoading}
+                                    className="px-5 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 transition drop-shadow-sm"
+                                >
+                                    Previous
+                                </button>
+                                <button
+                                    onClick={onNextPage}
+                                    disabled={!hasMore || isLoading}
+                                    className="px-5 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2 drop-shadow-sm"
+                                >
+                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Next Page"}
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </div>
             )}

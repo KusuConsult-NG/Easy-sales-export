@@ -302,7 +302,12 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
     }
 }
 
-export async function getStandardAcademyApplicationsAction(statusFilter?: "pending" | "approved" | "rejected" | "under_review" | "all"): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+export async function getStandardAcademyApplicationsAction(options: {
+    limit?: number;
+    search?: string;
+    status?: "pending" | "approved" | "rejected" | "under_review" | "all";
+    lastDocId?: string;
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -314,13 +319,23 @@ export async function getStandardAcademyApplicationsAction(statusFilter?: "pendi
             return { success: false, error: "Unauthorized" };
         }
 
-        let q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("createdAt", "desc").limit(500);
-        if (statusFilter && statusFilter !== "all") {
+        const fetchLimit = options.limit || 50;
+        let q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("createdAt", "desc");
+        
+        if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("status", "==", statusFilter)
-                .orderBy("createdAt", "desc")
-                .limit(500);
+                .where("status", "==", options.status)
+                .orderBy("createdAt", "desc");
         }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+        
+        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
@@ -359,10 +374,31 @@ export async function getStandardAcademyApplicationsAction(statusFilter?: "pendi
             };
         });
 
-        return { success: true, data: standardForms };
+        // Client-side search application if specified
+        let finalForms = standardForms;
+        if (options.search) {
+            const s = options.search.toLowerCase();
+            finalForms = standardForms.filter((f: any) => 
+                f.user.name?.toLowerCase().includes(s) || 
+                f.user.email?.toLowerCase().includes(s) || 
+                f.user.phone?.includes(s)
+            );
+        }
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: finalForms,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor,
+            meta: {
+                totalFetched: applications.length,
+                hasMore: !!nextCursor
+            }
+        };
     } catch (error) {
         logger.error("Get standard academy apps error:", error);
         return { success: false, error: "Failed to fetch normalized applications" };
     }
 }
-

@@ -38,6 +38,9 @@
   ],
   "exclude": [
     "node_modules",
-    "scripts"
+    "scripts",
+    "tests",
+    "__tests__",
+    "e2e"
   ]
 }

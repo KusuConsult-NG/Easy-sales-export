@@ -15,6 +15,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, limit, where, getDocs } from "firebase/firestore";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
 import { getStandardAcademyApplicationsAction } from "@/app/actions/academy-admin";
+import { useAdminData } from "@/hooks/useAdminData";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -80,54 +81,36 @@ function planBadge(plan: string | undefined) {
 // ─── Page ────────────────────────────────────────────────────────────────────
 export default function AdminAcademyApplicationsPage() {
     const { showToast } = useToast();
-    const [appDocs, setAppDocs] = useState<AcademyApplication[]>([]);
-    const [paymentDocs, setPaymentDocs] = useState<AcademyApplication[]>([]);
-    const [enrolledUsers, setEnrolledUsers] = useState<AcademyApplication[]>([]);
-    const [loaded, setLoaded] = useState(false);
-    const [loadedCount, setLoadedCount] = useState(0);
-
-    // Merge and deduplicate across all 3 sources:
-    // 1. academy_applications (formal application docs)
-    // 2. processedPayments with type=academy_registration
-    // 3. users with role=academy_participant (enrolled but no standalone application)
-    const applications = useMemo(() => {
-        const merged = [...appDocs];
-        const existingRefs = new Set(appDocs.map(a => a.paymentReference).filter(Boolean));
-        const existingIds = new Set(appDocs.map(a => a.id));
-
-        // Add payment docs not already covered by an application doc
-        for (const p of paymentDocs) {
-            if (!p.paymentReference || !existingRefs.has(p.paymentReference)) {
-                merged.push(p);
-                if (p.paymentReference) existingRefs.add(p.paymentReference);
-                existingIds.add(p.id);
-            }
-        }
-
-        // Add enrolled users without a standalone application or payment doc
-        for (const u of enrolledUsers) {
-            if (!existingIds.has(u.id)) {
-                merged.push(u);
-            }
-        }
-
-        return merged.sort((a, b) => {
-            const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
-            const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
-            return tb - ta;
-        });
-    }, [appDocs, paymentDocs, enrolledUsers]);
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
     const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
 
-    const fetchData = async () => {
-        try {
-            // 1. fetch standard applications
-            const result = await getStandardAcademyApplicationsAction();
-            if (result.success) {
+    const {
+        data: applications,
+        loading: isLoading,
+        hasMore,
+        refresh: fetchData,
+        onNextPage,
+        onPrevPage,
+        pageIndex
+    } = useAdminData<AcademyApplication>({
+        fetchAction: async (opts) => {
+            try {
+                // Pass dependencies gracefully
+                const result = await getStandardAcademyApplicationsAction({
+                    limit: opts.limit || 50,
+                    lastDocId: opts.lastDocId,
+                    search: search.trim() ? search : undefined,
+                    status: statusFilter === "all" ? undefined : statusFilter
+                });
+
+                if (!result.success) {
+                    showToast(result.error || "Failed to load applications", "error");
+                    return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+                }
+
                 const apps = (result.data ?? []).map((stdApp: any) => {
                     const d = stdApp.data;
                     const pi = d.personalInfo || {};
@@ -139,7 +122,7 @@ export default function AdminAcademyApplicationsPage() {
                             lastName: pi.lastName,
                             otherName: pi.otherName,
                             email: stdApp.user.email,
-                            phone: pi.phone ?? d.phone ?? "",
+                            phone: pi.phone ?? d.phone ?? stdApp.user.phone ?? "",
                         },
                         education: d.education,
                         status: stdApp.status,
@@ -153,71 +136,22 @@ export default function AdminAcademyApplicationsPage() {
                         hasApplicationDoc: true,
                     } as AcademyApplication;
                 });
-                setAppDocs(apps);
+
+                return {
+                    success: true,
+                    data: apps,
+                    meta: {
+                        lastDocId: result.lastDocId,
+                        hasMore: result.hasMore
+                    }
+                };
+            } catch (err: any) {
+                return { success: false, data: [], meta: { hasMore: false }, error: err.message };
             }
-
-            // 2. Payments fetch
-            const payQ = query(collection(db, "processedPayments"), where("type", "==", "academy_registration"));
-            const paySnap = await getDocs(payQ);
-            const pApps: AcademyApplication[] = paySnap.docs.map(doc => {
-                const d = doc.data();
-                return {
-                    id: doc.id,
-                    personalInfo: {
-                        fullName: d.customerName ?? d.fullName ?? "—",
-                        email: d.customerEmail ?? d.email ?? "—",
-                        phone: d.phone ?? d.customerPhone ?? "",
-                    },
-                    status: "pending" as ApplicationStatus,
-                    submittedAt: toIso(d.processedAt ?? d.createdAt ?? null),
-                    paymentStatus: "completed",
-                    paymentAmount: d.amount ? Number(d.amount) : undefined,
-                    plan: d.plan ?? d.metadata?.plan ?? null,
-                    paymentReference: d.reference ?? d.tx_ref ?? doc.id,
-                    source: d.source ?? "webhook",
-                    hasApplicationDoc: false,
-                };
-            });
-            setPaymentDocs(pApps);
-
-            // 3. Users fetch
-            const userQ = query(collection(db, "users"), where("roles", "array-contains", "academy_participant"));
-            const uSnap = await getDocs(userQ);
-            const uApps: AcademyApplication[] = uSnap.docs.map(doc => {
-                const d = doc.data();
-                const derivedFullName = d.firstName
-                    ? [d.firstName, d.otherName, d.lastName].filter(Boolean).join(" ").trim()
-                    : (d.fullName ?? d.name ?? d.kyc?.fullName ?? "—");
-                return {
-                    id: doc.id,
-                    personalInfo: {
-                        fullName: derivedFullName,
-                        firstName: d.firstName,
-                        lastName: d.lastName,
-                        otherName: d.otherName,
-                        email: d.email ?? "—",
-                        phone: d.phone ?? d.phoneNumber ?? d.kyc?.phoneNumber ?? "",
-                    },
-                    status: (d.academyStatus ?? "approved") as ApplicationStatus,
-                    submittedAt: toIso(d.academyEnrolledAt ?? d.createdAt ?? null),
-                    paymentStatus: d.academyPaymentStatus ?? "completed",
-                    plan: d.academyPlan ?? null,
-                    paymentReference: null,
-                    source: "user_profile",
-                    hasApplicationDoc: false,
-                };
-            });
-            setEnrolledUsers(uApps);
-        } catch (err) {
-            console.error("Failed to fetch academy data", err);
-        } finally {
-            setLoaded(true);
-        }
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, []);
+        },
+        limit: 50,
+        dependencies: [statusFilter, search]
+    });
 
     async function handleApprove(id: string) {
         setProcessingId(id);
@@ -265,21 +199,10 @@ export default function AdminAcademyApplicationsPage() {
     }[s] ?? "bg-slate-100 text-slate-600");
 
     const filtered = applications
-        .filter(a => statusFilter === "all" || a.status === statusFilter)
         .filter(a => {
             if (paymentFilter === "all") return true;
             if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
             return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
-        })
-        .filter(a => {
-            const q = search.trim().toLowerCase();
-            if (!q) return true;
-            return (
-                a.personalInfo.fullName.toLowerCase().includes(q) ||
-                a.personalInfo.email.toLowerCase().includes(q) ||
-                a.personalInfo.phone.includes(q) ||
-                (a.plan ?? "").toLowerCase().includes(q)
-            );
         });
 
     // Counts per status for tab badges
@@ -367,14 +290,14 @@ export default function AdminAcademyApplicationsPage() {
             </div>
 
             {/* Loading */}
-            {!loaded && (
+            {isLoading && applications.length === 0 && (
                 <div className="flex items-center justify-center py-12">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                 </div>
             )}
 
             {/* Applications */}
-            {loaded && (
+            {!isLoading && applications.length > 0 && (
                 <div className="space-y-4">
                     {filtered.map(app => (
                         <div key={app.id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
@@ -478,6 +401,29 @@ export default function AdminAcademyApplicationsPage() {
                             </p>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Pagination Controls */}
+            {!isLoading && applications.length > 0 && (
+                <div className="flex items-center justify-between mt-6 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={onPrevPage}
+                            disabled={pageIndex === 0 || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition"
+                        >
+                            Previous
+                        </button>
+                        <button
+                            onClick={onNextPage}
+                            disabled={!hasMore || isLoading}
+                            className="px-4 py-2 border border-slate-200 text-slate-600 font-medium rounded-lg hover:bg-slate-50 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            {isLoading ? <Loader2 className="w-4 h-4 animate-spin text-slate-500" /> : "Next Page"}
+                        </button>
+                    </div>
                 </div>
             )}
 

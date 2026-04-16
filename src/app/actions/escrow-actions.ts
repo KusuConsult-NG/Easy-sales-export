@@ -72,9 +72,12 @@ export async function getUserEscrowTransactions(): Promise<{ success: boolean; t
  * Get ALL escrow transactions (Admin only)
  * Used by the admin escrow management dashboard.
  */
-export async function getAllEscrowTransactionsAdmin(filters?: {
+export async function getAllEscrowTransactionsAdmin(options: {
     status?: EscrowStatus;
-}): Promise<{ success: boolean; transactions?: EscrowTransaction[]; error?: string }> {
+    limit?: number;
+    lastDocId?: string;
+    search?: string;
+} = {}): Promise<{ success: boolean; transactions?: EscrowTransaction[]; error?: string; hasMore?: boolean; lastDocId?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionError(sessionResult);
@@ -85,18 +88,26 @@ export async function getAllEscrowTransactionsAdmin(filters?: {
             return { success: false, error: "Admin access required" };
         }
 
-        let query = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-            .orderBy("createdAt", "desc") as FirebaseFirestore.Query;
+        const fetchLimit = options.limit || 50;
+        let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc");
 
-        if (filters?.status) {
-            query = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .where("status", "==", filters.status)
+        if (options.status) {
+            q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("status", "==", options.status)
                 .orderBy("createdAt", "desc");
         }
 
-        const snapshot = await query.limit(200).get(); // safety cap
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
 
-        const transactions = snapshot.docs.map(doc => {
+        q = q.limit(fetchLimit);
+        const snapshot = await q.get();
+
+        let transactions = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 id: doc.id,
@@ -121,7 +132,25 @@ export async function getAllEscrowTransactionsAdmin(filters?: {
             } as EscrowTransaction;
         });
 
-        return { success: true, transactions };
+        // Client-side search if specified
+        if (options.search) {
+            const s = options.search.toLowerCase();
+            transactions = transactions.filter(t => 
+                t.buyerEmail?.toLowerCase().includes(s) || 
+                t.sellerEmail?.toLowerCase().includes(s) || 
+                t.productName?.toLowerCase().includes(s) ||
+                t.paymentReference?.toLowerCase().includes(s)
+            );
+        }
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            transactions,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor
+        };
     } catch (error: any) {
         logger.error("Get all escrow transactions admin error:", error);
         return { success: false, error: error.message };

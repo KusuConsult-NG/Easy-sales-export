@@ -134,32 +134,37 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
 
     // Revenue is already computed in getPlatformMetricsAction (totalRevenue)
-    // We just compute monthlyRevenue here:
+    // Fetch base paid cooperative members to aggregate without needing a new date index
+    let paidCoops: any[] = [];
+    try {
+        const coopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").get();
+        paidCoops = coopSnap.docs.map(d => d.data());
+    } catch(_e) {}
+
     let monthlyRevenue = 0;
     try {
-        const [monthRevSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.TRANSACTIONS)
-                .where("status", "==", "completed")
-                .where("date", ">=", thisMonthStart)
-                .aggregate({ total: AggregateField.sum("amount") }).get(),
-        ]);
-        monthlyRevenue = monthRevSnap.status === "fulfilled" ? (monthRevSnap.value.data().total ?? 0) : 0;
+        const monthRevSnap = await db.collection(COLLECTIONS.TRANSACTIONS)
+            .where("status", "==", "completed")
+            .where("date", ">=", thisMonthStart)
+            .aggregate({ total: AggregateField.sum("amount") }).get();
+
+        monthlyRevenue += monthRevSnap.data().total ?? 0;
     } catch (_e) {
-        // collection may not exist yet — leave as 0
+        // collection may not exist yet
     }
 
     // ── Revenue by month (last 6 months — all payment sources) ─────────────
     const revenueByMonth = await Promise.all(
         months.map(async ({ label, start, end }) => {
             try {
-                const [p1] = await Promise.allSettled([
-                    db.collection(COLLECTIONS.TRANSACTIONS)
+                const p1 = await db.collection(COLLECTIONS.TRANSACTIONS)
                         .where("status", "==", "completed")
                         .where("date", ">=", start)
                         .where("date", "<=", end)
-                        .aggregate({ total: AggregateField.sum("amount") }).get(),
-                ]);
-                const rev = p1.status === "fulfilled" ? (p1.value.data().total ?? 0) : 0;
+                        .aggregate({ total: AggregateField.sum("amount") }).get();
+
+                let rev = p1.data().total ?? 0;
+
                 return { month: label, revenue: rev };
             } catch (_e) {
                 return { month: label, revenue: 0 };
@@ -224,24 +229,40 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
 
     try {
-        const txSnap = await db.collection(COLLECTIONS.TRANSACTIONS)
-            .orderBy("date", "desc")
-            .limit(15)
-            .get();
+        const [txSnap, coopSnap, escrowSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.TRANSACTIONS).orderBy("date", "desc").limit(15).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get()
+        ]);
 
-        txSnap.docs.forEach(doc => {
-            if (recentTransactions.length >= 8) return;
-            const d = doc.data();
+        const allDocs: any[] = [];
+        
+        if (txSnap.status === "fulfilled") {
+            txSnap.value.docs.forEach(d => allDocs.push(d.data()));
+        }
+
+        // Sort unified pool by date descending
+        allDocs.sort((a, b) => {
+            const ta = a.date?.toDate ? a.date.toDate().getTime() : new Date(a.date || 0).getTime();
+            const tb = b.date?.toDate ? b.date.toDate().getTime() : new Date(b.date || 0).getTime();
+            return tb - ta;
+        });
+
+        // Pick top 8 latest valid transactions
+        let collected = 0;
+        for (const d of allDocs) {
+            if (collected >= 8) break;
             const ts = d.date ?? null;
             if (Number(d.amount) > 0 || d.amount === undefined) {
                 recentTransactions.push({
-                    id: doc.id,
+                    id: d.id || Math.random().toString(),
                     type: d.type ?? "Transaction",
                     amount: Number(d.amount) || 0,
                     date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString())
                 });
+                collected++;
             }
-        });
+        }
     } catch (e) {
         logger.error("Failed to fetch unified recent transactions:", e);
     }
@@ -326,15 +347,12 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     let totalLoansDisbursed = 0;
     const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
-    const [allEscrowsR, completedEscrowsR, coopRevenueR] = await Promise.allSettled([
+    const [allEscrowsR, allTxnsR] = await Promise.allSettled([
         db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
-        db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
-        db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").aggregate({ total: AggregateField.sum("registrationFee") }).get(),
+        db.collection(COLLECTIONS.TRANSACTIONS).where("status", "==", "completed").aggregate({ total: AggregateField.sum("amount") }).get(),
     ]);
     totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
-    const escrowRevenue = completedEscrowsR.status === "fulfilled" ? (completedEscrowsR.value.data().total ?? 0) * 0.025 : 0;
-    const coopRevenue = coopRevenueR.status === "fulfilled" ? (coopRevenueR.value.data().total ?? 0) : 0;
-    totalRevenue = escrowRevenue + coopRevenue;
+    totalRevenue = allTxnsR.status === "fulfilled" ? (allTxnsR.value.data().total ?? 0) : 0;
 
     const loanR = await Promise.allSettled([
         db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "disbursed").aggregate({ total: AggregateField.sum("amount") }).get(),
@@ -342,19 +360,17 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     totalLoansDisbursed = loanR[0].status === "fulfilled" ? (loanR[0].value.data().total ?? 0) : 0;
 
     try {
-        // PRIMARY: processedPayments = every Paystack webhook payment (all 50 real transactions)
-        // SECONDARY: escrow_transactions = marketplace escrow entries (created by marketplace_order handler)
-        const [processedSnap, escrowSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).limit(200).get(),
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).limit(100).get(),
+        // PRIMARY: processedPayments = NO, fetching directly from TRANSACTIONS avoids exact duplication
+        const [txSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.TRANSACTIONS).orderBy("date", "desc").limit(100).get()
         ]);
 
-        const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot, typePrefix: string) => {
+        const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
             const d = doc.data();
-            const ts = d.processedAt ?? d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
+            const ts = d.date ?? d.processedAt ?? d.createdAt ?? d.requestedAt ?? d.timestamp ?? null;
             return {
                 id: doc.id,
-                type: d.type ?? d.action ?? typePrefix,
+                type: d.type ?? d.action ?? "payment",
                 amount: Number(d.amount) || 0,
                 status: d.status ?? "completed",
                 description: d.description ?? d.purpose ?? d.note ?? null,
@@ -364,8 +380,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         };
 
         const all: ReturnType<typeof toTx>[] = [];
-        if (processedSnap.status === "fulfilled") all.push(...processedSnap.value.docs.map(d => toTx(d, "payment")));
-        if (escrowSnap.status === "fulfilled") all.push(...escrowSnap.value.docs.map(d => toTx(d, "escrow")));
+        if (txSnap.status === "fulfilled") all.push(...txSnap.value.docs.map(d => toTx(d)));
 
         all
             .filter(tx => tx.amount > 0)
