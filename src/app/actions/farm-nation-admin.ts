@@ -153,20 +153,33 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         }).map((user: any) => {
             const userName = user.name || user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.email || "Unknown User");
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
+
+            // Flatten nested address & personal fields so admin modal reads consistent top-level keys
+            const mergedData = {
+                ...user,
+                phone:              user.phone              || user.phoneNumber   || null,
+                gender:             user.gender             || null,
+                dateOfBirth:        user.dateOfBirth        || user.dob           || null,
+                occupation:         user.occupation         || null,
+                stateOfOrigin:      user.stateOfOrigin      || (typeof user.address === 'object' ? user.address?.state  : null) || null,
+                lga:                user.lga                || (typeof user.address === 'object' ? user.address?.lga    : null) || null,
+                residentialAddress: user.residentialAddress || (typeof user.address === 'object' ? user.address?.street : user.address) || null,
+            };
+
             return {
-                id: user.id, // Using the user ID since Farm Nation ties reg straight to user
+                id: user.id,
                 user: {
                     id: user.id,
                     name: userName,
-                    email: user.email || "Unknown",
-                    phone: user.phone || "Unknown",
-                    dob: user.dob || "Unknown",
-                    address: typeof user.address === 'object' ? user.address?.street : (user.address || "Unknown"),
-                    state: typeof user.address === 'object' ? user.address?.state : (user.stateOfOrigin || "Unknown"),
-                    lga: typeof user.address === 'object' ? user.address?.lga : (user.lga || "Unknown"),
+                    email: mergedData.email || "Unknown",
+                    phone: mergedData.phone || "Unknown",
+                    dob: mergedData.dateOfBirth || "Unknown",
+                    address: mergedData.residentialAddress || "Unknown",
+                    state: mergedData.stateOfOrigin || "Unknown",
+                    lga: mergedData.lga || "Unknown",
                 },
                 status: status,
-                data: user // Returning complete user profile including nested farmNation data
+                data: mergedData
             };
         });
 

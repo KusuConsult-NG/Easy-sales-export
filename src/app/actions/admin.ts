@@ -2025,27 +2025,44 @@ export async function getStandardExportApplicationsAction(options: {
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const kyc = (app.kyc || {}) as any;
+            const profile = (app.profile || {}) as any;
             const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
-            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.profile?.fullName || kycName || "Unknown User");
+            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
             
             // Normalize status to map perfectly to UI rules
             let status = app.status || "pending";
             if (status === "pending_review") status = "pending";
+
+            // Merge USERS profile + profile sub-object as fallbacks so admin modal
+            // shows all personal fields regardless of which path data came through
+            const mergedData = {
+                ...app,
+                phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || null,
+                gender:             app.gender             || profile?.gender             || uData.gender      || null,
+                dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
+                occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
+                stateOfOrigin:      app.stateOfOrigin      || profile?.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state  : uData.stateOfOrigin)  || null,
+                lga:                app.lga                || profile?.lga                || (typeof uData.address === 'object' ? uData.address?.lga    : uData.lga)            || null,
+                residentialAddress: app.residentialAddress || profile?.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
+                firstName:          profile?.firstName      || app.firstName              || uData.firstName   || null,
+                lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
+                email:              app.userEmail           || app.email                  || uData.email        || null,
+            };
             
             return {
                 id: app.id,
                 user: {
                     id: app.userId,
                     name: userName,
-                    email: uData.email || app.userEmail || "Unknown",
-                    phone: uData.phone || app.phone || app.phoneNumber || "Unknown",
-                    dob: uData.dob || app.dateOfBirth || "Unknown",
-                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
-                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
-                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
+                    email: mergedData.email || "Unknown",
+                    phone: mergedData.phone || "Unknown",
+                    dob: mergedData.dateOfBirth || "Unknown",
+                    address: mergedData.residentialAddress || "Unknown",
+                    state: mergedData.stateOfOrigin || "Unknown",
+                    lga: mergedData.lga || "Unknown",
                 },
                 status: status,
-                data: app
+                data: mergedData
             };
         });
 

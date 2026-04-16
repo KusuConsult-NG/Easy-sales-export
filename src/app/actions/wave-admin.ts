@@ -478,22 +478,36 @@ export async function getStandardWaveApplicationsAction(options: {
 
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
-            // Attempt to glean name from user doc, fallback to application doc, fallback to unknown
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.surname ? `${app.firstName} ${app.surname}`.trim() : "Unknown User");
+
+            const mergedData = {
+                ...app,
+                phone:              app.phone              || uData.phone       || uData.phoneNumber || null,
+                gender:             app.gender             || uData.gender      || null,
+                dateOfBirth:        app.dateOfBirth        || uData.dob         || null,
+                occupation:         app.occupation         || uData.occupation  || null,
+                stateOfOrigin:      app.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state  : uData.stateOfOrigin)  || null,
+                lga:                app.lga                || (typeof uData.address === 'object' ? uData.address?.lga    : uData.lga)            || null,
+                residentialAddress: app.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
+                firstName:          app.firstName          || uData.firstName   || null,
+                lastName:           app.lastName || app.surname || uData.lastName || null,
+                email:              app.email || app.userEmail || uData.email    || null,
+            };
+
             return {
                 id: app.id,
                 user: {
                     id: app.userId,
                     name: userName,
-                    email: uData.email || app.email || app.userEmail || "Unknown",
-                    phone: uData.phone || app.phone || app.phoneNumber || "Unknown",
-                    dob: uData.dob || app.dateOfBirth || "Unknown",
-                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
-                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
-                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
+                    email: mergedData.email || "Unknown",
+                    phone: mergedData.phone || "Unknown",
+                    dob: mergedData.dateOfBirth || "Unknown",
+                    address: mergedData.residentialAddress || "Unknown",
+                    state: mergedData.stateOfOrigin || "Unknown",
+                    lga: mergedData.lga || "Unknown",
                 },
                 status: app.status || "pending",
-                data: app // raw
+                data: mergedData
             };
         });
 

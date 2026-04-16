@@ -356,21 +356,39 @@ export async function getStandardAcademyApplicationsAction(options: {
             const pi = (app.personalInfo || {}) as any;
             const localName = pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : pi.fullName;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
-            
+
+            // Merge app + personalInfo sub-object + USERS profile so every field is populated
+            // regardless of which path the data came through (direct fields, nested personalInfo, or USERS doc).
+            const mergedData = {
+                ...app,
+                // Flatten personalInfo fields to top-level for consistent access by admin UI
+                phone:              app.phone              || pi.phone              || uData.phone       || uData.phoneNumber || null,
+                gender:             app.gender             || pi.gender             || uData.gender      || null,
+                dateOfBirth:        app.dateOfBirth        || pi.dateOfBirth        || uData.dob         || null,
+                occupation:         app.occupation         || pi.occupation         || uData.occupation  || null,
+                stateOfOrigin:      app.stateOfOrigin      || pi.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state  : uData.stateOfOrigin)  || null,
+                lga:                app.lga                || pi.lga                || (typeof uData.address === 'object' ? uData.address?.lga    : uData.lga)            || null,
+                residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
+                firstName:          pi.firstName           || app.firstName         || uData.firstName   || null,
+                lastName:           pi.lastName            || app.lastName          || uData.lastName    || null,
+                fullName:           pi.fullName            || app.fullName          || `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || null,
+                email:              app.email              || pi.email              || uData.email        || null,
+            };
+
             return {
                 id: app.id,
                 user: {
                     id: app.userId,
                     name: userName,
-                    email: uData.email || pi.email || app.email || "Unknown",
-                    phone: uData.phone || pi.phone || app.phone || app.phoneNumber || "Unknown",
-                    dob: uData.dob || pi.dateOfBirth || app.dateOfBirth || "Unknown",
-                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || pi.residentialAddress || app.residentialAddress || "Unknown"),
-                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || pi.stateOfOrigin || app.stateOfOrigin || "Unknown"),
-                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || pi.lga || app.lga || "Unknown"),
+                    email: mergedData.email || "Unknown",
+                    phone: mergedData.phone || "Unknown",
+                    dob: mergedData.dateOfBirth || "Unknown",
+                    address: mergedData.residentialAddress || "Unknown",
+                    state: mergedData.stateOfOrigin || "Unknown",
+                    lga: mergedData.lga || "Unknown",
                 },
                 status: app.status || "pending",
-                data: app
+                data: mergedData
             };
         });
 
