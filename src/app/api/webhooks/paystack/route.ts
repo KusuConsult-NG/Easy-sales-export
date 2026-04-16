@@ -312,7 +312,6 @@ export async function processExportInvestment(reference: string, amount: number,
             roi: roiLabel,
             returnMultiplier,
             expectedReturn,
-            status: "completed",
             source: "webhook"
         });
 
