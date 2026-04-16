@@ -11,7 +11,6 @@
  */
 
 "use server";
-import { iterateStream } from '@/lib/firestore-stream';
 
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -106,70 +105,70 @@ async function collectSmsRecipients(
             // 1. Primary: root users collection
             const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name").stream();
             const seenUserIds = new Set<string>();
-            await iterateStream(usersStream, async (d: any) => {
+            for await (const d of usersStream as any) {
                 const u: any = d.data();
                 seenUserIds.add(u.id || d.id);
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "User");
-            });
+            }
 
             // 2. Supplement: cooperative_members (phone may be stored here only)
             const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("state", "address", "phone", "phoneNumber", "firstName", "lastName").stream();
-            await iterateStream(cmStream, async (d: any) => {
+            for await (const d of cmStream as any) {
                 const m: any = d.data();
                 const userState = m.state || (m.address && m.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 const phone = m.phone || m.phoneNumber;
                 const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || "Member";
                 add(phone, name);
-            });
+            }
 
             // 3. Supplement: wave_applications
             const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName").stream();
-            await iterateStream(waveStream, async (d: any) => {
+            for await (const d of waveStream as any) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const phone = a.phone || a.alternativePhone || a.phoneNumber;
                 const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
                 add(phone, name);
-            });
+            }
 
             // 4. Supplement: academy_applications
             const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").stream();
-            await iterateStream(academyStream, async (d: any) => {
+            for await (const d of academyStream as any) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 const phone = (a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber;
                 const name = (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User";
                 add(phone, name);
-            });
+            }
 
             // 5. Supplement: wave_briefing_registrations
             const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("state", "phone", "phoneNumber", "name", "firstName", "surname").stream();
-            await iterateStream(briefStream, async (d: any) => {
+            for await (const d of briefStream as any) {
                 const r: any = d.data();
-                if (filters.state && r.state !== filters.state) return;
+                if (filters.state && r.state !== filters.state) continue;
                 add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
-            });
+            }
 
             // 6. Supplement: farm_nation_inquiries
             const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").stream();
-            await iterateStream(fnStream, async (d: any) => {
+            for await (const d of fnStream as any) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state) return;
+                if (filters.state && a.state !== filters.state) continue;
                 add(a.phone || a.phoneNumber, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
-            });
+            }
 
             // 7. Supplement: export_onboarding_applications
             const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").stream();
-            await iterateStream(exportStream, async (d: any) => {
+            for await (const d of exportStream as any) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
-            });
+            }
 
             break;
         }
@@ -179,12 +178,12 @@ async function collectSmsRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
                 .stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "sellers":
@@ -198,11 +197,11 @@ async function collectSmsRecipients(
             
             const sellerStream = q.select("userId", "address").stream();
             const userIds: string[] = [];
-            await iterateStream(sellerStream, async (d: any) => {
+            for await (const d of sellerStream as any) {
                 const v: any = d.data();
-                if (filters.state && v.address && v.address.state !== filters.state) return;
+                if (filters.state && v.address && v.address.state !== filters.state) continue;
                 if (v.userId) userIds.push(v.userId);
-            });
+            }
             
             const uMap = await resolveUsers(db, userIds);
             for (const userId of userIds) {
@@ -217,23 +216,23 @@ async function collectSmsRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
                 .stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
-            });
+            }
             break;
         }
         case "cooperative_members": {
             const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name").stream();
             const userIds: string[] = [];
             const members: any[] = [];
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const m: any = d.data();
                 members.push(m);
                 if (m.userId) userIds.push(m.userId);
-            });
+            }
             
             const uMap = await resolveUsers(db, userIds);
             for (const m of members) {
@@ -254,96 +253,96 @@ async function collectSmsRecipients(
         }
         case "wave_applicants": {
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || a.name || "Applicant");
-            });
+            }
             break;
         }
         case "academy_users": {
             // Primary: academy_applications collection
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add((a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber, (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User");
-            });
+            }
 
             // Supplement: users with academy_participant role (enrolled but no standalone application doc)
             const usersStream = db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "academy_participant")
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name")
                 .stream();
-            await iterateStream(usersStream, async (d: any) => {
+            for await (const d of usersStream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Academy User");
-            });
+            }
 
             // Supplement: processedPayments for academy registration
             const ppStream = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "academy_registration")
                 .select("phone", "customerPhone", "customerName", "fullName")
                 .stream();
-            await iterateStream(ppStream, async (d: any) => {
+            for await (const d of ppStream as any) {
                 const p: any = d.data();
                 add(p.phone || p.customerPhone, p.customerName || p.fullName || "Academy User");
-            });
+            }
             break;
         }
         case "export_users": {
             const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
-            });
+            }
 
             // Supplement: users with export roles
             const usersStream = db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "export_member")
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name")
                 .stream();
-            await iterateStream(usersStream, async (d: any) => {
+            for await (const d of usersStream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Export User");
-            });
+            }
             break;
         }
         case "farm_nation_users": {
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state) return;
+                if (filters.state && a.state !== filters.state) continue;
                 add(a.phone || a.phoneNumber, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
-            });
+            }
 
             // Supplement: processedPayments for farm_nation
             const ppStream = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "farm_nation")
                 .select("phone", "customerPhone", "customerName")
                 .stream();
-            await iterateStream(ppStream, async (d: any) => {
+            for await (const d of ppStream as any) {
                 const p: any = d.data();
                 add(p.phone || p.customerPhone, p.customerName || "Farm Nation User");
-            });
+            }
             break;
         }
         case "abandoned_failed_transactions": {
             const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerPhone", "phone", "customerName").stream();
             const userIds: string[] = [];
             const failedPayments: any[] = [];
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const f: any = d.data();
                 failedPayments.push(f);
                 if (f.userId) userIds.push(f.userId);
-            });
+            }
             
             const uMap = await resolveUsers(db, userIds);
             for (const f of failedPayments) {
@@ -370,11 +369,11 @@ async function collectSmsRecipients(
                 .where("status", "==", "registered")
                 .select("state", "phone", "phoneNumber", "name", "firstName", "surname")
                 .stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const r: any = d.data();
-                if (filters.state && r.state !== filters.state) return;
+                if (filters.state && r.state !== filters.state) continue;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
-            });
+            }
             break;
         }
         case "custom": {

@@ -4,7 +4,6 @@
  */
 
 "use server";
-import { iterateStream } from '@/lib/firestore-stream';
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -149,7 +148,7 @@ export async function getCooperativeStatsAction(): Promise<{
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
         const txnStream = txnQuery.select("type", "status", "amount", "date").stream();
-        await iterateStream(txnStream, async (doc: any) => {
+        for await (const doc of txnStream as any) {
             const t = doc.data();
             totalTransactions++;
             
@@ -176,7 +175,7 @@ export async function getCooperativeStatsAction(): Promise<{
                     }
                 }
             }
-        });
+        }
 
         // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
         // Ideally loans should have cooperativeId. Checking Schema...
@@ -187,9 +186,9 @@ export async function getCooperativeStatsAction(): Promise<{
         let pendingLoans = 0;
         const validMemberIds = adminScope ? new Set(paidMembersList.map((m: any) => m.id)) : null;
 
-        await iterateStream(loansStream, async (doc: any) => {
+        for await (const doc of loansStream as any) {
             const l = doc.data();
-            if (validMemberIds && !validMemberIds.has(l.memberId)) return;
+            if (validMemberIds && !validMemberIds.has(l.memberId)) continue;
             
             totalLoans += Number(l.amount) || 0;
             if (l.status === "disbursed" || l.status === "approved") {
@@ -197,7 +196,7 @@ export async function getCooperativeStatsAction(): Promise<{
             } else if (l.status === "pending") {
                 pendingLoans++;
             }
-        });
+        }
 
         const monthlyGrowth =
             previousMonthContributions > 0
@@ -574,7 +573,7 @@ export async function getContributionReportsAction(options?: {
         }
 
         const stream = q.select("type", "amount", "userId", "date").stream();
-        await iterateStream(stream, async (doc: any) => {
+        for await (const doc of stream as any) {
             const t = doc.data();
             if (t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee") {
                 const amount = Number(t.amount) || 0;
@@ -591,7 +590,7 @@ export async function getContributionReportsAction(options?: {
                     if (bucket) bucket.amount += amount;
                 }
             }
-        });
+        }
 
         const averageContribution = memberCount > 0 ? totalContributions / memberCount : 0;
 

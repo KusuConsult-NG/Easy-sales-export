@@ -1,5 +1,4 @@
 'use server';
-import { iterateStream } from '@/lib/firestore-stream';
 
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
@@ -38,11 +37,11 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 .select('email')
                 .stream();
             let count = 0;
-            await iterateStream(stream, async (doc: any) => {
+            for await (const doc of stream as any) {
                 const data = doc.data();
                 if (data.email) emails.push(data.email);
                 count++;
-            });
+            }
             console.log(`[AdminComms] cooperative segment: ${count} docs found`);
         } else {
             let stream: NodeJS.ReadableStream;
@@ -59,12 +58,12 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 case 'wave': {
                     const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select('email', 'userEmail').stream();
                     let waveCount = 0;
-                    await iterateStream(waveStream, async (doc: any) => {
+                    for await (const doc of waveStream as any) {
                         const data = doc.data();
                         const email = data.email || data.userEmail;
                         if (email) emails.push(email);
                         waveCount++;
-                    });
+                    }
                     console.log(`[AdminComms] wave segment: ${waveCount} docs found`);
                     return [...new Set(emails)];
                 }
@@ -75,13 +74,13 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
             }
 
             let mainCount = 0;
-            await iterateStream(stream, async (doc: any) => {
+            for await (const doc of stream as any) {
                 const data = doc.data();
                 if (data.email) {
                     emails.push(data.email);
                 }
                 mainCount++;
-            });
+            }
             console.log(`[AdminComms] segment '${segment}': ${mainCount} docs processed`);
         }
 

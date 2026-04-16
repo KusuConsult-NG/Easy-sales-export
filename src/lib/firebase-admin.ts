@@ -93,14 +93,7 @@ export function initializeFirebaseAdmin(): App {
 export function getAdminDb(): Firestore {
     if (!globalThis.__FIRESTORE_INSTANCE__) {
         initializeFirebaseAdmin();
-        const db = getFirestore();
-        try {
-            db.settings({ preferRest: true, ignoreUndefinedProperties: true });
-        } catch (e) {
-            // Ignore if settings were already configured elsewhere
-            console.warn("Firestore settings already applied manually");
-        }
-        globalThis.__FIRESTORE_INSTANCE__ = db;
+        globalThis.__FIRESTORE_INSTANCE__ = getFirestore();
     }
     return globalThis.__FIRESTORE_INSTANCE__;
 }

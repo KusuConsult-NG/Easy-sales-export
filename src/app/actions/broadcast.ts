@@ -8,7 +8,6 @@
  */
 
 "use server";
-import { iterateStream } from '@/lib/firestore-stream';
 
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -137,15 +136,15 @@ export async function collectRecipients(
         case "all": {
             console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
             const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 const resolvedEmail = u.email || u.emailAddress;
                 const resolvedName = u.fullName || u.name || u.displayName || "User";
-                if (!resolvedEmail) return;
+                if (!resolvedEmail) continue;
                 add(resolvedEmail, resolvedName);
-            });
+            }
             break;
         }
         case "buyers": {
@@ -154,12 +153,12 @@ export async function collectRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
-            });
+            }
             break;
         }
         case "sellers":
@@ -174,14 +173,14 @@ export async function collectRecipients(
             const sellerStream = q.select("userId", "address").stream();
             const userIds: string[] = [];
             const sellerDataMap = new Map<string, any>();
-            await iterateStream(sellerStream, async (d: any) => {
+            for await (const d of sellerStream as any) {
                 const v: any = d.data();
-                if (filters.state && v.address && v.address.state !== filters.state) return;
+                if (filters.state && v.address && v.address.state !== filters.state) continue;
                 if (v.userId) {
                     userIds.push(v.userId);
                     sellerDataMap.set(v.userId, v);
                 }
-            });
+            }
             
             const uMap = await resolveUsers(db, userIds);
             for (const userId of userIds) {
@@ -196,12 +195,12 @@ export async function collectRecipients(
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
-            });
+            }
             break;
         }
         case "cooperative_members": {
@@ -213,11 +212,11 @@ export async function collectRecipients(
             
             const userIds: string[] = [];
             const members: any[] = [];
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const m: any = d.data();
                 members.push(m);
                 if (m.userId) userIds.push(m.userId);
-            });
+            }
 
             const uMap = await resolveUsers(db, userIds);
             for (const m of members) {
@@ -237,12 +236,12 @@ export async function collectRecipients(
         }
         case "wave_applicants": {
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "name", "firstName", "surname").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) return;
+                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const applicantEmail = a.email || a.userEmail;
                 if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
-            });
+            }
             break;
         }
         case "wave_briefing_registrants": {
@@ -251,55 +250,55 @@ export async function collectRecipients(
                 .where("status", "==", "registered")
                 .select("state", "email", "userEmail", "name", "firstName", "surname")
                 .stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const r: any = d.data();
-                if (filters.state && r.state !== filters.state) return;
+                if (filters.state && r.state !== filters.state) continue;
                 const regEmail = r.email || r.userEmail;
                 if (regEmail) add(regEmail, r.name || `${r.firstName || ''} ${r.surname || ''}`.trim() || "Registrant");
-            });
+            }
             break;
         }
         case "academy_users": {
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 const email = (a.personalInfo && a.personalInfo.email) || a.email || a.userEmail;
                 if (email) add(email, (a.personalInfo && a.personalInfo.fullName) || "Academy User");
-            });
+            }
             break;
         }
         case "export_users": {
             const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "userEmail", "email").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && userState !== filters.state) continue;
                 const email = a.userEmail || (a.profile && a.profile.email) || a.email;
                 if (email) add(email, (a.profile && a.profile.fullName) || "Export User");
-            });
+            }
             break;
         }
         case "farm_nation_users": {
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").stream();
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state) return;
+                if (filters.state && a.state !== filters.state) continue;
                 const email = a.email;
                 if (email) add(email, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
-            });
+            }
             break;
         }
         case "abandoned_failed_transactions": {
             const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerEmail", "customerName").stream();
             const userIds: string[] = [];
             const failedPayments: any[] = [];
-            await iterateStream(stream, async (d: any) => {
+            for await (const d of stream as any) {
                 const f: any = d.data();
                 failedPayments.push(f);
                 if (f.userId) userIds.push(f.userId);
-            });
+            }
             
             const uMap = await resolveUsers(db, userIds);
             for (const f of failedPayments) {
