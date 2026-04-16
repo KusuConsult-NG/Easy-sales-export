@@ -173,7 +173,7 @@ export async function collectRecipients(
             const sellerStream = q.select("userId", "address").stream();
             const userIds: string[] = [];
             const sellerDataMap = new Map<string, any>();
-            for await (const d of sellerStream) {
+            for await (const d of sellerStream as any) {
                 const v: any = d.data();
                 if (filters.state && v.address && v.address.state !== filters.state) continue;
                 if (v.userId) {

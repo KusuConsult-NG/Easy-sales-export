@@ -148,7 +148,7 @@ export async function getCooperativeStatsAction(): Promise<{
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
         const txnStream = txnQuery.select("type", "status", "amount", "date").stream();
-        for await (const doc of txnStream) {
+        for await (const doc of txnStream as any) {
             const t = doc.data();
             totalTransactions++;
             
@@ -186,7 +186,7 @@ export async function getCooperativeStatsAction(): Promise<{
         let pendingLoans = 0;
         const validMemberIds = adminScope ? new Set(paidMembersList.map((m: any) => m.id)) : null;
 
-        for await (const doc of loansStream) {
+        for await (const doc of loansStream as any) {
             const l = doc.data();
             if (validMemberIds && !validMemberIds.has(l.memberId)) continue;
             
