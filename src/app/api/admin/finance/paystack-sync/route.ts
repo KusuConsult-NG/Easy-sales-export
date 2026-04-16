@@ -8,6 +8,14 @@ import { FieldValue } from "firebase-admin/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
+import {
+    processMarketplaceOrder,
+    processExportInvestment,
+    processCooperativeRegistration,
+    processAcademyRegistration,
+    processFarmNationRegistration,
+    processWaveRegistration
+} from "@/app/api/webhooks/paystack/route";
 
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!;
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
@@ -127,7 +135,29 @@ async function paystackSyncHandler(_req: NextRequest) {
                         if (isSuccess) {
                             const docRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
                             const snap = await docRef.get();
-                            if (!snap.exists) {
+                            
+                            // Skip ONLY if we already fully synced it
+                            if (snap.exists && snap.data()?.status === "completed") {
+                                skipped++;
+                                return; // or let it hit next condition
+                            }
+
+                            // The user requested to strictly enforce Paystack numbers. By using the core
+                            // webhook processors here, we ensure that resolving a 'pending' payment
+                            // automatically updates the user's cooperative/academy/etc documents too!
+                            if (type === "marketplace_order") {
+                                await processMarketplaceOrder(reference, amountNGN, userId);
+                            } else if (type === "export_investment") {
+                                await processExportInvestment(reference, amountNGN, userId, metadata.exportId);
+                            } else if (type === "cooperative_membership_registration") {
+                                await processCooperativeRegistration(reference, amountNGN, userId, metadata.membershipTier, metadata.membershipId);
+                            } else if (type === "academy_registration") {
+                                await processAcademyRegistration(reference, amountNGN, userId, metadata.plan);
+                            } else if (type === "farm_nation_registration" || type === "farm_nation_subscription") {
+                                await processFarmNationRegistration(reference, amountNGN, userId);
+                            } else if (type === "wave_registration" || type === "wave_application") {
+                                await processWaveRegistration(reference, amountNGN, userId);
+                            } else {
                                 await docRef.set({
                                     reference,
                                     type,
@@ -140,12 +170,11 @@ async function paystackSyncHandler(_req: NextRequest) {
                                     currency: tx.currency ?? "NGN",
                                     customerEmail: tx.customer?.email ?? null,
                                     metadata,
-                                });
-                                synced++;
-                                logger.info(`[PaystackSync] Back-filled successful payment: ${reference}`);
-                            } else {
-                                skipped++;
+                                }, { merge: true });
                             }
+                            
+                            synced++;
+                            logger.info(`[PaystackSync] Back-filled successful payment & updated module UI: ${reference}`);
                         } else if (isFailed || isAbandoned) {
                             const docRef = db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference);
                             const snap = await docRef.get();

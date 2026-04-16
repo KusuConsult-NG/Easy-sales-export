@@ -376,7 +376,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     try {
         // PRIMARY: processedPayments = NO, fetching directly from TRANSACTIONS avoids exact duplication
         const [txSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(100).get()
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(1000).get()
         ]);
 
         const toTx = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
@@ -403,7 +403,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
                 const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
                 return tb - ta;
             })
-            .slice(0, 50)
+            
             .forEach(tx => recentTransactions.push(tx));
     } catch (e: any) {
         console.error("[FINANCE] Transactions fetch error:", e.message);
@@ -421,7 +421,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     // Fetch failed/abandoned transactions (from failedPayments collection)
     const failedTransactions: FinancialOverview["failedTransactions"] = [];
     try {
-        const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).limit(100).get();
+        const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).orderBy("failedAt", "desc").limit(1000).get();
         failedSnap.docs.forEach(doc => {
             const d = doc.data();
             const ts = d.failedAt ?? d.abandonedAt ?? null;

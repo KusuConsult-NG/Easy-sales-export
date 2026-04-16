@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
  * Handle Marketplace Order Fulfillment
  * (Mirrors logic in marketplace-payment.ts)
  */
-async function processMarketplaceOrder(reference: string, amount: number, userId: string) {
+export async function processMarketplaceOrder(reference: string, amount: number, userId: string) {
     // Find order
     const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
         .where("paymentReference", "==", reference)
@@ -271,7 +271,7 @@ async function processMarketplaceOrder(reference: string, amount: number, userId
 /**
  * Handle Export Investment Fulfillment
  */
-async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string) {
+export async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string) {
     if (!exportId) throw new Error("Missing exportId in metadata");
 
     // Read the export window to get real ROI — do this BEFORE the transaction
@@ -352,7 +352,7 @@ async function processExportInvestment(reference: string, amount: number, userId
 /**
  * Handle Cooperative Membership Registration Fulfillment
  */
-async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string) {
+export async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string) {
     // Normalise tier to lowercase for consistent comparison
     const normalisedTier = (tier || "basic").toLowerCase();
 
@@ -475,7 +475,7 @@ async function processCooperativeRegistration(reference: string, amount: number,
 /**
  * Handle Academy Registration Fulfillment
  */
-async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string) {
+export async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string) {
     // Normalise plan to lowercase for consistent comparison
     const normalisedPlan = (plan || "foundation").toLowerCase();
 
@@ -576,7 +576,7 @@ async function processAcademyRegistration(reference: string, amount: number, use
  * Handle Farm Nation Registration Payment
  * NOTE: Farm Nation sends metadata.type = "farm_nation_registration"
  */
-async function processFarmNationRegistration(reference: string, amount: number, userId: string) {
+export async function processFarmNationRegistration(reference: string, amount: number, userId: string) {
     await db.runTransaction(async (t) => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
@@ -622,7 +622,7 @@ async function processFarmNationRegistration(reference: string, amount: number, 
  * Handle WAVE Registration Payment
  * NOTE: WAVE sends metadata.type = "wave_registration" or "wave_application"
  */
-async function processWaveRegistration(reference: string, amount: number, userId: string) {
+export async function processWaveRegistration(reference: string, amount: number, userId: string) {
     await db.runTransaction(async (t) => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
