@@ -59,8 +59,8 @@ export async function getProductsAction(filters?: ProductFilters) {
         if (filters?.searchTerm) {
             const term = filters.searchTerm.toLowerCase();
             products = products.filter(product =>
-                product.title.toLowerCase().includes(term) ||
-                product.description.toLowerCase().includes(term)
+                product.title?.toLowerCase()?.includes(term) ||
+                product.description?.toLowerCase()?.includes(term)
             );
         }
 

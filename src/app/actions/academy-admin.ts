@@ -319,7 +319,7 @@ export async function getStandardAcademyApplicationsAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("createdAt", "desc");
         
         if (options.status && options.status !== "all") {

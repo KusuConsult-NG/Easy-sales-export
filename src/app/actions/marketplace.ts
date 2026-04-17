@@ -646,8 +646,8 @@ export async function getSellerProductsAction(options: {
         if (search) {
             const searchLower = search.toLowerCase();
             products = products.filter(p =>
-                p.title.toLowerCase().includes(searchLower) ||
-                p.category.toLowerCase().includes(searchLower)
+                p.title?.toLowerCase()?.includes(searchLower) ||
+                p.category?.toLowerCase()?.includes(searchLower)
             );
         }
 
@@ -1246,8 +1246,8 @@ export async function searchProductsAction(params: {
         if (params.query) {
             const lowerQuery = params.query.toLowerCase();
             finalProducts = finalProducts.filter(p =>
-                p.title.toLowerCase().includes(lowerQuery) ||
-                p.description.toLowerCase().includes(lowerQuery)
+                p.title?.toLowerCase()?.includes(lowerQuery) ||
+                p.description?.toLowerCase()?.includes(lowerQuery)
             );
         }
 

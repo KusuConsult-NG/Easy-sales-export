@@ -88,7 +88,7 @@ export async function getAllEscrowTransactionsAdmin(options: {
             return { success: false, error: "Admin access required" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc");
 
         if (options.status) {

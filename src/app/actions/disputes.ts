@@ -203,7 +203,7 @@ export async function getAdminDisputesAction(options: {
             return { success: false, error: "Not authorized as admin" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
 
         if (options.status && options.status !== "all") {

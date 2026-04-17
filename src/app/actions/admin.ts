@@ -1368,7 +1368,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             };
         }
 
-        const pageSize = options.limit || 50;
+        const pageSize = options.search ? 2000 : (options.limit || 50);
         const page = options.page ?? 0; // page offset (0-indexed)
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
@@ -1500,11 +1500,11 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         if (options.search) {
             const searchLower = options.search.toLowerCase();
             filteredUsers = filteredUsers.filter(user =>
-                user.name.toLowerCase().includes(searchLower) ||
-                user.email.toLowerCase().includes(searchLower) ||
+                user.name?.toLowerCase()?.includes(searchLower) ||
+                user.email?.toLowerCase()?.includes(searchLower) ||
                 (user.phone && user.phone.includes(searchLower)) ||
-                (user.state && user.state.toLowerCase().includes(searchLower)) ||
-                (user.lga && user.lga.toLowerCase().includes(searchLower))
+                (user.state && user.state?.toLowerCase()?.includes(searchLower)) ||
+                (user.lga && user.lga?.toLowerCase()?.includes(searchLower))
             );
         }
         // In-memory status filter — using the defensive chain already computed in mapping:
@@ -1990,7 +1990,7 @@ export async function getStandardExportApplicationsAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
         
         if (options.status && options.status !== "all") {
@@ -3102,7 +3102,7 @@ export async function getMarketplaceUsersAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
 
         // We paginate by document ID to handle the custom array-contains checks later if needed.

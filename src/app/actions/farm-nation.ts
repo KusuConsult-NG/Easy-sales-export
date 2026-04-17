@@ -110,9 +110,9 @@ export async function getPropertiesAction(filters?: {
             if (filters.search) {
                 const searchLower = filters.search.toLowerCase();
                 properties = properties.filter(p =>
-                    p.name.toLowerCase().includes(searchLower) ||
-                    p.location.toLowerCase().includes(searchLower) ||
-                    p.state.toLowerCase().includes(searchLower)
+                    p.name?.toLowerCase()?.includes(searchLower) ||
+                    p.location?.toLowerCase()?.includes(searchLower) ||
+                    p.state?.toLowerCase()?.includes(searchLower)
                 );
             }
             if (filters.state && filters.state !== "all") {

@@ -239,8 +239,9 @@ export async function getCooperativeStatsAction(): Promise<{
 // ============================================================================
 
 export async function getAllMembersAction(options?: {
-    status?: "all" | "active" | "pending" | "suspended";
+    status?: "all" | "active" | "pending" | "suspended" | string;
     limit?: number;
+    search?: string;
 }): Promise<{
     success: boolean;
     meta?: any;
@@ -273,15 +274,25 @@ export async function getAllMembersAction(options?: {
             q = q.where("membershipStatus", "==", options.status);
         }
 
-        if (options?.limit) {
-            q = q.limit(options.limit);
-        }
+        const fetchLimit = options?.search ? 2000 : (options?.limit || 50);
+        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
         const allMembers = serializeDocs(snapshot.docs);
 
         // 🐛 FIX: Only return paid members in the list
-        const members = allMembers.filter((m: any) => m.paymentStatus === "completed");
+        let members = allMembers.filter((m: any) => m.paymentStatus === "completed");
+
+        if (options?.search) {
+            const s = options.search.toLowerCase();
+            members = members.filter((m: any) =>
+                m.firstName?.toLowerCase()?.includes(s) ||
+                m.lastName?.toLowerCase()?.includes(s) ||
+                m.fullName?.toLowerCase()?.includes(s) ||
+                m.email?.toLowerCase()?.includes(s) ||
+                m.phone?.includes(s)
+            );
+        }
 
         return { success: true, data: { members }, meta: { hasMore: false, cursor: null } };
     } catch (error) {

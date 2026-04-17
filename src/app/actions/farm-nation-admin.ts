@@ -32,7 +32,7 @@ export async function getFarmNationRegistrantsAction(options: {
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
         }
 
-        const pageSize = options.limit || 20;
+        const pageSize = options.search ? 2000 : (options.limit || 20);
         const page = options.page ?? 0;
 
         // Firestore can't query "field exists" directly, so fetch all users and
@@ -124,7 +124,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q = db.collection(COLLECTIONS.USERS).where('registeredServices', 'array-contains', 'farmNation');
 
         if (options.lastDocId) {
@@ -234,7 +234,7 @@ export async function getAdminLandVerificationsAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.limit || 50;
+        const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let queryRef = db.collection("land_listings").orderBy("createdAt", "desc");
 
         if (options.status && options.status !== "all") {
