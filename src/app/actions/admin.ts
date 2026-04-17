@@ -918,27 +918,41 @@ export async function getAllExportRequestsAction(
         }
 
         const snapshot = await query.get();
-        const docs = snapshot.docs;
+        const rawDocs = snapshot.docs;
         
-        let exports = [];
+        let exportsList = [];
         try {
-            exports = serializeDocs(docs)
-                .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            exportsList = rawDocs.map((doc: any) => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    orderId: data.orderId || "",
+                    title: data.title || "",
+                    commodity: data.commodity || "other",
+                    quantity: data.quantity || "0",
+                    amount: Number(data.amount) || 0,
+                    status: data.status || "pending",
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
+                    deliveryDate: data.deliveryDate?.toDate ? data.deliveryDate.toDate().toISOString() : null,
+                };
+            }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         } catch (serializeErr: any) {
-            console.error("CRASH DURING SERIALIZE:", serializeErr);
+            const msg = typeof serializeErr === 'string' ? serializeErr : (serializeErr?.message || "Unknown serialize error");
+            console.error("CRASH DURING SERIALIZE:", msg);
             return { error: "Failed to serialize export records", success: false };
         }
 
         return {
             error: null,
             success: true,
-            exports,
-            hasMore: exports.length === limit
+            exports: exportsList,
+            hasMore: exportsList.length === limit
         };
     } catch (error: any) {
-        // Log safety: avoid circular reference crash in JSON.stringify
-        console.error("Get all export requests RAW error:", error?.message || error);
-        return { error: error?.message || "Failed to fetch export requests", success: false };
+        // Enforce pure string error to prevent React Flight serialization crash
+        const errMsg = typeof error === 'string' ? error : (error?.message || "Failed to fetch export requests");
+        console.error("Get all export requests RAW error:", errMsg);
+        return { error: errMsg, success: false };
     }
 }
 
