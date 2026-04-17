@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue, FieldPath } from "firebase-admin/firestore";
+import { FieldValue, FieldPath, AggregateField } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -299,6 +299,36 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
     } catch (error: any) {
         logger.error("Get pending Academy applications error:", error);
         return { error: "Failed to fetch applications", success: false };
+    }
+}
+
+/**
+ * Get Academy global applications stats (Admin)
+ */
+export async function getAcademyStatsAction(): Promise<{
+    success: boolean;
+    data?: {
+        stats: {
+            totalApplications: number;
+        }
+    };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required", success: false };
+        }
+
+        const countSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).count().get();
+        const totalApplications = countSnap.data().count;
+
+        return { success: true, data: { stats: { totalApplications } } };
+    } catch (error: any) {
+        logger.error("Get academy stats error:", error);
+        return { success: false, error: "Failed to fetch academy stats" };
     }
 }
 

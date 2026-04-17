@@ -1018,10 +1018,14 @@ export async function requestCooperativeRevisionAction(
 }
 
 export async function getStandardCooperativeMembersAction(
-    statusFilter?: "pending" | "approved" | "suspended" | "under_review" | "all",
-    cursorId?: string,
-    limitCount: number = 50
-): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
+    options: {
+        status?: "pending" | "approved" | "suspended" | "under_review" | "all";
+        cursorId?: string;
+        limit?: number;
+        search?: string;
+    } = {}
+): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+    const { status: statusFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
@@ -1038,6 +1042,8 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
+        const fetchLimit = search ? 2000 : limitCount;
+
         let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
         
         if (statusFilter && statusFilter !== "all" && statusFilter !== "pending") {
@@ -1051,11 +1057,11 @@ export async function getStandardCooperativeMembersAction(
             q = q.startAfter(cursorSnap);
         }
         
-        q = q.limit(limitCount);
+        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
-        const nextCursorId = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        const nextCursorId = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
@@ -1069,7 +1075,7 @@ export async function getStandardCooperativeMembersAction(
             }
         }
 
-        const standardForms = applications.map((app: any) => {
+        let standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
@@ -1110,7 +1116,23 @@ export async function getStandardCooperativeMembersAction(
             };
         });
 
-        return { success: true, data: standardForms, error: undefined, meta: { lastDocId: nextCursorId } };
+        if (search) {
+            const s = search.toLowerCase();
+            standardForms = standardForms.filter((f: any) => 
+                f.user.name?.toLowerCase().includes(s) || 
+                f.user.email?.toLowerCase().includes(s) || 
+                f.user.phone?.includes(s)
+            );
+        }
+
+        return { 
+            success: true, 
+            data: standardForms, 
+            error: undefined, 
+            lastDocId: nextCursorId, 
+            hasMore: !!nextCursorId, 
+            meta: { lastDocId: nextCursorId } 
+        };
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
         return { success: false, error: "Failed to load applications", meta: null };

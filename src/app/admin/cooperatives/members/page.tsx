@@ -67,11 +67,12 @@ export default function CooperativeMembersPage() {
         refresh: loadApplications
     } = useAdminData<StandardPendingForm<MembershipApplication>>({
         fetchAction: async (opts) => {
-            return getStandardCooperativeMembersAction(
-                (opts.status as any) || "all",
-                opts.lastDocId,
-                opts.limit || 50
-            );
+            return getStandardCooperativeMembersAction({
+                status: (opts.status as any) || "all",
+                lastDocId: opts.lastDocId,
+                limit: opts.limit || 50,
+                search: opts.search ? opts.search.trim() : undefined
+            });
         },
         limit: 50
     });

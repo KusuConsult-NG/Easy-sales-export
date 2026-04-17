@@ -14,7 +14,7 @@ import {
 import { db } from "@/lib/firebase";
 import { collection, query, limit, where, getDocs } from "firebase/firestore";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
-import { getStandardAcademyApplicationsAction } from "@/app/actions/academy-admin";
+import { getStandardAcademyApplicationsAction, getAcademyStatsAction } from "@/app/actions/academy-admin";
 import { useAdminData } from "@/hooks/useAdminData";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -86,6 +86,15 @@ export default function AdminAcademyApplicationsPage() {
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+    const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
+
+    useEffect(() => {
+        getAcademyStatsAction().then(res => {
+            if (res.success && res.data?.stats) {
+                setStats(res.data.stats);
+            }
+        });
+    }, []);
 
     const {
         data: applications,
@@ -215,7 +224,7 @@ export default function AdminAcademyApplicationsPage() {
             <div className="mb-8 flex items-center justify-between flex-wrap gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 mb-1">Academy Applications</h1>
-                    <p className="text-slate-600">Live — {applications.length} total applications</p>
+                    <p className="text-slate-600">Live — {stats ? stats.totalApplications.toLocaleString() : applications.length} total applications</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                     <button
