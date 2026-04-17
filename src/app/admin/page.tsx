@@ -121,7 +121,7 @@ export default function AdminDashboardPage() {
         },
         {
             label: "Total Revenue",
-            value: `₦${(stats.platformOverview.totalRevenue / 1000000).toFixed(1)}M`,
+            value: `₦${(stats.platformOverview.totalRevenue ?? 0).toLocaleString()}`,
             icon: DollarSign,
             color: "purple",
             change: "Based on transaction volume",
