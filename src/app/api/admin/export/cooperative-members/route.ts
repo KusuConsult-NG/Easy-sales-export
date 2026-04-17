@@ -18,7 +18,27 @@ export async function GET(request: NextRequest) {
             return new NextResponse("Admin access required", { status: 403 });
         }
 
-        const snapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get();
+        const urlOptions = new URL(request.url).searchParams;
+        const state = urlOptions.get("state");
+        const lga = urlOptions.get("lga");
+        const fromDate = urlOptions.get("fromDate");
+        const toDate = urlOptions.get("toDate");
+        const search = urlOptions.get("search")?.toLowerCase() || "";
+
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+
+        if (state) query = query.where("stateOfOrigin", "==", state);
+        if (lga) query = query.where("lga", "==", lga);
+        if (fromDate) {
+            query = query.where("createdAt", ">=", new Date(fromDate));
+        }
+        if (toDate) {
+            const tDate = new Date(toDate);
+            tDate.setHours(23, 59, 59, 999);
+            query = query.where("createdAt", "<=", tDate);
+        }
+
+        const snapshot = await query.get();
         // Fallback user mapping to get names and emails for members missing them
         const userIds = [...new Set(snapshot.docs.map(doc => doc.data().userId || doc.id))];
         const userFallbackMap = new Map<string, any>();
@@ -44,7 +64,9 @@ export async function GET(request: NextRequest) {
             "Occupation", "Date Applied"
         ].map(h => `"${h}"`).join(",");
 
-        const rows = snapshot.docs.map(doc => {
+        const rows: string[] = [];
+        
+        snapshot.docs.forEach(doc => {
             const data = doc.data();
             const userId = data.userId || doc.id;
             const fallbackUser = userFallbackMap.get(userId) || {};
@@ -81,7 +103,16 @@ export async function GET(request: NextRequest) {
                 createdAt
             ];
             
-            return cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",");
+            
+            if (search) {
+                if (!fullName.toLowerCase().includes(search) && 
+                    !email.toLowerCase().includes(search) && 
+                    !phone.includes(search)) {
+                    return; // skip if search term doesn't match
+                }
+            }
+            
+            rows.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","));
         });
 
         const csvContent = [headersLine, ...rows].join("\n");

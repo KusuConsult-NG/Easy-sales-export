@@ -202,21 +202,13 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
                     .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                     .where("paymentStatus", "==", "completed")
             ),
-            safeCount(
-                db
-                    .collection(COLLECTIONS.USERS)
-                    .where("serviceRegistrations.farmNation.status", "in", ["pending", "approved"])
-            ),
+            safeCount(db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)),
             safeCount(
                 db
                     .collection(COLLECTIONS.SELLER_VERIFICATIONS)
                     .where("status", "!=", "rejected")
             ),
-            safeCount(
-                db
-                    .collection(COLLECTIONS.USERS)
-                    .where("serviceRegistrations.export.status", "in", ["pending", "approved"])
-            ),
+            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
         ]);
 
     const moduleUsage = [
@@ -485,8 +477,8 @@ const fetchModuleRegistrationStats = unstable_cache(
             safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
             safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").where("membershipStatus", "!=", "rejected")),
             safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING).where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "in", ["pending", "approved"])),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.export.status", "in", ["pending", "approved"])),
+            safeCount(db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)),
+            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
             safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending_review")),
             safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "!=", "rejected")),
         ]);

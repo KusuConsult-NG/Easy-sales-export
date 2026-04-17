@@ -199,13 +199,19 @@ export default function CooperativeMembersPage() {
     async function handleExportCSV() {
         setIsExporting(true);
         try {
-            window.location.href = "/api/admin/export/cooperative-members";
+            const params = new URLSearchParams();
+            if (stateFilter) params.append('state', stateFilter);
+            if (lgaFilter) params.append('lga', lgaFilter);
+            if (fromDate) params.append('fromDate', fromDate);
+            if (toDate) params.append('toDate', toDate);
+            if (searchQuery) params.append('search', searchQuery);
+            window.location.href = `/api/admin/export/cooperative-members?${params.toString()}`;
         } catch (error) {
             showToast("Failed to initiate export", "error");
         } finally {
             setTimeout(() => setIsExporting(false), 2000);
         }
-    };
+    }
     const viewDetails = (application: StandardPendingForm<MembershipApplication>) => {
         setSelectedApplication(application);
         setIsEditMode(false);
