@@ -1029,13 +1029,13 @@ export async function getStandardCooperativeMembersAction(
     const { status: statusFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return paginatedErr('Not authenticated');
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+        if (!session?.user?.id) return paginatedErr('Not authenticated');
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return paginatedErr('Unauthorized');
         }
 
         let cursorSnap = null;
