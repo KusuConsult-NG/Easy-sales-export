@@ -564,7 +564,7 @@ export async function getStandardWaveWithdrawalsAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 25);
+        const fetchLimit = options.limit || 25;
         let q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).orderBy("requestedAt", "desc");
         
         if (options.status && options.status !== "all") {
