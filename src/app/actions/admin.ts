@@ -1677,6 +1677,11 @@ export async function approveSellerVerificationAction(
             verifiedBy: session.user.id, // Track who verified the user
             verifiedAt: FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("seller"),
+            // SYNC serviceRegistrations so module access check (Layer 2) gates work immediately
+            "serviceRegistrations.marketplace.status": "active",
+            "serviceRegistrations.marketplace.accountType": verificationData.accountType || "seller",
+            "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
+            "serviceRegistrations.marketplace.approvedBy": session.user.id,
             // SYNC CONTACT INFO: Update phone with verified number to prevent data drift
             phone: verificationData.phoneNumber,
             updatedAt: FieldValue.serverTimestamp(),

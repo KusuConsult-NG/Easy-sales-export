@@ -1021,12 +1021,13 @@ export async function requestCooperativeRevisionAction(
 export async function getStandardCooperativeMembersAction(
     options: {
         status?: "pending" | "approved" | "suspended" | "under_review" | "all";
+        paymentStatus?: "pending" | "completed" | "failed" | "all";
         cursorId?: string;
         limit?: number;
         search?: string;
     } = {}
 ): Promise<{ success: boolean; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
-    const { status: statusFilter = "all", cursorId, limit: limitCount = 50, search } = options;
+    const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return paginatedErr('Not authenticated');
@@ -1047,11 +1048,14 @@ export async function getStandardCooperativeMembersAction(
 
         let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
         
-        if (statusFilter && statusFilter !== "all" && statusFilter !== "pending") {
+        if (statusFilter && statusFilter !== "all") {
             q = q.where("membershipStatus", "==", statusFilter);
-        } else if (statusFilter === "pending") {
-            // Support backwards compatibility pending status queries
-            q = q.where("membershipStatus", "==", "pending");
+        }
+
+        // Server-side paymentStatus filter — prevents client-side filter on paginated data
+        // causing mismatch between stat counts and table rows.
+        if (paymentFilter && paymentFilter !== "all") {
+            q = q.where("paymentStatus", "==", paymentFilter);
         }
 
         if (cursorSnap && cursorSnap.exists) {

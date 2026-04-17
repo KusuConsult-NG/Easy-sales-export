@@ -28,7 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 # deploy via a build variable, ensuring COPY . . is never served from a stale layer.
 # To set this in Railway: add a build variable CACHEBUST with value ${new Date().getTime()}
 # or simply use the Railway UI "Redeploy" with "Clear build cache" option.
-ARG CACHEBUST=1
+ARG CACHEBUST=20260417-v5
 RUN echo "Cache bust: $CACHEBUST"
 
 # Copy all source files (this layer is invalidated whenever CACHEBUST changes)

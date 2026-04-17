@@ -69,6 +69,7 @@ export default function CooperativeMembersPage() {
         fetchAction: async (opts) => {
             return getStandardCooperativeMembersAction({
                 status: (opts.status as any) || "all",
+                paymentStatus: (opts.payment as any) || "all",
                 cursorId: opts.lastDocId,
                 limit: opts.limit || 50,
                 search: opts.search ? opts.search.trim() : undefined
@@ -109,9 +110,8 @@ export default function CooperativeMembersPage() {
     let filteredApplications = applications;
 
 
-    if (paymentStatusFilter && paymentStatusFilter !== "all") {
-        filteredApplications = filteredApplications.filter(a => a.data.paymentStatus === paymentStatusFilter);
-    }
+    // paymentStatus is now filtered server-side — no client-side override needed.
+    // State/LGA filters remain client-side (no Firestore index for them).
     if (stateFilter) {
         filteredApplications = filteredApplications.filter(a => a.data.stateOfOrigin === stateFilter);
     }

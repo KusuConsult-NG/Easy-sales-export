@@ -125,9 +125,9 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const totalRevenue = metricsResult.success ? (metricsResult.data?.totalRevenue ?? 0) : 0;
     const pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
 
-    // Active users: fall back to totalUsers for now since we rely on lastLoginAt which may be sparse
-    const rawActiveUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
-    const activeUsers = rawActiveUsers > 0 ? rawActiveUsers : totalUsers;
+    // Active users: users who logged in within the last 30 days.
+    // lastLoginAt is written on every successful login in auth.ts.
+    const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
 
     const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
     const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
@@ -143,14 +143,15 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
 
     let monthlyRevenue = 0;
     try {
-        const monthRevSnap = await db.collection(COLLECTIONS.TRANSACTIONS)
-            .where("status", "==", "completed")
-            .where("date", ">=", thisMonthStart)
-            .aggregate({ total: AggregateField.sum("amount") }).get();
-
-        monthlyRevenue += monthRevSnap.data().total ?? 0;
+        // Use processedPayments (same source as totalRevenue) to avoid split-source discrepancy.
+        // Filter to current month using processedAt timestamp.
+        const monthRevDocs = recentPayments.filter(d => {
+            const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt ?? 0);
+            return pAt >= thisMonthStart;
+        });
+        monthlyRevenue = monthRevDocs.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
     } catch (_e) {
-        // collection may not exist yet
+        // Silently skip
     }
 
     // ── Revenue by month (last 6 months — all payment sources) ─────────────
@@ -195,7 +196,9 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     // ── Module usage (for pie chart) ─────────────────────────────────────────
     const [waveCount, academyCount, cooperativeCount, farmNationCount, marketplaceCount, exportCount] =
         await Promise.allSettled([
-            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)),
+            // Wave: exclude rejected so count matches approved/active members view
+            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("status", "in", ["pending", "submitted", "under_review", "approved"])),
             safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
             safeCount(
                 db
