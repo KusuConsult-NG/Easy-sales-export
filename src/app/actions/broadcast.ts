@@ -150,8 +150,8 @@ export async function collectRecipients(
         case "buyers": {
             // Buyers can be from marketplace or farmNation in the new registry schema
             const [mktSnap, fnSnap] = await Promise.all([
-                db.collection(COLLECTIONS.USERS).orderBy("serviceRegistrations.marketplace.status").select("serviceRegistrations", "stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName").get(),
-                db.collection(COLLECTIONS.USERS).orderBy("serviceRegistrations.farmNation.status").select("serviceRegistrations", "stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName").get()
+                db.collection(COLLECTIONS.USERS).where("serviceRegistrations.marketplace.status", "!=", null).select("serviceRegistrations", "stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName").get(),
+                db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "!=", null).select("serviceRegistrations", "stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName").get()
             ]);
             
             const processBuyerDoc = (u: any) => {
@@ -201,7 +201,7 @@ export async function collectRecipients(
         case "marketplace_onboarded": {
             const stream = db
                 .collection(COLLECTIONS.USERS)
-                .orderBy("serviceRegistrations.marketplace.status")
+                .where("serviceRegistrations.marketplace.status", "!=", null)
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .get();
             for (const d of (await stream).docs) {
@@ -280,7 +280,7 @@ export async function collectRecipients(
         }
         case "export_users": {
             const stream = db.collection(COLLECTIONS.USERS)
-                .orderBy("serviceRegistrations.export.status")
+                .where("serviceRegistrations.export.status", "!=", null)
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .get();
             for (const d of (await stream).docs) {
@@ -293,7 +293,7 @@ export async function collectRecipients(
         }
         case "farm_nation_users": {
             const stream = db.collection(COLLECTIONS.USERS)
-                .orderBy("serviceRegistrations.farmNation.status")
+                .where("serviceRegistrations.farmNation.status", "!=", null)
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .get();
             for (const d of (await stream).docs) {
