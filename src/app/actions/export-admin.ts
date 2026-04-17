@@ -21,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function getAdminExportCatalogAction(options: { 
     limit?: number; 
     lastDocId?: string; 
-} = {}): Promise<{ success: boolean; data?: any[]; meta?: any; error?: string }> {
+} = {}): Promise<{ success: boolean; data?: any[]; meta?: any; error?: string; hasMore?: boolean; lastDocId?: string | null }> {
     try {
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)
@@ -47,6 +47,8 @@ export async function getAdminExportCatalogAction(options: {
             return { 
                 success: true, 
                 data: products, 
+                lastDocId: nextCursor,
+                hasMore: hasMore,
                 meta: { hasMore, lastDocId: nextCursor } 
             };
         }
@@ -56,11 +58,13 @@ export async function getAdminExportCatalogAction(options: {
             return { 
                 success: true, 
                 data: DEFAULT_CATALOG, 
+                lastDocId: null,
+                hasMore: false,
                 meta: { hasMore: false, lastDocId: null, source: "default" } 
             };
         }
 
-        return { success: true, data: [], meta: { hasMore: false } };
+        return { success: true, data: [], hasMore: false, meta: { hasMore: false } };
 
     } catch (error: any) {
         logger.error("Get export catalog error:", error);

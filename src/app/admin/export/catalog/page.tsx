@@ -179,12 +179,8 @@ export default function AdminExportCatalogPage() {
                 return { success: false, data: [], meta: { hasMore: false }, error: result.error };
             }
             return {
-                success: true,
+                ...result,
                 data: result.data || [],
-                meta: {
-                    lastDocId: result.meta?.lastDocId,
-                    hasMore: result.meta?.hasMore
-                }
             };
         },
         limit: 50,

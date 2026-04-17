@@ -75,7 +75,7 @@ export async function getPendingContentAction(): Promise<{
         // 1. Marketplace Products
         const productsQuery = db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS)
             .where("status", "==", "pending")
-            .limit(50);
+            .limit(500);
         const productsSnap = await productsQuery.get();
         productsSnap.forEach((doc) => {
             const data = doc.data();
@@ -94,7 +94,7 @@ export async function getPendingContentAction(): Promise<{
         // 2. Land Listings
         const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
             .where("verificationStatus", "==", "pending")
-            .limit(50);
+            .limit(500);
         const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
             const data = doc.data();
@@ -113,7 +113,7 @@ export async function getPendingContentAction(): Promise<{
         // 3. Loans
         const loansQuery = db.collection(COLLECTIONS.LOANS)
             .where("status", "==", "pending")
-            .limit(50);
+            .limit(500);
         const loansSnap = await loansQuery.get();
         loansSnap.forEach((doc) => {
             const data = doc.data();
@@ -132,7 +132,7 @@ export async function getPendingContentAction(): Promise<{
         // 4. WAVE Applications
         const waveQuery = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
             .where("status", "==", "pending")
-            .limit(50);
+            .limit(500);
         const waveSnap = await waveQuery.get();
         waveSnap.forEach((doc) => {
             const data = doc.data();
