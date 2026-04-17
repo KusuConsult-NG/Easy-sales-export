@@ -552,6 +552,7 @@ export async function getStandardWaveWithdrawalsAction(options: {
     status?: "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected" | "all";
     limit?: number;
     lastDocId?: string;
+    search?: string;
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
