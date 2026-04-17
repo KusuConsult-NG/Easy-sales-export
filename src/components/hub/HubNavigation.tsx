@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X, LayoutDashboard, LogIn, LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
+import { logoutAction } from "@/app/actions/auth";
 
 export default function HubNavigation() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -13,6 +14,17 @@ export default function HubNavigation() {
     const pathname = usePathname();
     const { data: session } = useSession();
     const toggles = useFeatureToggles(["wave_program", "academy_courses", "cooperative_loans", "farm_nation_purchases"]);
+
+    const handleLogout = async () => {
+        try {
+            const { signOut: firebaseSignOut } = await import("firebase/auth");
+            const { auth } = await import("@/lib/firebase");
+            await firebaseSignOut(auth);
+        } catch (e) {
+            console.error("Firebase signout failed", e);
+        }
+        await logoutAction();
+    };
 
     const navItems = [
         // Home removed per user request
@@ -105,7 +117,7 @@ export default function HubNavigation() {
                                         Dashboard
                                     </Link>
                                     <button
-                                        onClick={() => signOut({ callbackUrl: '/' })}
+                                        onClick={handleLogout}
                                         className="flex items-center gap-2 px-5 py-2.5 text-slate-700 hover:text-red-600 font-bold transition-colors"
                                     >
                                         <LogOut className="w-4 h-4" />
@@ -209,7 +221,7 @@ export default function HubNavigation() {
                                     <button
                                         onClick={() => {
                                             setIsMobileMenuOpen(false);
-                                            signOut({ callbackUrl: '/' });
+                                            handleLogout();
                                         }}
                                         className="flex items-center justify-center gap-2 w-full px-5 py-3 text-red-600 border border-red-200 font-bold rounded-xl hover:bg-red-50"
                                     >
