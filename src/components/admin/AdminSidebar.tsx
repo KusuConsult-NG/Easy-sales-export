@@ -44,7 +44,7 @@ const NAV_ITEMS = [
     { label: "Disputes", href: "/admin/disputes", icon: ShieldAlert, section: "platform" },
     { label: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText, section: "platform" },
     { label: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX, section: "platform" },
-    { label: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck, section: "platform", featureToggle: "digital_id_system" },
+
     { label: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft, section: "platform" },
     // ── Modules ─────────────────────────────────────────────────────────────
     { label: "WAVE Program", href: "/admin/wave", icon: Waves, section: "modules", featureToggle: "wave_program" },

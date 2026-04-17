@@ -142,7 +142,7 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         { name: "Disputes", href: "/admin/disputes", icon: ShieldAlert },
         { name: "Audit Logs", href: "/admin/audit-logs", icon: ScrollText },
         { name: "Orphaned Users", href: "/admin/orphaned-users", icon: UserX },
-        { name: "ID Verification", href: "/admin/verify-id", icon: BadgeCheck, featureToggle: "digital_id_system" },
+
         { name: "Feature Toggles", href: "/admin/feature-toggles", icon: ToggleLeft },
         // ── Modules ──────────────────────────────────────────────────────
         { name: "WAVE Program", href: "/admin/wave", icon: Waves, featureToggle: "wave_program" },

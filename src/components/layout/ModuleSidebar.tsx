@@ -116,7 +116,7 @@ const ADMIN_NAV: NavItem[] = [
     { name: "Disputes",           href: "/admin/disputes",           icon: ShieldAlert },
     { name: "Audit Logs",         href: "/admin/audit-logs",         icon: ScrollText },
     { name: "Orphaned Users",     href: "/admin/orphaned-users",     icon: UserX },
-    { name: "ID Verification",    href: "/admin/verify-id",          icon: BadgeCheck },
+
     { name: "Feature Toggles",    href: "/admin/feature-toggles",    icon: ToggleLeft },
     { name: "WAVE Program",       href: "/admin/wave",               icon: Waves,          sectionLabel: "Modules" },
     { name: "Cooperatives",       href: "/admin/cooperatives",       icon: Building2 },

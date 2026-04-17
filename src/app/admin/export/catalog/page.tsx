@@ -180,6 +180,7 @@ export default function AdminExportCatalogPage() {
             }
             return {
                 ...result,
+                lastDocId: result.lastDocId ?? undefined,
                 data: result.data || [],
             };
         },
