@@ -918,8 +918,16 @@ export async function getAllExportRequestsAction(
         }
 
         const snapshot = await query.get();
-        const exports = serializeDocs(snapshot.docs)
-            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const docs = snapshot.docs;
+        
+        let exports = [];
+        try {
+            exports = serializeDocs(docs)
+                .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        } catch (serializeErr: any) {
+            console.error("CRASH DURING SERIALIZE:", serializeErr);
+            return { error: "Failed to serialize export records", success: false };
+        }
 
         return {
             error: null,
@@ -928,8 +936,9 @@ export async function getAllExportRequestsAction(
             hasMore: exports.length === limit
         };
     } catch (error: any) {
-        logger.error("Get all export requests error:", error);
-        return { error: "Failed to fetch export requests", success: false };
+        // Log safety: avoid circular reference crash in JSON.stringify
+        console.error("Get all export requests RAW error:", error?.message || error);
+        return { error: error?.message || "Failed to fetch export requests", success: false };
     }
 }
 
