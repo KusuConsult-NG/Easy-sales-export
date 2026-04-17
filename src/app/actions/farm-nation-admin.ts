@@ -8,6 +8,40 @@ import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
 /**
+ * Get Farm Nation global stats (Admin)
+ */
+export async function getFarmNationStatsAction(): Promise<{
+    success: boolean;
+    data?: {
+        stats: {
+            totalApplications: number;
+        }
+    };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return sessionResult.error;
+        const { session } = sessionResult;
+        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
+            return { error: "Unauthorized: Permission required", success: false };
+        }
+
+        const countSnap = await db.collection(COLLECTIONS.USERS)
+            .where('registeredServices', 'array-contains', 'farmNation')
+            .count()
+            .get();
+        
+        const totalApplications = countSnap.data().count;
+
+        return { success: true, data: { stats: { totalApplications } } };
+    } catch (error: any) {
+        logger.error("Get farm nation stats error:", error);
+        return { success: false, error: "Failed to fetch farm nation stats" };
+    }
+}
+
+/**
  * Get all users who have submitted a Farm Nation registration.
  * Queries users collection and filters in-memory for those with
  * serviceRegistrations.farmNation field populated.

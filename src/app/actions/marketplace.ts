@@ -359,23 +359,42 @@ export async function submitMarketplaceOnboardingAction(
 
         // 4. Update User Profile
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-        await userRef.update({
+        const accountType = formData.get("accountType") as string;
+        const isBuyerOnly = accountType === "buyer";
+
+        const userUpdate: any = {
             phone: formData.get("phone") as string,
             location: `${location.address}, ${location.lga}, ${location.state}`, // Simplified location string
-            isSeller: true, // Flag to indicate seller intent
-            sellerVerificationStatus: "pending",
-            sellerVerificationId: verificationId,
-            sellerCategory: formData.get("sellerCategory") as string || "retail",
-            // Use dot notation to preserve other service registrations (Academy, Cooperatives, etc.)
-            "serviceRegistrations.marketplace": {
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        if (isBuyerOnly) {
+            userUpdate["serviceRegistrations.marketplace"] = {
+                status: "active",
+                accountType: "buyer",
+                sellerCategory: "retail",
+                submittedAt: FieldValue.serverTimestamp(),
+            };
+            // Also append marketplace_buyer role if we want them to bypass future checks easily
+            const existingRoles = userDoc.data()?.roles || ["general_user"];
+            if (!existingRoles.includes("marketplace_buyer")) {
+                userUpdate.roles = [...existingRoles, "marketplace_buyer"];
+            }
+        } else {
+            userUpdate.isSeller = true;
+            userUpdate.sellerVerificationStatus = "pending";
+            userUpdate.sellerVerificationId = verificationId;
+            userUpdate.sellerCategory = formData.get("sellerCategory") as string || "retail";
+            userUpdate["serviceRegistrations.marketplace"] = {
                 status: "pending",
                 verificationId,
-                accountType: formData.get("accountType") as string,
+                accountType: accountType,
                 sellerCategory: formData.get("sellerCategory") as string || "retail",
                 submittedAt: FieldValue.serverTimestamp(),
-            },
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            };
+        }
+
+        await userRef.update(userUpdate);
 
         return { success: true, data: { verificationId } };
 

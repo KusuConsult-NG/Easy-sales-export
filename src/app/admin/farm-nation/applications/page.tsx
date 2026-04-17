@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { updateUserRolesAction } from "@/app/actions/admin";
-import { getStandardFarmNationRegistrantsAction } from "@/app/actions/farm-nation-admin";
+import { getStandardFarmNationRegistrantsAction, getFarmNationStatsAction } from "@/app/actions/farm-nation-admin";
 import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import AdminDataTable from "@/components/admin/AdminDataTable";
@@ -37,6 +37,15 @@ export default function FarmNationApplicationsPage() {
     const [selectedSeller, setSelectedSeller] = useState<StandardPendingForm<SellerProfile> | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
+
+    useEffect(() => {
+        getFarmNationStatsAction().then(res => {
+            if (res.success && res.data?.stats) {
+                setStats(res.data.stats);
+            }
+        });
+    }, []);
 
     const {
         data: sellers,
@@ -229,13 +238,15 @@ export default function FarmNationApplicationsPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
-            <div className="mb-6 sm:mb-8">
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
-                    Registration Applications
-                </h1>
-                <p className="text-sm sm:text-base text-slate-600">
-                    Review and approve Farm Nation applications
-                </p>
+            <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-2">
+                        Registration Applications
+                    </h1>
+                    <p className="text-sm sm:text-base text-slate-600">
+                        Live — {stats ? stats.totalApplications.toLocaleString() : sellers.length} total applications
+                    </p>
+                </div>
             </div>
 
             <AdminDataTable

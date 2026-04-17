@@ -69,7 +69,7 @@ export default function CooperativeMembersPage() {
         fetchAction: async (opts) => {
             return getStandardCooperativeMembersAction({
                 status: (opts.status as any) || "all",
-                lastDocId: opts.lastDocId,
+                cursorId: opts.lastDocId,
                 limit: opts.limit || 50,
                 search: opts.search ? opts.search.trim() : undefined
             });
