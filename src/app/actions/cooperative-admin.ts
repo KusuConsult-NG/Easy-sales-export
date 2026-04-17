@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/lib/admin-action-response";
 import {
     sendWithdrawalApprovedEmail,
     sendWithdrawalRejectedEmail
@@ -1024,7 +1025,7 @@ export async function getStandardCooperativeMembersAction(
         limit?: number;
         search?: string;
     } = {}
-): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+): Promise<ReturnType<typeof paginatedOk>> {
     const { status: statusFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();
@@ -1061,7 +1062,7 @@ export async function getStandardCooperativeMembersAction(
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
-        const nextCursorId = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        const nextCursorId = computeNextCursor(snapshot.docs, fetchLimit);
 
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
@@ -1125,16 +1126,9 @@ export async function getStandardCooperativeMembersAction(
             );
         }
 
-        return { 
-            success: true, 
-            data: standardForms, 
-            error: undefined, 
-            lastDocId: nextCursorId, 
-            hasMore: !!nextCursorId, 
-            meta: { lastDocId: nextCursorId } 
-        };
+        return paginatedOk(standardForms, nextCursorId);
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
-        return { success: false, error: "Failed to load applications", meta: null };
+        return paginatedErr("Failed to load cooperative members");
     }
 }
