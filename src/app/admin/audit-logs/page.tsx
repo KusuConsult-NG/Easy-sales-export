@@ -118,7 +118,8 @@ export default function AdminAuditLogsPage() {
         return date.toLocaleString();
     }
 
-    function formatAction(action: string): string {
+    function formatAction(action: string | undefined): string {
+        if (!action) return "Unknown Action";
         return action
             .split("_")
             .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -316,7 +317,7 @@ export default function AdminAuditLogsPage() {
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-blue-200">
                                                         <div>{log.userEmail || "Unknown"}</div>
-                                                        <div className="text-xs text-blue-300">{log.userId.substring(0, 8)}...</div>
+                                                        <div className="text-xs text-blue-300">{(log.userId || "").substring(0, 8)}{log.userId ? "..." : ""}</div>
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-blue-200">
                                                         {log.targetType || "-"}
