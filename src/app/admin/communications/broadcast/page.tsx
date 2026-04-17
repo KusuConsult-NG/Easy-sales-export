@@ -33,6 +33,7 @@ const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; lab
         label: "📋 General",
         options: [
             { value: "all", label: "All Users", desc: "Every registered user" },
+            { value: "pending_applicants", label: "All Pending Applicants", desc: "Everyone awaiting review across Cooperative, WAVE, Academy, Farm Nation & Export" },
             { value: "abandoned_failed_transactions", label: "Abandoned / Failed Payments", desc: "Users with failed or aborted payments" },
             { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
         ],

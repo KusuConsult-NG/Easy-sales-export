@@ -29,6 +29,7 @@ export type BroadcastAudience =
     | "academy_users"
     | "export_users"
     | "farm_nation_users"
+    | "pending_applicants"
     | "abandoned_failed_transactions"
     | "csv_upload";
 
@@ -334,6 +335,79 @@ export async function collectRecipients(
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
                 add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "User");
+            }
+            break;
+        }
+        case "pending_applicants": {
+            // Cross-module: everyone pending across ALL modules in a single pass.
+            // Collects from: cooperative_members, wave_applications,
+            // academy_applications, and farm_nation / export via users doc.
+            const [coopSnap, waveSnap, acadSnap] = await Promise.all([
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("membershipStatus", "==", "pending")
+                    .select("userId", "stateOfOrigin", "state", "address", "email", "firstName", "lastName", "fullName")
+                    .get(),
+                db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    .where("status", "==", "pending")
+                    .select("state", "stateOfResidence", "email", "userEmail", "firstName", "surname", "name")
+                    .get(),
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("status", "==", "pending")
+                    .select("personalInfo", "email", "userEmail")
+                    .get(),
+            ]);
+
+            // Cooperative pending members
+            const coopUserIds: string[] = [];
+            const coopMembers: any[] = [];
+            for (const d of coopSnap.docs) {
+                const m: any = d.data();
+                coopMembers.push(m);
+                if (m.userId) coopUserIds.push(m.userId);
+            }
+            const coopUserMap = await resolveUsers(db, coopUserIds);
+            for (const m of coopMembers) {
+                let userState = m.stateOfOrigin || m.state || m.address?.state;
+                const uData = m.userId ? coopUserMap.get(m.userId) : null;
+                if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
+                if (filters.state && userState !== filters.state) continue;
+                const email = m.email || uData?.email || uData?.emailAddress;
+                const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative Applicant";
+                if (email) add(email, name);
+            }
+
+            // WAVE pending applicants
+            for (const d of waveSnap.docs) {
+                const a: any = d.data();
+                const userState = a.state || a.stateOfResidence;
+                if (filters.state && userState !== filters.state) continue;
+                const email = a.email || a.userEmail;
+                if (email) add(email, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "WAVE Applicant");
+            }
+
+            // Academy pending applicants
+            for (const d of acadSnap.docs) {
+                const a: any = d.data();
+                const pi = a.personalInfo || {};
+                const userState = pi.state || pi.stateOfOrigin || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                const email = pi.email || a.email || a.userEmail;
+                if (email) add(email, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy Applicant");
+            }
+
+            // Farm Nation + Export pending (via users collection, in-memory status check)
+            const serviceSnap = await db.collection(COLLECTIONS.USERS)
+                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "fullName", "displayName", "serviceRegistrations")
+                .get();
+            for (const d of serviceSnap.docs) {
+                const u: any = d.data();
+                const srv = u.serviceRegistrations || {};
+                const isPendingFN = srv.farmNation?.status === "pending";
+                const isPendingEx = srv.export?.status === "pending";
+                if (!isPendingFN && !isPendingEx) continue;
+                const userState = u.stateOfOrigin || u.state || u.address?.state;
+                if (filters.state && userState !== filters.state) continue;
+                add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "Applicant");
             }
             break;
         }
