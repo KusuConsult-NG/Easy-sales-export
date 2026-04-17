@@ -292,7 +292,7 @@ export default function AdminAuditLogsPage() {
                                 </thead>
                                 <tbody className="divide-y divide-white/10">
                                     {logs.map((log) => {
-                                        const { color, icon: Icon, label } = severityConfig[log.severity];
+                                        const { color, icon: Icon, label } = severityConfig[log.severity as keyof typeof severityConfig] ?? severityConfig.info;
                                         const isExpanded = expandedRow === log.id;
 
                                         return (
