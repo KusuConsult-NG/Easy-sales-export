@@ -83,7 +83,8 @@ export async function getAuditLogsAction(filters: {
 
         return { 
             success: true, 
-            logs,
+            data: logs,       // consumed by useAdminData (looks for result.data)
+            logs,             // consumed by audit.ts wrapper + exportAuditLogsCSV
             lastDocId: nextCursor,
             hasMore: !!nextCursor
         };
