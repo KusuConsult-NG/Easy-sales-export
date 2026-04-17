@@ -148,17 +148,26 @@ export async function collectRecipients(
             break;
         }
         case "buyers": {
-            const stream = db
-                .collection(COLLECTIONS.USERS)
-                .where("marketplaceAccountType", "in", ["buyer", "both"])
-                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
-                .get();
-            for (const d of (await stream).docs) {
-                const u: any = d.data();
+            // Buyers can be from marketplace or farmNation in the new registry schema
+            const [mktSnap, fnSnap] = await Promise.all([
+                db.collection(COLLECTIONS.USERS).orderBy("serviceRegistrations.marketplace.status").select("serviceRegistrations", "stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName").get(),
+                db.collection(COLLECTIONS.USERS).orderBy("serviceRegistrations.farmNation.status").select("serviceRegistrations", "stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName").get()
+            ]);
+            
+            const processBuyerDoc = (u: any) => {
+                const srv = u.serviceRegistrations || {};
+                const isMktBuyer = srv.marketplace?.accountType === "buyer" || srv.marketplace?.accountType === "both";
+                const isFnBuyer = srv.farmNation?.role === "buyer" || srv.farmNation?.role === "both";
+                
+                if (!isMktBuyer && !isFnBuyer) return;
+                
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && userState !== filters.state) return;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
-            }
+            };
+            
+            mktSnap.docs.forEach(d => processBuyerDoc(d.data()));
+            fnSnap.docs.forEach(d => processBuyerDoc(d.data()));
             break;
         }
         case "sellers":
@@ -192,7 +201,7 @@ export async function collectRecipients(
         case "marketplace_onboarded": {
             const stream = db
                 .collection(COLLECTIONS.USERS)
-                .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
+                .orderBy("serviceRegistrations.marketplace.status")
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
                 .get();
             for (const d of (await stream).docs) {
@@ -270,23 +279,28 @@ export async function collectRecipients(
             break;
         }
         case "export_users": {
-            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "userEmail", "email").get();
+            const stream = db.collection(COLLECTIONS.USERS)
+                .orderBy("serviceRegistrations.export.status")
+                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
+                .get();
             for (const d of (await stream).docs) {
-                const a: any = d.data();
-                const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
-                const email = a.userEmail || (a.profile && a.profile.email) || a.email;
-                if (email) add(email, (a.profile && a.profile.fullName) || "Export User");
+                add(u.email || u.emailAddress, u.name || u.displayName || "User");
             }
             break;
         }
         case "farm_nation_users": {
-            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").get();
+            const stream = db.collection(COLLECTIONS.USERS)
+                .orderBy("serviceRegistrations.farmNation.status")
+                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
+                .get();
             for (const d of (await stream).docs) {
-                const a: any = d.data();
-                if (filters.state && a.state !== filters.state) continue;
-                const email = a.email;
-                if (email) add(email, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+                const u: any = d.data();
+                const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
+                if (filters.state && userState !== filters.state) continue;
+                add(u.email || u.emailAddress, u.name || u.displayName || "User");
             }
             break;
         }
