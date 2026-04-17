@@ -25,7 +25,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 
 # Cache-bust: increment this label whenever you need to force a full source rebuild
-LABEL build-version="2026-04-16-v2"
+LABEL build-version="2026-04-17-v3"
 
 # Copy all source files
 COPY . .
