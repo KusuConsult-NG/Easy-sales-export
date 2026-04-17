@@ -143,14 +143,18 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 onDataChange(updated);
             } else if (result.success && !result.isMatch) {
                 setBvnState('mismatch');
-                setBvnError(result.error || 'Name mismatch. Please check the name on your BVN record.');
+                setBvnError(result.error || 'Name mismatch. The name on your BVN record does not match. Please check your name spelling.');
             } else {
                 setBvnState('error');
                 setBvnError(result.error || 'BVN verification failed. Please try again.');
             }
-        } catch (error) {
+        } catch (error: any) {
+            console.error('[KYCForm] BVN verify threw:', error);
             setBvnState('error');
-            setBvnError('Network error or server timeout. Please try again later.');
+            setBvnError(
+                error?.message ||
+                'Network error or server timeout. Please try again later.'
+            );
         }
     };
 
@@ -186,14 +190,18 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                 onDataChange(updated);
             } else if (result.success && !result.isMatch) {
                 setNinState('mismatch');
-                setNinError(result.error || 'Name mismatch. Please check the name on your NIN record.');
+                setNinError(result.error || 'Name mismatch. The name on your NIN record does not match. Please check your name spelling.');
             } else {
                 setNinState('error');
                 setNinError(result.error || 'NIN verification failed. Please try again.');
             }
-        } catch (error) {
+        } catch (error: any) {
+            console.error('[KYCForm] NIN verify threw:', error);
             setNinState('error');
-            setNinError('Network error or server timeout. Please try again later.');
+            setNinError(
+                error?.message ||
+                'Network error or server timeout. Please try again later.'
+            );
         }
     };
 

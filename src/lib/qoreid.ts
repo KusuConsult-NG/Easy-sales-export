@@ -18,22 +18,49 @@ function normState(state?: string): string {
 }
 
 // A lookup is considered a successful identity match when:
-//  - status.state is "complete" or "exact_match"
-//  - AND (where available) summary.exactMatch is not explicitly false
+//  - The OVERALL status.status == "id_verified" (not "id_mismatch")
+//  - AND the inner *_check.status is "exact_match" (not "NO_MATCH")
+//
+// IMPORTANT: QoreID returns state="complete" even for mismatches — the
+// top-level `state` only means the request finished processing, NOT that
+// the identity matched. We must check `status.status` and the inner
+// `*_check.status` to determine a real match.
 function resolveMatch(data: any): boolean {
-    // Check top-level status.state
-    const topState = normState(data?.status?.state);
-    const stateOk = topState === 'complete' || topState === 'exact_match' || topState === 'verified' || topState === 'found';
+    // Hard-fail on explicit mismatch/not-found statuses
+    const topStatus = normState(data?.status?.status);
+    if (
+        topStatus === 'id_mismatch' ||
+        topStatus === 'not_found' ||
+        topStatus === 'failed' ||
+        topStatus === 'error'
+    ) {
+        return false;
+    }
 
-    // Check nested nin_check / bvn_check status (inside summary)
+    // Require at least one inner identity check to return exact_match
     const summaryChecks = data?.summary || {};
     const checkStatuses = Object.values(summaryChecks)
-        .map((v: any) => normState(v?.status))
+        .map((v: any) => normState((v as any)?.status))
         .filter(Boolean);
-    const anyCheckExactMatch = checkStatuses.some(s => s === 'exact_match' || s === 'complete' || s === 'verified' || s === 'found');
 
-    const nameMatch = data?.summary?.exactMatch !== false;
-    return (stateOk || anyCheckExactMatch) && nameMatch;
+    // NO_MATCH in any check = not a match
+    const anyNoMatch = checkStatuses.some(s => s === 'no_match' || s === 'not_found');
+    if (anyNoMatch) return false;
+
+    // Need at least one positive check
+    const anyPositive = checkStatuses.some(
+        s => s === 'exact_match' || s === 'complete' || s === 'verified' || s === 'found'
+    );
+
+    // Legacy: fall back to top-level state for accounts that don't return inner checks
+    const topState = normState(data?.status?.state);
+    const topStateOk =
+        topState === 'exact_match' ||
+        topState === 'verified' ||
+        topState === 'found';
+    // NOTE: 'complete' alone is NOT sufficient — 'complete' + 'id_mismatch' means failed
+
+    return anyPositive || topStateOk;
 }
 
 // ─── QoreID Service ──────────────────────────────────────────────────────────
@@ -88,18 +115,39 @@ class QoreIdService {
         const url = `${QOREID_API_URL}${path}`;
         logger.info(`QoreID fetch: POST ${url}`, { body });
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
+        // 25-second timeout to prevent Railway/serverless function hangs
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25_000);
+
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+            });
+        } catch (fetchError: any) {
+            clearTimeout(timeoutId);
+            // Clear cached token on network errors — it may be stale
+            this.accessToken = null;
+            this.tokenExpiry = null;
+            if (fetchError?.name === 'AbortError') {
+                logger.error(`QoreID ${path} timed out after 25s`);
+                return { success: false as const, error: 'Verification service timed out. Please try again.' };
+            }
+            logger.error(`QoreID ${path} network error`, fetchError);
+            return { success: false as const, error: 'Could not reach verification service. Please check your connection and try again.' };
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         const rawBody = await response.text();
         let data: any = {};
         try { data = JSON.parse(rawBody); } catch { data = { rawText: rawBody }; }
 
         if (response.status === 429) {
-            return { success: false as const, error: 'RATE_LIMIT: Verification service is temporarily rate-limited. Please wait a moment and try again.' };
+            return { success: false as const, error: 'Verification service is temporarily rate-limited. Please wait a moment and try again.' };
         }
         if (response.status === 401 || response.status === 403) {
             // Token may have been revoked; clear cache so next call re-authenticates
@@ -115,7 +163,7 @@ class QoreIdService {
             return { success: false as const, error: errMsg };
         }
 
-        logger.info(`QoreID ${path} success`, { state: data?.status?.state });
+        logger.info(`QoreID ${path} success`, { state: data?.status?.state, status: data?.status?.status });
         return { success: true as const, data };
     }
 
