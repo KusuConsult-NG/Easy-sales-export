@@ -20,7 +20,7 @@ export async function getAuditLogsAction(filters: {
     endDate?: string;
     limit?: number;
     lastDocId?: string;
-}): Promise<{ success: boolean; logs?: AuditLogEntry[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+}): Promise<{ success: boolean; data?: AuditLogEntry[]; logs?: AuditLogEntry[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return sessionResult.error;
