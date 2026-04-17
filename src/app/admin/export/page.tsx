@@ -30,35 +30,40 @@ export default function AdminExportPage() {
             setLoadingMore(true);
         }
 
-        const currentLastDocId = reset ? undefined : lastDocId || undefined;
+        try {
+            const currentLastDocId = reset ? undefined : lastDocId || undefined;
 
-        const result = await getAllExportRequestsAction(
-            filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed"),
-            50,
-            currentLastDocId
-        );
+            const result = await getAllExportRequestsAction(
+                filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed"),
+                50,
+                currentLastDocId
+            );
 
-        if (result.success && result.exports) {
-            if (reset) {
-                setExports(result.exports);
+            if (result.success && result.exports) {
+                if (reset) {
+                    setExports(result.exports);
+                } else {
+                    setExports(prev => [...prev, ...result.exports!]);
+                }
+
+                setHasMore(result.hasMore || false);
+
+                // Set cursor for next page
+                if (result.exports.length > 0) {
+                    const lastItem = result.exports[result.exports.length - 1];
+                    setLastDocId(lastItem.id);
+                }
             } else {
-                setExports(prev => [...prev, ...result.exports!]);
+                logger.error(result.error ?? "Unknown error loading exports");
+                showToast(result.error || "Failed to load exports", "error");
             }
-
-            setHasMore(result.hasMore || false);
-
-            // Set cursor for next page
-            if (result.exports.length > 0) {
-                const lastItem = result.exports[result.exports.length - 1];
-                setLastDocId(lastItem.id);
-            }
-        } else {
-            logger.error(result.error ?? "Unknown error loading exports");
-            showToast(result.error || "Failed to load exports", "error");
+        } catch (error: any) {
+            logger.error("Client side error loading exports:", error);
+            showToast("Server action threw an unhandled exception.", "error");
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
         }
-
-        setLoading(false);
-        setLoadingMore(false);
     }, [filter, lastDocId, showToast]);
 
     // Data fetching on filter change
