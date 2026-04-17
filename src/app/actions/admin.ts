@@ -885,7 +885,7 @@ export async function getPendingLoanApplications(): Promise<{
 export async function getAllExportRequestsAction(
     statusFilter?: "pending" | "in_transit" | "delivered" | "completed" | "all",
     limit = 50,
-    lastCreatedAt?: Date | string
+    lastDocId?: string
 ): Promise<{
     error: string | null;
     success: boolean;
@@ -910,9 +910,11 @@ export async function getAllExportRequestsAction(
                          .limit(limit);
         }
 
-        if (lastCreatedAt) {
-            const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
-            query = query.startAfter(Timestamp.fromDate(cursorDate));
+        if (lastDocId) {
+            const cursorDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastDocId).get();
+            if (cursorDoc.exists) {
+                query = query.startAfter(cursorDoc);
+            }
         }
 
         const snapshot = await query.get();

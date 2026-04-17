@@ -17,7 +17,7 @@ export default function AdminExportPage() {
     const [selectedExport, setSelectedExport] = useState<any | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [filter, setFilter] = useState("all");
-    const [lastCreatedAt, setLastCreatedAt] = useState<string | null>(null);
+    const [lastDocId, setLastDocId] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
 
     // Load exports with useCallback to prevent recreating on every render
@@ -25,17 +25,17 @@ export default function AdminExportPage() {
         if (reset) {
             setLoading(true);
             setExports([]);
-            setLastCreatedAt(null);
+            setLastDocId(null);
         } else {
             setLoadingMore(true);
         }
 
-        const currentLastCreatedAt = reset ? undefined : lastCreatedAt || undefined;
+        const currentLastDocId = reset ? undefined : lastDocId || undefined;
 
         const result = await getAllExportRequestsAction(
             filter === "all" ? undefined : (filter as "pending" | "in_transit" | "delivered" | "completed"),
             50,
-            currentLastCreatedAt
+            currentLastDocId
         );
 
         if (result.success && result.exports) {
@@ -50,7 +50,7 @@ export default function AdminExportPage() {
             // Set cursor for next page
             if (result.exports.length > 0) {
                 const lastItem = result.exports[result.exports.length - 1];
-                setLastCreatedAt(lastItem.createdAt instanceof Date ? lastItem.createdAt.toISOString() : lastItem.createdAt);
+                setLastDocId(lastItem.id);
             }
         } else {
             logger.error(result.error ?? "Unknown error loading exports");
@@ -59,7 +59,7 @@ export default function AdminExportPage() {
 
         setLoading(false);
         setLoadingMore(false);
-    }, [filter, lastCreatedAt, showToast]);
+    }, [filter, lastDocId, showToast]);
 
     // Data fetching on filter change
     useEffect(() => {
