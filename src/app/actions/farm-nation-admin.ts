@@ -185,19 +185,41 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             if (options.status && options.status !== "all" && status !== options.status) return false;
             return true;
         }).map((user: any) => {
-            const userName = user.name || user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : (user.email || "Unknown User");
+            // Fix: check firstName presence FIRST to avoid "undefined undefined" for legacy users
+            const userName = user.firstName
+                ? `${user.firstName} ${user.lastName || ''}`.trim()
+                : (user.name || user.fullName || user.email || "Unknown User");
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
 
-            // Flatten nested address & personal fields so admin modal reads consistent top-level keys
+            // Flatten nested address & personal fields so admin modal reads consistent top-level keys.
+            // Also inject a synthetic farmNation.profile alias so the admin page's nested paths resolve.
+            const profileAlias = {
+                phone:   user.phone || user.phoneNumber || null,
+                state:   user.stateOfOrigin || user.address?.state || user.state || null,
+                lga:     user.lga || user.address?.lga || null,
+                address: user.residentialAddress || user.address?.street || (typeof user.address === 'string' ? user.address : null) || null,
+            };
             const mergedData = {
                 ...user,
-                phone:              user.phone              || user.phoneNumber   || null,
+                phone:              profileAlias.phone,
                 gender:             user.gender             || null,
                 dateOfBirth:        user.dateOfBirth        || user.dob           || null,
                 occupation:         user.occupation         || null,
-                stateOfOrigin:      user.stateOfOrigin      || (typeof user.address === 'object' ? user.address?.state  : null) || null,
-                lga:                user.lga                || (typeof user.address === 'object' ? user.address?.lga    : null) || null,
-                residentialAddress: user.residentialAddress || (typeof user.address === 'object' ? user.address?.street : user.address) || null,
+                stateOfOrigin:      profileAlias.state,
+                lga:                profileAlias.lga,
+                residentialAddress: profileAlias.address,
+                // Inject farmNation.profile so admin page paths resolve when the nested object is missing
+                farmNation: {
+                    ...(user.farmNation || {}),
+                    profile: {
+                        ...(user.farmNation?.profile || {}),
+                        phone:   (user.farmNation?.profile?.phone   || profileAlias.phone),
+                        state:   (user.farmNation?.profile?.state   || profileAlias.state),
+                        lga:     (user.farmNation?.profile?.lga     || profileAlias.lga),
+                        address: (user.farmNation?.profile?.address || profileAlias.address),
+                    },
+                    interests: user.farmNation?.interests || user.serviceRegistrations?.farmNation?.interests || null,
+                },
             };
 
             return {

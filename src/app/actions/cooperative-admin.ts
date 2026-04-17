@@ -1083,7 +1083,10 @@ export async function getStandardCooperativeMembersAction(
         let standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
-            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
+            // Fix: check firstName FIRST to avoid "undefined undefined" for legacy users
+            const userName = uData.firstName
+                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                : (uData.name || uData.fullName || localName || "Unknown User");
 
             // Merge USERS data into app.data as fallback for fields that were never filled via onboarding.
             // Legacy members who only paid (never submitted the form) will have blank phone/gender/dob etc.
@@ -1102,6 +1105,14 @@ export async function getStandardCooperativeMembersAction(
                 firstName:           app.firstName           || uData.firstName          || null,
                 lastName:            app.lastName            || uData.lastName           || null,
                 email:               app.email               || uData.email              || null,
+                // nextOfKin: remap stored field names to what the admin modal reads
+                // Firestore stores: { fullName, phone, residentialAddress }
+                // Admin modal reads: { name, phone, address }
+                nextOfKin: app.nextOfKin ? {
+                    ...app.nextOfKin,
+                    name:    app.nextOfKin.fullName    || app.nextOfKin.name    || null,
+                    address: app.nextOfKin.residentialAddress || app.nextOfKin.address || null,
+                } : null,
             };
 
             return {

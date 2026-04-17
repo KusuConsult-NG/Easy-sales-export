@@ -485,7 +485,13 @@ export async function getStandardWaveApplicationsAction(options: {
 
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
-            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.surname ? `${app.firstName} ${app.surname}`.trim() : "Unknown User");
+            // Derive display name: prefer separate firstName+lastName on either the app doc or
+            // the users profile. Fall back to the stored full name string then email.
+            const userName = uData.firstName
+                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                : (uData.name || uData.fullName ||
+                   (app.firstName ? `${app.firstName} ${app.surname || app.lastName || ''}`.trim() : null) ||
+                   "Unknown User");
 
             const mergedData = {
                 ...app,

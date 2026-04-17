@@ -384,8 +384,11 @@ export async function getStandardAcademyApplicationsAction(options: {
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const pi = (app.personalInfo || {}) as any;
-            const localName = pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : pi.fullName;
-            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
+            const localName = pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : (pi.fullName || null);
+            // Fix: check uData.firstName presence FIRST to avoid "undefined undefined" for legacy users
+            const userName = uData.firstName
+                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
+                : (uData.name || uData.fullName || localName || "Unknown User");
 
             // Merge app + personalInfo sub-object + USERS profile so every field is populated
             // regardless of which path the data came through (direct fields, nested personalInfo, or USERS doc).
