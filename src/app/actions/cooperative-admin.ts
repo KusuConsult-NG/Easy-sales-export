@@ -1025,7 +1025,7 @@ export async function getStandardCooperativeMembersAction(
         limit?: number;
         search?: string;
     } = {}
-): Promise<ReturnType<typeof paginatedOk>> {
+): Promise<{ success: boolean; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
     const { status: statusFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();
