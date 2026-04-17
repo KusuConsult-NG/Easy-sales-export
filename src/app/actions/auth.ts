@@ -288,7 +288,7 @@ export async function registerAction(prevState: any, formData: FormData) {
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
         // We return success, and the client component calls signIn() via NextAuth client SDK.
-        return { success: true, data: { redirectUrl, error: "" } };
+        return { success: true, redirectUrl, error: "" };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation
         if (error && typeof error === 'object' && 'digest' in error &&
