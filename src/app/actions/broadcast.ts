@@ -36,6 +36,8 @@ export interface BroadcastFilters {
     audience: BroadcastAudience;
     state?: string; // e.g. 'Lagos'
     sellerStatus?: "pending" | "approved" | "suspended"; // only for seller audiences
+    moduleStatus?: string; // e.g. 'pending', 'approved', 'rejected' — applied to the active module segment
+    farmNationRole?: "buyer" | "seller" | "both"; // farm nation role filter
     csvEmails?: string[]; // Array of emails extracted from CSV upload
 }
 
@@ -213,41 +215,57 @@ export async function collectRecipients(
             break;
         }
         case "cooperative_members": {
-            const stream = db
-                .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where("status", "==", "active")
-                .select("userId", "state", "address", "email", "name", "firstName", "lastName", "fullName")
-                .get();
-            
-            const userIds: string[] = [];
+            // membershipStatus field is written by registerCooperativeMemberAction ('pending'/'approved').
+            // Legacy joinCooperativeAction used 'status: active'. Catch both.
+            const targetStatus = filters.moduleStatus || "approved";
+            // Query both possible field names to handle schema evolution
+            const [newSnap, legacySnap] = await Promise.all([
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("membershipStatus", "==", targetStatus === "active" ? "approved" : targetStatus)
+                    .select("userId", "stateOfOrigin", "state", "address", "email", "name", "firstName", "lastName", "fullName")
+                    .get(),
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("status", "==", "active")
+                    .select("userId", "stateOfOrigin", "state", "address", "email", "name", "firstName", "lastName", "fullName")
+                    .get(),
+            ]);
+
+            const seenIds = new Set<string>();
             const members: any[] = [];
-            for (const d of (await stream).docs) {
-                const m: any = d.data();
-                members.push(m);
-                if (m.userId) userIds.push(m.userId);
+            const userIds: string[] = [];
+
+            for (const snap of [newSnap, legacySnap]) {
+                for (const d of snap.docs) {
+                    if (seenIds.has(d.id)) continue;
+                    seenIds.add(d.id);
+                    const m: any = { ...d.data(), _docId: d.id };
+                    members.push(m);
+                    if (m.userId) userIds.push(m.userId);
+                }
             }
 
             const uMap = await resolveUsers(db, userIds);
             for (const m of members) {
-                let userState = m.state || (m.address && m.address.state);
+                let userState = m.stateOfOrigin || m.state || (m.address && m.address.state);
                 const uData = m.userId ? uMap.get(m.userId) : null;
-                if (!userState && uData) userState = uData.state;
-
+                if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
                 if (filters.state && userState !== filters.state) continue;
 
-                if (m.email) {
-                    add(m.email, m.name || m.fullName || "Member");
-                } else if (uData && (uData.email || uData.emailAddress)) {
-                    add(uData.email || uData.emailAddress, uData.fullName || uData.name || "Member");
-                }
+                const memberEmail = m.email || (uData && (uData.email || uData.emailAddress));
+                const memberName = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || (uData && (uData.fullName || uData.name)) || "Member";
+                if (memberEmail) add(memberEmail, memberName);
             }
             break;
         }
         case "wave_applicants": {
-            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "name", "firstName", "surname").get();
+            let waveQ: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                waveQ = (waveQ as FirebaseFirestore.CollectionReference).where("status", "==", filters.moduleStatus);
+            }
+            const stream = (waveQ as any).select("status", "state", "stateOfResidence", "residentialState", "email", "userEmail", "name", "firstName", "surname").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
+                if (filters.state && a.state !== filters.state && a.stateOfResidence !== filters.state && a.residentialState !== filters.state) continue;
                 const applicantEmail = a.email || a.userEmail;
                 if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
             }
@@ -268,13 +286,18 @@ export async function collectRecipients(
             break;
         }
         case "academy_users": {
-            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").get();
+            let acadQ: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                acadQ = acadQ.where("status", "==", filters.moduleStatus);
+            }
+            const stream = acadQ.select("status", "personalInfo", "state", "stateOfOrigin", "email", "userEmail").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
-                const userState = (a.personalInfo && a.personalInfo.state) || a.state;
+                const pi = a.personalInfo || {};
+                const userState = pi.state || pi.stateOfOrigin || a.state || a.stateOfOrigin;
                 if (filters.state && userState !== filters.state) continue;
-                const email = (a.personalInfo && a.personalInfo.email) || a.email || a.userEmail;
-                if (email) add(email, (a.personalInfo && a.personalInfo.fullName) || "Academy User");
+                const email = pi.email || a.email || a.userEmail;
+                if (email) add(email, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
             break;
         }
@@ -292,15 +315,25 @@ export async function collectRecipients(
             break;
         }
         case "farm_nation_users": {
-            const stream = db.collection(COLLECTIONS.USERS)
-                .where("serviceRegistrations.farmNation.status", "!=", null)
-                .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
-                .get();
+            let fnQ: any = db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "!=", null);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                // Can't chain != + == on different fields without composite index — filter in-memory
+            }
+            const stream = fnQ.select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName", "fullName", "serviceRegistrations").get();
             for (const d of (await stream).docs) {
                 const u: any = d.data();
+                // Module status filter (in-memory to avoid composite index requirement)
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (u.serviceRegistrations?.farmNation?.status !== filters.moduleStatus) continue;
+                }
+                // Farm Nation role filter
+                if (filters.farmNationRole) {
+                    const role = u.serviceRegistrations?.farmNation?.role;
+                    if (role !== filters.farmNationRole && !(filters.farmNationRole === "both" && role === "both")) continue;
+                }
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
-                add(u.email || u.emailAddress, u.name || u.displayName || "User");
+                add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "User");
             }
             break;
         }

@@ -27,21 +27,74 @@ import type { BroadcastAudience, BroadcastFilters } from "@/app/actions/broadcas
 import { diagnoseBroadcastAction } from "@/app/actions/diagnose-broadcast";
 import { useToast } from "@/contexts/ToastContext";
 
-const AUDIENCE_OPTIONS: { value: BroadcastAudience; label: string; desc: string }[] = [
-    { value: "all", label: "All Users", desc: "Every registered user" },
-    { value: "buyers", label: "Buyers Only", desc: "Marketplace buyers (buyer or both)" },
-    { value: "sellers", label: "All Sellers", desc: "Approved marketplace sellers" },
-    { value: "wholesale_sellers", label: "Wholesale Sellers", desc: "Sellers categorised as Wholesale" },
-    { value: "retail_sellers", label: "Retail Sellers", desc: "Sellers categorised as Retail" },
-    { value: "marketplace_onboarded", label: "Marketplace Users", desc: "All onboarded marketplace participants" },
-    { value: "cooperative_members", label: "Cooperative Members", desc: "Active cooperative members" },
-    { value: "wave_applicants", label: "WAVE Applicants", desc: "WAVE program registrants" },
-    { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", desc: "Users registered for WAVE briefing sessions" },
-    { value: "academy_users", label: "Academy Users", desc: "All Academy applicants" },
-    { value: "export_users", label: "Export Users", desc: "All Export onboarding applicants" },
-    { value: "farm_nation_users", label: "Farm Nation Users", desc: "All Farm Nation inquiries" },
-    { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", desc: "Users with failed or aborted payments" },
-    { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
+// ── Audience groups ─────────────────────────────────────────────────────────
+const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; label: string; desc: string }[] }[] = [
+    {
+        label: "📋 General",
+        options: [
+            { value: "all", label: "All Users", desc: "Every registered user" },
+            { value: "abandoned_failed_transactions", label: "Abandoned / Failed Payments", desc: "Users with failed or aborted payments" },
+            { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
+        ],
+    },
+    {
+        label: "🛒 Marketplace",
+        options: [
+            { value: "marketplace_onboarded", label: "All Marketplace Users", desc: "Every onboarded marketplace participant" },
+            { value: "buyers", label: "Buyers Only", desc: "Marketplace buyers (buyer or both)" },
+            { value: "sellers", label: "All Sellers", desc: "Marketplace sellers (any status)" },
+            { value: "wholesale_sellers", label: "Wholesale Sellers", desc: "Sellers categorised as Wholesale" },
+            { value: "retail_sellers", label: "Retail Sellers", desc: "Sellers categorised as Retail" },
+        ],
+    },
+    {
+        label: "🌾 Modules",
+        options: [
+            { value: "cooperative_members", label: "Cooperative Members", desc: "Cooperative membership holders" },
+            { value: "wave_applicants", label: "WAVE Applicants", desc: "WAVE program registrants" },
+            { value: "wave_briefing_registrants", label: "WAVE Briefing Registrants", desc: "Users registered for WAVE briefing sessions" },
+            { value: "academy_users", label: "Academy Users", desc: "All Academy applicants" },
+            { value: "farm_nation_users", label: "Farm Nation Users", desc: "All Farm Nation registrants" },
+            { value: "export_users", label: "Export Users", desc: "All Export onboarding applicants" },
+        ],
+    },
+];
+
+// Flat list for convenience
+const AUDIENCE_OPTIONS = AUDIENCE_GROUPS.flatMap(g => g.options);
+
+const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> = {
+    cooperative_members: [
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+        { value: "suspended", label: "Suspended" },
+    ],
+    wave_applicants: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+    academy_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+        { value: "under_review", label: "Under Review" },
+    ],
+    farm_nation_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+};
+
+const FARM_NATION_ROLES = [
+    { value: "", label: "All Roles" },
+    { value: "buyer", label: "Buyers" },
+    { value: "seller", label: "Sellers" },
+    { value: "both", label: "Buyer & Seller" },
 ];
 
 const SELLER_STATUS_OPTIONS = [
@@ -87,6 +140,8 @@ export default function BroadcastComposePage() {
     const [audience, setAudience] = useState<BroadcastAudience>("all");
     const [stateFilter, setStateFilter] = useState("");
     const [sellerStatus, setSellerStatus] = useState<"pending" | "approved" | "suspended">("approved");
+    const [moduleStatus, setModuleStatus] = useState("approved");
+    const [farmNationRole, setFarmNationRole] = useState("");
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
     const [showPreview, setShowPreview] = useState(false);
@@ -102,11 +157,15 @@ export default function BroadcastComposePage() {
     const [diagResult, setDiagResult] = useState<string | null>(null);
 
     const isSellerAudience = ["sellers", "wholesale_sellers", "retail_sellers"].includes(audience);
+    const hasModuleStatus = audience in MODULE_STATUS_OPTIONS;
+    const isFarmNation = audience === "farm_nation_users";
 
     const buildFilters = (): BroadcastFilters => ({
         audience,
         state: stateFilter || undefined,
         sellerStatus: isSellerAudience ? sellerStatus : undefined,
+        moduleStatus: hasModuleStatus ? moduleStatus : undefined,
+        farmNationRole: isFarmNation && farmNationRole ? farmNationRole as any : undefined,
         csvEmails: audience === "csv_upload" ? csvEmails : undefined,
     });
 
@@ -206,35 +265,49 @@ export default function BroadcastComposePage() {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     {/* Left — Form */}
                     <div className="lg:col-span-3 space-y-6">
-                        {/* Audience */}
+                        {/* Audience — grouped */}
                         <div className="bg-white border border-slate-200 rounded-2xl p-6">
                             <div className="flex items-center gap-2 mb-4">
                                 <Users className="w-5 h-5 text-slate-600" />
                                 <h2 className="font-bold text-slate-900">Audience</h2>
                             </div>
-                            <div className="grid grid-cols-1 gap-2">
-                                {AUDIENCE_OPTIONS.map((opt) => (
-                                    <label
-                                        key={opt.value}
-                                        className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${audience === opt.value
-                                                ? "border-green-500 bg-green-50"
-                                                : "border-slate-200 hover:border-slate-300"
-                                            }`}
-                                    >
-                                        <input type="radio" name="audience" value={opt.value}
-                                            checked={audience === opt.value}
-                                            onChange={() => { setAudience(opt.value); setRecipientCount(null); }}
-                                            className="mt-0.5 accent-green-600" />
-                                        <div>
-                                            <p className="font-semibold text-slate-900 text-sm">{opt.label}</p>
-                                            <p className="text-xs text-slate-500">{opt.desc}</p>
+                            <div className="space-y-5">
+                                {AUDIENCE_GROUPS.map((group) => (
+                                    <div key={group.label}>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">{group.label}</p>
+                                        <div className="grid grid-cols-1 gap-1.5">
+                                            {group.options.map((opt) => (
+                                                <label
+                                                    key={opt.value}
+                                                    className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${
+                                                        audience === opt.value
+                                                            ? "border-green-500 bg-green-50"
+                                                            : "border-slate-200 hover:border-slate-300"
+                                                    }`}
+                                                >
+                                                    <input type="radio" name="audience" value={opt.value}
+                                                        checked={audience === opt.value}
+                                                        onChange={() => {
+                                                            setAudience(opt.value);
+                                                            setRecipientCount(null);
+                                                            // Reset sub-filters when switching audience
+                                                            setModuleStatus(MODULE_STATUS_OPTIONS[opt.value]?.[0]?.value || "approved");
+                                                            setFarmNationRole("");
+                                                        }}
+                                                        className="mt-0.5 accent-green-600" />
+                                                    <div>
+                                                        <p className="font-semibold text-slate-900 text-sm">{opt.label}</p>
+                                                        <p className="text-xs text-slate-500">{opt.desc}</p>
+                                                    </div>
+                                                </label>
+                                            ))}
                                         </div>
-                                    </label>
+                                    </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* Filters or CSV Upload */}
+                        {/* Filters / CSV Upload */}
                         {audience === "csv_upload" ? (
                             <div className="bg-white border border-slate-200 rounded-2xl p-6">
                                 <div className="flex items-center gap-2 mb-4">
@@ -242,16 +315,12 @@ export default function BroadcastComposePage() {
                                     <h2 className="font-bold text-slate-900">Upload CSV</h2>
                                 </div>
                                 <div>
-                                    <input 
-                                        type="file" 
+                                    <input
+                                        type="file"
                                         accept=".csv,.txt"
                                         onChange={(e) => {
                                             const file = e.target.files?.[0];
-                                            if (!file) {
-                                                setCsvEmails([]);
-                                                setCsvName("");
-                                                return;
-                                            }
+                                            if (!file) { setCsvEmails([]); setCsvName(""); return; }
                                             setCsvName(file.name);
                                             const reader = new FileReader();
                                             reader.onload = (event) => {
@@ -277,23 +346,55 @@ export default function BroadcastComposePage() {
                             <div className="bg-white border border-slate-200 rounded-2xl p-6">
                                 <div className="flex items-center gap-2 mb-4">
                                     <MapPin className="w-5 h-5 text-slate-600" />
-                                    <h2 className="font-bold text-slate-900">Optional Filters</h2>
+                                    <h2 className="font-bold text-slate-900">Filters</h2>
                                 </div>
                                 <div className="space-y-4">
+                                    {/* State filter — all audiences */}
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">State (leave blank for all states)</label>
+                                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">State (optional)</label>
                                         <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setRecipientCount(null); }}
                                             className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
                                             <option value="">All States</option>
                                             {NIGERIAN_STATES.map((s) => <option key={s}>{s}</option>)}
                                         </select>
                                     </div>
+
+                                    {/* Seller status filter */}
                                     {isSellerAudience && (
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Seller Status</label>
                                             <select value={sellerStatus} onChange={(e) => { setSellerStatus(e.target.value as any); setRecipientCount(null); }}
                                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
                                                 {SELLER_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* Module-level status filter (Cooperative, WAVE, Academy, Farm Nation) */}
+                                    {hasModuleStatus && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                                                {audience === "cooperative_members" && "Membership Status"}
+                                                {audience === "wave_applicants" && "Application Status"}
+                                                {audience === "academy_users" && "Application Status"}
+                                                {audience === "farm_nation_users" && "Registration Status"}
+                                            </label>
+                                            <select value={moduleStatus} onChange={(e) => { setModuleStatus(e.target.value); setRecipientCount(null); }}
+                                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                                {MODULE_STATUS_OPTIONS[audience].map((s) => (
+                                                    <option key={s.value} value={s.value}>{s.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* Farm Nation role filter */}
+                                    {isFarmNation && (
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Farm Nation Role</label>
+                                            <select value={farmNationRole} onChange={(e) => { setFarmNationRole(e.target.value); setRecipientCount(null); }}
+                                                className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                                {FARM_NATION_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                                             </select>
                                         </div>
                                     )}
