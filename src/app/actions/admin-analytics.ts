@@ -141,18 +141,8 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         paidCoops = coopSnap.docs.map(d => d.data());
     } catch(_e) {}
 
+    // monthlyRevenue is computed after recentPayments is fetched below.
     let monthlyRevenue = 0;
-    try {
-        // Use processedPayments (same source as totalRevenue) to avoid split-source discrepancy.
-        // Filter to current month using processedAt timestamp.
-        const monthRevDocs = recentPayments.filter(d => {
-            const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt ?? 0);
-            return pAt >= thisMonthStart;
-        });
-        monthlyRevenue = monthRevDocs.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
-    } catch (_e) {
-        // Silently skip
-    }
 
     // ── Revenue by month (last 6 months — all payment sources) ─────────────
     // Fetch recent completed payments once to avoid composite index requirements
@@ -164,6 +154,14 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
             .get();
         recentPayments = pSnap.docs.map(d => d.data());
     } catch (_e) {}
+
+    // Monthly revenue: filter recentPayments to the current calendar month.
+    // Uses the same collection as totalRevenue to avoid split-source discrepancy.
+    const monthRevDocs = recentPayments.filter(d => {
+        const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt ?? 0);
+        return pAt >= thisMonthStart;
+    });
+    monthlyRevenue = monthRevDocs.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
 
     const revenueByMonth = months.map(({ label, start, end }) => {
         let rev = 0;
