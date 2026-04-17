@@ -44,7 +44,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
             }
             console.log(`[AdminComms] cooperative segment: ${count} docs found`);
         } else {
-            let stream: NodeJS.ReadableStream;
+            let stream: any;
             switch (segment) {
                 case 'active':
                     stream = query.where('status', '==', 'active').select('email').get();
