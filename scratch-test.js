@@ -1,2 +1,2 @@
-require('dotenv').config();
-console.log('Firebase ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
+const { AggregateField } = require('firebase-admin/firestore');
+console.log(typeof AggregateField);

@@ -135,8 +135,8 @@ export async function collectRecipients(
         }
         case "all": {
             console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
-            const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").stream();
-            for await (const d of stream as any) {
+            const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").get();
+            for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -152,8 +152,8 @@ export async function collectRecipients(
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
-                .stream();
-            for await (const d of stream as any) {
+                .get();
+            for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -170,10 +170,10 @@ export async function collectRecipients(
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
             
-            const sellerStream = q.select("userId", "address").stream();
+            const sellerStream = q.select("userId", "address").get();
             const userIds: string[] = [];
             const sellerDataMap = new Map<string, any>();
-            for await (const d of sellerStream as any) {
+            for (const d of (await sellerStream).docs) {
                 const v: any = d.data();
                 if (filters.state && v.address && v.address.state !== filters.state) continue;
                 if (v.userId) {
@@ -194,8 +194,8 @@ export async function collectRecipients(
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("stateOfOrigin", "state", "address", "email", "emailAddress", "name", "displayName")
-                .stream();
-            for await (const d of stream as any) {
+                .get();
+            for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && userState !== filters.state) continue;
@@ -208,11 +208,11 @@ export async function collectRecipients(
                 .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where("status", "==", "active")
                 .select("userId", "state", "address", "email", "name", "firstName", "lastName", "fullName")
-                .stream();
+                .get();
             
             const userIds: string[] = [];
             const members: any[] = [];
-            for await (const d of stream as any) {
+            for (const d of (await stream).docs) {
                 const m: any = d.data();
                 members.push(m);
                 if (m.userId) userIds.push(m.userId);
@@ -235,8 +235,8 @@ export async function collectRecipients(
             break;
         }
         case "wave_applicants": {
-            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "name", "firstName", "surname").stream();
-            for await (const d of stream as any) {
+            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "name", "firstName", "surname").get();
+            for (const d of (await stream).docs) {
                 const a: any = d.data();
                 if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
                 const applicantEmail = a.email || a.userEmail;
@@ -249,8 +249,8 @@ export async function collectRecipients(
                 .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
                 .where("status", "==", "registered")
                 .select("state", "email", "userEmail", "name", "firstName", "surname")
-                .stream();
-            for await (const d of stream as any) {
+                .get();
+            for (const d of (await stream).docs) {
                 const r: any = d.data();
                 if (filters.state && r.state !== filters.state) continue;
                 const regEmail = r.email || r.userEmail;
@@ -259,8 +259,8 @@ export async function collectRecipients(
             break;
         }
         case "academy_users": {
-            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").stream();
-            for await (const d of stream as any) {
+            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").get();
+            for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -270,8 +270,8 @@ export async function collectRecipients(
             break;
         }
         case "export_users": {
-            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "userEmail", "email").stream();
-            for await (const d of stream as any) {
+            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "userEmail", "email").get();
+            for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
                 if (filters.state && userState !== filters.state) continue;
@@ -281,8 +281,8 @@ export async function collectRecipients(
             break;
         }
         case "farm_nation_users": {
-            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").stream();
-            for await (const d of stream as any) {
+            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").get();
+            for (const d of (await stream).docs) {
                 const a: any = d.data();
                 if (filters.state && a.state !== filters.state) continue;
                 const email = a.email;
@@ -291,10 +291,10 @@ export async function collectRecipients(
             break;
         }
         case "abandoned_failed_transactions": {
-            const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerEmail", "customerName").stream();
+            const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerEmail", "customerName").get();
             const userIds: string[] = [];
             const failedPayments: any[] = [];
-            for await (const d of stream as any) {
+            for (const d of (await stream).docs) {
                 const f: any = d.data();
                 failedPayments.push(f);
                 if (f.userId) userIds.push(f.userId);

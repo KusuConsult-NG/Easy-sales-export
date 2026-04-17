@@ -35,9 +35,9 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
             const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where('paymentStatus', '==', 'completed')
                 .select('email')
-                .stream();
+                .get();
             let count = 0;
-            for await (const doc of stream as any) {
+            for (const doc of (await stream).docs) {
                 const data = doc.data();
                 if (data.email) emails.push(data.email);
                 count++;
@@ -47,18 +47,18 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
             let stream: NodeJS.ReadableStream;
             switch (segment) {
                 case 'active':
-                    stream = query.where('status', '==', 'active').select('email').stream();
+                    stream = query.where('status', '==', 'active').select('email').get();
                     break;
                 case 'verified':
-                    stream = query.where('verified', '==', true).select('email').stream();
+                    stream = query.where('verified', '==', true).select('email').get();
                     break;
                 case 'sellers':
-                    stream = query.where('roles', 'array-contains', 'seller').select('email').stream();
+                    stream = query.where('roles', 'array-contains', 'seller').select('email').get();
                     break;
                 case 'wave': {
-                    const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select('email', 'userEmail').stream();
+                    const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select('email', 'userEmail').get();
                     let waveCount = 0;
-                    for await (const doc of waveStream as any) {
+                    for (const doc of (await waveStream).docs) {
                         const data = doc.data();
                         const email = data.email || data.userEmail;
                         if (email) emails.push(email);
@@ -69,12 +69,12 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 }
                 case 'all':
                 default:
-                    stream = query.select('email').stream();
+                    stream = query.select('email').get();
                     break;
             }
 
             let mainCount = 0;
-            for await (const doc of stream as any) {
+            for (const doc of (await stream).docs) {
                 const data = doc.data();
                 if (data.email) {
                     emails.push(data.email);

@@ -147,8 +147,8 @@ export async function getCooperativeStatsAction(): Promise<{
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-        const txnStream = txnQuery.select("type", "status", "amount", "date").stream();
-        for await (const doc of txnStream as any) {
+        const txnStream = txnQuery.select("type", "status", "amount", "date").get();
+        for (const doc of (await txnStream).docs) {
             const t = doc.data();
             totalTransactions++;
             
@@ -180,13 +180,13 @@ export async function getCooperativeStatsAction(): Promise<{
         // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
         // Ideally loans should have cooperativeId. Checking Schema...
         // If not, we filter in memory against the 'members' list we already fetched.
-        const loansStream = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status").stream();
+        const loansStream = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status").get();
         let totalLoans = 0;
         let activeLoans = 0;
         let pendingLoans = 0;
         const validMemberIds = adminScope ? new Set(paidMembersList.map((m: any) => m.id)) : null;
 
-        for await (const doc of loansStream as any) {
+        for (const doc of (await loansStream).docs) {
             const l = doc.data();
             if (validMemberIds && !validMemberIds.has(l.memberId)) continue;
             
@@ -572,8 +572,8 @@ export async function getContributionReportsAction(options?: {
             });
         }
 
-        const stream = q.select("type", "amount", "userId", "date").stream();
-        for await (const doc of stream as any) {
+        const stream = q.select("type", "amount", "userId", "date").get();
+        for (const doc of (await stream).docs) {
             const t = doc.data();
             if (t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee") {
                 const amount = Number(t.amount) || 0;
