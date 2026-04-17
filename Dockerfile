@@ -24,10 +24,14 @@ WORKDIR /app
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Cache-bust: increment this label whenever you need to force a full source rebuild
-LABEL build-version="2026-04-17-v4"
+# Cache-bust: Railway sets CACHEBUST to a unique value (e.g. timestamp) on every
+# deploy via a build variable, ensuring COPY . . is never served from a stale layer.
+# To set this in Railway: add a build variable CACHEBUST with value ${new Date().getTime()}
+# or simply use the Railway UI "Redeploy" with "Clear build cache" option.
+ARG CACHEBUST=1
+RUN echo "Cache bust: $CACHEBUST"
 
-# Copy all source files
+# Copy all source files (this layer is invalidated whenever CACHEBUST changes)
 COPY . .
 
 # Disable Next.js telemetry during build
