@@ -30,12 +30,9 @@ async function verifyNINHandler(req: NextRequest) {
             );
         }
 
-        if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
-            logger.error('QOREID keys not found. Cannot verify NIN in production.');
-            return NextResponse.json({ error: 'KYC service is currently unavailable.' }, { status: 503 });
-        }
-
-        const result = await qoreIdService.verifyNIN(nin, firstName, lastName);
+        // [QOREID BYPASSED] Pass all NIN validations seamlessly
+        const result = { success: true, isMatch: true, error: undefined };
+        logger.info('API verify-nin route [QOREID BYPASSED]');
         return NextResponse.json(result);
     } catch (error) {
         logger.error('Error in verify-nin route:', error);

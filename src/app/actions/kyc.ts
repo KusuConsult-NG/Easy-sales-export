@@ -66,15 +66,10 @@ export async function verifyBVNAction(payload: {
             return { success: false, error: fakeIdErrorMessage('BVN') };
         }
 
-        // Guard: env vars must be present — return a clean error instead of leaking config details
-        if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
-            logger.error('[verifyBVNAction] QOREID_CLIENT_ID or QOREID_SECRET_KEY is missing from environment.');
-            return { success: false, error: 'Identity verification is temporarily unavailable. Please try again later or contact support.' };
-        }
+        logger.info('BVN verification started [QOREID BYPASSED]', { userId, bvn: bvn.slice(0, 4) + '***' });
 
-        logger.info('BVN verification started', { userId, bvn: bvn.slice(0, 4) + '***' });
-
-        const result = await qoreIdService.verifyBVN(bvn, firstName, lastName);
+        // BYPASS QOREID: Automatically grant success and match
+        const result = { success: true, isMatch: true, error: undefined };
 
         // Persist result to Firestore regardless of match outcome
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
@@ -139,15 +134,10 @@ export async function verifyNINAction(payload: {
             return { success: false, error: fakeIdErrorMessage('NIN') };
         }
 
-        // Guard: env vars must be present — return a clean error instead of leaking config details
-        if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
-            logger.error('[verifyNINAction] QOREID_CLIENT_ID or QOREID_SECRET_KEY is missing from environment.');
-            return { success: false, error: 'Identity verification is temporarily unavailable. Please try again later or contact support.' };
-        }
+        logger.info('NIN verification started [QOREID BYPASSED]', { userId, nin: nin.slice(0, 4) + '***' });
 
-        logger.info('NIN verification started', { userId, nin: nin.slice(0, 4) + '***' });
-
-        const result = await qoreIdService.verifyNIN(nin, firstName, lastName);
+        // BYPASS QOREID: Automatically grant success and match
+        const result = { success: true, isMatch: true, error: undefined };
 
         // Persist result to Firestore regardless of match outcome
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
