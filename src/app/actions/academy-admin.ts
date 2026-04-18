@@ -350,12 +350,14 @@ export async function getStandardAcademyApplicationsAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("createdAt", "desc");
+        // NOTE: academy_applications documents use 'submittedAt', not 'createdAt'.
+        // orderBy('createdAt') would return 0 results because the field doesn't exist on most docs.
+        let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", "desc");
         
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", options.status)
-                .orderBy("createdAt", "desc");
+                .orderBy("submittedAt", "desc");
         }
 
         if (options.lastDocId) {
