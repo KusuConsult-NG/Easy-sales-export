@@ -285,14 +285,24 @@ export async function getAllMembersAction(options?: {
         let members = allMembers.filter((m: any) => m.paymentStatus === "completed");
 
         if (options?.search) {
-            const s = options.search.toLowerCase();
-            members = members.filter((m: any) =>
-                m.firstName?.toLowerCase()?.includes(s) ||
-                m.lastName?.toLowerCase()?.includes(s) ||
-                m.fullName?.toLowerCase()?.includes(s) ||
-                m.email?.toLowerCase()?.includes(s) ||
-                m.phone?.includes(s)
-            );
+            const s = options.search.toLowerCase().trim();
+            members = members.filter((m: any) => {
+                const searchString = [
+                    m.id,
+                    m.userId,
+                    m.firstName,
+                    m.lastName,
+                    m.fullName,
+                    m.email,
+                    m.phone,
+                    m.bankName,
+                    m.accountNumber,
+                    m.nin,
+                    m.bvn
+                ].filter(Boolean).join(" ").toLowerCase();
+                
+                return searchString.includes(s);
+            });
         }
 
         return { success: true, data: { members }, meta: { hasMore: false, cursor: null } };

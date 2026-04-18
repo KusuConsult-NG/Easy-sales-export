@@ -527,12 +527,23 @@ export async function getStandardWaveApplicationsAction(options: {
         // Client-side search application if specified
         let finalForms = standardForms;
         if (options.search) {
-            const s = options.search.toLowerCase();
-            finalForms = standardForms.filter((f: any) => 
-                f.user.name?.toLowerCase().includes(s) || 
-                f.user.email?.toLowerCase().includes(s) || 
-                f.user.phone?.includes(s)
-            );
+            const s = options.search.toLowerCase().trim();
+            finalForms = standardForms.filter((f: any) => {
+                const searchString = [
+                    f.id,
+                    f.user?.id,
+                    f.user?.name,
+                    f.user?.email,
+                    f.user?.phone,
+                    f.data?.bankName,
+                    f.data?.accountNumber,
+                    f.data?.stateOfOrigin,
+                    f.data?.nin,
+                    f.data?.bvn
+                ].filter(Boolean).join(" ").toLowerCase();
+                
+                return searchString.includes(s);
+            });
         }
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;

@@ -242,12 +242,22 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         });
 
         if (options.search) {
-            const s = options.search.toLowerCase();
-            applications = applications.filter((app: any) => 
-                app.user.name?.toLowerCase().includes(s) || 
-                app.user.email?.toLowerCase().includes(s) || 
-                app.user.phone?.includes(s)
-            );
+            const s = options.search.toLowerCase().trim();
+            applications = applications.filter((app: any) => {
+                const searchString = [
+                    app.id,
+                    app.user?.id,
+                    app.user?.name,
+                    app.user?.email,
+                    app.user?.phone,
+                    app.data?.firstName,
+                    app.data?.lastName,
+                    app.data?.fullName,
+                    app.data?.stateOfOrigin
+                ].filter(Boolean).join(" ").toLowerCase();
+                
+                return searchString.includes(s);
+            });
         }
 
         // We sort manually for this specific page, but note that across multiple pages, it sorts within the page buffer.
