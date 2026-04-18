@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { uploadDocumentAction } from "@/app/actions/upload";
 
 interface UploadState {
     progress: number;
@@ -35,13 +34,12 @@ export function useStorage() {
                 [file.name]: { ...prev[file.name], progress: 20 },
             }));
 
-            // Derive documentType from the path segment after the last slash grouping
             const documentType = path.split("/").pop()?.replace(/^\d+_/, "") || file.name;
+            const folder = path.split("/").slice(0, -1).join("/") || "uploads";
 
             const formData = new FormData();
             formData.append("file", file);
-            formData.append("fileName", file.name);
-            formData.append("mimeType", file.type);
+            formData.append("folder", folder);
             formData.append("documentType", documentType);
 
             setUploadState(prev => ({
@@ -49,13 +47,14 @@ export function useStorage() {
                 [file.name]: { ...prev[file.name], progress: 50 },
             }));
 
-            // Step 2: Upload via server action (Cloudinary, authenticated, streaming)
+            // Step 2: Upload via API route (Cloudinary, authenticated, streaming)
             // Retry wrapper for robust uploads
             const uploadWithRetry = async (attempt = 1): Promise<any> => {
                 try {
-                    const res = await uploadDocumentAction(formData);
-                    if (!res.success || !res.url) throw new Error(res.error || "Upload failed");
-                    return res;
+                    const res = await fetch("/api/upload", { method: "POST", body: formData });
+                    const resData = await res.json();
+                    if (!res.ok || !resData.success || !resData.url) throw new Error(resData.error || "Upload failed");
+                    return resData;
                 } catch (err) {
                     if (attempt < 3) {
                         // Exponential backoff: 1s, 2s, 4s...

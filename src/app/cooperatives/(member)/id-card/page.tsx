@@ -8,7 +8,6 @@ import {
     CheckCircle, IdCard, Shield, Camera, Upload, RefreshCw,
 } from "lucide-react";
 import { getCooperativeMemberIdCardAction, updatePassportPhotoAction, type MemberIdCardData } from "@/app/actions/cooperative";
-import { uploadDocumentAction } from "@/app/actions/upload";
 import { useToast } from "@/contexts/ToastContext";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,12 +46,13 @@ function PassportUploadWidget({ onUploaded }: { onUploaded: (url: string, name: 
         try {
             const formData = new FormData();
             formData.append("file", file);
-            formData.append("fileName", file.name);
-            formData.append("mimeType", file.type);
+            formData.append("folder", "id-cards");
             formData.append("documentType", "passportPhoto");
 
-            const result = await uploadDocumentAction(formData);
-            if (!result.success || !result.url) {
+            const res = await fetch("/api/upload", { method: "POST", body: formData });
+            const result = await res.json();
+            
+            if (!res.ok || !result.success || !result.url) {
                 showToast(result.error || "Upload failed. Please try again.", "error");
                 return;
             }

@@ -9,7 +9,6 @@
 
 import { useState } from "react";
 import { Upload, FileText, Image, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { uploadDocumentAction } from "@/app/actions/upload";
 import { useToast } from "@/contexts/ToastContext";
 import { IdInput } from "@/components/ui/IdInput";
 
@@ -62,15 +61,15 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         try {
             const formData = new FormData();
             formData.append("file", file);
-            formData.append("fileName", file.name);
-            formData.append("mimeType", file.type);
+            formData.append("folder", "documents");
             formData.append("documentType", field);
 
             setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 40 } }));
 
-            const result = await uploadDocumentAction(formData);
+            const res = await fetch("/api/upload", { method: "POST", body: formData });
+            const result = await res.json();
 
-            if (!result.success || !result.url) {
+            if (!res.ok || !result.success || !result.url) {
                 throw new Error(result.error || 'Upload failed');
             }
 
