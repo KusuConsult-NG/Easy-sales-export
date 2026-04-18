@@ -331,11 +331,23 @@ export async function searchUsersAction(query: string) {
             return { users: admins, error: null };
         }
 
-        // Generic search: pull admins first to guarantee they are never hidden by the 100 limit
-        const [adminsSnapshot, generalSnapshot] = await Promise.all([
-            db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ["admin", "super_admin"]).get(),
-            db.collection(COLLECTIONS.USERS).limit(200).get()
-        ]);
+        // Generic search: pull admins first to guarantee they are never hidden
+        let adminsSnapshot: any;
+        let generalSnapshot: any;
+
+        try {
+            [adminsSnapshot, generalSnapshot] = await Promise.all([
+                db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ["admin", "super_admin"]).get(),
+                // Use lastLoginAt so admins can always find recently active platform users easily
+                db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get()
+            ]);
+        } catch (e) {
+            // Fallback if the composite index is missing
+            [adminsSnapshot, generalSnapshot] = await Promise.all([
+                db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ["admin", "super_admin"]).get(),
+                db.collection(COLLECTIONS.USERS).limit(500).get()
+            ]);
+        }
 
         const users: UserSearchResult[] = [];
         const seenIds = new Set<string>([session.user.id]); // Exclude self
