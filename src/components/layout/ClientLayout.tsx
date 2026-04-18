@@ -41,7 +41,7 @@ function getSidebarMode(pathname: string): SidebarMode {
     ) return "none";
 
     // Hub dashboard and Admin panel render their own custom navigation layouts internally
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin")) return "none";
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/admin") || pathname.startsWith("/messages")) return "none";
 
     // Module root landing pages (exact match only — not /academy/dashboard)
     const MODULE_ROOTS = [
@@ -59,7 +59,7 @@ function getSidebarMode(pathname: string): SidebarMode {
         "/farm-nation/landing", "/farm-nation/application",
         "/export/landing", "/export/application",
         // Universal pages without a module context -- content is full-width
-        "/messages", "/profile",
+        "/profile",
     ];
     if (NON_MEMBER_PREFIXES.some(p => pathname.startsWith(p))) return "none";
 

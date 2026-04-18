@@ -197,13 +197,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         "auth/invalid-credential": "Invalid email or password.",
                         "auth/wrong-password": "Invalid email or password.",
                         "auth/user-not-found": "Invalid email or password.",
+                        "INVALID_LOGIN_CREDENTIALS": "Invalid email or password.",
+                        "INVALID_PASSWORD": "Invalid email or password.",
+                        "EMAIL_NOT_FOUND": "Invalid email or password.",
                         "auth/user-disabled": "Your account has been disabled. Please contact support.",
+                        "USER_DISABLED": "Your account has been disabled. Please contact support.",
                         "auth/too-many-requests": "Too many attempts. Please try again later.",
+                        "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Please try again later.",
                         "auth/network-request-failed": "Network error — please check your connection and try again.",
                         "auth/operation-not-allowed": "Email/password login is not enabled. Please contact support.",
+                        "OPERATION_NOT_ALLOWED": "Email/password login is not enabled. Please contact support.",
                     };
 
-                    const userMessage = firebaseErrorMap[code] || error?.message || "Authentication failed.";
+                    // Only fallback to error.message if it's not the exact raw ALL_CAPS string code 
+                    // (prevents ugly raw strings in UI if mapping misses something)
+                    let userMessage = firebaseErrorMap[code] || firebaseErrorMap[error?.message] || "Authentication failed.";
+                    if (!firebaseErrorMap[code] && !firebaseErrorMap[error?.message] && error?.message && !/^[A-Z_]+$/.test(error?.message)) {
+                        userMessage = error.message;
+                    }
 
                     console.error("Throwing AuthError with message:", userMessage, "Original error:", error);
 
@@ -306,10 +317,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             console.error(`🔴 [NEXTAUTH_FRAMEWORK_ERROR] ${(code as any)?.name || code}:`, ...message);
         },
         warn(code, ...message) {
+            if (code === "debug-enabled") return; // Silence the expected debug warning
             console.warn(`🟠 [NEXTAUTH_FRAMEWORK_WARN] ${(code as any)?.name || code}:`, ...message);
         },
         debug(code, ...message) {
-            console.log(`🔵 [NEXTAUTH_FRAMEWORK_DEBUG] ${(code as any)?.name || code}:`, ...message);
+            // Disabled trace level debug to prevent terminal spam
+            // console.log(`🔵 [NEXTAUTH_FRAMEWORK_DEBUG] ${(code as any)?.name || code}:`, ...message);
         }
     }
 });

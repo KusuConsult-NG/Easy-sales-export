@@ -36,21 +36,52 @@ export async function requireSession(): Promise<
     }
 
     try {
-        const db = getAdminDb();
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const { getCached, CacheKeys, setCache, CACHE_TTL } = await import("@/lib/redis");
+        const cacheKey = CacheKeys.userProfile(session.user.id);
 
-        if (!userDoc.exists) {
-            return {
-                session: null,
-                error: {
-                    success: false,
-                    code: SESSION_EXPIRED_CODE,
-                    error: "Account not found. Please log in again.",
-                },
-            };
+        let data: any = null;
+        let fromCache = false;
+
+        // 1. Try Redis cache first
+        try {
+            data = await getCached(cacheKey);
+            if (data) fromCache = true;
+        } catch (e) {
+            console.error("[SessionGuard] Redis cache read failed:", e);
         }
 
-        const data = userDoc.data();
+        // 2. Fallback to Firestore if cache misses
+        if (!data) {
+            const db = getAdminDb();
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+
+            if (!userDoc.exists) {
+                return {
+                    session: null,
+                    error: {
+                        success: false,
+                        code: SESSION_EXPIRED_CODE,
+                        error: "Account not found. Please log in again.",
+                    },
+                };
+            }
+
+            data = userDoc.data();
+
+            // 3. Populate cache
+            if (data) {
+                try {
+                    await setCache(cacheKey, {
+                         ...(data as any),
+                         roles: data.roles || [] 
+                    }, CACHE_TTL.USER_PROFILE);
+                } catch (e) {
+                    console.error("[SessionGuard] Redis cache write failed:", e);
+                }
+            }
+        }
+
+        // 4. Verify account status
         if (data?.isBanned || data?.status === "banned" || data?.suspended) {
             return {
                 session: null,
@@ -62,7 +93,7 @@ export async function requireSession(): Promise<
             };
         }
 
-        // Force-sync live roles from database over stale JWT roles
+        // Force-sync live roles from database/cache over stale JWT roles
         if (data?.roles) {
             session.user.roles = data.roles;
         }

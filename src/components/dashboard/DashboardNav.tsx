@@ -151,10 +151,6 @@ export default function DashboardNav() {
         // Messages + Notifications — universal
         { label: "Messages",       href: "/messages",                   icon: MessageCircle, badge: unreadMessages || null },
         { label: "Notifications",  href: "/dashboard/notifications",    icon: Bell,          badge: unreadCount || null },
-        // Digital ID — universal
-        ...(toggles.digital_id_system !== false ? [
-            { label: "Digital ID",     href: "/dashboard/digital-id",       icon: IdCard },
-        ] : []),
         // Marketplace-only items
         ...(isMarketplaceUser ? [
             { label: "My Orders",  href: "/marketplace/buyer/orders",   icon: Package },
