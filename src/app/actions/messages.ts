@@ -244,14 +244,12 @@ export async function startConversationAction(participantUid: string, productId?
         for (const doc of existingSnapshot.docs) {
             const conversation = doc.data() as any;
             if (conversation.participants.includes(participantUid) && conversation.participants.length === 2) {
-                // If this is a product-specific chat request, ensure productId matches to avoid mixing
-                if (productId) {
-                    if (conversation.productId === productId) return { conversationId: doc.id, error: null };
-                } else {
-                    // For generic support chat, ensure it's not a product/order-specific chat
-                    if (!conversation.productId && !conversation.orderId) {
-                        return { conversationId: doc.id, error: null };
-                    }
+                // Ensure exact match of chat context to avoid mingling product/order/generic chats
+                const hasMatchingProduct = productId ? conversation.productId === productId : !conversation.productId;
+                const hasMatchingOrder = orderId ? conversation.orderId === orderId : !conversation.orderId;
+
+                if (hasMatchingProduct && hasMatchingOrder) {
+                    return { conversationId: doc.id, error: null };
                 }
             }
         }
