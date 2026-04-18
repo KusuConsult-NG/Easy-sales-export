@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState } from "react";
 import {
-    FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter,
-    Search, Eye, BookOpen, GraduationCap, DollarSign, Users
+    FileText, CheckCircle, XCircle, Loader2, Filter,
+    Search, Eye, BookOpen, GraduationCap, DollarSign,
+    X, User, Phone, Mail, MapPin, Briefcase, Calendar,
+    Target, Award
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -11,19 +13,18 @@ import {
     rejectAcademyApplicationAction,
     markAcademyApplicationUnderReviewAction
 } from "@/app/actions/admin";
-import { db } from "@/lib/firebase";
-import { collection, query, limit, where, getDocs } from "firebase/firestore";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
 import { getStandardAcademyApplicationsAction, getAcademyStatsAction } from "@/app/actions/academy-admin";
 import { useAdminData } from "@/hooks/useAdminData";
+import { useEffect } from "react";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
 interface AcademyApplication {
     id: string;
     personalInfo: {
-        fullName: string; // always derived — never stored raw from new submissions
+        fullName: string;
         firstName?: string;
         lastName?: string;
         otherName?: string;
@@ -33,6 +34,13 @@ interface AcademyApplication {
     education?: {
         educationLevel?: string;
         fieldOfStudy?: string;
+        yearsExperience?: number;
+        currentRole?: string;
+    };
+    interests?: {
+        learningPaths?: string[];
+        topics?: string;
+        goals?: string;
     };
     status: ApplicationStatus;
     submittedAt: string | null;
@@ -43,11 +51,17 @@ interface AcademyApplication {
     plan?: string;
     paymentReference?: string | null;
     source?: string;
-    // true = has a formal academy_applications doc (can be reviewed/approved)
-    hasApplicationDoc?: boolean;
+    // Extra merged fields from backend
+    gender?: string;
+    dateOfBirth?: string;
+    occupation?: string;
+    stateOfOrigin?: string;
+    lga?: string;
+    residentialAddress?: string;
+    _raw?: any; // full merged data object
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function toIso(ts: any): string | null {
     if (!ts) return null;
     if (ts?.toDate) return ts.toDate().toISOString();
@@ -68,7 +82,9 @@ function planBadge(plan: string | undefined) {
     const colors: Record<string, string> = {
         elite: "bg-purple-100 text-purple-700",
         advanced: "bg-blue-100 text-blue-700",
+        standard: "bg-indigo-100 text-indigo-700",
         foundation: "bg-green-100 text-green-700",
+        registration: "bg-slate-100 text-slate-600",
     };
     const label = plan.charAt(0).toUpperCase() + plan.slice(1);
     return (
@@ -78,7 +94,200 @@ function planBadge(plan: string | undefined) {
     );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+const statusColor = (s: ApplicationStatus) => ({
+    approved: "bg-green-100 text-green-700",
+    rejected: "bg-red-100 text-red-700",
+    under_review: "bg-blue-100 text-blue-700",
+    pending: "bg-yellow-100 text-yellow-700",
+}[s] ?? "bg-slate-100 text-slate-600");
+
+// ─── Detail Modal ─────────────────────────────────────────────────────────────
+function ApplicationDetailModal({
+    app,
+    onClose,
+    onApprove,
+    onReject,
+    onReview,
+    processingId,
+}: {
+    app: AcademyApplication;
+    onClose: () => void;
+    onApprove: (id: string) => void;
+    onReject: (id: string) => void;
+    onReview: (id: string) => void;
+    processingId: string | null;
+}) {
+    const d = app._raw || {};
+    const pi = d.personalInfo || {};
+    const edu = d.education || app.education || {};
+    const interests = d.interests || app.interests || {};
+
+    const Row = ({ label, value }: { label: string; value?: string | number | null }) => (
+        value ? (
+            <div className="flex flex-col sm:flex-row sm:items-start gap-1 py-2 border-b border-slate-100 last:border-0">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide sm:w-44 shrink-0">{label}</span>
+                <span className="text-sm text-slate-800 font-medium">{String(value)}</span>
+            </div>
+        ) : null
+    );
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.55)" }}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                {/* Header */}
+                <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-2xl z-10">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                            <GraduationCap className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-bold text-slate-900">{app.personalInfo.fullName}</h2>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
+                                {app.status.replace("_", " ")}
+                            </span>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                </div>
+
+                <div className="px-6 py-5 space-y-6">
+                    {/* Personal Info */}
+                    <section>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                            <User className="w-4 h-4" /> Personal Information
+                        </h3>
+                        <div className="bg-slate-50 rounded-xl px-4 py-2">
+                            <Row label="Full Name" value={app.personalInfo.fullName} />
+                            <Row label="Email" value={app.personalInfo.email} />
+                            <Row label="Phone" value={app.personalInfo.phone || d.phone} />
+                            <Row label="Gender" value={d.gender || app.gender} />
+                            <Row label="Date of Birth" value={d.dateOfBirth || app.dateOfBirth} />
+                            <Row label="Occupation" value={d.occupation || pi.occupation || app.occupation} />
+                            <Row label="State" value={d.stateOfOrigin || pi.stateOfOrigin || pi.state || app.stateOfOrigin} />
+                            <Row label="LGA" value={d.lga || pi.lga || app.lga} />
+                            <Row label="Address" value={d.residentialAddress || pi.residentialAddress || app.residentialAddress} />
+                        </div>
+                    </section>
+
+                    {/* Education */}
+                    <section>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                            <BookOpen className="w-4 h-4" /> Education & Background
+                        </h3>
+                        <div className="bg-slate-50 rounded-xl px-4 py-2">
+                            <Row label="Education Level" value={edu.educationLevel} />
+                            <Row label="Field of Study" value={edu.fieldOfStudy} />
+                            <Row label="Years Experience" value={edu.yearsExperience != null ? `${edu.yearsExperience} years` : undefined} />
+                            <Row label="Current Role" value={edu.currentRole} />
+                        </div>
+                    </section>
+
+                    {/* Interests & Goals */}
+                    <section>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                            <Target className="w-4 h-4" /> Learning Interests & Goals
+                        </h3>
+                        <div className="bg-slate-50 rounded-xl px-4 py-3 space-y-3">
+                            {interests.learningPaths?.length > 0 && (
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Learning Paths</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {interests.learningPaths.map((p: string) => (
+                                            <span key={p} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">{p}</span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {interests.topics && (
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Topics of Interest</p>
+                                    <p className="text-sm text-slate-700">{interests.topics}</p>
+                                </div>
+                            )}
+                            {interests.goals && (
+                                <div>
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Goals</p>
+                                    <p className="text-sm text-slate-700">{interests.goals}</p>
+                                </div>
+                            )}
+                            {!interests.goals && !interests.topics && (!interests.learningPaths?.length) && (
+                                <p className="text-sm text-slate-400 italic">Not provided</p>
+                            )}
+                        </div>
+                    </section>
+
+                    {/* Payment */}
+                    <section>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                            <DollarSign className="w-4 h-4" /> Payment Details
+                        </h3>
+                        <div className="bg-slate-50 rounded-xl px-4 py-2">
+                            <Row label="Plan" value={app.plan} />
+                            <Row label="Payment Status" value={app.paymentStatus} />
+                            <Row label="Amount Paid" value={app.paymentAmount != null ? `₦${app.paymentAmount.toLocaleString()}` : undefined} />
+                            <Row label="Reference" value={app.paymentReference ?? undefined} />
+                            <Row label="Source" value={app.source} />
+                        </div>
+                    </section>
+
+                    {/* Meta */}
+                    <section>
+                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                            <Calendar className="w-4 h-4" /> Application Meta
+                        </h3>
+                        <div className="bg-slate-50 rounded-xl px-4 py-2">
+                            <Row label="Application ID" value={app.id} />
+                            <Row label="Submitted" value={fmtDate(app.submittedAt)} />
+                            <Row label="Reviewed" value={fmtDate(app.reviewedAt)} />
+                            {app.rejectionReason && <Row label="Rejection Reason" value={app.rejectionReason} />}
+                        </div>
+                    </section>
+                </div>
+
+                {/* Action Footer */}
+                <div className="sticky bottom-0 bg-white border-t border-slate-200 px-6 py-4 flex flex-wrap gap-3 justify-end rounded-b-2xl">
+                    <button onClick={onClose} className="px-4 py-2 border border-slate-300 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 transition">
+                        Close
+                    </button>
+                    {(app.status === "pending" || app.status === "under_review") && (
+                        <>
+                            <button
+                                onClick={() => onReject(app.id)}
+                                disabled={!!processingId}
+                                className="px-4 py-2 rounded-xl border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                                Reject
+                            </button>
+                            {app.status === "pending" && (
+                                <button
+                                    onClick={() => onReview(app.id)}
+                                    disabled={!!processingId}
+                                    className="px-4 py-2 rounded-xl border border-amber-400 text-amber-700 font-semibold hover:bg-amber-50 transition disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {processingId === app.id + "_review" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                                    Mark Under Review
+                                </button>
+                            )}
+                            <button
+                                onClick={() => onApprove(app.id)}
+                                disabled={!!processingId}
+                                className="px-4 py-2 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                Approve
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AdminAcademyApplicationsPage() {
     const { showToast } = useToast();
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
@@ -86,6 +295,7 @@ export default function AdminAcademyApplicationsPage() {
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+    const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
 
     useEffect(() => {
@@ -107,7 +317,6 @@ export default function AdminAcademyApplicationsPage() {
     } = useAdminData<AcademyApplication>({
         fetchAction: async (opts) => {
             try {
-                // Pass dependencies gracefully
                 const result = await getStandardAcademyApplicationsAction({
                     limit: opts.limit || 50,
                     lastDocId: opts.lastDocId,
@@ -134,15 +343,23 @@ export default function AdminAcademyApplicationsPage() {
                             phone: pi.phone ?? d.phone ?? stdApp.user.phone ?? "",
                         },
                         education: d.education,
+                        interests: d.interests,
                         status: stdApp.status,
                         submittedAt: toIso(d.submittedAt || d.createdAt),
+                        reviewedAt: toIso(d.reviewedAt),
                         rejectionReason: d.rejectionReason,
                         paymentStatus: d.paymentStatus,
                         paymentAmount: d.paymentAmount ? Number(d.paymentAmount) : undefined,
                         plan: d.plan,
                         paymentReference: d.paymentReference,
                         source: d.source,
-                        hasApplicationDoc: true,
+                        gender: d.gender,
+                        dateOfBirth: d.dateOfBirth,
+                        occupation: d.occupation,
+                        stateOfOrigin: d.stateOfOrigin,
+                        lga: d.lga,
+                        residentialAddress: d.residentialAddress,
+                        _raw: d, // keep full merged object for the detail modal
                     } as AcademyApplication;
                 });
 
@@ -167,12 +384,13 @@ export default function AdminAcademyApplicationsPage() {
         const result = await approveAcademyApplicationAction(id);
         if (result.success) {
             showToast("Application approved", "success");
+            setSelectedApp(null);
             await fetchData();
         } else {
             showToast(result.error || "Failed to approve", "error");
         }
         setProcessingId(null);
-    };
+    }
 
     async function handleReject(id: string) {
         const reason = prompt("Enter rejection reason:");
@@ -181,40 +399,33 @@ export default function AdminAcademyApplicationsPage() {
         const result = await rejectAcademyApplicationAction(id, reason);
         if (result.success) {
             showToast("Application rejected", "success");
+            setSelectedApp(null);
             await fetchData();
         } else {
             showToast(result.error || "Failed to reject", "error");
         }
         setProcessingId(null);
-    };
+    }
 
     async function handleMarkUnderReview(id: string) {
         setProcessingId(id + "_review");
         const result = await markAcademyApplicationUnderReviewAction(id);
         if (result.success) {
             showToast("Application marked under review", "success");
+            setSelectedApp(null);
             await fetchData();
         } else {
             showToast(result.error || "Failed to mark under review", "error");
         }
         setProcessingId(null);
-    };
+    }
 
-    const statusColor = (s: ApplicationStatus) => ({
-        approved: "bg-green-100 text-green-700",
-        rejected: "bg-red-100 text-red-700",
-        under_review: "bg-blue-100 text-blue-700",
-        pending: "bg-yellow-100 text-yellow-700",
-    }[s] ?? "bg-slate-100 text-slate-600");
+    const filtered = applications.filter(a => {
+        if (paymentFilter === "all") return true;
+        if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
+        return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
+    });
 
-    const filtered = applications
-        .filter(a => {
-            if (paymentFilter === "all") return true;
-            if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
-            return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
-        });
-
-    // Counts per status for tab badges
     const counts = { pending: 0, under_review: 0, approved: 0, rejected: 0 };
     applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
 
@@ -240,23 +451,23 @@ export default function AdminAcademyApplicationsPage() {
                 </div>
             </div>
 
-            {/* Summary Strip */}
+            {/* Status Summary Tabs */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {(["pending", "under_review", "approved", "rejected"] as const).map(s => (
                     <button
                         key={s}
                         onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
-                        className={`rounded-xl p-4 text-left transition border ${
-                            statusFilter === s ? "ring-2 ring-blue-500" : ""
-                        } ${statusColor(s)} bg-white border-slate-200`}
+                        className={`rounded-xl p-4 text-left transition border bg-white border-slate-200 ${statusFilter === s ? "ring-2 ring-blue-500" : ""}`}
                     >
-                        <p className="text-2xl font-bold">{counts[s]}</p>
-                        <p className="text-xs font-semibold capitalize">{s.replace("_", " ")}</p>
+                        <p className="text-2xl font-bold text-slate-900">{counts[s]}</p>
+                        <p className={`text-xs font-semibold capitalize px-2 py-0.5 rounded-full inline-block mt-1 ${statusColor(s)}`}>
+                            {s.replace("_", " ")}
+                        </p>
                     </button>
                 ))}
             </div>
 
-            {/* Filter + Search */}
+            {/* Filters */}
             <div className="flex flex-wrap items-center gap-4 mb-6">
                 <div className="flex items-center gap-2">
                     <Filter className="w-4 h-4 text-slate-500" />
@@ -272,7 +483,6 @@ export default function AdminAcademyApplicationsPage() {
                         <option value="rejected">Rejected</option>
                     </select>
                 </div>
-                
                 <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-slate-500" />
                     <select
@@ -289,7 +499,7 @@ export default function AdminAcademyApplicationsPage() {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                         type="text"
-                        placeholder="Search by name, email, phone, plan…"
+                        placeholder="Search by name, email, phone…"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -305,97 +515,87 @@ export default function AdminAcademyApplicationsPage() {
                 </div>
             )}
 
-            {/* Applications */}
+            {/* Application Cards */}
             {!isLoading && applications.length > 0 && (
-                <div className="space-y-4">
+                <div className="space-y-3">
                     {filtered.map(app => (
-                        <div key={app.id} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                            <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                                        <GraduationCap className="w-6 h-6 text-blue-600" />
+                        <div key={app.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:border-blue-200 hover:shadow-md transition">
+                            <div className="flex items-start justify-between flex-wrap gap-3">
+                                <div className="flex items-start gap-4 flex-1 min-w-0">
+                                    <div className="w-11 h-11 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                        <GraduationCap className="w-5 h-5 text-blue-600" />
                                     </div>
-                                    <div>
+                                    <div className="min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <h3 className="text-lg font-bold text-slate-900">{app.personalInfo.fullName}</h3>
+                                            <h3 className="text-base font-bold text-slate-900">{app.personalInfo.fullName}</h3>
                                             {planBadge(app.plan)}
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
+                                                {app.status.replace("_", " ")}
+                                            </span>
                                         </div>
-                                        <p className="text-sm text-slate-500">{app.personalInfo.email} {app.personalInfo.phone ? `• ${app.personalInfo.phone}` : ""}</p>
-                                        {app.education?.educationLevel && (
-                                            <p className="text-sm text-slate-600 mt-0.5">
-                                                Education: <span className="font-semibold">{app.education.educationLevel}</span>
-                                                {app.education.fieldOfStudy ? ` — ${app.education.fieldOfStudy}` : ""}
-                                            </p>
-                                        )}
-                                        {app.paymentAmount != null && (
-                                            <div className="flex items-center gap-1 mt-1 text-sm text-green-700 font-semibold">
-                                                <DollarSign className="w-3.5 h-3.5" />
-                                                ₦{app.paymentAmount.toLocaleString()} paid
-                                                {app.paymentReference && (
-                                                    <span className="text-slate-400 font-normal ml-1">· Ref: {app.paymentReference}</span>
-                                                )}
-                                            </div>
-                                        )}
+                                        <p className="text-sm text-slate-500 truncate">
+                                            {app.personalInfo.email}
+                                            {app.personalInfo.phone ? ` • ${app.personalInfo.phone}` : ""}
+                                        </p>
+                                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                            {app.education?.educationLevel && (
+                                                <span className="text-xs text-slate-500">{app.education.educationLevel}</span>
+                                            )}
+                                            {app.paymentAmount != null && (
+                                                <span className="text-xs text-green-700 font-semibold">₦{app.paymentAmount.toLocaleString()} paid</span>
+                                            )}
+                                            <span className="text-xs text-slate-400">{fmtDate(app.submittedAt)}</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <span className={`px-3 py-1 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
-                                    {app.status.replace("_", " ")}
-                                </span>
-                            </div>
 
-                            <div className="flex items-center justify-between pt-4 border-t border-slate-200 flex-wrap gap-3">
-                                <p className="text-xs text-slate-500">Submitted: {fmtDate(app.submittedAt)}</p>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {/* View Details */}
+                                    <button
+                                        onClick={() => setSelectedApp(app)}
+                                        className="px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 text-sm font-semibold hover:bg-blue-50 transition flex items-center gap-1.5"
+                                    >
+                                        <Eye className="w-4 h-4" /> View
+                                    </button>
 
-                                {app.status === "pending" && (
-                                    <div className="flex gap-2 flex-wrap">
-                                        <button
-                                            onClick={() => handleReject(app.id)}
-                                            disabled={!!processingId}
-                                            className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                                            Reject
-                                        </button>
-                                        <button
-                                            onClick={() => handleMarkUnderReview(app.id)}
-                                            disabled={!!processingId}
-                                            className="px-4 py-2 rounded-lg border border-amber-400 text-amber-700 font-semibold hover:bg-amber-50 transition disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            {processingId === app.id + "_review" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                                            Under Review
-                                        </button>
+                                    {/* Quick Actions */}
+                                    {app.status === "pending" && (
+                                        <>
+                                            <button
+                                                onClick={() => handleMarkUnderReview(app.id)}
+                                                disabled={!!processingId}
+                                                className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition disabled:opacity-50"
+                                            >
+                                                Review
+                                            </button>
+                                            <button
+                                                onClick={() => handleApprove(app.id)}
+                                                disabled={!!processingId}
+                                                className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-1"
+                                            >
+                                                {processingId === app.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                                Approve
+                                            </button>
+                                        </>
+                                    )}
+                                    {app.status === "under_review" && (
                                         <button
                                             onClick={() => handleApprove(app.id)}
                                             disabled={!!processingId}
-                                            className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
+                                            className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-1"
                                         >
-                                            {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                            {processingId === app.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
                                             Approve
                                         </button>
-                                    </div>
-                                )}
-                                {app.status === "under_review" && (
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={() => handleReject(app.id)}
-                                            disabled={!!processingId}
-                                            className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            <XCircle className="w-4 h-4" /> Reject
-                                        </button>
-                                        <button
-                                            onClick={() => handleApprove(app.id)}
-                                            disabled={!!processingId}
-                                            className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            <CheckCircle className="w-4 h-4" /> Approve
-                                        </button>
-                                    </div>
-                                )}
-                                {app.status === "rejected" && app.rejectionReason && (
-                                    <p className="text-sm text-red-600">Reason: {app.rejectionReason}</p>
-                                )}
+                                    )}
+                                </div>
                             </div>
+
+                            {app.rejectionReason && (
+                                <p className="mt-2 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-1.5">
+                                    Rejection reason: {app.rejectionReason}
+                                </p>
+                            )}
                         </div>
                     ))}
 
@@ -405,15 +605,24 @@ export default function AdminAcademyApplicationsPage() {
                             <h3 className="text-xl font-bold text-slate-900 mb-2">No Applications Found</h3>
                             <p className="text-slate-600">
                                 {search ? `No results for "${search}"` :
-                                 statusFilter !== "all" ? `No ${statusFilter.replace("_"," ")} applications` :
-                                 "No academy applications yet"}
+                                    statusFilter !== "all" ? `No ${statusFilter.replace("_", " ")} applications` :
+                                        "No academy applications yet"}
                             </p>
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Pagination Controls */}
+            {/* Empty State */}
+            {!isLoading && applications.length === 0 && (
+                <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-slate-200">
+                    <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Applications Yet</h3>
+                    <p className="text-slate-600">Academy applications will appear here once submitted.</p>
+                </div>
+            )}
+
+            {/* Pagination */}
             {!isLoading && applications.length > 0 && (
                 <div className="flex items-center justify-between mt-6 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
@@ -436,10 +645,22 @@ export default function AdminAcademyApplicationsPage() {
                 </div>
             )}
 
+            {/* Detail Modal */}
+            {selectedApp && (
+                <ApplicationDetailModal
+                    app={selectedApp}
+                    onClose={() => setSelectedApp(null)}
+                    onApprove={handleApprove}
+                    onReject={handleReject}
+                    onReview={handleMarkUnderReview}
+                    processingId={processingId}
+                />
+            )}
+
             {/* Enroll Student Modal */}
-            <EnrollStudentModal 
-                isOpen={isEnrollModalOpen} 
-                onClose={() => setIsEnrollModalOpen(false)} 
+            <EnrollStudentModal
+                isOpen={isEnrollModalOpen}
+                onClose={() => setIsEnrollModalOpen(false)}
             />
         </div>
     );
