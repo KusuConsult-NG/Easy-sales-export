@@ -72,205 +72,6 @@ function lastNMonths(n: number): Array<{ label: string; start: Date; end: Date }
 // Main dashboard stats action
 // ─────────────────────────────────────────────────────────────────────────────
 
-const fetchDashboardStats = unstable_cache(
-    async (): Promise<AnalyticsData> => {
-        const months = lastNMonths(6);
-        const now = new Date();
-        const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-        // ── Parallel Firestore queries ───────────────────────────────────────────
-        const [
-            totalUsersSnap,
-            activeUsersSnap,
-            pendingEscrowsCount,
-            activeLandCount,
-            pendingLoansCount,
-            pendingSellersCount,
-            pendingWithdrawalsCount,
-            totalOrdersCount,
-            totalEscrowsCount,
-            recentLogsSnap,
-        ] = await Promise.allSettled([
-            db.collection(COLLECTIONS.USERS).count().get(),
-            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
-            safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
-            safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.WALLET_TRANSACTIONS).where("type", "==", "withdrawal").where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.MARKETPLACE_ORDERS)),
-            safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)),
-            db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc").limit(10).get(),
-        ]);
-
-        const { getPlatformMetricsAction, getGlobalPendingApprovalsAction } = await import("./global-aggregation");
-
-        const [metricsResult, pendingResult] = await Promise.all([
-            getPlatformMetricsAction(),
-            getGlobalPendingApprovalsAction()
-        ]);
-
-        const totalUsers = metricsResult.success ? (metricsResult.data?.totalUsers ?? 0) : 0;
-        const totalTransactions = metricsResult.success ? (metricsResult.data?.totalTransactions ?? 0) : 0;
-        const totalRevenue = metricsResult.success ? (metricsResult.data?.totalRevenue ?? 0) : 0;
-        const pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
-
-        // Active users: users who logged in within the last 30 days.
-        const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
-
-        const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
-        const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
-        const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
-
-        // Fetch base paid cooperative members to aggregate without needing a new date index
-        let paidCoops: any[] = [];
-        try {
-            const coopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").get();
-            paidCoops = coopSnap.docs.map(d => d.data());
-        } catch(_e) {}
-
-        let monthlyRevenue = 0;
-
-        // ── Revenue by month (last 6 months — all payment sources) ─────────────
-        let recentPayments: any[] = [];
-        try {
-            const pSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("status", "==", "completed")
-                .limit(5000)
-                .get();
-            recentPayments = pSnap.docs.map(d => d.data());
-        } catch (_e) {}
-
-        const monthRevDocs = recentPayments.filter(d => {
-            const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt ?? 0);
-            return pAt >= thisMonthStart;
-        });
-        monthlyRevenue = monthRevDocs.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
-
-        const revenueByMonth = months.map(({ label, start, end }) => {
-            let rev = 0;
-            recentPayments.forEach(d => {
-                const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt);
-                if (pAt >= start && pAt <= end) {
-                    rev += (Number(d.amount) || 0);
-                }
-            });
-            return { month: label, revenue: rev };
-        });
-
-        // ── User growth by month (last 6 months) ────────────────────────────────
-        const userGrowthByMonth = await Promise.all(
-            months.map(async ({ label, start, end }) => {
-                try {
-                    const snap = await db
-                        .collection(COLLECTIONS.USERS)
-                        .where("createdAt", ">=", start)
-                        .where("createdAt", "<=", end)
-                        .count()
-                        .get();
-                    return { month: label, users: snap.data().count ?? 0 };
-                } catch (_e) {
-                    return { month: label, users: 0 };
-                }
-            })
-        );
-
-        // ── Module usage (for pie chart) ─────────────────────────────────────────
-        const [waveCount, academyCount, cooperativeCount, farmNationCount, marketplaceCount, exportCount] =
-            await Promise.allSettled([
-                safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                    .where("status", "in", ["pending", "submitted", "under_review", "approved"])),
-                safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
-                safeCount(
-                    db
-                        .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                        .where("paymentStatus", "==", "completed")
-                ),
-                safeCount(db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)),
-                safeCount(
-                    db
-                        .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                        .where("status", "!=", "rejected")
-                ),
-                safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
-            ]);
-
-        const moduleUsage = [
-            { module: "WAVE", count: waveCount.status === "fulfilled" ? waveCount.value : 0 },
-            { module: "Academy", count: academyCount.status === "fulfilled" ? academyCount.value : 0 },
-            { module: "Cooperative", count: cooperativeCount.status === "fulfilled" ? cooperativeCount.value : 0 },
-            { module: "Farm Nation", count: farmNationCount.status === "fulfilled" ? farmNationCount.value : 0 },
-            { module: "Marketplace", count: marketplaceCount.status === "fulfilled" ? marketplaceCount.value : 0 },
-            { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
-        ].filter((m) => m.count > 0);
-
-        // ── Recent transactions: pulling completely from unified platform ledger
-        const recentTransactions: AnalyticsData["recentTransactions"] = [];
-
-        try {
-            const [txSnap, coopSnap, escrowSnap] = await Promise.allSettled([
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(15).get(),
-                db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get(),
-                db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get()
-            ]);
-
-            const allDocs: any[] = [];
-            
-            if (txSnap.status === "fulfilled") {
-                txSnap.value.docs.forEach(d => allDocs.push(d.data()));
-            }
-
-            allDocs.sort((a, b) => {
-                const tsa = a.processedAt ?? a.createdAt ?? a.date ?? 0;
-                const tsb = b.processedAt ?? b.createdAt ?? b.date ?? 0;
-                const ta = tsa?.toDate ? tsa.toDate().getTime() : new Date(tsa).getTime();
-                const tb = tsb?.toDate ? tsb.toDate().getTime() : new Date(tsb).getTime();
-                return tb - ta;
-            });
-
-            let collected = 0;
-            for (const d of allDocs) {
-                if (collected >= 8) break;
-                const ts = d.processedAt ?? d.createdAt ?? d.date ?? null;
-                if (Number(d.amount) > 0 || d.amount === undefined || d.registrationFee !== undefined) {
-                    recentTransactions.push({
-                        id: d.id || Math.random().toString(),
-                        type: d.type ?? d.action ?? "Transaction",
-                        amount: Number(d.amount ?? d.registrationFee) || 0,
-                        date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString())
-                    });
-                    collected++;
-                }
-            }
-        } catch (e) {
-            logger.error("Failed to fetch unified recent transactions:", e);
-        }
-
-        return {
-            platformOverview: {
-                totalUsers,
-                activeUsers,
-                totalRevenue,
-                monthlyRevenue,
-                totalTransactions,
-                pendingApprovals,
-            },
-            counts: {
-                pendingEscrows,
-                activeLandListings,
-                pendingLoans,
-            },
-            revenueByMonth,
-            userGrowthByMonth,
-            moduleUsage: moduleUsage.length ? moduleUsage : [{ module: "No data yet", count: 1 }],
-            recentTransactions,
-        };
-    },
-    ["admin-dashboard-stats"],
-    { revalidate: 120, tags: ["admin-dashboard"] }
-);
-
 export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return null;
@@ -282,7 +83,207 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         return null;
     }
 
-    return fetchDashboardStats();
+    const { getCached, setCache } = await import("@/lib/redis");
+    const cacheKey = "admin:dashboard-stats:global";
+
+    try {
+        const cached = await getCached(cacheKey);
+        if (cached) return cached as AnalyticsData;
+    } catch(e) {
+        // quiet fail on cache read
+    }
+
+    const months = lastNMonths(6);
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // ── Parallel Firestore queries ───────────────────────────────────────────
+    const [
+        totalUsersSnap,
+        activeUsersSnap,
+        pendingEscrowsCount,
+        activeLandCount,
+        pendingLoansCount,
+        pendingSellersCount,
+        pendingWithdrawalsCount,
+        totalOrdersCount,
+        totalEscrowsCount,
+        recentLogsSnap,
+    ] = await Promise.allSettled([
+        db.collection(COLLECTIONS.USERS).count().get(),
+        db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+        safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
+        safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.WALLET_TRANSACTIONS).where("type", "==", "withdrawal").where("status", "==", "pending")),
+        safeCount(db.collection(COLLECTIONS.MARKETPLACE_ORDERS)),
+        safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)),
+        db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc").limit(10).get(),
+    ]);
+
+    const { getPlatformMetricsAction, getGlobalPendingApprovalsAction } = await import("./global-aggregation");
+
+    const [metricsResult, pendingResult] = await Promise.all([
+        getPlatformMetricsAction(),
+        getGlobalPendingApprovalsAction()
+    ]);
+
+    const totalUsers = metricsResult.success ? (metricsResult.data?.totalUsers ?? 0) : 0;
+    const totalTransactions = metricsResult.success ? (metricsResult.data?.totalTransactions ?? 0) : 0;
+    const totalRevenue = metricsResult.success ? (metricsResult.data?.totalRevenue ?? 0) : 0;
+    const pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
+
+    // Active users: users who logged in within the last 30 days.
+    const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
+
+    const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
+    const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
+    const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
+
+    let monthlyRevenue = 0;
+
+    // ── Revenue by month (last 6 months — all payment sources) ─────────────
+    let recentPayments: any[] = [];
+    try {
+        const pSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("status", "==", "completed")
+            .limit(5000)
+            .get();
+        recentPayments = pSnap.docs.map(d => d.data());
+    } catch (_e) {}
+
+    const monthRevDocs = recentPayments.filter(d => {
+        const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt ?? 0);
+        return pAt >= thisMonthStart;
+    });
+    monthlyRevenue = monthRevDocs.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
+
+    const revenueByMonth = months.map(({ label, start, end }) => {
+        let rev = 0;
+        recentPayments.forEach(d => {
+            const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt);
+            if (pAt >= start && pAt <= end) {
+                rev += (Number(d.amount) || 0);
+            }
+        });
+        return { month: label, revenue: rev };
+    });
+
+    // ── User growth by month (last 6 months) ────────────────────────────────
+    const userGrowthByMonth = await Promise.all(
+        months.map(async ({ label, start, end }) => {
+            try {
+                const snap = await db
+                    .collection(COLLECTIONS.USERS)
+                    .where("createdAt", ">=", start)
+                    .where("createdAt", "<=", end)
+                    .count()
+                    .get();
+                return { month: label, users: snap.data().count ?? 0 };
+            } catch (_e) {
+                return { month: label, users: 0 };
+            }
+        })
+    );
+
+    // ── Module usage (for pie chart) ─────────────────────────────────────────
+    const [waveCount, academyCount, cooperativeCount, farmNationCount, marketplaceCount, exportCount] =
+        await Promise.allSettled([
+            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("status", "in", ["pending", "submitted", "under_review", "approved"])),
+            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
+            safeCount(
+                db
+                    .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("paymentStatus", "==", "completed")
+            ),
+            safeCount(db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)),
+            safeCount(
+                db
+                    .collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                    .where("status", "!=", "rejected")
+            ),
+            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
+        ]);
+
+    const moduleUsage = [
+        { module: "WAVE", count: waveCount.status === "fulfilled" ? waveCount.value : 0 },
+        { module: "Academy", count: academyCount.status === "fulfilled" ? academyCount.value : 0 },
+        { module: "Cooperative", count: cooperativeCount.status === "fulfilled" ? cooperativeCount.value : 0 },
+        { module: "Farm Nation", count: farmNationCount.status === "fulfilled" ? farmNationCount.value : 0 },
+        { module: "Marketplace", count: marketplaceCount.status === "fulfilled" ? marketplaceCount.value : 0 },
+        { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
+    ].filter((m) => m.count > 0);
+
+    // ── Recent transactions: pulling completely from unified platform ledger
+    const recentTransactions: AnalyticsData["recentTransactions"] = [];
+
+    try {
+        const [txSnap, coopSnap, escrowSnap] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(15).get(),
+            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get()
+        ]);
+
+        const allDocs: any[] = [];
+        
+        if (txSnap.status === "fulfilled") {
+            txSnap.value.docs.forEach(d => allDocs.push(d.data()));
+        }
+
+        allDocs.sort((a, b) => {
+            const tsa = a.processedAt ?? a.createdAt ?? a.date ?? 0;
+            const tsb = b.processedAt ?? b.createdAt ?? b.date ?? 0;
+            const ta = tsa?.toDate ? tsa.toDate().getTime() : new Date(tsa).getTime();
+            const tb = tsb?.toDate ? tsb.toDate().getTime() : new Date(tsb).getTime();
+            return tb - ta;
+        });
+
+        let collected = 0;
+        for (const d of allDocs) {
+            if (collected >= 8) break;
+            const ts = d.processedAt ?? d.createdAt ?? d.date ?? null;
+            if (Number(d.amount) > 0 || d.amount === undefined || d.registrationFee !== undefined) {
+                recentTransactions.push({
+                    id: d.id || Math.random().toString(),
+                    type: d.type ?? d.action ?? "Transaction",
+                    amount: Number(d.amount ?? d.registrationFee) || 0,
+                    date: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : new Date(0).toISOString())
+                });
+                collected++;
+            }
+        }
+    } catch (e) {
+        logger.error("Failed to fetch unified recent transactions:", e);
+    }
+
+    const payload: AnalyticsData = {
+        platformOverview: {
+            totalUsers,
+            activeUsers,
+            totalRevenue,
+            monthlyRevenue,
+            totalTransactions,
+            pendingApprovals,
+        },
+        counts: {
+            pendingEscrows,
+            activeLandListings,
+            pendingLoans,
+        },
+        revenueByMonth,
+        userGrowthByMonth,
+        moduleUsage: moduleUsage.length ? moduleUsage : [{ module: "No data yet", count: 1 }],
+        recentTransactions,
+    };
+
+    try {
+        await setCache(cacheKey, payload, 120); // Cache for 2 minutes
+    } catch(e) {}
+
+    return payload;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
