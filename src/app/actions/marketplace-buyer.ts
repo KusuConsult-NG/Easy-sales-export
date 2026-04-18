@@ -147,7 +147,7 @@ export async function getBuyerOrdersAction() {
     try {
         const { auth } = await import("@/lib/auth");
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
@@ -182,7 +182,7 @@ export async function confirmOrderReceiptAction(orderId: string) {
         const { auth } = await import("@/lib/auth");
         const { FieldValue } = await import("firebase-admin/firestore");
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {

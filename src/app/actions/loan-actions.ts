@@ -22,7 +22,7 @@ export async function submitLoanApplication(
     data: z.infer<typeof loanApplicationSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -72,7 +72,7 @@ export async function submitLoanApplication(
  */
 export async function getUserLoanApplications() {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -102,7 +102,7 @@ export async function getUserLoanApplications() {
  */
 export async function getLoanApplication(loanId: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -139,7 +139,7 @@ export async function getLoanApplication(loanId: string) {
  */
 export async function getPendingLoanApplications() {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only", loans: [] };
@@ -174,7 +174,7 @@ export async function approveLoanApplication(
     data: z.infer<typeof loanApprovalSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
@@ -231,7 +231,7 @@ export async function approveLoanApplication(
  */
 export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
@@ -269,7 +269,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
  */
 export async function getLoanStatistics() {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return {

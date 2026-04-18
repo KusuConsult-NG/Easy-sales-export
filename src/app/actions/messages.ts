@@ -21,7 +21,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 export async function getConversationsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", conversations: [] };
@@ -50,7 +50,7 @@ export async function getConversationsAction() {
 export async function getAllConversationsAdminAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", conversations: [] };
@@ -83,7 +83,7 @@ export async function getAllConversationsAdminAction() {
 export async function getMessagesAction(conversationId: string, limit = 50) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", messages: [] };
@@ -130,7 +130,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
 export async function sendMessageAction(conversationId: string, text: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", success: false };
@@ -200,7 +200,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
 export async function markAsReadAction(conversationId: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", success: false };
@@ -226,7 +226,7 @@ export async function markAsReadAction(conversationId: string) {
 export async function startConversationAction(participantUid: string, productId?: string, orderId?: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", conversationId: null };
@@ -304,7 +304,7 @@ export async function startConversationAction(participantUid: string, productId?
 export async function searchUsersAction(query: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", users: [] };
@@ -353,7 +353,7 @@ export async function searchUsersAction(query: string) {
 export async function startSupportConversationAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", conversationId: null };

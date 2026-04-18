@@ -18,7 +18,7 @@ export const deleteUserAccountAction = withSafeAction(
     async (): Promise<ActionResponse<void>> => {
         try {
             const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
             if (!session?.user?.id) {
                 return { success: false, error: "Unauthorized. You must be logged in." };

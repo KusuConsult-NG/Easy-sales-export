@@ -56,7 +56,7 @@ export async function getPendingContentAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -165,7 +165,7 @@ export async function approveContentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
@@ -222,7 +222,7 @@ export async function rejectContentAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };

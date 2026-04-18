@@ -61,7 +61,7 @@ export async function initiateCooperativePaymentAction(
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
@@ -153,7 +153,7 @@ export async function registerCooperativeMemberAction(
 ): Promise<MembershipRegistrationState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to register", success: false };
@@ -381,7 +381,7 @@ export async function joinCooperativeAction(
 ): Promise<JoinCooperativeState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to join a cooperative", success: false };
@@ -482,7 +482,7 @@ export async function makeContributionAction(
 ): Promise<MakeContributionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to make a contribution", success: false };
@@ -592,7 +592,7 @@ export async function makeContributionAction(
 export async function getMembershipAction(): Promise<GetMembershipState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
@@ -640,7 +640,7 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
 export async function getTransactionsAction(): Promise<GetTransactionsState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
@@ -776,7 +776,7 @@ export async function applyForLoanAction(
 ): Promise<LoanApplicationState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to apply for a loan", success: false };
@@ -891,7 +891,7 @@ export async function createFixedSavingsAction(
 ): Promise<FixedSavingsState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false };
@@ -983,7 +983,7 @@ export async function submitWithdrawalAction(
 ): Promise<WithdrawalActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { error: "Unauthorized", success: false };
 
@@ -1045,7 +1045,7 @@ export async function getDirectoryMembersAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         // Allow any logged in user? Or just admin? Assuming members can view directory.
         if (!session?.user) {
@@ -1092,7 +1092,7 @@ export async function getCooperativeApplicationAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
@@ -1120,7 +1120,7 @@ export async function resubmitCooperativeApplicationAction(
 ): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 

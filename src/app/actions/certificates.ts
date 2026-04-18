@@ -43,7 +43,7 @@ export async function uploadCertificateAction(
 ): Promise<{ success: boolean; error?: string; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
@@ -124,7 +124,7 @@ export async function deleteCertificateAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };
@@ -191,7 +191,7 @@ export async function deleteCertificateAction(
 export async function completeOnboardingAction(userId: string): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false, error: "Unauthorized" };

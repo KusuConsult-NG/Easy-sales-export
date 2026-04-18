@@ -36,7 +36,7 @@ export async function initializeInvestmentPaymentAction(
 ): Promise<PaymentInitState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
@@ -143,7 +143,7 @@ export async function initializeInvestmentPaymentAction(
 export async function verifyInvestmentPaymentAction(reference: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {

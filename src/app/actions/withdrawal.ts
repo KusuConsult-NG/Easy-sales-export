@@ -32,7 +32,7 @@ export async function submitWithdrawalRequestAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {

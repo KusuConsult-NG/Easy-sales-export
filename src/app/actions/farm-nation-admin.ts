@@ -21,7 +21,7 @@ export async function getFarmNationStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { error: "Unauthorized: Permission required", success: false };
@@ -60,7 +60,7 @@ export async function getFarmNationRegistrantsAction(options: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
@@ -149,7 +149,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
@@ -282,7 +282,7 @@ export async function getAdminLandVerificationsAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();

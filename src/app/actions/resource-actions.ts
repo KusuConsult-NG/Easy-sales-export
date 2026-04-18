@@ -35,7 +35,7 @@ export interface WaveResource {
 export async function uploadResourceAction(formData: FormData): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -168,7 +168,7 @@ export async function getResourcesAction(category?: string): Promise<{ success: 
 export async function downloadResourceAction(resourceId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -211,7 +211,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{ succ
 export async function deleteResourceAction(resourceId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -262,7 +262,7 @@ export async function updateResourceAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {

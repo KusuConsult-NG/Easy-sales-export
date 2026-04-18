@@ -12,7 +12,6 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/lib/admin-action-response";
 import {
     sendWithdrawalApprovedEmail,
     sendWithdrawalRejectedEmail
@@ -79,7 +78,7 @@ export async function getCooperativeStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -251,7 +250,7 @@ export async function getAllMembersAction(options?: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -308,7 +307,7 @@ export async function updateMemberStatusAction(
 ): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -408,7 +407,7 @@ export async function getAllTransactionsAction(options?: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -540,7 +539,7 @@ export async function getContributionReportsAction(options?: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -653,7 +652,7 @@ export async function getRecentActivityAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -709,7 +708,7 @@ export async function approveWithdrawalAction(
 ): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         // Check admin role directly from session (Performance Optimization)
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
@@ -826,7 +825,7 @@ export async function rejectWithdrawalAction(
 ): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false, error: "Unauthorized" };
@@ -947,7 +946,7 @@ export async function requestCooperativeRevisionAction(
 ): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
@@ -1019,24 +1018,19 @@ export async function requestCooperativeRevisionAction(
 }
 
 export async function getStandardCooperativeMembersAction(
-    options: {
-        status?: "pending" | "approved" | "suspended" | "under_review" | "all";
-        paymentStatus?: "pending" | "completed" | "failed" | "all";
-        cursorId?: string;
-        limit?: number;
-        search?: string;
-    } = {}
-): Promise<{ success: boolean; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
-    const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
+    statusFilter?: "pending" | "approved" | "suspended" | "under_review" | "all",
+    cursorId?: string,
+    limitCount: number = 50
+): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return paginatedErr('Not authenticated');
+        if (!sessionResult.session) return sessionResult.error;
         const { session } = sessionResult;
-        if (!session?.user?.id) return paginatedErr('Not authenticated');
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
-            return paginatedErr('Unauthorized');
+            return { success: false, error: "Unauthorized" };
         }
 
         let cursorSnap = null;
@@ -1044,29 +1038,24 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const fetchLimit = search ? 2000 : limitCount;
-
         let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
         
-        if (statusFilter && statusFilter !== "all") {
+        if (statusFilter && statusFilter !== "all" && statusFilter !== "pending") {
             q = q.where("membershipStatus", "==", statusFilter);
-        }
-
-        // Server-side paymentStatus filter — prevents client-side filter on paginated data
-        // causing mismatch between stat counts and table rows.
-        if (paymentFilter && paymentFilter !== "all") {
-            q = q.where("paymentStatus", "==", paymentFilter);
+        } else if (statusFilter === "pending") {
+            // Support backwards compatibility pending status queries
+            q = q.where("membershipStatus", "==", "pending");
         }
 
         if (cursorSnap && cursorSnap.exists) {
             q = q.startAfter(cursorSnap);
         }
         
-        q = q.limit(fetchLimit);
+        q = q.limit(limitCount);
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
-        const nextCursorId = computeNextCursor(snapshot.docs, fetchLimit);
+        const nextCursorId = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
@@ -1080,13 +1069,10 @@ export async function getStandardCooperativeMembersAction(
             }
         }
 
-        let standardForms = applications.map((app: any) => {
+        const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
-            // Fix: check firstName FIRST to avoid "undefined undefined" for legacy users
-            const userName = uData.firstName
-                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                : (uData.name || uData.fullName || localName || "Unknown User");
+            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (localName || "Unknown User");
 
             // Merge USERS data into app.data as fallback for fields that were never filled via onboarding.
             // Legacy members who only paid (never submitted the form) will have blank phone/gender/dob etc.
@@ -1105,14 +1091,6 @@ export async function getStandardCooperativeMembersAction(
                 firstName:           app.firstName           || uData.firstName          || null,
                 lastName:            app.lastName            || uData.lastName           || null,
                 email:               app.email               || uData.email              || null,
-                // nextOfKin: remap stored field names to what the admin modal reads
-                // Firestore stores: { fullName, phone, residentialAddress }
-                // Admin modal reads: { name, phone, address }
-                nextOfKin: app.nextOfKin ? {
-                    ...app.nextOfKin,
-                    name:    app.nextOfKin.fullName    || app.nextOfKin.name    || null,
-                    address: app.nextOfKin.residentialAddress || app.nextOfKin.address || null,
-                } : null,
             };
 
             return {
@@ -1132,18 +1110,9 @@ export async function getStandardCooperativeMembersAction(
             };
         });
 
-        if (search) {
-            const s = search.toLowerCase();
-            standardForms = standardForms.filter((f: any) => 
-                f.user.name?.toLowerCase().includes(s) || 
-                f.user.email?.toLowerCase().includes(s) || 
-                f.user.phone?.includes(s)
-            );
-        }
-
-        return paginatedOk(standardForms, nextCursorId);
+        return { success: true, data: standardForms, error: undefined, meta: { lastDocId: nextCursorId } };
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
-        return paginatedErr("Failed to load cooperative members");
+        return { success: false, error: "Failed to load applications", meta: null };
     }
 }

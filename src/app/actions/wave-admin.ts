@@ -27,7 +27,7 @@ export async function createResourceAction(data: {
 }): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -74,7 +74,7 @@ export async function updateResourceAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -110,7 +110,7 @@ export async function deleteResourceAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -157,7 +157,7 @@ export async function createTrainingEventAction(data: {
 }): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -206,7 +206,7 @@ export async function updateTrainingEventAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -240,7 +240,7 @@ export async function updateTrainingEventAction(
 export async function getEventParticipantsAction(eventId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -266,7 +266,7 @@ export async function getEventParticipantsAction(eventId: string): Promise<{ suc
 export async function getWaveApplicationsAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -293,7 +293,7 @@ export async function approveWaveApplicationAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -372,7 +372,7 @@ export async function rejectWaveApplicationAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -433,7 +433,7 @@ export async function getStandardWaveApplicationsAction(options: {
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
@@ -562,7 +562,7 @@ export async function getStandardWaveWithdrawalsAction(options: {
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 

@@ -18,7 +18,7 @@ import { requireSession } from "@/lib/session-guard";
 export async function checkWaveMembershipAction(): Promise<{ success: boolean; data?: { enrolled: boolean; memberData?: any }; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: true, data: { enrolled: false } };
@@ -87,7 +87,7 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
 export async function getWaveMemberStatsAction(): Promise<{ success: boolean; data?: { stats: any }; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -144,7 +144,7 @@ export async function getWaveMemberStatsAction(): Promise<{ success: boolean; da
 export async function trackResourceAccessAction(resourceId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
@@ -194,7 +194,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{ s
 export async function getUserTrainingRegistrationsAction(): Promise<{ success: boolean; data?: { registrations: any[] }; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };

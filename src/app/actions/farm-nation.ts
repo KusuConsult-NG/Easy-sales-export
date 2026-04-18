@@ -154,7 +154,7 @@ export async function getPropertiesAction(filters?: {
 export async function approveFarmNationSellerAction(userId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
@@ -176,7 +176,7 @@ export async function approveFarmNationSellerAction(userId: string) {
 export async function rejectFarmNationSellerAction(userId: string, reason: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
@@ -236,7 +236,7 @@ export async function getPropertyByIdAction(propertyId: string) {
 export async function listPropertyAction(input: PropertyListingInput) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -329,7 +329,7 @@ export async function listPropertyAction(input: PropertyListingInput) {
 export async function getMyPropertiesAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -371,7 +371,7 @@ export async function initiatePropertyPurchaseAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -453,7 +453,7 @@ export async function initiatePropertyPurchaseAction(
 export async function getMyPurchaseRequestsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -487,7 +487,7 @@ export async function getMyPurchaseRequestsAction() {
 export async function cancelPurchaseRequestAction(requestId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -545,7 +545,7 @@ export async function cancelPurchaseRequestAction(requestId: string) {
 export async function deletePropertyAction(propertyId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -604,7 +604,7 @@ export async function deletePropertyAction(propertyId: string) {
 export async function updatePropertyAction(propertyId: string, updates: Partial<PropertyListingInput>) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
@@ -706,7 +706,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
     try {
         // Get authenticated session
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -895,7 +895,7 @@ export async function uploadPropertyDocumentsAction(
 ): Promise<{ success: boolean; data?: any; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, data: null, error: "Unauthorized", meta: null };
 
@@ -931,7 +931,7 @@ export async function uploadPropertyDocumentsAction(
 export async function verifyPropertyAction(propertyId: string, verified: boolean) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
@@ -993,7 +993,7 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
 export async function getFarmNationApplicationAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, data: null, error: 'Unauthorized', meta: null };
 
@@ -1026,7 +1026,7 @@ export async function resubmitFarmNationApplicationAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, data: null, error: 'Unauthorized', meta: null };
 

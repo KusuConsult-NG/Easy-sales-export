@@ -18,7 +18,7 @@ export async function getSellerOrdersAction(filters?: {
 }) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
@@ -72,7 +72,7 @@ export async function updateOrderStatusAction(
 ) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
@@ -175,7 +175,7 @@ export async function getBuyerOrdersAction(filters?: {
 }) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
@@ -217,7 +217,7 @@ export async function getBuyerOrdersAction(filters?: {
 export async function confirmDeliveryAction(orderId: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
@@ -322,7 +322,7 @@ export async function confirmDeliveryAction(orderId: string) {
 export async function getOrderByIdForSellerAction(orderId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {

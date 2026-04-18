@@ -42,7 +42,7 @@ export async function sendAIMessage(
     data: z.infer<typeof aiChatMessageSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -128,7 +128,7 @@ export async function sendAIMessage(
  */
 export async function getAIChatHistory(maxMessages: number = 20) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -159,7 +159,7 @@ export async function getAIChatHistory(maxMessages: number = 20) {
  */
 export async function getAISuggestions(context: { currentPage: string; userRole: string }) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     // Generate contextual suggestions based on page

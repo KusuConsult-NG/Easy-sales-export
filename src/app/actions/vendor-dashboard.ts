@@ -14,7 +14,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 export async function getVendorSalesStatsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
@@ -70,7 +70,7 @@ export async function getVendorSalesStatsAction() {
 export async function getVendorRevenueTrendsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -122,7 +122,7 @@ export async function getVendorRevenueTrendsAction() {
 export async function getTopSellingProductsAction(limit: number = 5) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -171,7 +171,7 @@ export async function getTopSellingProductsAction(limit: number = 5) {
 export async function getVendorInventoryStatsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -218,7 +218,7 @@ export async function getVendorInventoryStatsAction() {
 export async function getVendorRevenueInsightsAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -270,7 +270,7 @@ export async function getVendorRevenueInsightsAction() {
 export async function getVendorActivityFeedAction(limit: number = 20) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 

@@ -16,7 +16,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 export async function getDashboardDataAction() {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user) {
             return {

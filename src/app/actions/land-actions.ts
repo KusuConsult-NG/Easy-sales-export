@@ -24,7 +24,7 @@ export async function createLandListing(
     data: z.infer<typeof landListingSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -184,7 +184,7 @@ export async function getLandListing(listingId: string) {
  */
 export async function getMyLandListings() {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -223,7 +223,7 @@ export async function updateLandListing(
     data: z.infer<typeof landListingUpdateSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -288,7 +288,7 @@ export async function verifyLandListing(
     data: z.infer<typeof landVerificationSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return { success: false, error: "Unauthorized - Admin only" };
@@ -345,7 +345,7 @@ export async function verifyLandListing(
  */
 export async function deleteLandListing(listingId: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -389,7 +389,7 @@ export async function deleteLandListing(listingId: string) {
  */
 export async function getLandStatistics() {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return {

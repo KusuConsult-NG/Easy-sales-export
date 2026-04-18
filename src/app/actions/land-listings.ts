@@ -129,7 +129,7 @@ export async function verifyLandListingAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         const roles = session?.user?.roles || [];
         if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
@@ -176,7 +176,7 @@ export async function rejectLandListingAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         const roles = session?.user?.roles || [];
         if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {

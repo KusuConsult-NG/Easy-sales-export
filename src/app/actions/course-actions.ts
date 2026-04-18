@@ -22,7 +22,7 @@ export async function updateLessonProgress(
     data: z.infer<typeof courseProgressSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -70,7 +70,7 @@ export async function enrollInCourse(
     data: z.infer<typeof courseEnrollmentSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -138,7 +138,7 @@ export async function enrollInCourse(
  */
 export async function getCourseProgress(courseId: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -174,7 +174,7 @@ export async function getCourseProgress(courseId: string) {
  */
 export async function getLessonProgress(lessonId: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -201,7 +201,7 @@ export async function getLessonProgress(lessonId: string) {
  */
 export async function getUserEnrolledCourses() {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -223,7 +223,7 @@ export async function getUserEnrolledCourses() {
  */
 export async function completeCourse(courseId: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -267,7 +267,7 @@ export async function completeCourse(courseId: string) {
  */
 export async function generateCourseCertificate(courseId: string, courseTitle: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {
@@ -348,7 +348,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
  */
 export async function getCourseCertificate(courseId: string) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {

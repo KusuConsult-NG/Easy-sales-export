@@ -23,7 +23,7 @@ export async function createDisputeAction(params: {
 }) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -120,7 +120,7 @@ export async function createDisputeAction(params: {
 export async function getBuyerDisputesAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -153,7 +153,7 @@ export async function getBuyerDisputesAction() {
 export async function getSellerDisputesAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -192,7 +192,7 @@ export async function getAdminDisputesAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -269,7 +269,7 @@ export async function getAdminDisputesAction(options: {
 export async function getDisputeByIdAction(disputeId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -317,7 +317,7 @@ export async function updateDisputeStatusAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 

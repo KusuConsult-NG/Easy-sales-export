@@ -23,7 +23,7 @@ export async function getAuditLogsAction(filters: {
 }): Promise<{ success: boolean; data?: AuditLogEntry[]; logs?: AuditLogEntry[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -107,7 +107,7 @@ export async function exportAuditLogsCSV(filters: {
 }): Promise<{ success: boolean; csv?: string; error?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -178,7 +178,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return sessionResult.error;
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {

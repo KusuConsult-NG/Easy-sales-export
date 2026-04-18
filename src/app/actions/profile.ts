@@ -34,7 +34,7 @@ const notificationPreferencesSchema = z.object({
 export async function getUserProfileAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -97,7 +97,7 @@ export async function updateUserProfileAction(data: {
 }) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         // Validate input
@@ -155,7 +155,7 @@ export async function updateNotificationPreferencesAction(preferences: {
 }) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         // Validate input

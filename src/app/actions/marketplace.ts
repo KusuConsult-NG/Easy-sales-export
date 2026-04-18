@@ -123,7 +123,7 @@ export async function submitSellerVerificationAction(
 ): Promise<SellerVerificationState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -203,7 +203,7 @@ export async function submitSellerVerificationAction(
 export async function getSellerVerificationAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -237,7 +237,7 @@ export async function submitMarketplaceOnboardingAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -445,7 +445,7 @@ export async function createProductAction(
 ): Promise<ProductActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -607,7 +607,7 @@ export async function getSellerProductsAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -698,7 +698,7 @@ export async function getSellerOrdersAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -767,7 +767,7 @@ export async function getSellerOrdersAction(options: {
 export async function getSellerAnalyticsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -869,7 +869,7 @@ export async function getBuyerOrdersAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -920,7 +920,7 @@ export async function getBuyerOrdersAction(options: {
 export async function getBuyerStatsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user) {
@@ -1061,7 +1061,7 @@ export async function getRecommendedProductsAction(limit: number = 3) {
 export async function deleteProductAction(productId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
@@ -1298,7 +1298,7 @@ export async function resubmitSellerVerificationAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 

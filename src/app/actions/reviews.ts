@@ -26,7 +26,7 @@ export async function createReviewAction(params: {
 }) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -154,7 +154,7 @@ export async function getProductReviewsAction(
 export async function getUserReviewsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -182,7 +182,7 @@ export async function updateReviewAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -249,7 +249,7 @@ export async function moderateReviewAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -341,7 +341,7 @@ export async function getAdminReviewsAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return sessionResult.error;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
