@@ -28,7 +28,7 @@ export async function getFarmNationStatsAction(): Promise<{
         }
 
         const countSnap = await db.collection(COLLECTIONS.USERS)
-            .where('registeredServices', 'array-contains', 'farmNation')
+            .where('serviceRegistrations.farmNation.status', '!=', null)
             .count()
             .get();
         
@@ -158,20 +158,22 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized" };
         }
 
+        // Query users who have a Farm Nation service registration.
+        // The field serviceRegistrations.farmNation.status is written during onboarding
+        // (farm-nation.ts sets it to "pending" on submission).
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q = db.collection(COLLECTIONS.USERS).where('registeredServices', 'array-contains', 'farmNation');
+        let q: any = db.collection(COLLECTIONS.USERS)
+            .where('serviceRegistrations.farmNation.status', '!=', null);
 
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
-                // Since we sort manually in memory for chronological, we must just use default ID pagination if no index exists
-                // We order by document ID to make cursors consistent
-                q = q.orderBy("__name__").startAfter(lastDoc);
+                q = q.orderBy('serviceRegistrations.farmNation.status').startAfter(lastDoc);
             } else {
-                q = q.orderBy("__name__");
+                q = q.orderBy('serviceRegistrations.farmNation.status');
             }
         } else {
-            q = q.orderBy("__name__");
+            q = q.orderBy('serviceRegistrations.farmNation.status');
         }
         
         q = q.limit(fetchLimit);
