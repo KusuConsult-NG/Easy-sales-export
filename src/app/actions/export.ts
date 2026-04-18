@@ -18,7 +18,8 @@ import { revalidatePath } from "next/cache";
  */
 
 // Export Window Schema
-export const exportWindowSchema = z.object({
+// Kept as a private const — NOT exported ("use server" files cannot export non-async values)
+const exportWindowSchema = z.object({
     commodity: z.enum(["yam", "sesame", "hibiscus", "other"], {
         message: "Please select a valid commodity",
     }),
@@ -447,7 +448,10 @@ export async function getExportWindowsAction(
 // Get Export Window Details Action
 // ============================================
 
-export const getExportRequestByIdAction = getExportWindowDetailsAction; // Alias
+// Alias as an async wrapper — "use server" files can only export async functions, not const aliases
+export async function getExportRequestByIdAction(exportId: string) {
+    return getExportWindowDetailsAction(exportId);
+}
 
 export async function getExportWindowDetailsAction(
     exportId: string

@@ -44,99 +44,85 @@ const briefingRegistrationSchema = z.object({
  * Register a guest for the WAVE National Awareness Briefing
  * Public action — no auth required
  */
-export const registerForBriefingAction = withSafeAction(
-    "registerForBriefingAction",
-    async (data: BriefingRegistrationData): Promise<ActionResponse<void>> => {
-        try {
-            // Strict Zero-Trust Validation via Zod
-            const validationResult = briefingRegistrationSchema.safeParse(data);
+/**
+ * Register a guest for the WAVE National Awareness Briefing
+ * Public action — no auth required
+ * NOTE: Declared as async function (not const) so Next.js "use server" validator accepts it.
+ */
+export async function registerForBriefingAction(data: BriefingRegistrationData): Promise<ActionResponse<void>> {
+    try {
+        // Strict Zero-Trust Validation via Zod
+        const validationResult = briefingRegistrationSchema.safeParse(data);
 
-            if (!validationResult.success) {
-                // Extract the first validation error message using Zod's error.issues
-                const firstError = validationResult.error.issues[0]?.message || "Invalid submission data";
-                return { success: false, error: firstError };
-            }
-
-            const validData = validationResult.data!;
-
-            // Note: From this point on, we use validData instead of data for the database insertions
-            const emailToStore = validData.email;
-            const phoneToStore = validData.phoneNumber;
-
-            // 🔒 STRICT DEDUPLICATION: Check email AND phone in parallel
-            const [existingByEmail, existingByPhone] = await Promise.all([
-                db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
-                    .where("email", "==", emailToStore)
-                    .limit(1)
-                    .get(),
-                db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
-                    .where("phoneNumber", "==", phoneToStore)
-                    .limit(1)
-                    .get(),
-            ]);
-
-            if (!existingByEmail.empty) {
-                return { success: false, error: "This email address is already registered for the briefing." };
-            }
-            if (!existingByPhone.empty) {
-                return { success: false, error: "This phone number is already registered for the briefing." };
-            }
-
-            // ... (existing helper functions if any)
-
-            // Store registration with standardized schema
-            const status: BriefingStatus = "registered";
-            const docRef = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).add({
-                fullName: validData.fullName,
-                firstName: validData.firstName || validData.fullName.split(' ')[0] || "",
-                lastName: validData.lastName || validData.fullName.split(' ').slice(-1)[0] || "",
-                otherName: validData.otherName || null,
-                phoneNumber: phoneToStore,
-                email: emailToStore,
-                state: validData.state,
-                role: validData.role,
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-                status: status,
-                confirmationSent: false,
-                attended: false,
-            });
-
-            logger.info(`[WAVE Briefing] New registration: ${emailToStore}`);
-
-            // Send confirmation email
-            try {
-                const emailResult = await sendBriefingConfirmationEmail(
-                    emailToStore,
-                    validData.fullName
-                );
-
-                if (emailResult.success) {
-                    await docRef.update({ confirmationSent: true });
-                    logger.info(`[WAVE Briefing] Confrimation email sent to ${emailToStore}`);
-                } else {
-                    logger.warn(`[WAVE Briefing] Email failed for ${emailToStore}: ${emailResult.error}`);
-                }
-
-                // Send WhatsApp group invite (one-time link via email)
-                try {
-                    await generateAndSendWhatsAppInvite("wave_briefing", {
-                        email: emailToStore,
-                        name: validData.fullName,
-                    });
-                } catch (waError) {
-                    logger.error(`[WAVE Briefing] WhatsApp invite failed for ${emailToStore}:`, waError);
-                    // Non-blocking: registration still succeeds
-                }
-            } catch (emailError) {
-                logger.error(`[WAVE Briefing] Email system error for ${emailToStore}:`, emailError);
-                // Non-blocking: We still return success for the registration itself
-            }
-
-            return { success: true };
-        } catch (error) {
-            logger.error("[WAVE Briefing] Registration error:", error);
-            // The error will still be caught by our withSafeAction wrapper
-            throw error;
+        if (!validationResult.success) {
+            const firstError = validationResult.error.issues[0]?.message || "Invalid submission data";
+            return { success: false, error: firstError };
         }
-    });
+
+        const validData = validationResult.data!;
+        const emailToStore = validData.email;
+        const phoneToStore = validData.phoneNumber;
+
+        // STRICT DEDUPLICATION: Check email AND phone in parallel
+        const [existingByEmail, existingByPhone] = await Promise.all([
+            db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                .where("email", "==", emailToStore)
+                .limit(1)
+                .get(),
+            db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
+                .where("phoneNumber", "==", phoneToStore)
+                .limit(1)
+                .get(),
+        ]);
+
+        if (!existingByEmail.empty) {
+            return { success: false, error: "This email address is already registered for the briefing." };
+        }
+        if (!existingByPhone.empty) {
+            return { success: false, error: "This phone number is already registered for the briefing." };
+        }
+
+        const status: BriefingStatus = "registered";
+        const docRef = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).add({
+            fullName: validData.fullName,
+            firstName: validData.firstName || validData.fullName.split(' ')[0] || "",
+            lastName: validData.lastName || validData.fullName.split(' ').slice(-1)[0] || "",
+            otherName: validData.otherName || null,
+            phoneNumber: phoneToStore,
+            email: emailToStore,
+            state: validData.state,
+            role: validData.role,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            status: status,
+            confirmationSent: false,
+            attended: false,
+        });
+
+        logger.info(`[WAVE Briefing] New registration: ${emailToStore}`);
+
+        try {
+            const emailResult = await sendBriefingConfirmationEmail(emailToStore, validData.fullName);
+            if (emailResult.success) {
+                await docRef.update({ confirmationSent: true });
+                logger.info(`[WAVE Briefing] Confirmation email sent to ${emailToStore}`);
+            } else {
+                logger.warn(`[WAVE Briefing] Email failed for ${emailToStore}: ${emailResult.error}`);
+            }
+            try {
+                await generateAndSendWhatsAppInvite("wave_briefing", { email: emailToStore, name: validData.fullName });
+            } catch (waError) {
+                logger.error(`[WAVE Briefing] WhatsApp invite failed for ${emailToStore}:`, waError);
+            }
+        } catch (emailError) {
+            logger.error(`[WAVE Briefing] Email system error for ${emailToStore}:`, emailError);
+        }
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("[WAVE Briefing] Registration error:", error);
+        const msg = typeof error === 'string' ? error : (error?.message || "Registration failed");
+        return { success: false, error: msg };
+    }
+}
+
