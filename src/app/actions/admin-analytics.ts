@@ -72,17 +72,6 @@ function lastNMonths(n: number): Array<{ label: string; start: Date; end: Date }
 // Main dashboard stats action
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return null;
-    const { session } = sessionResult;
-    if (
-        !session?.user?.roles?.includes("admin") &&
-        !session?.user?.roles?.includes("super_admin")
-    ) {
-        return null;
-    }
-
 const fetchDashboardStats = unstable_cache(
     async (): Promise<AnalyticsData> => {
         const months = lastNMonths(6);
