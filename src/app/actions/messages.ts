@@ -302,33 +302,53 @@ export async function startConversationAction(participantUid: string, productId?
 export async function searchUsersAction(query: string) {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Not authenticated", users: [] };
         }
 
         const trimmedQuery = query.trim().toLowerCase();
+
+        // If no query, return ALL available administrators so the user can easily select one
         if (!trimmedQuery) {
-            return { users: [], error: null };
+            const adminsSnapshot = await db.collection(COLLECTIONS.USERS)
+                .where("roles", "array-contains-any", ["admin", "super_admin"])
+                .get();
+
+            const admins = adminsSnapshot.docs
+                .filter(doc => doc.id !== session.user.id)
+                .map(doc => {
+                    const userData = doc.data();
+                    return {
+                        uid: doc.id,
+                        fullName: userData.fullName || "Admin",
+                        email: userData.email || "",
+                        roles: userData.roles || []
+                    };
+                });
+
+            return { users: admins, error: null };
         }
 
-        // Get all users (we'll filter client-side for simplicity)
-        // In production, use Algolia or similar for better search
-        const usersSnapshot = await db.collection(COLLECTIONS.USERS)
-            .limit(50)
-            .get();
+        // Generic search: pull admins first to guarantee they are never hidden by the 100 limit
+        const [adminsSnapshot, generalSnapshot] = await Promise.all([
+            db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ["admin", "super_admin"]).get(),
+            db.collection(COLLECTIONS.USERS).limit(200).get()
+        ]);
 
         const users: UserSearchResult[] = [];
+        const seenIds = new Set<string>([session.user.id]); // Exclude self
 
-        for (const doc of usersSnapshot.docs) {
+        // Helper to process and filter users
+        const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+            if (seenIds.has(doc.id)) return;
             const userData = doc.data();
-            if (doc.id === session.user.id) continue; // Exclude current user
-
             const fullName = (userData.fullName || "").toLowerCase();
             const email = (userData.email || "").toLowerCase();
 
             if (fullName.includes(trimmedQuery) || email.includes(trimmedQuery)) {
+                seenIds.add(doc.id);
                 users.push({
                     uid: doc.id,
                     fullName: userData.fullName || "User",
@@ -336,7 +356,10 @@ export async function searchUsersAction(query: string) {
                     roles: userData.roles || []
                 });
             }
-        }
+        };
+
+        adminsSnapshot.docs.forEach(processDoc);
+        generalSnapshot.docs.forEach(processDoc);
 
         return { users, error: null };
     } catch (error) {

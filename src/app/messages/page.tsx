@@ -132,17 +132,21 @@ export default function MessagesPage() {
     // Handle user search
     async function handleSearch(query: string) {
         setSearchQuery(query);
-        if (!query.trim()) {
-            setSearchResults([]);
-            return;
-        }
-
         setSearching(true);
         const result = await searchUsersAction(query);
         if (!isSessionExpired(result) && result.users) {
             setSearchResults(result.users);
         }
         setSearching(false);
+    }
+
+    // Call search with empty query when opening New Chat to load default Admins
+    const toggleNewChat = () => {
+        const nextState = !showNewChat;
+        setShowNewChat(nextState);
+        if (nextState) {
+            handleSearch("");
+        }
     };
 
     // Start new conversation
@@ -203,7 +207,7 @@ export default function MessagesPage() {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-900">Messages</h2>
                         <button
-                            onClick={() => setShowNewChat(!showNewChat)}
+                            onClick={toggleNewChat}
                             className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
                         >
                             <Plus className="w-5 h-5 text-slate-600" />
