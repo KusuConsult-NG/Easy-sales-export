@@ -79,7 +79,7 @@ function LogRow({ log }: { log: BroadcastLog }) {
                         <span className="flex items-center gap-1">
                             <Users className="w-3.5 h-3.5" />
                             {AUDIENCE_LABELS[log.audience]}
-                            {log.filters.state ? ` · ${log.filters.state}` : ""}
+                            {log.filters?.state ? ` · ${log.filters.state}` : ""}
                         </span>
                         <span>{formatDate(log.sentAt)}</span>
                         <span className="text-slate-400">by {log.sentByName}</span>

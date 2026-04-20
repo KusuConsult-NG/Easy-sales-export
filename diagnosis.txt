@@ -1,0 +1,46 @@
+[dotenv@17.3.1] injecting env (71) from .env.local -- tip: ⚡️ secrets for agents: https://dotenvx.com/as2
+
+🔍 ================== CHECKING SCHEMA PROPERTIES (UNDEFINED FIELDS) ==================
+  📊 users (Checked 50 docs):
+     ✅ All docs have standard timestamp fields.
+  📊 export_windows (Checked 3 docs):
+     ✅ All docs have standard timestamp fields.
+  📊 cooperatives (Checked 1 docs):
+     ✅ All docs have standard timestamp fields.
+  📊 products (Checked 3 docs):
+     ✅ All docs have standard timestamp fields.
+  📊 wave_applications (Checked 50 docs):
+     ✅ All docs have standard timestamp fields.
+  📊 transactions (Checked 50 docs):
+     ❌ Missing 'createdAt': 50 | Missing 'updatedAt': 50 (This causes cursor pagination crashes!)
+
+🔍 ================== CHECKING MISSING COMPOSITE INDEXES ==================
+  ❌ MISSING INDEX: users -> query [role == member, orderBy createdAt desc]
+  ❌ MISSING INDEX: users -> query [status == active, orderBy updatedAt desc]
+  ❌ MISSING INDEX: export_windows -> query [status == open, orderBy createdAt desc]
+  ❌ MISSING INDEX: export_windows -> query [isActive == true, orderBy endDate asc]
+  ✅ Index exists: wave_applications -> query [status == pending, orderBy createdAt desc]
+  ❌ MISSING INDEX: transactions -> query [status == completed, orderBy timestamp desc]
+  ✅ Index exists: transactions -> query [userId == test, orderBy createdAt desc]
+
+🚨 ACTION REQUIRED: Please create the following missing indexes:
+
+Collection: users
+Query: where(role == member).orderBy(createdAt desc)
+Create URL -> https://console.firebase.google.com/v1/r/project/easy-sales-hub/firestore/indexes?create_composite=Ckxwcm9qZWN0cy9lYXN5LXNhbGVzLWh1Yi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdXNlcnMvaW5kZXhlcy9fEAEaCAoEcm9sZRABGg0KCWNyZWF0ZWRBdBACGgwKCF9fbmFtZV9fEAI
+
+Collection: users
+Query: where(status == active).orderBy(updatedAt desc)
+Create URL -> https://console.firebase.google.com/v1/r/project/easy-sales-hub/firestore/indexes?create_composite=Ckxwcm9qZWN0cy9lYXN5LXNhbGVzLWh1Yi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdXNlcnMvaW5kZXhlcy9fEAEaCgoGc3RhdHVzEAEaDQoJdXBkYXRlZEF0EAIaDAoIX19uYW1lX18QAg
+
+Collection: export_windows
+Query: where(status == open).orderBy(createdAt desc)
+Create URL -> https://console.firebase.google.com/v1/r/project/easy-sales-hub/firestore/indexes?create_composite=ClVwcm9qZWN0cy9lYXN5LXNhbGVzLWh1Yi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvZXhwb3J0X3dpbmRvd3MvaW5kZXhlcy9fEAEaCgoGc3RhdHVzEAEaDQoJY3JlYXRlZEF0EAIaDAoIX19uYW1lX18QAg
+
+Collection: export_windows
+Query: where(isActive == true).orderBy(endDate asc)
+Create URL -> https://console.firebase.google.com/v1/r/project/easy-sales-hub/firestore/indexes?create_composite=ClVwcm9qZWN0cy9lYXN5LXNhbGVzLWh1Yi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvZXhwb3J0X3dpbmRvd3MvaW5kZXhlcy9fEAEaDAoIaXNBY3RpdmUQARoLCgdlbmREYXRlEAEaDAoIX19uYW1lX18QAQ
+
+Collection: transactions
+Query: where(status == completed).orderBy(timestamp desc)
+Create URL -> https://console.firebase.google.com/v1/r/project/easy-sales-hub/firestore/indexes?create_composite=ClNwcm9qZWN0cy9lYXN5LXNhbGVzLWh1Yi9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvdHJhbnNhY3Rpb25zL2luZGV4ZXMvXxABGgoKBnN0YXR1cxABGg0KCXRpbWVzdGFtcBACGgwKCF9fbmFtZV9fEAI

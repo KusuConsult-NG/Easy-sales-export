@@ -47,6 +47,7 @@ export interface BroadcastLog {
     subject: string;
     body: string;
     audience: BroadcastAudience;
+    /** May be absent on legacy documents written before filters were standardised */
     filters: BroadcastFilters;
     sentBy: string;
     sentByName: string;
@@ -578,17 +579,18 @@ export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[
             const data = d.data();
             return {
                 id: d.id,
-                subject: data.subject,
-                body: data.body,
-                audience: data.audience,
-                filters: data.filters,
-                sentBy: data.sentBy,
-                sentByName: data.sentByName,
+                subject: data.subject ?? "",
+                body: data.body ?? "",
+                audience: data.audience ?? "all",
+                // Fallback to a minimal filters object for legacy docs that lack this field
+                filters: data.filters ?? { audience: data.audience ?? "all" },
+                sentBy: data.sentBy ?? "admin",
+                sentByName: data.sentByName ?? "Admin",
                 sentAt: data.sentAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-                totalRecipients: data.totalRecipients,
-                successCount: data.successCount,
-                failCount: data.failCount,
-                status: data.status,
+                totalRecipients: data.totalRecipients ?? 0,
+                successCount: data.successCount ?? 0,
+                failCount: data.failCount ?? 0,
+                status: data.status ?? "done",
             } as BroadcastLog;
         });
 
