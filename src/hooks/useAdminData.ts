@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { logger } from '@/lib/logger';
 
 interface UseAdminDataOptions<T> {
-    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[]; lastDocId?: string; hasMore?: boolean; meta?: any; }>;
+    fetchAction: (params: any) => Promise<{ success: boolean; data?: any; error?: string | null; loans?: any[]; properties?: any[]; users?: any[]; lastDocId?: string; cursor?: string; hasMore?: boolean; meta?: any; }>;
     limit?: number;
     dependencies?: any[];
 }
