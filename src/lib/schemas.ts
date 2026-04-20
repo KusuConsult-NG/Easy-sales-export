@@ -6,7 +6,13 @@ import { z } from "zod";
 
 export const strictNameSchema = z.string()
     .min(2, "Name must be at least 2 characters")
-    .regex(/^[a-zA-Z\s\-']+$/, "Name can only contain letters, spaces, hyphens and apostrophes");
+    .max(50, "Name cannot exceed 50 characters")
+    .regex(/^[a-zA-Z\s\-']+$/, "Name can only contain letters, spaces, hyphens and apostrophes")
+    .refine(val => {
+        // Prevent pentester keyboard smashes: no single block of letters longer than 15 chars
+        const words = val.split(/\s|\-|_/);
+        return words.every(word => word.length <= 15);
+    }, { message: "Name contains unusually long continuous characters (bot detection)" });
 
 export const strictEmailSchema = z.string()
     .email("Invalid email address")

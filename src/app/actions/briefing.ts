@@ -25,10 +25,10 @@ export interface BriefingRegistrationData {
 }
 
 import { z } from "zod";
-import { strictEmailSchema } from "@/lib/schemas";
+import { strictEmailSchema, strictNameSchema } from "@/lib/schemas";
 // Zod Validation Schema for Registration Data
 const briefingRegistrationSchema = z.object({
-    fullName: z.string().trim().min(2, { message: "Full Name must be at least 2 characters" }),
+    fullName: strictNameSchema,
     firstName: z.string().trim().optional(),
     lastName: z.string().trim().optional(),
     otherName: z.string().trim().optional(),
