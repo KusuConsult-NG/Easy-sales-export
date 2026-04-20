@@ -23,8 +23,10 @@ const targetEmail = "q.ew.uy.i.r.u.6.20@gmail.com";
 const targetFullName = "oZzgzedgwjeXEBkuzjlVi CmfPOtOgtunkXFZO XxEiHrKvLkvXiJaR";
 
 async function execute() {
-    console.log("Searching for user to ban and delete...");
+    console.log("Searching for user to ban and delete across ALL collections...");
+
     let uids = [];
+    let docRefsToDelete = [];
 
     // 1. Find via Auth
     try {
@@ -35,61 +37,73 @@ async function execute() {
         console.log("Not found in Auth by exact email.");
     }
 
-    // 2. Find via name in Users collection
-    const usersSnap = await db.collection("users").where("fullName", "==", targetFullName).get();
-    usersSnap.docs.forEach(d => {
-        console.log(`Found via Users Collection Name: ${d.id}`);
-        if (!uids.includes(d.id)) uids.push(d.id);
-    });
+    // 2. Sweeping collections for UIDs or specific docs
+    const collectionsToSweep = [
+        "users", "cooperative_members", "wave_members", 
+        "wave_applications", "academy_applications", "seller_verifications",
+        "export_applications", "land_listings", "wave_briefing_registrations",
+        "briefing_submissions", "cooperative_onboarding_applications"
+    ];
 
-    const emailSnap = await db.collection("users").where("email", "==", targetEmail).get();
-    emailSnap.docs.forEach(d => {
-        console.log(`Found via Users Collection Email: ${d.id}`);
-        if (!uids.includes(d.id)) uids.push(d.id);
-    });
-
-    if (uids.length === 0) {
-        console.log("User not found anywhere.");
-        process.exit(1);
+    for (const col of collectionsToSweep) {
+        // Find by email
+        const e1 = await db.collection(col).where("email", "==", targetEmail).get();
+        const e2 = await db.collection(col).where("userEmail", "==", targetEmail).get();
+        // Find by fullName
+        const n1 = await db.collection(col).where("fullName", "==", targetFullName).get();
+        const n2 = await db.collection(col).where("name", "==", targetFullName).get();
+        
+        const docs = [...e1.docs, ...e2.docs, ...n1.docs, ...n2.docs];
+        for (const doc of docs) {
+            console.log(`Found doc in ${col}: ${doc.id}`);
+            docRefsToDelete.push(doc.ref);
+            if (col === "users" && !uids.includes(doc.id)) {
+                uids.push(doc.id);
+            }
+        }
     }
+
+    // De-dupe refs
+    const uniqueRefsMap = new Map();
+    docRefsToDelete.forEach(ref => {
+        uniqueRefsMap.set(ref.path, ref);
+    });
+    const uniqueRefs = Array.from(uniqueRefsMap.values());
+
+    console.log(`\nFound ${uids.length} UIDs to ban.`);
+    console.log(`Found ${uniqueRefs.length} documents to delete.`);
 
     for (const uid of uids) {
-        console.log(`\nProcessing UID: ${uid}`);
-        
-        // Disable in Auth (BAN)
         try {
             await auth.updateUser(uid, { disabled: true });
-            console.log(`[+] Banned (disabled) in Firebase Auth.`);
-        } catch(e) {
-            console.log(`[-] Could not disable in Auth: ${e.message}`);
-        }
-
-        // Delete from all major collections
-        const collectionsToCheck = [
-            "users", "cooperative_members", "wave_members", 
-            "wave_applications", "academy_applications", "seller_verifications",
-            "export_applications", "land_listings"
-        ];
-
-        const batch = db.batch();
-        
-        for (const col of collectionsToCheck) {
-            // Delete by ID
-            batch.delete(db.collection(col).doc(uid));
-
-            // Query by email and delete
-            const e1 = await db.collection(col).where("email", "==", targetEmail).get();
-            const e2 = await db.collection(col).where("userEmail", "==", targetEmail).get();
+            console.log(`[+] Banned (disabled) UID: ${uid} in Firebase Auth.`);
             
-            e1.docs.forEach(d => batch.delete(d.ref));
-            e2.docs.forEach(d => batch.delete(d.ref));
+            // Delete user-id based docs blindly in case they exist
+            for (const col of collectionsToSweep) {
+                docRefsToDelete.push(db.collection(col).doc(uid));
+            }
+        } catch(e) {
+            console.log(`[-] Could not disable UID: ${uid} in Auth (may already be disabled or not exist)`);
         }
-
-        await batch.commit();
-        console.log(`[+] Purged records from all DB collections.`);
     }
 
-    console.log("\nSuccess: User banned and data deleted from app.");
+    // Create a new deduped list to include the blind deletes
+    const finalRefsMap = new Map();
+    docRefsToDelete.forEach(ref => finalRefsMap.set(ref.path, ref));
+    const finalRefs = Array.from(finalRefsMap.values());
+
+    // Batch delete
+    const batchSize = 500;
+    for (let i = 0; i < finalRefs.length; i += batchSize) {
+        const batch = db.batch();
+        const chunk = finalRefs.slice(i, i + batchSize);
+        chunk.forEach(ref => batch.delete(ref));
+        await batch.commit();
+    }
+    
+    console.log(`[+] Purged ${finalRefs.length} records/paths across all DB collections.`);
+
+    console.log("\nSuccess: User banned and data fully deleted from app.");
     process.exit(0);
 }
 
