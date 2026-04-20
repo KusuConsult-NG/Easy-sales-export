@@ -4,6 +4,7 @@ import "./globals.css";
 import { ClientLayout } from "@/components/layout/ClientLayout";
 import { validateProductionSecrets, checkForExposedKeys } from "@/lib/security-checks";
 import GlobalScrollWatcher from "@/components/common/GlobalScrollWatcher";
+import DeploymentWatcher from "@/components/DeploymentWatcher";
 
 // Run security checks on app initialization
 if (process.env.NODE_ENV === 'production') {
@@ -162,6 +163,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <GlobalScrollWatcher />
+        <DeploymentWatcher />
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

@@ -5,6 +5,22 @@ import { logger } from "@/lib/logger";
 import { AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 
+/** Returns true if the error is caused by a stale JS bundle after a new deployment */
+function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
+    const msg = error?.message ?? "";
+    const name = error?.name ?? "";
+    return (
+        name === "ChunkLoadError" ||
+        name === "UnrecognizedActionError" ||
+        msg.includes("ChunkLoadError") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("was not found on the server") ||
+        msg.includes("UnrecognizedAction") ||
+        msg.includes("Failed to fetch dynamically imported module") ||
+        msg.includes("Importing a module script failed")
+    );
+}
+
 export default function GlobalError({
     error,
     reset,
@@ -13,13 +29,36 @@ export default function GlobalError({
     reset: () => void
 }) {
     useEffect(() => {
-        // Log to our newly upgraded Telemetry webhook
+        // ── Stale-deployment auto-recovery ──────────────────────────────────
+        // ChunkLoadError / UnrecognizedActionError mean the browser has a stale
+        // JS bundle from before the last Vercel deploy. A hard reload fetches
+        // the new bundle and the user lands on the same page without any error.
+        if (isStaleDeploymentError(error)) {
+            console.warn("[GlobalError] Stale deployment detected — auto-reloading.", error.name, error.message);
+            window.location.reload();
+            return;
+        }
+
+        // Log genuine errors to telemetry
         logger.error("Next.js Global UI Boundary Caught Exception", error, {
             digest: error.digest,
             path: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
             fatal: true
         });
     }, [error]);
+
+    // While a stale-deployment reload is in flight, show nothing
+    if (isStaleDeploymentError(error)) {
+        return (
+            <html>
+                <body>
+                    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', color: '#475569' }}>
+                        <p>Updating to latest version…</p>
+                    </div>
+                </body>
+            </html>
+        );
+    }
 
     return (
         <html>

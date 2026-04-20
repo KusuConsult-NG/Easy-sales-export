@@ -14,8 +14,26 @@ interface State {
 
 /**
  * Global Error Boundary
- * Catches errors in any child component tree
+ * Catches errors in any child component tree.
+ * Auto-reloads on chunk-load / stale-deployment errors.
  */
+
+function isStaleDeploymentError(error?: Error): boolean {
+    if (!error) return false;
+    const msg = error.message ?? "";
+    const name = error.name ?? "";
+    return (
+        name === "ChunkLoadError" ||
+        name === "UnrecognizedActionError" ||
+        msg.includes("ChunkLoadError") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("was not found on the server") ||
+        msg.includes("UnrecognizedAction") ||
+        msg.includes("Failed to fetch dynamically imported module") ||
+        msg.includes("Importing a module script failed")
+    );
+}
+
 export class ErrorBoundary extends Component<Props, State> {
     constructor(props: Props) {
         super(props);
@@ -30,7 +48,13 @@ export class ErrorBoundary extends Component<Props, State> {
         // Do not log internal Next.js redirect errors
         if (error.message.startsWith('NEXT_REDIRECT')) return;
 
-        // Log to error tracking service (Sentry, LogRocket, etc.)
+        // Auto-reload on stale-deployment errors (new Vercel build invalidated old chunks)
+        if (isStaleDeploymentError(error)) {
+            console.warn('[ErrorBoundary] Stale deployment — auto-reloading.');
+            window.location.reload();
+            return;
+        }
+
         console.error('Error Boundary caught:', error, errorInfo);
     }
 
