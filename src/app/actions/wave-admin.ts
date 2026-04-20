@@ -405,32 +405,58 @@ export async function rejectWaveApplicationAction(
             return { success: false, error: "Unauthorized" };
         }
 
-        // Get application data for email
+        // Get application data
         const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
-        if (appDoc.exists) {
-            const appData = appDoc.data();
-            if (appData?.userId) {
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
-                if (userDoc.exists) {
-                    const userData = userDoc.data();
-                    const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
-                    await sendWaveApplicationEmail(
-                        userData?.email,
-                        userData?.name || 'Member',
-                        'rejected',
-                        reason
-                    );
-                }
-            }
+
+        if (!appDoc.exists) {
+            return { success: false, error: "Application not found" };
         }
 
-        await appRef.update({
+        const appData = appDoc.data();
+
+        // ✅ FIX: Commit status changes FIRST, then send email as non-blocking side effect.
+        // Previously the email fired before status update — a throw left status unchanged.
+        // Also: USERS.serviceRegistrations.wave.status was never set to "rejected",
+        // leaving rejected users permanently showing "pending" and unable to re-apply.
+        const rejectionBatch = db.batch();
+
+        rejectionBatch.update(appRef, {
             status: "rejected",
             rejectedAt: FieldValue.serverTimestamp(),
             rejectedBy: session.user.id,
             rejectionReason: reason,
+            updatedAt: FieldValue.serverTimestamp(),
         });
+
+        if (appData?.userId) {
+            rejectionBatch.update(db.collection(COLLECTIONS.USERS).doc(appData.userId), {
+                "serviceRegistrations.wave.status": "rejected",
+                "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        await rejectionBatch.commit();
+
+        // Non-blocking email notification (after commit)
+        if (appData?.userId) {
+            try {
+                const memberUserDoc = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
+                if (memberUserDoc.exists) {
+                    const memberData = memberUserDoc.data();
+                    const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
+                    await sendWaveApplicationEmail(
+                        memberData?.email,
+                        memberData?.name || 'Member',
+                        'rejected',
+                        reason
+                    );
+                }
+            } catch (emailError) {
+                logger.error('[Wave Rejection] Email send error (non-blocking):', emailError);
+            }
+        }
 
         await createAdminAuditLog({
             action: "wave_application_rejected",

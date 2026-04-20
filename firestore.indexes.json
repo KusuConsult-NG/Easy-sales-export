@@ -565,6 +565,20 @@
       ]
     },
     {
+      "collectionGroup": "wave_resource_access",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "resourceId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "wave_training_registrations",
       "queryScope": "COLLECTION",
       "fields": [
