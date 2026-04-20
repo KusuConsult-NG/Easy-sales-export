@@ -35,13 +35,18 @@ export async function getSellerOrdersAction(filters?: {
             return { success: false, error: "Not authorized as seller" };
         }
 
-        // Build query
-        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerId", "==", userId)
+        // ✅ FIX: Orders are written with 'sellerIds' (array), not 'sellerId' (string).
+        // The old .where("sellerId", "==") returned zero results for every seller.
+        // Also: status filter must rebuild from scratch before orderBy to avoid Firestore 400.
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+            .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
         if (filters?.status) {
-            query = query.where("status", "==", filters.status);
+            query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                .where("sellerIds", "array-contains", userId)
+                .where("status", "==", filters.status)
+                .orderBy("createdAt", "desc");
         }
 
         const snapshot = await query.get();

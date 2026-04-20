@@ -204,8 +204,11 @@ export async function confirmOrderReceiptAction(orderId: string) {
             return { success: false, error: "Unauthorized" };
         }
 
-        if (orderData?.orderStatus !== "in_transit" && orderData?.orderStatus !== "processing") {
-            // Allow confirming if it's processing or in_transit
+        // ✅ FIX: Orders use field 'status', not 'orderStatus'.
+        // The old check was dead code — it never triggered, so buyers could confirm
+        // any order regardless of actual state. Now enforced correctly.
+        if (orderData?.status !== "in_transit" && orderData?.status !== "processing" && orderData?.status !== "shipped") {
+            return { success: false, error: "Order is not yet in transit or processing" };
         }
 
         await db.runTransaction(async (transaction) => {

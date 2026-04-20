@@ -712,12 +712,18 @@ export async function getSellerOrdersAction(options: {
         // (Firestore does not support full-text search natively)
         const fetchLimit = search ? Math.min(limit * 5, 100) : limit;
 
-        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
+        // ✅ FIX: status filter must be applied BEFORE orderBy, so rebuild from scratch.
+        // Previously appended .where("orderStatus") after .orderBy(), causing Firestore 400.
+        // Also fixed wrong field name: orders store 'status', not 'orderStatus'.
         if (status && status !== "all") {
-            query = query.where("orderStatus", "==", status);
+            query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                .where("sellerIds", "array-contains", userId)
+                .where("status", "==", status)
+                .orderBy("createdAt", "desc");
         }
 
         if (lastId && !search) {
@@ -879,12 +885,18 @@ export async function getBuyerOrdersAction(options: {
         const userId = session.user.id;
         const { limit = 20, lastId, status } = options;
 
-        let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", userId) // marketplace-payment.ts uses buyerId
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+            .where("buyerId", "==", userId)
             .orderBy("createdAt", "desc");
 
+        // ✅ FIX: status filter must be applied BEFORE orderBy, so rebuild from scratch.
+        // Previously appended .where("orderStatus") after .orderBy(), causing Firestore 400.
+        // Also fixed wrong field name: orders store 'status', not 'orderStatus'.
         if (status && status !== "all") {
-            query = query.where("orderStatus", "==", status);
+            query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                .where("buyerId", "==", userId)
+                .where("status", "==", status)
+                .orderBy("createdAt", "desc");
         }
 
         if (lastId) {
@@ -1082,10 +1094,11 @@ export async function deleteProductAction(productId: string) {
             return { success: false, error: "Unauthorized" };
         }
 
-        // Check for active orders
+        // ✅ FIX: Check correct field name 'status' (not 'orderStatus' which doesn't exist on orders).
+        // Previously this guard never fired, allowing soft-delete of products with active orders.
         const activeOrders = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("productIds", "array-contains", productId)
-            .where("orderStatus", "in", ["confirmed", "processing", "shipped"])
+            .where("status", "in", ["confirmed", "processing", "shipped"])
             .get();
 
         if (!activeOrders.empty) {
