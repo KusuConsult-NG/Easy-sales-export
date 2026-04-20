@@ -3,52 +3,65 @@
 /**
  * DeploymentWatcher
  *
- * Silently polls /api/version every 5 minutes. When it detects the
- * server is running a newer build than the current browser tab, it shows
- * a soft banner inviting the user to refresh — preventing all the
- * "ChunkLoadError" / "Server Action not found" issues that happen when
- * Vercel deploys a new build while users are mid-session.
+ * Polls /api/health every 5 minutes. When it detects the server is running
+ * a newer build than the current browser tab (build timestamps differ), it
+ * shows a soft banner inviting the user to refresh.
  *
- * No dependencies beyond React — no polling during SSR, no effect on
- * performance outside of a 5-minute interval fetch.
+ * Works with Railway's Docker-based deployments: each new container has a
+ * unique BUILD_TIME stamped at `next build` time.
+ *
+ * Prevents ChunkLoadError / "Server Action not found" issues that happen
+ * when Railway switches to a new container while users are mid-session.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { RefreshCw } from "lucide-react";
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 export default function DeploymentWatcher() {
     const [updateAvailable, setUpdateAvailable] = useState(false);
+    // Capture the build time the browser loaded with (set at next build via next.config.ts)
+    const currentBuildTime = useRef<string | null>(
+        typeof window !== "undefined"
+            ? (window as any).__NEXT_BUILD_TIME ||
+              process.env.NEXT_PUBLIC_BUILD_TIME ||
+              null
+            : null
+    );
 
     useEffect(() => {
-        // Capture the build ID the browser loaded with
-        const currentBuildId = (window as any).__NEXT_DATA__?.buildId;
-        if (!currentBuildId) return; // Can't compare — skip
-
-        let timer: ReturnType<typeof setInterval>;
-
         async function checkForUpdate() {
             try {
-                // /_next/static/chunks/pages/_app.js would change hash, but simpler:
-                // Next.js exposes the build ID in /_next/static/[buildId]/_ssgManifest.js
-                // We can also check a lightweight custom endpoint.
-                const res = await fetch(`/_next/static/${currentBuildId}/_ssgManifest.js`, {
-                    method: "HEAD",
+                const res = await fetch("/api/health", {
                     cache: "no-store",
+                    headers: { "Accept": "application/json" },
                 });
-                // If the current build manifest file is GONE (404), a new build deployed
-                if (res.status === 404) {
+                if (!res.ok) return;
+
+                const data = await res.json();
+                const serverBuildTime: string | undefined = data?.buildTime;
+
+                if (!serverBuildTime) return;
+
+                // First call — capture the server's build time as our baseline
+                if (!currentBuildTime.current) {
+                    currentBuildTime.current = serverBuildTime;
+                    return;
+                }
+
+                // If the server reports a different (newer) build time, a new
+                // Docker container has been deployed
+                if (serverBuildTime !== currentBuildTime.current) {
                     setUpdateAvailable(true);
-                    clearInterval(timer);
                 }
             } catch {
                 // Network errors are not deployment events — ignore
             }
         }
 
-        // Start polling after the first interval (not immediately on mount)
-        timer = setInterval(checkForUpdate, POLL_INTERVAL_MS);
+        // Start polling (not immediately — wait one interval first)
+        const timer = setInterval(checkForUpdate, POLL_INTERVAL_MS);
         return () => clearInterval(timer);
     }, []);
 

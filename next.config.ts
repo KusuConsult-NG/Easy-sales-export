@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const nextConfig: NextConfig = {
+  // Stamp the build time into the environment so Railway containers can be
+  // distinguished from each other by DeploymentWatcher / /api/health.
+  env: {
+    BUILD_TIME: new Date().toISOString(),
+    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+  },
+
   // Reduce serverless function bundle sizes by excluding packages
   // that are available natively in the Vercel runtime or unused server-side
   outputFileTracingExcludes: {
