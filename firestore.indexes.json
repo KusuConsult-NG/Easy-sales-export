@@ -269,6 +269,20 @@
       ]
     },
     {
+      "collectionGroup": "wave_training_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "wave_training_sessions",
       "queryScope": "COLLECTION",
       "fields": [

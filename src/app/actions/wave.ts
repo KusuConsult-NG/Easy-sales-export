@@ -562,7 +562,8 @@ export async function getWaveTrainingEventsAction(
 
         let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS)
             .where("status", "in", ["upcoming", "ongoing"])
-            .orderBy("scheduledAt", "asc")
+            // ✅ FIX: 'scheduledAt' does not exist — events are stored with field 'date'
+            .orderBy("date", "asc")
             .limit(pageSize + 1);
 
         if (cursor) {
@@ -578,7 +579,7 @@ export async function getWaveTrainingEventsAction(
 
         const data = serializeDocs<WaveTrainingEvent>(docs);
         const nextCursor = hasMore && docs.length > 0
-            ? docs[docs.length - 1].data().scheduledAt?.toDate?.()?.toISOString() ?? null
+            ? docs[docs.length - 1].data().date?.toDate?.()?.toISOString() ?? null
             : null;
 
         return { success: true, data, meta: { cursor: nextCursor, hasMore } };

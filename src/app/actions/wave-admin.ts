@@ -314,41 +314,62 @@ export async function approveWaveApplicationAction(
 
         const appData = appDoc.data();
 
-        // Update application status
-        await appRef.update({
+        // ✅ FIX: Use a batch — application status + member enrollment must be atomic.
+        // Previously two separate writes: a crash between them leaves applicant stuck
+        // in 'approved' state but not enrolled, locking them out of resources forever.
+        const batch = db.batch();
+
+        // 1. Mark application approved
+        batch.update(appRef, {
             status: "approved",
             approvedAt: FieldValue.serverTimestamp(),
             approvedBy: session.user.id,
         });
 
-        // Enroll user in WAVE
+        // 2. Enroll user in WAVE_MEMBERS (if userId exists)
         if (appData?.userId) {
-            await db.collection(COLLECTIONS.WAVE_MEMBERS).add({
+            const memberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(appData.userId);
+            batch.set(memberRef, {
                 userId: appData.userId,
                 enrolledAt: FieldValue.serverTimestamp(),
                 active: true,
-            });
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
 
-            // CLEAR CACHE - User now has Wave access
+            // 3. Sync user role + serviceRegistrations
+            batch.update(db.collection(COLLECTIONS.USERS).doc(appData.userId), {
+                "serviceRegistrations.wave.status": "approved",
+                "serviceRegistrations.wave.approvedAt": FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        await batch.commit();
+
+        // Post-commit: non-critical side effects (cache, email)
+        if (appData?.userId) {
             try {
                 const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
                 await invalidateServiceCache(appData.userId, 'wave');
                 logger.info(`[Wave Approval] Cleared cache for user: ${appData.userId}`);
             } catch (cacheError) {
-                // Non-critical - continue even if cache clear fails
                 logger.error('[Wave Approval] Cache invalidation error:', cacheError);
             }
 
-            // Send approval email
             const userDocData = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
             if (userDocData.exists) {
                 const userData = userDocData.data();
-                const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
-                await sendWaveApplicationEmail(
-                    userData?.email,
-                    userData?.name || 'Member',
-                    'approved'
-                );
+                try {
+                    const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
+                    await sendWaveApplicationEmail(
+                        userData?.email,
+                        userData?.name || 'Member',
+                        'approved'
+                    );
+                } catch (emailError) {
+                    logger.error('[Wave Approval] Email send error (non-blocking):', emailError);
+                }
             }
         }
 
