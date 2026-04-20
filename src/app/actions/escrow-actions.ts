@@ -12,7 +12,7 @@ import { createNotificationAction } from "@/app/actions/notifications";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
-const escrowStatusSchema = z.enum(["pending", "funded", "in_transit", "delivered", "completed", "disputed", "cancelled"]);
+const escrowStatusSchema = z.enum(["pending", "funded", "in_transit", "delivered", "released", "refunded", "disputed", "cancelled"]);
 
 /** Structured unauthorised response */
 function sessionError(sessionResult: { error: unknown }) {
@@ -278,7 +278,7 @@ export async function createEscrowDispute(
 
         // Check for existing active dispute before entering transaction (read-only guard)
         const existingDisputes = await db.collection(COLLECTIONS.DISPUTES)
-            .where("orderId", "==", transactionId)
+            .where("escrowId", "==", transactionId)
             .where("status", "in", ["open", "under_review"])
             .get();
 
@@ -307,7 +307,7 @@ export async function createEscrowDispute(
             }
 
             const disputeData = {
-                orderId: transactionId,
+                escrowId: transactionId,  // canonical field — matches escrow.ts createDisputeAction
                 buyerId: txData.buyerId,
                 sellerId: txData.sellerId,
                 reason,
@@ -383,15 +383,15 @@ export async function releaseEscrowFunds(
 
             const data = txDoc.data()!;
 
-            // Validate current status
-            if (data.status !== "delivered" && data.status !== "disputed") {
+            // Validate current status — must be delivered or disputed to release
+            if (data.status !== "delivered" && data.status !== "disputed" && data.status !== "funded") {
                 throw new Error(
-                    `Cannot release escrow in ${data.status} status. Must be 'delivered' or 'disputed'.`
+                    `Cannot release escrow in ${data.status} status. Must be 'funded', 'delivered', or 'disputed'.`
                 );
             }
 
-            // Prevent double-release (should be caught by status check, but explicit guard)
-            if (data.status === "completed") {
+            // Prevent double-release
+            if (data.status === "released") {
                 throw new Error("Escrow already released");
             }
 
@@ -422,7 +422,7 @@ export async function releaseEscrowFunds(
             });
 
             tx.update(txRef, {
-                status: "completed",
+                status: "released",  // canonical status — matches cron and escrow.ts
                 releasedAt: FieldValue.serverTimestamp(),
                 releasedBy: userId,
                 updatedAt: FieldValue.serverTimestamp(),
