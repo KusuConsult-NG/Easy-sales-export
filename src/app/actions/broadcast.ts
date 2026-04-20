@@ -44,8 +44,10 @@ export interface BroadcastFilters {
 
 export interface BroadcastLog {
     id: string;
-    subject: string;
-    body: string;
+    /** 'email' | 'sms' — used to render the correct icon and field labels */
+    channel: "email" | "sms";
+    subject: string;        // email subject  OR  first 60 chars of SMS message
+    body: string;           // full email body OR full SMS message
     audience: BroadcastAudience;
     /** May be absent on legacy documents written before filters were standardised */
     filters: BroadcastFilters;
@@ -565,24 +567,34 @@ export async function sendBroadcastAction(
 }
 
 /**
- * Fetch broadcast history (last 50 broadcasts, newest first)
+ * Fetch unified broadcast history — merges Email (broadcast_logs) +
+ * SMS (sms_broadcast_logs), sorted newest-first (last 100 total).
  */
 export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[]; error?: string }> {
     try {
-        const snap = await getAdminDb()
-            .collection(COLLECTIONS.BROADCAST_LOGS)
-            .orderBy("sentAt", "desc")
-            .limit(50)
-            .get();
+        const db = getAdminDb();
 
-        const logs: BroadcastLog[] = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
+        // Fetch both collections in parallel
+        const [emailSnap, smsSnap] = await Promise.all([
+            db.collection(COLLECTIONS.BROADCAST_LOGS)
+                .orderBy("sentAt", "desc")
+                .limit(50)
+                .get(),
+            db.collection("sms_broadcast_logs")
+                .orderBy("sentAt", "desc")
+                .limit(50)
+                .get(),
+        ]);
+
+        // Map email logs
+        const emailLogs: BroadcastLog[] = emailSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
             const data = d.data();
             return {
                 id: d.id,
+                channel: "email" as const,
                 subject: data.subject ?? "",
                 body: data.body ?? "",
                 audience: data.audience ?? "all",
-                // Fallback to a minimal filters object for legacy docs that lack this field
                 filters: data.filters ?? { audience: data.audience ?? "all" },
                 sentBy: data.sentBy ?? "admin",
                 sentByName: data.sentByName ?? "Admin",
@@ -591,7 +603,38 @@ export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[
                 successCount: data.successCount ?? 0,
                 failCount: data.failCount ?? 0,
                 status: data.status ?? "done",
-            } as BroadcastLog;
+            };
+        });
+
+        // Map SMS logs — field names differ slightly (sent/failed vs successCount/failCount)
+        const smsLogs: BroadcastLog[] = smsSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
+            const data = d.data();
+            const msgPreview = (data.message ?? "").slice(0, 60) + ((data.message ?? "").length > 60 ? "…" : "");
+            const sent = data.sent ?? data.successCount ?? 0;
+            const failed = data.failed ?? data.failCount ?? 0;
+            const total = data.totalRecipients ?? (sent + failed);
+            const status: BroadcastLog["status"] =
+                failed === 0 ? "done" : sent === 0 ? "partial" : "partial";
+            return {
+                id: d.id,
+                channel: "sms" as const,
+                subject: msgPreview,          // reuse subject slot as SMS preview
+                body: data.message ?? "",     // full SMS text
+                audience: data.audience ?? "all",
+                filters: data.filters ?? { audience: data.audience ?? "all" },
+                sentBy: data.sentBy ?? "admin",
+                sentByName: data.sentByName ?? "Admin",
+                sentAt: data.sentAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+                totalRecipients: total,
+                successCount: sent,
+                failCount: failed,
+                status: data.status ?? status,
+            };
+        });
+
+        // Merge and sort newest-first
+        const logs = [...emailLogs, ...smsLogs].sort((a, b) => {
+            return new Date(b.sentAt as string).getTime() - new Date(a.sentAt as string).getTime();
         });
 
         return { logs };

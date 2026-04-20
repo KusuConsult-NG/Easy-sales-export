@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
     History, ChevronLeft, Mail, Users, CheckCircle, AlertTriangle,
-    Loader2, RefreshCw, Eye, ChevronDown, ChevronUp,
+    Loader2, RefreshCw, Eye, ChevronDown, ChevronUp, MessageSquare,
 } from "lucide-react";
 import { getBroadcastHistoryAction } from "@/app/actions/broadcast";
 import type { BroadcastLog, BroadcastAudience } from "@/app/actions/broadcast";
@@ -61,24 +61,37 @@ function LogRow({ log }: { log: BroadcastLog }) {
         ? Math.round((log.successCount / log.totalRecipients) * 100)
         : 0;
 
+    const isSms = log.channel === "sms";
+    const accentIcon  = isSms ? "text-blue-700"  : "text-green-700";
+    const accentBg    = isSms ? "bg-blue-100"     : "bg-green-100";
+    const accentBar   = isSms ? "bg-blue-500"     : "bg-green-500";
+    const accentCount = isSms ? "text-blue-600"   : "text-green-600";
+    const channelLabel = isSms ? "📱 SMS" : "📧 Email";
+
     return (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="p-5 flex flex-col sm:flex-row sm:items-start gap-4">
                 {/* Icon */}
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
-                    <Mail className="w-5 h-5 text-green-700" />
+                <div className={`w-10 h-10 rounded-xl ${accentBg} flex items-center justify-center shrink-0`}>
+                    {isSms
+                        ? <MessageSquare className={`w-5 h-5 ${accentIcon}`} />
+                        : <Mail className={`w-5 h-5 ${accentIcon}`} />
+                    }
                 </div>
 
                 {/* Main content */}
                 <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${isSms ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}`}>
+                            {channelLabel}
+                        </span>
                         <h3 className="font-bold text-slate-900 truncate">{log.subject}</h3>
                         <StatusBadge status={log.status} />
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-slate-500">
                         <span className="flex items-center gap-1">
                             <Users className="w-3.5 h-3.5" />
-                            {AUDIENCE_LABELS[log.audience]}
+                            {AUDIENCE_LABELS[log.audience] ?? log.audience}
                             {log.filters?.state ? ` · ${log.filters.state}` : ""}
                         </span>
                         <span>{formatDate(log.sentAt)}</span>
@@ -93,7 +106,7 @@ function LogRow({ log }: { log: BroadcastLog }) {
                         <p className="text-xs text-slate-500">Total</p>
                     </div>
                     <div className="text-center">
-                        <p className="text-xl font-bold text-green-600">{(log.successCount ?? 0).toLocaleString()}</p>
+                        <p className={`text-xl font-bold ${accentCount}`}>{(log.successCount ?? 0).toLocaleString()}</p>
                         <p className="text-xs text-slate-500">Sent</p>
                     </div>
                     {log.failCount > 0 && (
@@ -115,14 +128,16 @@ function LogRow({ log }: { log: BroadcastLog }) {
             {/* Delivery bar */}
             <div className="mx-5 mb-4">
                 <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${deliveryRate}%` }} />
+                    <div className={`h-full ${accentBar} rounded-full`} style={{ width: `${deliveryRate}%` }} />
                 </div>
             </div>
 
             {/* Expanded body */}
             {expanded && (
                 <div className="border-t border-slate-100 px-5 py-4 bg-slate-50">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Message Body</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                        {isSms ? "SMS Message" : "Email Body"}
+                    </p>
                     <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{log.body}</pre>
                 </div>
             )}
