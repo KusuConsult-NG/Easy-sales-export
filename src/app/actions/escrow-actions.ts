@@ -83,8 +83,10 @@ export async function getAllEscrowTransactionsAdmin(options: {
         if (!sessionResult.session) return sessionError(sessionResult);
         const { session } = sessionResult;
 
-        // Enforce admin role
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        // Live role re-validation — reads Firestore, not stale JWT
+        const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const callerRoles: string[] = callerDoc.data()?.roles ?? [];
+        if (!callerRoles.includes("admin") && !callerRoles.includes("super_admin")) {
             return { success: false, error: "Admin access required" };
         }
 

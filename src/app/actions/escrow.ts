@@ -520,7 +520,7 @@ export async function resolveDisputeAction(
     disputeId: string,
     adminId: string,
     resolution: string,
-    outcome: "release_to_seller" | "refund_to_buyer"
+    outcome: "release_seller" | "refund_buyer"  // matches DisputeResolution type in marketplace.ts
 ): Promise<{ success: boolean; error?: string }> {
     // Live role re-validation — bypasses the stale JWT
     const adminCheck = await requireAdmin();
@@ -559,9 +559,9 @@ export async function resolveDisputeAction(
             });
 
             tx.update(escrowRef, {
-                status: outcome === "release_to_seller" ? "released" : "refunded",
+                status: outcome === "release_seller" ? "released" : "refunded",
                 releasedBy: adminId,
-                [outcome === "release_to_seller" ? "releasedAt" : "refundedAt"]:
+                [outcome === "release_seller" ? "releasedAt" : "refundedAt"]:
                     FieldValue.serverTimestamp(),
             });
         });

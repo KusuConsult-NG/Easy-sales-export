@@ -225,8 +225,12 @@ export default function AdminDisputesPage() {
 
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div className="p-3 bg-slate-50 rounded-xl">
-                                            <p className="text-xs text-slate-500 mb-1">Order ID</p>
-                                            <p className="font-semibold text-slate-900 font-mono">{selected.orderId || "N/A"}</p>
+                                            <p className="text-xs text-slate-500 mb-1">
+                                                {(selected as any).escrowId ? "Escrow ID" : "Order ID"}
+                                            </p>
+                                            <p className="font-semibold text-slate-900 font-mono text-xs">
+                                                {(selected as any).escrowId || selected.orderId || "N/A"}
+                                            </p>
                                         </div>
                                         <div className="p-3 bg-slate-50 rounded-xl">
                                             <p className="text-xs text-slate-500 mb-1">Filed By (Buyer)</p>
