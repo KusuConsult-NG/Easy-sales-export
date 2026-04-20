@@ -1,11 +1,39 @@
 import { z } from "zod";
 
+// ============================================
+// STRICT UNIFIED PII VALIDATORS (Anti-Abuse)
+// ============================================
+
+export const strictNameSchema = z.string()
+    .min(2, "Name must be at least 2 characters")
+    .regex(/^[a-zA-Z\s\-']+$/, "Name can only contain letters, spaces, hyphens and apostrophes");
+
+export const strictEmailSchema = z.string()
+    .email("Invalid email address")
+    .toLowerCase()
+    .trim()
+    .refine((val) => !val.includes('+'), {
+        message: "Plus addressing (+) is not permitted for security reasons"
+    })
+    .refine((val) => {
+        // Block Gmail dot-trick abuse (max 2 dots allowed in prefix)
+        if (val.endsWith('@gmail.com') || val.endsWith('@googlemail.com')) {
+            const localPart = val.split('@')[0];
+            const dotCount = (localPart.match(/\./g) || []).length;
+            return dotCount <= 2;
+        }
+        return true;
+    }, { message: "Email contains too many periods (possible abuse pattern)" });
+
+export const strictPhoneSchema = z.string()
+    .regex(/^(\+234|0)[789]\d{9}$/, "Invalid Nigerian phone number (e.g., +2348012345678 or 08012345678)");
+
 /**
  * Login Schema
  * Validates email and password for user authentication
  */
 export const loginSchema = z.object({
-    email: z.string().email("Invalid email address").min(1, "Email is required"),
+    email: strictEmailSchema,
     password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
@@ -17,9 +45,9 @@ export type LoginFormData = z.infer<typeof loginSchema>;
  */
 export const registerSchema = z
     .object({
-        fullName: z.string().min(3, "Full name must be at least 3 characters"),
-        email: z.string().email("Invalid email address").min(1, "Email is required"),
-        phone: z.string().min(10, "Phone number must be at least 10 digits"),
+        fullName: strictNameSchema,
+        email: strictEmailSchema,
+        phone: strictPhoneSchema,
         gender: z.enum(["male", "female"]).optional(),
         password: z
             .string()
@@ -43,11 +71,9 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
  * CRITICAL: WAVE is female-only - gender validation enforced
  */
 export const waveApplicationSchema = z.object({
-    fullName: z.string().min(3, "Full name is required"),
-    email: z.string().email("Invalid email address"),
-    phone: z
-        .string()
-        .regex(/^(\+234|0)[789]\d{9}$/, "Invalid Nigerian phone number (e.g., +2348012345678)"),
+    fullName: strictNameSchema,
+    email: strictEmailSchema,
+    phone: strictPhoneSchema,
     gender: z.literal("female"),
     businessName: z.string().min(3, "Business name is required"),
     businessType: z.enum(["farming", "trading", "processing", "other"], {
@@ -68,14 +94,9 @@ export type WaveApplicationFormData = z.infer<typeof waveApplicationSchema>;
  * Validates course enrollment with contact information
  */
 export const academyEnrollmentSchema = z.object({
-    fullName: z.string().min(3, "Full name is required"),
-    email: z.string().email("Invalid email address"),
-    phone: z
-        .string()
-        .regex(
-            /^(\+234|0)[789]\d{9}$/,
-            "Invalid Nigerian phone number (e.g., +2348012345678 or 08012345678)"
-        ),
+    fullName: strictNameSchema,
+    email: strictEmailSchema,
+    phone: strictPhoneSchema,
     courseId: z.string().min(1, "Course selection is required"),
 });
 
@@ -107,8 +128,8 @@ export type WithdrawalFormData = z.infer<typeof withdrawalSchema>;
  * Validates contact/support form submissions
  */
 export const contactSchema = z.object({
-    name: z.string().min(3, "Name must be at least 3 characters"),
-    email: z.string().email("Invalid email address"),
+    name: strictNameSchema,
+    email: strictEmailSchema,
     subject: z.string().min(5, "Subject must be at least 5 characters"),
     message: z.string().min(20, "Message must be at least 20 characters"),
 });
@@ -120,11 +141,9 @@ export type ContactFormData = z.infer<typeof contactSchema>;
  * Validates cart checkout with delivery information
  */
 export const checkoutSchema = z.object({
-    fullName: z.string().min(3, "Full name is required"),
-    email: z.string().email("Invalid email address"),
-    phone: z
-        .string()
-        .regex(/^(\+234|0)[789]\d{9}$/, "Invalid Nigerian phone number"),
+    fullName: strictNameSchema,
+    email: strictEmailSchema,
+    phone: strictPhoneSchema,
     deliveryAddress: z.string().min(10, "Please provide a complete delivery address"),
     city: z.string().min(3, "City is required"),
     state: z.string().min(3, "State is required"),

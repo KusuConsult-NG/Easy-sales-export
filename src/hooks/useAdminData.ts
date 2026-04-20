@@ -74,13 +74,15 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
 
                 if (result.meta) setMeta(result.meta);
 
-                if (result.lastDocId) {
+                // Extract cursor and hasMore from various backend response shapes (root vs meta container)
+                const extractedCursor = result.lastDocId || result.meta?.lastDocId || result.meta?.cursor || result.cursor;
+                if (extractedCursor) {
                     const newStack = resetCursors ? [undefined] : [...cursorStack.current];
-                    newStack[page + 1] = result.lastDocId;
+                    newStack[page + 1] = extractedCursor;
                     cursorStack.current = newStack;
                 }
 
-                const more = result.hasMore ?? (items.length === lim);
+                const more = result.hasMore ?? result.meta?.hasMore ?? (items.length === lim);
                 setHasMore(more);
 
                 logger.debug('[useAdminData] Page loaded', { page, count: items.length, hasMore: more });

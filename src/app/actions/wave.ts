@@ -8,6 +8,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
+import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { Resend } from "resend";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
@@ -50,14 +51,14 @@ export interface WaveTrainingEvent {
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({
     // SECTION A: Personal Identification
-    surname: z.string().min(2, "Surname is required"),
-    firstName: z.string().min(2, "First name is required"),
-    otherNames: z.string().optional(),
+    surname: strictNameSchema,
+    firstName: strictNameSchema,
+    otherNames: strictNameSchema.optional().or(z.literal("")),
     dateOfBirth: z.string(),
     age: z.number().min(18).max(100),
-    phone: z.string().min(10, "Invalid phone number"),
-    alternativePhone: z.string().optional(),
-    email: z.string().email("Invalid email").optional().or(z.literal("")),
+    phone: strictPhoneSchema,
+    alternativePhone: strictPhoneSchema.optional().or(z.literal("")),
+    email: strictEmailSchema.optional().or(z.literal("")),
     residentialAddress: z.string().min(5, "Residential address is required"),
     stateOfOrigin: z.string().min(2, "State of origin is required"),
     lgaOfOrigin: z.string().min(2, "LGA of origin is required"),

@@ -2906,9 +2906,9 @@ export async function manualAcademyEnrollmentAction(
 // ============================================
 
 import { z } from "zod";
-
+import { strictEmailSchema } from "@/lib/schemas";
 const InviteLegacyMemberSchema = z.object({
-    email: z.string().email(),
+    email: strictEmailSchema,
     firstName: z.string().min(1, "First name is optional but recommended for personalization").optional(),
 });
 

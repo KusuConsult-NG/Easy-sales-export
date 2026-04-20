@@ -10,14 +10,15 @@ import { logger } from '@/lib/logger';
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
+import { strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 
 // Validation schemas
 const profileUpdateSchema = z.object({
     firstName: z.string().max(50).optional(),
     lastName: z.string().max(50).optional(),
     otherName: z.string().max(50).optional(),
-    email: z.string().email("Please enter a valid email address").optional(),
-    phone: z.string().min(10, "Phone number must be at least 10 digits"),
+    email: strictEmailSchema.optional(),
+    phone: strictPhoneSchema,
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
 });

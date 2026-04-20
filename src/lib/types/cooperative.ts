@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "../schemas";
 
 /**
  * Cooperative Types and Schemas
@@ -13,21 +14,21 @@ import { z } from "zod";
 
 export const cooperativeMembershipSchema = z.object({
     // Personal Information (11 required fields from PRD)
-    firstName: z.string().min(2, "First name is required"),
-    otherName: z.string().optional(),
-    lastName: z.string().min(2, "Last name is required"),
+    firstName: strictNameSchema,
+    otherName: strictNameSchema.optional(),
+    lastName: strictNameSchema,
     dateOfBirth: z.string().min(1, "Date of birth is required"),
     gender: z.enum(["male", "female"], { message: "Please select gender" }),
-    email: z.string().email("Valid email is required"),
-    phone: z.string().min(11, "Valid phone number is required"),
+    email: strictEmailSchema,
+    phone: strictPhoneSchema,
     stateOfOrigin: z.string().min(1, "State of origin is required"),
     lga: z.string().min(1, "LGA is required"),
     residentialAddress: z.string().min(10, "Complete address is required"),
     occupation: z.string().min(2, "Occupation is required"),
 
     // Next of Kin
-    nextOfKinName: z.string().min(2, "Next of kin name is required"),
-    nextOfKinPhone: z.string().min(11, "Next of kin phone is required"),
+    nextOfKinName: strictNameSchema,
+    nextOfKinPhone: strictPhoneSchema,
     nextOfKinAddress: z.string().min(10, "Next of kin address is required"),
 
     // Membership Tier

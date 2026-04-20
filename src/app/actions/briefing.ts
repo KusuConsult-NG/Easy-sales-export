@@ -25,14 +25,14 @@ export interface BriefingRegistrationData {
 }
 
 import { z } from "zod";
-
+import { strictEmailSchema } from "@/lib/schemas";
 // Zod Validation Schema for Registration Data
 const briefingRegistrationSchema = z.object({
     fullName: z.string().trim().min(2, { message: "Full Name must be at least 2 characters" }),
     firstName: z.string().trim().optional(),
     lastName: z.string().trim().optional(),
     otherName: z.string().trim().optional(),
-    email: z.string().trim().email({ message: "Please enter a valid email address" }).toLowerCase(),
+    email: strictEmailSchema,
     phoneNumber: z.string().trim()
         .transform(val => val.replace(/\s/g, "")) // Remove spaces
         .pipe(z.string().min(10, { message: "Invalid phone number length" }).max(14, { message: "Invalid phone number length" })),
