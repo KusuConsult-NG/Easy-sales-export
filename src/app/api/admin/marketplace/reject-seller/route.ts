@@ -66,6 +66,21 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
+        // ✅ FIX: Sync rejection status to user doc so they can re-apply.
+        // Without this, serviceRegistrations.marketplace.status stays 'pending',
+        // permanently blocking re-application with "application is still being processed".
+        try {
+            await db.collection(COLLECTIONS.USERS).doc(verificationData.userId).update({
+                sellerVerificationStatus: "rejected",
+                "serviceRegistrations.marketplace.status": "rejected",
+                "serviceRegistrations.marketplace.rejectionReason": reason,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        } catch (userUpdateErr) {
+            logger.error("Failed to sync rejection status to user doc:", userUpdateErr);
+            // Non-fatal — verification and seller records are already updated
+        }
+
         // Fetch user document to get the correct email/name and send email (non-blocking)
         try {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(verificationData.userId).get();
