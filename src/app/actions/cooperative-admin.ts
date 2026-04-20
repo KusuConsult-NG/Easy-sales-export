@@ -563,12 +563,9 @@ export async function getContributionReportsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // ── AUTHORITATIVE paid-member count ─────────────
-        const paidCountSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-            .where("paymentStatus", "==", "completed")
-            .count()
-            .get();
-        const memberCount = paidCountSnap.data().count ?? 0;
+        // memberCount and averageContribution are derived from cooperative_transactions
+        // (the Paystack-authoritative collection) — never from a different collection
+        // to avoid cross-collection count drift.
 
         // Get all completed cooperative transactions for amount/trend reporting
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
@@ -579,6 +576,7 @@ export async function getContributionReportsAction(options?: {
         }
 
         let totalContributions = 0;
+        let transactionCount = 0; // count from the same source as totalContributions
         const contributorMap = new Map<string, number>();
         const monthlyTrendData: Array<{ month: string; mKey: number; yKey: number; amount: number }> = [];
 
@@ -594,27 +592,32 @@ export async function getContributionReportsAction(options?: {
             });
         }
 
-        const stream = q.select("type", "amount", "userId", "date").get();
+        const stream = q.select("type", "amount", "userId", "date", "paidAt").get();
         for (const doc of (await stream).docs) {
             const t = doc.data();
             if (t.type === "contribution" || t.type === "membership_registration" || t.type === "registration_fee") {
                 const amount = Number(t.amount) || 0;
                 totalContributions += amount;
+                transactionCount++;
 
                 if (t.userId) {
                     const current = contributorMap.get(t.userId) || 0;
                     contributorMap.set(t.userId, current + amount);
                 }
 
-                if (t.date) {
-                    const cDate = t.date.toDate ? t.date.toDate() : new Date(t.date);
+                // Prefer paidAt (Paystack-sourced) over date field
+                const rawDate = t.paidAt || t.date;
+                if (rawDate) {
+                    const cDate = rawDate.toDate ? rawDate.toDate() : new Date(rawDate);
                     const bucket = monthlyTrendData.find(b => b.mKey === cDate.getMonth() && b.yKey === cDate.getFullYear());
                     if (bucket) bucket.amount += amount;
                 }
             }
         }
 
-        const averageContribution = memberCount > 0 ? totalContributions / memberCount : 0;
+        // Both numerator and denominator come from the same collection — no drift
+        const memberCount = transactionCount;
+        const averageContribution = transactionCount > 0 ? totalContributions / transactionCount : 0;
 
         const topContributors = Array.from(contributorMap.entries())
             .sort((a, b) => b[1] - a[1])
