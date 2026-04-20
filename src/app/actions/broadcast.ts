@@ -586,22 +586,29 @@ export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[
                 .get(),
         ]);
 
-        // Map email logs
+        // Map email logs — handles both the current schema and legacy docs
+        // that used recipientCount/type instead of totalRecipients/successCount/audience/body
         const emailLogs: BroadcastLog[] = emailSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
             const data = d.data();
+            // Legacy docs (pre-broadcast-system) stored recipientCount, no successCount/failCount/body/audience
+            const recipientCount = data.recipientCount ?? 0;
+            const totalRecipients = data.totalRecipients ?? recipientCount;
+            const successCount    = data.successCount   ?? recipientCount; // legacy: assume all sent if no failure field
+            const failCount       = data.failCount      ?? 0;
             return {
                 id: d.id,
                 channel: "email" as const,
-                subject: data.subject ?? "",
+                subject: data.subject ?? "(no subject)",
                 body: data.body ?? "",
-                audience: data.audience ?? "all",
-                filters: data.filters ?? { audience: data.audience ?? "all" },
+                // Legacy docs store a `type` field (e.g. "bulk_email") instead of audience
+                audience: (data.audience ?? data.type ?? "all") as BroadcastAudience,
+                filters: data.filters ?? { audience: (data.audience ?? "all") as BroadcastAudience },
                 sentBy: data.sentBy ?? "admin",
                 sentByName: data.sentByName ?? "Admin",
                 sentAt: data.sentAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-                totalRecipients: data.totalRecipients ?? 0,
-                successCount: data.successCount ?? 0,
-                failCount: data.failCount ?? 0,
+                totalRecipients,
+                successCount,
+                failCount,
                 status: data.status ?? "done",
             };
         });
