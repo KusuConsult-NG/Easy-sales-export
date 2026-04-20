@@ -585,7 +585,7 @@ export async function resolveDisputeAction(
                 userId: d.initiatorId,
                 type: "dispute",
                 title: "Dispute Resolved",
-                message: outcome === "release_to_seller"
+                message: outcome === "release_seller"
                     ? `Your dispute has been resolved. Funds have been released to the seller.`
                     : `Your dispute has been resolved. Funds will be refunded to the buyer.`,
                 link: `/escrow/${d.escrowId}`,
@@ -597,7 +597,7 @@ export async function resolveDisputeAction(
                 userId: d.respondentId,
                 type: "dispute",
                 title: "Dispute Resolved",
-                message: outcome === "release_to_seller"
+                message: outcome === "release_seller"
                     ? `The dispute for your escrow transaction has been resolved. Funds have been released to you.`
                     : `The dispute for your escrow transaction has been resolved. A refund will be issued to the buyer.`,
                 link: `/escrow/${d.escrowId}`,
@@ -611,7 +611,7 @@ export async function resolveDisputeAction(
             ]);
             const initiatorPhone: string | undefined = initiatorDoc.data()?.phone ?? initiatorDoc.data()?.phoneNumber;
             const respondentPhone: string | undefined = respondentDoc.data()?.phone ?? respondentDoc.data()?.phoneNumber;
-            const outcomeLabel = outcome === "release_to_seller" ? "release_seller" : "refund_buyer";
+            const outcomeLabel = outcome === "release_seller" ? "release_seller" : "refund_buyer";
             await Promise.allSettled([
                 initiatorPhone ? smsDisputeResolved(initiatorPhone, escrowId ?? disputeId, outcomeLabel) : Promise.resolve(),
                 respondentPhone ? smsDisputeResolved(respondentPhone, escrowId ?? disputeId, outcomeLabel) : Promise.resolve(),
