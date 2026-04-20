@@ -1406,7 +1406,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
             const search = options.search.trim();
             // Email exact match
             if (search.includes("@")) {
-                query = query.where("email", "==", search);
+                query = query.where("email", "==", search.toLowerCase());
             }
             // Phone exact match
             else if (/^[\d+]+$/.test(search) && search.length > 5) {
@@ -1456,7 +1456,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
         if (options.search) {
             const search = options.search.trim();
             if (search.includes("@")) {
-                countQuery = countQuery.where("email", "==", search);
+                countQuery = countQuery.where("email", "==", search.toLowerCase());
             } else if (/^[\d+]+$/.test(search) && search.length > 5) {
                 countQuery = countQuery.where("phone", "==", search);
             }
