@@ -783,8 +783,10 @@ export async function getSellerAnalyticsAction() {
         const userId = session.user.id;
 
         // Fetch Orders
+        // ✅ FIX: Orders store 'sellerIds' (array), not 'sellerId' (string).
+        // Previously returned zero orders, making all seller analytics show ₦0.
         const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerId", "==", userId)
+            .where("sellerIds", "array-contains", userId)
             .get();
         const orders = ordersSnapshot.docs.map(doc => doc.data() as Order);
 

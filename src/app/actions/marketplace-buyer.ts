@@ -214,8 +214,10 @@ export async function confirmOrderReceiptAction(orderId: string) {
         await db.runTransaction(async (transaction) => {
             // 3. Update Order Status
             transaction.update(orderRef, {
-                orderStatus: "delivered",
-                paymentStatus: "paid_to_seller", // Escrow released
+                // ✅ FIX: Write to 'status', not 'orderStatus' (non-existent field).
+                // Previously the order status was never actually updated to 'delivered'.
+                status: "delivered",
+                paymentStatus: "paid_to_seller",
                 deliveredAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
