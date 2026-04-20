@@ -77,7 +77,10 @@ export async function POST(request: NextRequest) {
         }
 
         // Get course details (Admin SDK)
-        const courseDoc = await db.collection(COLLECTIONS.COURSES).doc(courseId).get();
+        // ✅ FIX: Query from active 'ACADEMY_COURSES' collection instead of legacy 'COURSES'.
+        // Previously, the query failed silently, causing all certificates to be printed
+        // with the generic title "Course Completion" instead of the actual course name.
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
         const courseData = courseDoc.data();
         const courseTitle = courseDoc.exists && courseData ? courseData.title : "Course Completion";
 

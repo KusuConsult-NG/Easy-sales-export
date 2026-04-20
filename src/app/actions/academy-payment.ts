@@ -153,7 +153,8 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation against REAL course price
-        const courseDoc = await db.collection(COLLECTIONS.COURSES).doc(metadata.courseId).get();
+        // ✅ FIX: Query from active 'ACADEMY_COURSES' collection instead of legacy 'COURSES'.
+        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(metadata.courseId).get();
         if (!courseDoc.exists) {
             return { success: false, error: "Course not found during verification" };
         }
@@ -183,7 +184,8 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             });
 
             // Increment course student count
-            const courseRef = db.collection(COLLECTIONS.COURSES).doc(metadata.courseId);
+            // ✅ FIX: Query from active 'ACADEMY_COURSES' collection instead of legacy 'COURSES'.
+            const courseRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc(metadata.courseId);
             const courseSnap = await transaction.get(courseRef);
             if (courseSnap.exists) {
                 const cData = courseSnap.data();
