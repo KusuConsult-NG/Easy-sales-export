@@ -264,9 +264,9 @@ export async function getAllMembersAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        // 🔒 SECURITY FIX: Content Scoping
+        // 🔒 SECURITY FIX: Content Scoping — where() MUST come before orderBy()
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
         }
@@ -276,7 +276,7 @@ export async function getAllMembersAction(options?: {
         }
 
         const fetchLimit = options?.search ? 2000 : (options?.limit || 50);
-        q = q.limit(fetchLimit);
+        q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
         const snapshot = await q.get();
         const allMembers = serializeDocs(snapshot.docs);
@@ -431,7 +431,8 @@ export async function getAllTransactionsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        let q = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("date", "desc");
+        // Build query: where() MUST precede orderBy() in Firestore Admin SDK
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
 
         // 🔒 SECURITY FIX: Content Scoping
         if (adminScope) {
@@ -445,6 +446,9 @@ export async function getAllTransactionsAction(options?: {
         if (options?.status && options.status !== "all") {
             q = q.where("status", "==", options.status);
         }
+
+        // orderBy LAST — after all where() filters
+        q = q.orderBy("date", "desc");
 
         const fetchLimit = options?.limit || 100;
         let query = q;
@@ -690,14 +694,14 @@ export async function getRecentActivityAction(): Promise<{
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // Get recent transactions
-        let q = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-            .orderBy("date", "desc")
-            .limit(10);
+        // Build query: where() MUST precede orderBy()
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
 
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
         }
+
+        q = q.orderBy("date", "desc").limit(10);
 
         const transactionsSnap = await q.get();
 
