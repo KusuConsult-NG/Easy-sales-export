@@ -82,13 +82,16 @@ export async function submitWithdrawalRequestAction(
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
-            // 2. Create withdrawal request
-            const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWALS).doc();
+            // 2. Create withdrawal request in COOPERATIVE_WITHDRAWALS
+            // ✅ FIX: was COLLECTIONS.WITHDRAWALS — admin approval/rejection
+            //         reads from COLLECTIONS.COOPERATIVE_WITHDRAWALS.
+            //         Using the wrong collection meant requests were invisible to admins.
+            const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
             transaction.set(withdrawalRef, {
                 userId,
                 userEmail,
                 userName: session.user.name || userEmail,
-                cooperativeId: membership.cooperativeId, // Link to coop
+                cooperativeId: membership.cooperativeId || "default",
                 amount: validatedData.amount,
                 bankName: validatedData.bankName,
                 accountNumber: validatedData.accountNumber,

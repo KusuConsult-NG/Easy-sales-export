@@ -137,7 +137,6 @@ export async function verifyContributionPaymentAction(
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
         const result = await runTransaction(db, async (transaction) => {
-            // Get membership
             const membershipRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, userId);
             const membershipDoc = await transaction.get(membershipRef);
 
@@ -153,6 +152,8 @@ export async function verifyContributionPaymentAction(
             const currentTotal = membershipData.totalContributions || 0;
             const newTotal = currentTotal + amountInNaira;
             const newTier = calculateUserTier(newTotal);
+            // ✅ FIX: read cooperativeId from membership doc — not a hardcoded constant
+            const cooperativeId = membershipData.cooperativeId || "default";
 
             // Update membership atomically
             transaction.update(membershipRef, {
@@ -185,10 +186,10 @@ export async function verifyContributionPaymentAction(
             });
 
             // Cooperative Ledger write
-            const coopTxRef = doc(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS); // Creates a new doc ref with auto ID
+            const coopTxRef = doc(db, COLLECTIONS.COOPERATIVE_TRANSACTIONS);
             transaction.set(coopTxRef, {
                 userId,
-                cooperativeId: "default", // or fetch from membershipData if supported
+                cooperativeId,
                 type: "contribution",
                 amount: amountInNaira,
                 date: serverTimestamp(),
