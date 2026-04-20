@@ -97,9 +97,12 @@ export async function processMarketplaceOrder(reference: string, amount: number,
                 orderId: orderData.orderId,
                 buyerId: orderData.buyerId,
                 sellerId: sellerId,
+                // ✅ participants[] required for array-contains query in getUserEscrowTransactions
+                participants: [orderData.buyerId, sellerId],
                 amount: totalAmount,
                 status: "funded",
                 createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
             });
         });
     });
