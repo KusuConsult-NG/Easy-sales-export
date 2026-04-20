@@ -91,19 +91,48 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 router.push(rawCallback);
             } else {
                 // No valid callback — use smart redirect based on user's roles
-                const redirectResult = await getPostLoginRedirect(formData.email);
+                try {
+                    const redirectResult = await getPostLoginRedirect(formData.email);
+                    if (redirectResult.success && redirectResult.data?.redirectUrl) {
+                        console.log("Using smart redirect:", redirectResult.data.redirectUrl);
+                        router.push(redirectResult.data.redirectUrl);
+                    } else {
+                        router.push("/dashboard");
+                    }
+                } catch (redirectErr: any) {
+                    // UnrecognizedActionError = stale JS bundle after a new deployment.
+                    // Force a full page reload so the browser fetches the new bundle;
+                    // the user will be already logged in and land on /dashboard.
+                    const isStaleBundle =
+                        redirectErr?.name === "UnrecognizedActionError" ||
+                        redirectErr?.message?.includes("was not found on the server") ||
+                        redirectErr?.message?.includes("UnrecognizedAction");
 
-                if (redirectResult.success && redirectResult.data?.redirectUrl) {
-                    console.log("Using smart redirect:", redirectResult.data.redirectUrl);
-                    router.push(redirectResult.data.redirectUrl);
-                } else {
-                    router.push("/auth/get-started");
+                    if (isStaleBundle) {
+                        console.warn("Stale deployment detected — reloading to pick up new bundle.");
+                        window.location.replace("/dashboard");
+                        return;
+                    }
+
+                    // Any other error: still signed in, just go to dashboard
+                    console.error("getPostLoginRedirect failed, falling back to /dashboard:", redirectErr);
+                    router.push("/dashboard");
                 }
             }
 
         } catch (err: any) {
             console.error("Login error:", err);
-            setError("An unexpected error occurred");
+            // Stale-bundle guard at the top level too
+            const isStaleBundle =
+                err?.name === "UnrecognizedActionError" ||
+                err?.message?.includes("was not found on the server") ||
+                err?.message?.includes("UnrecognizedAction");
+            if (isStaleBundle) {
+                console.warn("Stale deployment detected (top-level catch) — reloading.");
+                window.location.replace("/auth/login");
+                return;
+            }
+            setError("An unexpected error occurred. Please refresh the page and try again.");
             setIsLoading(false);
         }
     };
