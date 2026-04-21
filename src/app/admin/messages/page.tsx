@@ -62,6 +62,30 @@ export default function AdminMessagesPage() {
         return () => unsubscribe();
     }, []);
 
+    // Initial load for messages using server action to guarantee delivery
+    useEffect(() => {
+        if (!activeConversationId) {
+            setMessages([]);
+            return;
+        }
+
+        async function loadMessages() {
+            try {
+                // Fetch using admin SDK action to bypass client-side listener limitations
+                const { getMessagesAction } = await import("@/app/actions/messages");
+                const result = await getMessagesAction(activeConversationId, 100);
+                if (result && result.messages) {
+                    setMessages(result.messages);
+                    scrollToBottom();
+                }
+            } catch (error) {
+                console.error("Failed to fetch historical messages", error);
+            }
+        }
+
+        loadMessages();
+    }, [activeConversationId]);
+
     // Real-time listener for messages in active conversation
     useEffect(() => {
         if (!activeConversationId) return;
@@ -289,9 +313,14 @@ export default function AdminMessagesPage() {
                                 ) : (
                                     messages.map(msg => {
                                         const isAdmin = msg.senderId === adminId;
-                                        const ts = msg.timestamp instanceof Date
-                                            ? msg.timestamp
-                                            : (msg.timestamp as any)?.toDate?.() ?? null;
+                                        let ts: Date | null = null;
+                                        if (msg.timestamp instanceof Date) {
+                                            ts = msg.timestamp;
+                                        } else if (typeof (msg.timestamp as any)?.toDate === 'function') {
+                                            ts = (msg.timestamp as any).toDate();
+                                        } else if (typeof msg.timestamp === 'string') {
+                                            ts = new Date(msg.timestamp);
+                                        }
                                         return (
                                             <div key={msg.id} className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}>
                                                 {!isAdmin && (

@@ -38,7 +38,7 @@ const FS_PAGE_SIZE = 500;  // Firestore query page
 const FS_BATCH_SIZE = 500;  // Firestore batch-write max
 
 // Timestamp field names recognised across all collections
-const TS_FIELDS = ['createdAt', 'timestamp', 'creationTime', 'appliedAt', 'issuedAt', 'scheduledAt'];
+const TS_FIELDS = ['createdAt', 'timestamp', 'creationTime', 'appliedAt', 'issuedAt', 'scheduledAt', 'requestedAt', 'submittedAt', 'completedAt', 'reviewedAt', 'approvedAt', 'rejectedAt', 'enrolledAt'];
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 const privateKey = process.env.FIREBASE_PRIVATE_KEY

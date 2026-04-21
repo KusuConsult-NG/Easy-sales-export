@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
 import {
-    Plus, MapPin, DollarSign, Maximize, Eye, Heart, Edit, Trash2,
-    Loader2, AlertCircle, TrendingUp
+    Plus, MapPin, DollarSign, Maximize, Eye, Edit, Trash2,
+    Loader2, AlertCircle
 } from "lucide-react";
-import { getMyPropertiesAction, deletePropertyAction, type Property } from "@/app/actions/farm-nation";
+import { getMyLandListings, deleteLandListing } from "@/app/actions/land-actions";
 import { useToast } from "@/contexts/ToastContext";
 
 export default function MyPropertiesPage() {
@@ -17,7 +17,7 @@ export default function MyPropertiesPage() {
     const { data: session, status } = useSession();
     const { showToast } = useToast();
 
-    const [properties, setProperties] = useState<Property[]>([]);
+    const [properties, setProperties] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -26,9 +26,9 @@ export default function MyPropertiesPage() {
         if (!session?.user?.id) return;
 
         try {
-            const result = await getMyPropertiesAction();
-            if (result.success && result.data?.properties) {
-                setProperties(result.data.properties);
+            const result = await getMyLandListings();
+            if (result.success && result.data?.listings) {
+                setProperties(result.data.listings);
             }
         } catch (error) {
             logger.error("Failed to load properties:", error);
@@ -42,15 +42,15 @@ export default function MyPropertiesPage() {
         }
 
         try {
-            const result = await deletePropertyAction(propertyId);
+            const result = await deleteLandListing(propertyId);
             if (result.success) {
-                showToast(result.data?.message || "Property deleted successfully", "success");
+                showToast("Listing deleted successfully", "success");
                 loadProperties();
             } else {
-                showToast(result.error || "Failed to delete property", "error");
+                showToast(result.error || "Failed to delete listing", "error");
             }
         } catch (error) {
-            showToast("An error occurred while deleting property", "error");
+            showToast("An error occurred while deleting listing", "error");
         }
     }
 
@@ -70,10 +70,9 @@ export default function MyPropertiesPage() {
 
     const stats = {
         total: properties.length,
-        available: properties.filter(p => p.status === "available").length,
-        pending: properties.filter(p => p.status === "pending").length,
-        sold: properties.filter(p => p.status === "sold" || p.status === "leased").length,
-        totalViews: properties.reduce((sum, p) => sum + (p.viewCount || 0), 0),
+        verified: properties.filter(p => p.status === "verified").length,
+        pending: properties.filter(p => p.status === "pending_verification").length,
+        rejected: properties.filter(p => p.status === "rejected").length,
     };
 
     if (loading) {
@@ -81,7 +80,7 @@ export default function MyPropertiesPage() {
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 className="w-12 h-12 animate-spin text-green-600 mx-auto mb-4" />
-                    <p className="text-slate-600">Loading your properties...</p>
+                    <p className="text-slate-600">Loading your land listings...</p>
                 </div>
             </div>
         );
@@ -90,64 +89,62 @@ export default function MyPropertiesPage() {
     return (
         <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-7xl mx-auto">
-                {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-4xl font-bold text-slate-900 mb-2">My Properties</h1>
-                        <p className="text-slate-600">Manage your land listings</p>
+                        <h1 className="text-4xl font-bold text-slate-900 mb-2">My Listings</h1>
+                        <p className="text-slate-600">Manage your farm land listings</p>
                     </div>
                     <button
                         onClick={() => router.push("/farm-nation/list-land")}
                         className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition flex items-center gap-2"
                     >
                         <Plus className="w-5 h-5" />
-                        List New Property
+                        List New Land
                     </button>
                 </div>
 
-                {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white rounded-2xl p-6 elevation-2">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
                         <p className="text-sm text-slate-600 mb-1">Total Listings</p>
                         <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
                     </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 mb-1">Available</p>
-                        <p className="text-3xl font-bold text-green-600">{stats.available}</p>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <p className="text-sm text-slate-600 mb-1">Verified</p>
+                        <p className="text-3xl font-bold text-green-600">{stats.verified}</p>
                     </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 mb-1">Pending Sale</p>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <p className="text-sm text-slate-600 mb-1">Pending Verification</p>
                         <p className="text-3xl font-bold text-yellow-600">{stats.pending}</p>
                     </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2">
-                        <p className="text-sm text-slate-600 mb-1">Total Views</p>
-                        <div className="flex items-center gap-2">
-                            <TrendingUp className="w-5 h-5 text-blue-600" />
-                            <p className="text-3xl font-bold text-slate-900">{stats.totalViews}</p>
-                        </div>
+                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                        <p className="text-sm text-slate-600 mb-1">Rejected</p>
+                        <p className="text-3xl font-bold text-red-600">{stats.rejected}</p>
                     </div>
                 </div>
 
-                {/* Filters */}
-                <div className="bg-white rounded-2xl p-4 mb-6 elevation-2">
+                <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm">
                     <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-sm font-semibold text-slate-900">Filter:</span>
-                        {["all", "available", "pending", "sold", "leased"].map((status) => (
+                        {[
+                            { value: "all", label: "All" },
+                            { value: "verified", label: "Verified" },
+                            { value: "pending_verification", label: "Pending" },
+                            { value: "rejected", label: "Rejected" }
+                        ].map(({ value, label }) => (
                             <button
-                                key={status}
-                                onClick={() => setFilterStatus(status)}
-                                className={`px-4 py-2 rounded-lg font-medium text-sm transition ${filterStatus === status
+                                key={value}
+                                onClick={() => setFilterStatus(value)}
+                                className={`px-4 py-2 rounded-lg font-medium text-sm transition ${filterStatus === value
                                     ? "bg-green-600 text-white"
                                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                     }`}
                             >
-                                {status === "all" ? "All" : status.charAt(0).toUpperCase() + status.slice(1)}
+                                {label}
                             </button>
                         ))}
                     </div>
                 </div>
 
-                {/* Error Display */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
                         <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
@@ -155,27 +152,26 @@ export default function MyPropertiesPage() {
                     </div>
                 )}
 
-                {/* Properties Grid */}
                 {filteredProperties.length === 0 ? (
-                    <div className="bg-white rounded-2xl p-12 text-center elevation-2">
+                    <div className="bg-white rounded-2xl p-12 text-center shadow-sm">
                         <div className="max-w-md mx-auto">
                             <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                                 <MapPin className="w-12 h-12 text-slate-400" />
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 mb-2">
-                                {filterStatus === "all" ? "No Properties Listed" : `No ${filterStatus} Properties`}
+                                {filterStatus === "all" ? "No Listings Found" : `No ${filterStatus.replace("_", " ")} Listings`}
                             </h3>
                             <p className="text-slate-600 mb-6">
                                 {filterStatus === "all"
-                                    ? "Get started by listing your first property on Farm Nation marketplace."
-                                    : `You don't have any properties with status "${filterStatus}".`}
+                                    ? "Get started by sharing your first farm land on the marketplace."
+                                    : `You don't have any listings with status "${filterStatus.replace("_", " ")}".`}
                             </p>
                             {filterStatus === "all" && (
                                 <button
                                     onClick={() => router.push("/farm-nation/list-land")}
                                     className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition"
                                 >
-                                    List Your First Property
+                                    List Your Land
                                 </button>
                             )}
                         </div>
@@ -185,14 +181,13 @@ export default function MyPropertiesPage() {
                         {filteredProperties.map((property) => (
                             <div
                                 key={property.id}
-                                className="bg-white rounded-2xl overflow-hidden elevation-2 hover-lift transition"
+                                className="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
                             >
-                                {/* Property Image */}
                                 <div className="relative aspect-video bg-slate-200">
                                     {property.images && property.images.length > 0 ? (
                                         <Image
                                             src={property.images[0]}
-                                            alt={property.name}
+                                            alt={property.title}
                                             fill
                                             className="object-cover"
                                         />
@@ -202,37 +197,29 @@ export default function MyPropertiesPage() {
                                         </div>
                                     )}
 
-                                    {/* Status Badge */}
                                     <div className="absolute top-3 right-3">
                                         <span
-                                            className={`px-3 py-1 rounded-lg text-xs font-bold ${property.status === "available"
+                                            className={`px-3 py-1 rounded-lg text-xs font-bold uppercase ${
+                                                property.status === "verified"
                                                 ? "bg-green-600 text-white"
-                                                : property.status === "pending"
+                                                : property.status === "pending_verification"
                                                     ? "bg-yellow-600 text-white"
-                                                    : "bg-slate-600 text-white"
+                                                    : "bg-red-600 text-white"
                                                 }`}
                                         >
-                                            {property.status.toUpperCase()}
+                                            {property.status.replace("_", " ")}
                                         </span>
                                     </div>
-
-                                    {/* Verification Badge */}
-                                    {property.verified && (
-                                        <div className="absolute top-3 left-3 bg-blue-600 text-white px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1">
-                                            ✓ Verified
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* Property Info */}
                                 <div className="p-5">
                                     <h3 className="text-lg font-bold text-slate-900 mb-2 line-clamp-1">
-                                        {property.name}
+                                        {property.title}
                                     </h3>
 
                                     <div className="flex items-center gap-2 text-sm text-slate-600 mb-4">
                                         <MapPin className="w-4 h-4" />
-                                        <span className="line-clamp-1">{property.location}, {property.state}</span>
+                                        <span className="line-clamp-1">{property.location?.state}, {property.location?.lga}</span>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-3 mb-4">
@@ -242,7 +229,7 @@ export default function MyPropertiesPage() {
                                                 <span className="text-xs font-semibold">Price</span>
                                             </div>
                                             <p className="text-sm font-bold text-slate-900">
-                                                ₦{property.price.toLocaleString()}
+                                                ₦{property.price?.toLocaleString()}
                                             </p>
                                         </div>
 
@@ -252,31 +239,18 @@ export default function MyPropertiesPage() {
                                                 <span className="text-xs font-semibold">Size</span>
                                             </div>
                                             <p className="text-sm font-bold text-slate-900">
-                                                {property.size} ha
+                                                {property.size} {property.unit || "acres"}
                                             </p>
                                         </div>
                                     </div>
 
-                                    {/* Stats */}
-                                    <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-4 border-b border-slate-200">
-                                        <div className="flex items-center gap-1">
-                                            <Eye className="w-3 h-3" />
-                                            <span>{property.viewCount || 0} views</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Heart className="w-3 h-3" />
-                                            <span>{property.favoriteCount || 0} favorites</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 pt-4 border-t border-slate-100">
                                         <button
                                             onClick={() => router.push(`/farm-nation/property/${property.id}`)}
                                             className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition flex items-center justify-center gap-2"
                                         >
                                             <Eye className="w-4 h-4" />
-                                            View Property
+                                            View
                                         </button>
                                         <button
                                             onClick={() => router.push(`/farm-nation/edit-property/${property.id}`)}
@@ -286,7 +260,7 @@ export default function MyPropertiesPage() {
                                             <Edit className="w-4 h-4" />
                                         </button>
                                         <button
-                                            onClick={() => handleDeleteProperty(property.id, property.name)}
+                                            onClick={() => handleDeleteProperty(property.id, property.title)}
                                             className="px-4 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition"
                                             title="Delete Property"
                                         >

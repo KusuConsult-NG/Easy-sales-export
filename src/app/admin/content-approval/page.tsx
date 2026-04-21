@@ -69,8 +69,6 @@ export default function ContentApprovalPage() {
         const icons: any = {
             products: Package,
             land: Home,
-            loans: FileText,
-            wave: GraduationCap,
             certificates: FileText,
             resources: BookOpen,
             courses: GraduationCap,
@@ -186,8 +184,6 @@ export default function ContentApprovalPage() {
                                 <option value="all">All Content</option>
                                 <option value="products">Marketplace Products</option>
                                 <option value="land">Land Listings</option>
-                                <option value="loans">Loan Applications</option>
-                                <option value="wave">WAVE Applications</option>
                             </select>
                         </div>
                     </div>

@@ -924,16 +924,34 @@ export async function getAllExportRequestsAction(
         try {
             exportsList = rawDocs.map((doc: any) => {
                 const data = doc.data();
+                
+                // Safe mapping for Split-Schema (Private Requests vs Crowdfunded Opportunities)
+                const isCrowdfunded = !!data.targetVolume;
+                let calculatedAmount = Number(data.amount);
+                if (isNaN(calculatedAmount) || calculatedAmount === 0) {
+                    if (isCrowdfunded) {
+                        calculatedAmount = Number(data.targetVolume) * Number(data.slotPrice || 1);
+                    }
+                }
+                
+                const quantityStr = isCrowdfunded 
+                    ? `${data.targetVolume}kg` 
+                    : String(data.quantity || "0");
+                    
+                const itemTitle = data.title || (isCrowdfunded ? `${data.commodity} Export Goal` : "Private Request");
+                const itemOrderId = data.orderId || (isCrowdfunded ? `PUBLIC-${doc.id.substring(0, 6)}` : "");
+
                 return {
                     id: doc.id,
-                    orderId: data.orderId || "",
-                    title: data.title || "",
+                    orderId: itemOrderId,
+                    title: itemTitle,
                     commodity: data.commodity || "other",
-                    quantity: data.quantity || "0",
-                    amount: Number(data.amount) || 0,
+                    quantity: quantityStr,
+                    amount: calculatedAmount || 0,
                     status: data.status || "pending",
                     createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
                     deliveryDate: data.deliveryDate?.toDate ? data.deliveryDate.toDate().toISOString() : null,
+                    type: isCrowdfunded ? "crowdfunded" : "private"
                 };
             }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         } catch (serializeErr: any) {

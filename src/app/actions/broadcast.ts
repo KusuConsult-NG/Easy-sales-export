@@ -44,8 +44,8 @@ export interface BroadcastFilters {
 
 export interface BroadcastLog {
     id: string;
-    /** 'email' | 'sms' — used to render the correct icon and field labels */
-    channel: "email" | "sms";
+    /** 'email' | 'sms' | 'in-app' — used to render the correct icon and field labels */
+    channel: "email" | "sms" | "in-app";
     subject: string;        // email subject  OR  first 60 chars of SMS message
     body: string;           // full email body OR full SMS message
     audience: BroadcastAudience;
@@ -575,12 +575,16 @@ export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[
         const db = getAdminDb();
 
         // Fetch both collections in parallel
-        const [emailSnap, smsSnap] = await Promise.all([
+        const [emailSnap, smsSnap, inappSnap] = await Promise.all([
             db.collection(COLLECTIONS.BROADCAST_LOGS)
                 .orderBy("sentAt", "desc")
                 .limit(50)
                 .get(),
             db.collection("sms_broadcast_logs")
+                .orderBy("sentAt", "desc")
+                .limit(50)
+                .get(),
+            db.collection("inapp_broadcast_logs")
                 .orderBy("sentAt", "desc")
                 .limit(50)
                 .get(),
@@ -639,8 +643,31 @@ export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[
             };
         });
 
+        // Map In-App logs
+        const inappLogs: BroadcastLog[] = inappSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
+            const data = d.data();
+            const msgPreview = (data.message ?? "").slice(0, 60) + ((data.message ?? "").length > 60 ? "…" : "");
+            const sent = data.delivered ?? 0;
+            const total = data.totalRecipients ?? sent;
+            return {
+                id: d.id,
+                channel: "in-app" as const,
+                subject: data.title ?? msgPreview, 
+                body: data.message ?? "",
+                audience: data.audience ?? "all",
+                filters: data.filters ?? { audience: data.audience ?? "all" },
+                sentBy: data.sentBy ?? "admin",
+                sentByName: data.sentByName ?? "Admin",
+                sentAt: data.sentAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+                totalRecipients: total,
+                successCount: sent,
+                failCount: 0,
+                status: data.status ?? "done",
+            };
+        });
+
         // Merge and sort newest-first
-        const logs = [...emailLogs, ...smsLogs].sort((a, b) => {
+        const logs = [...emailLogs, ...smsLogs, ...inappLogs].sort((a, b) => {
             return new Date(b.sentAt as string).getTime() - new Date(a.sentAt as string).getTime();
         });
 

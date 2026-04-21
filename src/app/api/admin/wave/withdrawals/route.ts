@@ -137,9 +137,9 @@ export async function PATCH(request: NextRequest) {
 
         // Handle "complete" action for approved_pending_payout withdrawals
         if (action === "complete") {
-            if (doc.data()?.status !== "approved_pending_payout") {
+            if (doc.data()?.status !== "approved_pending_payout" && doc.data()?.status !== "approved") {
                 return NextResponse.json(
-                    { success: false, data: null, error: "Can only complete withdrawals in 'approved_pending_payout' status", meta: { cursor: null, hasMore: false } },
+                    { success: false, data: null, error: "Can only complete approved withdrawals", meta: { cursor: null, hasMore: false } },
                     { status: 409 }
                 );
             }
@@ -166,9 +166,44 @@ export async function PATCH(request: NextRequest) {
             );
         }
 
-        // "approve" → approved_pending_payout (queued for bank transfer, NOT completed yet)
-        // "reject"  → rejected
-        const newStatus = action === "approve" ? "approved_pending_payout" : "rejected";
+        let newStatus = action === "approve" ? "approved_pending_payout" : "rejected";
+        let payoutTransactionRef = transactionReference;
+        let payoutAdminNotes = adminNotes;
+        
+        // PAYOUT — Trigger Paystack Transfer immediately on approval
+        if (action === "approve") {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(doc.data()?.userId).get();
+            const userData = userDoc.data();
+            
+            if (!userData?.bankAccountNumber || !userData?.bankCode) {
+                 return NextResponse.json(
+                     { success: false, data: null, error: "User bank details not configured. Cannot process payout.", meta: { cursor: null, hasMore: false } },
+                     { status: 400 }
+                 );
+            }
+            
+            const { paystackPayout } = await import("@/lib/paystack-transfer");
+            const payoutResult = await paystackPayout(
+                 {
+                     accountNumber: userData.bankAccountNumber,
+                     bankCode: userData.bankCode,
+                     accountName: userData.bankAccountName || userData.name,
+                 },
+                 doc.data()?.amount,
+                 `WAVE Withdrawal payout - ${withdrawalId}`
+            );
+            
+            if (!payoutResult.success) {
+                 return NextResponse.json(
+                     { success: false, data: null, error: `Paystack payout failed: ${payoutResult.error}`, meta: { cursor: null, hasMore: false } },
+                     { status: 500 }
+                 );
+            }
+            
+            newStatus = "completed"; // Automatically mark as completed if Paystack succeeded
+            payoutTransactionRef = payoutResult.reference || transactionReference;
+            payoutAdminNotes = (adminNotes ? adminNotes + " - " : "") + "Auto-paid via Paystack.";
+        }
 
         await db.runTransaction(async tx => {
             const freshDoc = await tx.get(ref);
@@ -179,8 +214,12 @@ export async function PATCH(request: NextRequest) {
                 status: newStatus,
                 processedBy: session.user.id,
                 processedAt: FieldValue.serverTimestamp(),
-                ...(adminNotes ? { adminNotes } : {}),
-                ...(transactionReference ? { transactionReference } : {}),
+                ...(newStatus === "completed" ? {
+                     completedBy: session.user.id,
+                     completedAt: FieldValue.serverTimestamp()
+                } : {}),
+                ...(payoutAdminNotes ? { adminNotes: payoutAdminNotes } : {}),
+                ...(payoutTransactionRef ? { transactionReference: payoutTransactionRef } : {}),
             });
         });
 

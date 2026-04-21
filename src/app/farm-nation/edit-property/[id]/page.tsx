@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Map, MapPin, ArrowLeft, Loader2, Save } from "lucide-react";
 import Link from "next/link";
-import { updatePropertyAction, getPropertiesAction } from "@/app/actions/farm-nation";
+import { updateLandListing } from "@/app/actions/land-actions";
+import { getPropertyByIdAction } from "@/app/actions/land-listings";
 import { useToast } from "@/contexts/ToastContext";
 
 interface EditPropertyPageProps {
     params: Promise<{ id: string }>;
 }
-
-type PropertyType = "farmland" | "ranch" | "commercial_farm" | "agricultural_land";
 
 export default function EditPropertyPage(props: EditPropertyPageProps) {
     const params = use(props.params);
@@ -23,17 +22,15 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
-        name: "",
+        title: "",
         description: "",
         state: "",
         lga: "",
         address: "",
-        pricePerAcre: 0,
+        price: 0,
         size: 0,
-        propertyType: "" as PropertyType | "",
         category: "",
         features: [] as string[],
-        leaseDuration: 0,
     });
 
     const nigerianStates = [
@@ -56,30 +53,22 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
             if (!session?.user) return;
 
             try {
-                const result = await getPropertiesAction();
-                if (result.success && result.data?.properties) {
-                    const prop: any = result.data.properties.find((p: any) => p.id === params.id);
-                    if (prop) {
-                        const location = typeof prop.location === 'string' ? { state: "", lga: "", address: prop.location } : prop.location;
-                        setFormData({
-                            name: prop.name || "",
-                            description: prop.description || "",
-                            state: location?.state || "",
-                            lga: location?.lga || "",
-                            address: location?.address || "",
-                            pricePerAcre: prop.pricePerAcre || prop.price || 0,
-                            size: prop.size || 0,
-                            propertyType: prop.propertyType || prop.type || "",
-                            category: prop.category || "",
-                            features: prop.features || [],
-                            leaseDuration: prop.leaseDuration || 0,
-                        });
-                    } else {
-                        showToast("Property not found", "error");
-                        router.push("/farm-nation/my-properties");
-                    }
+                const prop = await getPropertyByIdAction(params.id);
+                if (prop) {
+                    const location = prop.location || { state: "", lga: "", address: "" };
+                    setFormData({
+                        title: prop.title || "",
+                        description: prop.description || "",
+                        state: location.state || "",
+                        lga: location.lga || location.city || "",
+                        address: location.address || "",
+                        price: prop.price || 0,
+                        size: prop.size || 0,
+                        category: prop.category || "farmland",
+                        features: prop.features || [],
+                    });
                 } else {
-                    showToast("Failed to load properties", "error");
+                    showToast("Property not found", "error");
                     router.push("/farm-nation/my-properties");
                 }
             } catch (error) {
@@ -103,18 +92,22 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
         setIsSubmitting(true);
 
         try {
-            const result = await updatePropertyAction(params.id, {
-                name: formData.name,
+            const result = await updateLandListing({
+                listingId: params.id,
+                title: formData.title,
                 description: formData.description,
-                location: formData.address,
-                state: formData.state,
-                lga: formData.lga,
-                price: formData.pricePerAcre * formData.size,
+                location: {
+                    address: formData.address,
+                    state: formData.state,
+                    lga: formData.lga,
+                    city: formData.lga, 
+                    lat: 0, // Preserve original lat/lng if updating dynamically later via Maps
+                    lng: 0,
+                },
+                price: formData.price,
                 size: formData.size,
-                category: formData.category,
                 features: formData.features,
-                leaseDuration: formData.leaseDuration,
-            } as Parameters<typeof updatePropertyAction>[1]);
+            });
 
             if (result.success) {
                 showToast("Property updated successfully", "success");
@@ -149,16 +142,14 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                 </Link>
 
                 <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                    {/* Header */}
                     <div className="bg-linear-to-r from-green-600 to-emerald-600 p-8 text-white">
-                        <h1 className="text-3xl font-bold mb-2">Edit Property</h1>
+                        <h1 className="text-3xl font-bold mb-2">Edit Land Listing</h1>
                         <p className="text-green-100">
-                            Update your property details
+                            Update your property details on Farm Nation
                         </p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
-                        {/* Basic Information */}
                         <section>
                             <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <Map className="w-6 h-6" />
@@ -168,12 +159,12 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Property Name *
+                                        Land Title *
                                     </label>
                                     <input
                                         type="text"
-                                        value={formData.name}
-                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     />
@@ -181,15 +172,15 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Property Type *
+                                        Category *
                                     </label>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         {propertyTypes.map((type) => (
                                             <button
                                                 key={type.value}
                                                 type="button"
-                                                onClick={() => setFormData({ ...formData, propertyType: type.value as PropertyType })}
-                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.propertyType === type.value
+                                                onClick={() => setFormData({ ...formData, category: type.value })}
+                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category === type.value
                                                     ? "border-green-600 bg-green-50"
                                                     : "border-slate-200 hover:border-green-400"
                                                     }`}
@@ -218,7 +209,6 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                             </div>
                         </section>
 
-                        {/* Location */}
                         <section>
                             <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2">
                                 <MapPin className="w-6 h-6" />
@@ -245,7 +235,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                            LGA *
+                                            LGA / City *
                                         </label>
                                         <input
                                             type="text"
@@ -272,7 +262,6 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                             </div>
                         </section>
 
-                        {/* Size & Pricing */}
                         <section>
                             <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Size & Pricing
@@ -296,12 +285,12 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                        Price per Acre (₦) *
+                                        Total Price (₦) *
                                     </label>
                                     <input
                                         type="number"
-                                        value={formData.pricePerAcre}
-                                        onChange={(e) => setFormData({ ...formData, pricePerAcre: Number(e.target.value) })}
+                                        value={formData.price}
+                                        onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         min="0"
                                         step="1000"
@@ -309,18 +298,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                     />
                                 </div>
                             </div>
-
-                            {formData.size > 0 && formData.pricePerAcre > 0 && (
-                                <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                                    <p className="text-sm text-green-900">
-                                        <span className="font-semibold">Total Price: </span>
-                                        ₦{(formData.size * formData.pricePerAcre).toLocaleString()}
-                                    </p>
-                                </div>
-                            )}
                         </section>
 
-                        {/* Submit Button */}
                         <div className="flex gap-4 pt-4">
                             <button
                                 type="submit"

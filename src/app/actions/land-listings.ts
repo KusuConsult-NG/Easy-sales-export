@@ -515,3 +515,42 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ suc
         return { success: false, error: error.message };
     }
 }
+
+/**
+ * Admin: Delete land listing
+ */
+export async function deleteLandListingAction(
+    listingId: string,
+    adminId: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        const roles = session?.user?.roles || [];
+        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized: Admin access required" };
+        }
+        const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
+        const listingDoc = await listingRef.get();
+
+        if (!listingDoc.exists) {
+            return { success: false, error: "Listing not found" };
+        }
+
+        await listingRef.delete();
+
+        await logAdminAction(
+            "land_deleted",
+            adminId,
+            listingId,
+            "land_listing",
+            "Listing was permanently deleted"
+        );
+
+        return { success: true };
+    } catch (error) {
+        logger.error("Land deletion error:", error);
+        return { success: false, error: "Failed to delete listing" };
+    }
+}

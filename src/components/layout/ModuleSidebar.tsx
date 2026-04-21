@@ -86,7 +86,7 @@ const COOPERATIVES_NAV: NavItem[] = [
 const FARM_NATION_NAV: NavItem[] = [
     { name: "Properties",     href: "/farm-nation/properties",    icon: Map },
     { name: "My Properties",  href: "/farm-nation/my-properties", icon: Tractor },
-    { name: "My Purchases",   href: "/farm-nation/my-purchases",  icon: Home },
+    { name: "My Inquiries",   href: "/farm-nation/inquiries",     icon: MessageSquare },
     { name: "Map View",       href: "/farm-nation/map",           icon: Map },
     { name: "List Land",      href: "/farm-nation/list-land",     icon: Leaf },
 ];

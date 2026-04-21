@@ -678,57 +678,78 @@ export async function getUserExportInvestmentsAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user) {
+        if (!session?.user?.id) {
             return { error: "Authentication required", success: false };
         }
 
         const userId = session.user.id;
 
-        // Fetch user's export windows
-        let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
-            .where("userId", "==", userId)
-            .where("status", "in", ["pending", "in_transit", "delivered"])
-            .orderBy("createdAt", "desc");
+        // Fetch user's active Paystack-verified EXPORT_INVESTMENTS
+        let query = db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+            .where("investorId", "==", userId)
 
+        const snapshotRaw = await query.get();
+        // Since investments per user are small, we sort in memory to avoid missing index errors
+        const allDocs = snapshotRaw.docs.sort((a, b) => {
+             const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
+             const tB = b.data().createdAt?.toMillis() || b.data().bookedAt?.toMillis() || 0;
+             return tB - tA;
+        });
+
+        // Manual Pagination
+        let startIndex = 0;
         if (lastId) {
-            const lastDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastId).get();
-            if (lastDoc.exists) {
-                query = query.startAfter(lastDoc);
-            }
+             const idx = allDocs.findIndex(d => d.id === lastId);
+             if (idx !== -1) startIndex = idx + 1;
         }
+        
+        const paginatedDocs = allDocs.slice(startIndex, startIndex + limit);
 
-        query = query.limit(limit);
-
-        const snapshot = await query.get();
-
-        const investments = snapshot.docs.map(doc => {
+        const investments = await Promise.all(paginatedDocs.map(async doc => {
             const data = doc.data();
-
-            // Calculate days remaining until delivery
+            
+            // Soft-join to get the actual Export Window details dynamically
+            let commodity = data.commodity || "Export Opportunity";
+            let status = data.status || "pending";
+            let startDate = new Date();
+            let endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
             let daysRemaining = 0;
-            if (data.deliveryDate) {
-                const delivery = data.deliveryDate.toDate();
-                const now = new Date();
-                const diffTime = delivery.getTime() - now.getTime();
-                daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+            if (data.windowId) {
+                 const windowId = data.windowId;
+                 const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId).get();
+                 if (windowDoc.exists) {
+                     const wData = windowDoc.data()!;
+                     commodity = wData.title || wData.commodity || commodity;
+                     status = wData.status || status; // Reflect parent window status
+                     startDate = wData.startDate?.toDate() || startDate;
+                     endDate = wData.endDate?.toDate() || endDate;
+                     
+                     if (wData.endDate) {
+                         const delivery = wData.endDate.toDate();
+                         const diffTime = delivery.getTime() - new Date().getTime();
+                         daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+                     }
+                 }
             }
 
-            // Calculate expected return (assume 20% ROI for now)
-            const expectedReturn = data.amount * 0.20;
+            // Real investment logic calculations
+            const amount = data.amount || data.totalCost || 0;
+            const expectedReturn = data.expectedReturn || (amount * 0.20);
 
             return {
                 id: doc.id,
-                commodity: data.commodity || "Export",
-                amount: data.amount,
+                commodity,
+                amount,
                 expectedReturn,
-                status: data.status,
+                status,
                 daysRemaining,
-                startDate: data.startDate?.toDate() || new Date(),
-                endDate: data.endDate?.toDate() || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // Fallback
+                startDate,
+                endDate,
             };
-        });
+        }));
 
-        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+        const lastDocId = paginatedDocs.length === limit ? paginatedDocs[paginatedDocs.length - 1].id : null;
 
         return {
             error: null,
@@ -751,55 +772,45 @@ export async function getUserExportStatsAction() {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user) {
+        if (!session?.user?.id) {
             return { error: "Authentication required", success: false };
         }
 
         const userId = session.user.id;
 
-        // Fetch all user's export windows
-        const snapshot = await db.collection(COLLECTIONS.EXPORT_WINDOWS)
-            .where("userId", "==", userId)
-            .get();
+        // Fetch O(1) Compiled Stats from Active Paystack Integration
+        const portfolioDoc = await db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId).get();
 
-        let totalInvested = 0;
-        let activeInvestments = 0;
-        let totalReturns = 0;
-        let pendingReturns = 0;
+        if (portfolioDoc.exists) {
+             const data = portfolioDoc.data()!;
+             return {
+                 error: null,
+                 success: true,
+                 data: {
+                     totalInvested: data.totalInvested || 0,
+                     activeInvestments: data.activeInvestments || 0,
+                     totalReturns: data.totalReturned || 0,
+                     pendingReturns: data.totalExpectedReturns || 0,
+                 },
+                 meta: null
+             };
+        }
 
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
-            const amount = data.amount || 0;
-
-            totalInvested += amount;
-
-            // Count active investments (not completed)
-            if (data.status === "pending" || data.status === "in_transit" || data.status === "delivered") {
-                activeInvestments++;
-                // Pending returns (20% ROI assumption)
-                pendingReturns += amount * 0.20;
-            }
-
-            // Total returns from completed investments
-            if (data.status === "completed") {
-                totalReturns += amount * 0.20;
-            }
-        });
-
+        // Fallback if no portfolio exists yet
         return {
             error: null,
             success: true,
             data: {
-                totalInvested,
-                activeInvestments,
-                totalReturns,
-                pendingReturns,
+                totalInvested: 0,
+                activeInvestments: 0,
+                totalReturns: 0,
+                pendingReturns: 0,
             },
             meta: null
         };
     } catch (error: any) {
         logger.error("Get user export stats error:", error);
-        return { error: "Failed to fetch statistics", success: false, data: undefined, meta: null };
+        return { error: "Failed to fetch stats", success: false, data: undefined, meta: null };
     }
 }
 
@@ -1012,22 +1023,35 @@ export async function getMyExportInvestmentsAction() {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
-        const snapshot = await db.collection(COLLECTIONS.EXPORT_SLOTS)
-            .where("userId", "==", session.user.id)
-            .orderBy("createdAt", "desc")
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+            .where("investorId", "==", session.user.id)
             .get();
+            
+        // Use in-memory sort to avoid index compilation errors
+        const allDocs = snapshot.docs.sort((a, b) => {
+             const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
+             const tB = b.data().createdAt?.toMillis() || b.data().bookedAt?.toMillis() || 0;
+             return tB - tA;
+        });
 
-        const investments = await Promise.all(snapshot.docs.map(async (doc) => {
+        const investments = await Promise.all(allDocs.map(async (doc) => {
             const data = doc.data();
-            // Fetch window details for display
-            const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.exportId).get();
-            const windowData = windowDoc.data();
+            // Fetch window details for display safely
+            let windowTitle = data.windowTitle || "Export Investment";
+            
+            if (data.windowId) {
+                 const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId).get();
+                 if (windowDoc.exists) {
+                     const windowData = windowDoc.data()!;
+                     windowTitle = windowData.title || windowData.commodity || windowTitle;
+                 }
+            }
 
             return {
                 id: doc.id,
                 ...data,
-                windowTitle: windowData?.title || windowData?.commodity || "Export Investment",
-                createdAt: data.createdAt?.toDate(),
+                windowTitle,
+                createdAt: data.createdAt?.toDate() || data.bookedAt?.toDate() || new Date(),
             };
         }));
 

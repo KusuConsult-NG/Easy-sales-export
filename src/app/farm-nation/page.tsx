@@ -7,7 +7,8 @@ import BackToHub from "@/components/common/BackToHub";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { getPropertiesAction, checkFarmNationStatusAction } from "@/app/actions/farm-nation";
+import { checkFarmNationStatusAction } from "@/app/actions/farm-nation";
+import { searchLandListingsAction } from "@/app/actions/land-listings";
 
 const categories = [
     { name: "Arable Land", icon: "🌾" },
@@ -32,17 +33,16 @@ export default function FarmNationLandingPage() {
         async function loadData() {
             try {
                 // Load featured (verified) properties — filter in-memory after load
-                const result = await getPropertiesAction({ limit: 50 });
-                if (result.success && result.data?.properties) {
-                    // Only show verified properties on landing page
-                    const verified = result.data.properties.filter((p: any) => p.verified === true);
-                    setFeaturedProperties(verified.slice(0, 3));
-                    setTotalCount(result.data.properties.length);
+                const result = await searchLandListingsAction({ limit: 50 });
+                if (result && result.listings) {
+                    // searchLandListingsAction already filters by status='verified'
+                    setFeaturedProperties(result.listings.slice(0, 3));
+                    setTotalCount(result.listings.length);
 
                     // Count properties by type/category
                     const counts: Record<string, number> = {};
-                    result.data.properties.forEach((p: any) => {
-                        const type = p.propertyType || p.type || "other";
+                    result.listings.forEach((p: any) => {
+                        const type = p.category || p.propertyType || "other";
                         counts[type] = (counts[type] || 0) + 1;
                     });
                     setCategoryCounts(counts);

@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
-export type ContentType = "products" | "land" | "loans" | "wave" | "certificates" | "resources" | "courses";
+export type ContentType = "products" | "land" | "certificates" | "resources" | "courses";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface PendingContentItem {
@@ -46,8 +46,8 @@ function sanitizeForSerialization(obj: unknown): unknown {
  * Aggregates:
  * - Marketplace Products (status: pending)
  * - Land Listings (verificationStatus: pending)
- * - Loans (status: pending)
- * - WAVE Applications (status: pending)
+ * - Marketplace Products (status: pending)
+ * - Land Listings (verificationStatus: pending)
  */
 export async function getPendingContentAction(): Promise<{
     success: boolean;
@@ -110,43 +110,7 @@ export async function getPendingContentAction(): Promise<{
             });
         });
 
-        // 3. Loans
-        const loansQuery = db.collection(COLLECTIONS.LOANS)
-            .where("status", "==", "pending")
-            .limit(500);
-        const loansSnap = await loansQuery.get();
-        loansSnap.forEach((doc) => {
-            const data = doc.data();
-            pendingItems.push({
-                id: doc.id,
-                type: "loans",
-                title: `Loan Request: ₦${data.amount?.toLocaleString()}`,
-                submittedBy: data.userName || data.userId,
-                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
-                status: "pending",
-                description: `Purpose: ${data.purpose}`,
-                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
-            });
-        });
-
-        // 4. WAVE Applications
-        const waveQuery = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-            .where("status", "==", "pending")
-            .limit(500);
-        const waveSnap = await waveQuery.get();
-        waveSnap.forEach((doc) => {
-            const data = doc.data();
-            pendingItems.push({
-                id: doc.id,
-                type: "wave",
-                title: `WAVE Application: ${data.businessName || "Unknown Business"}`,
-                submittedBy: data.applicantName || data.email || "Unknown Applicant",
-                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
-                status: "pending",
-                description: `Business Type: ${data.businessType}`,
-                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
-            });
-        });
+        // Removed Loans and WAVE logic from Content Approval Center since they have dedicated administrative dashboards.
 
         // Sort by submittedAt desc (ISO strings sort lexicographically)
         pendingItems.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
@@ -187,20 +151,6 @@ export async function approveContentAction(
                     verificationStatus: "verified",
                     verifiedAt: timestamp,
                     verifiedBy: adminId,
-                });
-                break;
-            case "loans":
-                await db.collection(COLLECTIONS.LOANS).doc(id).update({
-                    status: "approved", // or 'processing' depending on flow, but 'approved' for now
-                    approvedAt: timestamp,
-                    approvedBy: adminId,
-                });
-                break;
-            case "wave":
-                await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(id).update({
-                    status: "approved",
-                    approvedAt: timestamp,
-                    approvedBy: adminId,
                 });
                 break;
             default:
@@ -252,22 +202,6 @@ export async function rejectContentAction(
                 await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
                     verificationStatus: "rejected",
                     verificationNotes: reason, // land uses 'verificationNotes' usually
-                    rejectedAt: timestamp,
-                    rejectedBy: adminId,
-                });
-                break;
-            case "loans":
-                await db.collection(COLLECTIONS.LOANS).doc(id).update({
-                    status: "rejected",
-                    rejectionReason: reason,
-                    rejectedAt: timestamp,
-                    rejectedBy: adminId,
-                });
-                break;
-            case "wave":
-                await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(id).update({
-                    status: "rejected",
-                    rejectionReason: reason,
                     rejectedAt: timestamp,
                     rejectedBy: adminId,
                 });
