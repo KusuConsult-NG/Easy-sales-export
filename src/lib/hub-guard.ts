@@ -21,6 +21,7 @@ export async function requireHubRegistration() {
     if (!sessionResult.session) {
         redirect("/hub/register");
     }
+    let shouldRedirect = false;
     
     // 2. Extrapolate db record for registration verification
     try {
@@ -28,32 +29,29 @@ export async function requireHubRegistration() {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(sessionResult.session.user.id).get();
         
         if (!userDoc.exists) {
-            redirect("/hub/register");
-        }
-        
-        const userData = userDoc.data();
-        
-        // 3. Define "Fully Registered" Status
-        // A fully registered user must have base identification and contact details populated.
-        // Legacy 'fullName' or 'firstName/lastName' combo must exist, along with phone and email.
-        const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
-        const hasEmail = Boolean(userData?.email);
-        const hasPhone = Boolean(userData?.phone);
-        
-        const isFullyRegistered = hasName && hasEmail && hasPhone;
-        
-        if (!isFullyRegistered) {
-            redirect("/hub/register");
-            // NOTE: redirect() throws a Next.js navigation error, so this stops execution.
+            shouldRedirect = true;
+        } else {
+            const userData = userDoc.data();
+            
+            // 3. Define "Fully Registered" Status
+            const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
+            const hasEmail = Boolean(userData?.email);
+            const hasPhone = Boolean(userData?.phone);
+            
+            const isFullyRegistered = hasName && hasEmail && hasPhone;
+            
+            if (!isFullyRegistered) {
+                shouldRedirect = true;
+            }
         }
     } catch(err) {
-        // If the database fails or throws an internal exception, 
-        // DO NOT allow bypass. Protect the module by actively redirecting to hub registration.
-        // Redirect throws an internal nextjs navigation exception so we shouldn't swallow it.
-        if (err instanceof Error && err.message === "NEXT_REDIRECT") {
-            throw err;
-        }
         console.error("Hub Guard Exception:", err);
+        shouldRedirect = true;
+    }
+    
+    // IMPORTANT: Next.js redirect() MUST be called outside the try/catch block
+    // to prevent swallowing the NEXT_REDIRECT internal exception.
+    if (shouldRedirect) {
         redirect("/hub/register");
     }
     
