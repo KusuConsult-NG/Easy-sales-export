@@ -154,6 +154,8 @@ export const MODULE_NAVIGATION: Record<string, NavigationItem[]> = {
         { name: "Academy", href: "/admin/academy", icon: GraduationCap, featureToggle: "academy_courses" },
         // ── Finance & Settings ────────────────────────────────────────────
         { name: "Finance", href: "/admin/finance", icon: Wallet },
+        { name: "Escrow Ledger", href: "/admin/escrow", icon: Lock },
+        { name: "System Health", href: "/admin/system-health", icon: ShieldAlert },
         { name: "Settings", href: "/admin/settings", icon: Settings },
         // ── AI Tools ─────────────────────────────────────────────────────
         { name: "AI Chatbot", href: "/admin/chatbot", icon: MessageCircle, featureToggle: "ai_assistant" },

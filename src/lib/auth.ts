@@ -234,7 +234,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
 
             // 2. Node-specific logic
-            const { user } = params;
+            const { user, trigger } = params;
+
+            // Session Refresh / Sync Protocol
+            if (trigger === "update" && token.id) {
+                 try {
+                     const { getAdminDb } = await import("@/lib/firebase-admin");
+                     const { COLLECTIONS } = await import("@/lib/types/firestore");
+                     const adminDb = getAdminDb();
+                     const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(token.id as string).get();
+                     if (userDoc.exists) {
+                         const userData = userDoc.data() as any;
+                         token.roles = userData.roles || [];
+                         token.verified = userData.isVerified ?? userData.verified ?? true;
+                         token.onboardingCompleted = userData.onboardingCompleted;
+                         token.sellerVerificationStatus = userData.sellerVerificationStatus;
+                     }
+                 } catch (e) {
+                     console.error("[NextAuth JWT] Failed to sync session from database", e);
+                 }
+            }
+
             if (user) {
                 // Clear any stale cached Firebase token on fresh sign-in
                 token.firebaseToken = undefined;
@@ -342,6 +362,8 @@ declare module "next-auth" {
             image?: string | null;
             roles: UserRole[];
             verified: boolean;
+            onboardingCompleted?: boolean;
+            sellerVerificationStatus?: string;
         };
         firebaseToken?: string;
     }
@@ -353,5 +375,7 @@ declare module "next-auth" {
         image?: string | null;
         roles: UserRole[];
         verified: boolean;
+        onboardingCompleted?: boolean;
+        sellerVerificationStatus?: string;
     }
 }

@@ -55,6 +55,8 @@ export const authConfig = {
                 token.image = user.image;
                 token.roles = user.roles;
                 token.verified = user.verified ?? true;
+                token.onboardingCompleted = user.onboardingCompleted;
+                token.sellerVerificationStatus = user.sellerVerificationStatus;
             }
             return token;
         },
@@ -67,6 +69,8 @@ export const authConfig = {
                 session.user.image = token.image as string | null;
                 session.user.roles = (token.roles as UserRole[]) || [];
                 session.user.verified = token.verified as boolean;
+                session.user.onboardingCompleted = token.onboardingCompleted as boolean | undefined;
+                session.user.sellerVerificationStatus = token.sellerVerificationStatus as string | undefined;
             }
             return session;
         },

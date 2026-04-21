@@ -14,6 +14,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
+import { atomicUpdateUser } from '@/lib/services/userService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,14 +73,13 @@ export async function verifyBVNAction(payload: {
         const result = { success: true, isMatch: true, error: undefined };
 
         // Persist result to Firestore regardless of match outcome
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        await atomicUpdateUser(userId, {
             'kyc.bvn': bvn,
             'kyc.bvnVerified': result.success && result.isMatch,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.bvnStatus': result.success
                 ? (result.isMatch ? 'verified' : 'mismatch')
                 : 'failed',
-            updatedAt: FieldValue.serverTimestamp(),
         });
 
         if (!result.success) {
@@ -140,14 +140,13 @@ export async function verifyNINAction(payload: {
         const result = { success: true, isMatch: true, error: undefined };
 
         // Persist result to Firestore regardless of match outcome
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        await atomicUpdateUser(userId, {
             'kyc.nin': nin,
             'kyc.ninVerified': result.success && result.isMatch,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.ninStatus': result.success
                 ? (result.isMatch ? 'verified' : 'mismatch')
                 : 'failed',
-            updatedAt: FieldValue.serverTimestamp(),
         });
 
         if (!result.success) {
@@ -204,7 +203,7 @@ export async function verifyVotersCardAction(payload: {
         const originalStatus = 'pending_manual_review';
 
         // Persist result to Firestore but forcefully override to allow the user to pass
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        await atomicUpdateUser(userId, {
             'kyc.votersCard': votersCardNumber,
             // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering
             // or the DB fails, we forcefully mark it verified so the user isn't stuck.
@@ -212,7 +211,6 @@ export async function verifyVotersCardAction(payload: {
             'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.votersCardStatus': 'verified',
             'kyc.votersCardOriginalQoreIdStatus': originalStatus,
-            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // Update overall KYC status since we forced voter's card to verified
@@ -282,7 +280,7 @@ export async function saveKYCProfileAction(payload: {
             updatedAt: FieldValue.serverTimestamp(),
         };
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update(rootUpdate);
+        await atomicUpdateUser(userId, rootUpdate);
 
         // ── Cross-module PII sync ──────────────────────────────────────────────
         // Propagate the latest phone / name / address to all module sub-collections
@@ -391,11 +389,10 @@ async function updateOverallKYCStatus(userId: string) {
         // KYC is considered complete when BVN is verified and at least one primary ID (NIN or Voter's Card) is verified
         const kycComplete = bvnVerified && (ninVerified || votersCardVerified);
 
-        await userRef.update({
+        await atomicUpdateUser(userId, {
             'kyc.status': kycComplete ? 'verified' : 'pending',
             'kyc.completedAt': kycComplete ? FieldValue.serverTimestamp() : null,
             kycVerified: kycComplete,
-            updatedAt: FieldValue.serverTimestamp(),
         });
     } catch (err) {
         logger.error('Failed to update overall KYC status', err);

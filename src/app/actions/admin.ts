@@ -23,6 +23,7 @@ import {
 } from "@/lib/schemas";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
+import { atomicUpdateUser } from "@/lib/services/userService";
 
 /**
  * Admin Server Actions
@@ -541,7 +542,7 @@ export async function toggleUserKycVerificationAction(
             updatePayload['kycVerified'] = newVerificationStatus && otherVerified;
         }
 
-        await userRef.update(updatePayload);
+        await atomicUpdateUser(userId, updatePayload);
 
         // CLEAR CACHE
         try {
@@ -1652,10 +1653,9 @@ export async function updateUserRolesAction(
             }
         }
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        await atomicUpdateUser(userId, {
             roles: roles,
             updatedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
             ...serviceUpdates,
         });
 
@@ -1713,7 +1713,7 @@ export async function approveSellerVerificationAction(
         });
 
         // 3. Update User Profile (Verify & Add Role)
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        await atomicUpdateUser(userId, {
             isVerified: true,
             sellerVerificationStatus: "approved",
             sellerVerificationId: verificationId,
@@ -1727,7 +1727,6 @@ export async function approveSellerVerificationAction(
             "serviceRegistrations.marketplace.approvedBy": session.user.id,
             // SYNC CONTACT INFO: Update phone with verified number to prevent data drift
             phone: verificationData.phoneNumber,
-            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // CLEAR CACHE - User now has seller role and verification
@@ -1847,14 +1846,13 @@ export async function approveExportOnboardingAction(
         });
 
         // 3. Update User Profile (Verify, Add Role, Activate Service)
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+        await atomicUpdateUser(userId, {
             isVerified: true,
             "services.export.status": "active",
             "services.export.approvedAt": FieldValue.serverTimestamp(),
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("export_participant"),
-            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // CLEAR CACHE - User now has Export access
