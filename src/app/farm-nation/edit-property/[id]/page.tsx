@@ -60,12 +60,12 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                         title: prop.title || "",
                         description: prop.description || "",
                         state: location.state || "",
-                        lga: location.lga || location.city || "",
+                        lga: location.lga || (location as any).city || "",
                         address: location.address || "",
                         price: prop.price || 0,
                         size: prop.size || 0,
                         category: prop.category || "farmland",
-                        features: prop.features || [],
+                        features: (prop as any).features || [],
                     });
                 } else {
                     showToast("Property not found", "error");
