@@ -73,7 +73,7 @@ export default function AdminMessagesPage() {
             try {
                 // Fetch using admin SDK action to bypass client-side listener limitations
                 const { getMessagesAction } = await import("@/app/actions/messages");
-                const result = await getMessagesAction(activeConversationId, 100);
+                const result = await getMessagesAction(activeConversationId!, 100);
                 if (result && result.messages) {
                     setMessages(result.messages);
                     scrollToBottom();
