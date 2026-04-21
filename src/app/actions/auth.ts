@@ -258,6 +258,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             lastName: registrationLastName,
             otherName: registrationOtherName || undefined,
             email: validatedData.email,
+            phone: validatedData.phone,
             roles: userRoles,
             isVerified: true,  // canonical field
             verified: true,    // legacy compat field — keep both so old queries still work
