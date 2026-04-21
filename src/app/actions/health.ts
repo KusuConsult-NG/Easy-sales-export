@@ -57,12 +57,12 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
             // 2. Export Participant without approved module status
             if (data.roles?.includes("export_participant")) {
                  const exportStatus = data.serviceRegistrations?.export?.status;
-                 if (exportStatus !== "active" && exportStatus !== "approved") {
+                 if (exportStatus !== "approved") {
                     issues.push({
                         id: uid,
                         email: data.email,
                         issueType: "Data Corruption (Export State Drift)",
-                        expectedState: "serviceRegistrations.export.status = active",
+                        expectedState: "serviceRegistrations.export.status = approved",
                         actualState: `export.status = ${exportStatus || 'undefined'}`,
                         description: "User is an 'export_participant' but is missing an active module registration."
                     });
