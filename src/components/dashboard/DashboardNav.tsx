@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useState, useEffect } from "react";
@@ -175,15 +176,16 @@ export default function DashboardNav() {
 
     const NavContent = () => (
         <div className="flex flex-col h-full">
-            {/* Logo / Brand */}
             <div className="px-5 py-5 border-b border-slate-700/50">
-                <Link href="/dashboard" className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 bg-linear-to-br from-emerald-400 to-green-600 rounded-lg flex items-center justify-center shadow">
-                        <span className="text-white font-black text-sm">ES</span>
-                    </div>
-                    <div>
-                        <p className="text-white font-bold text-sm leading-tight">Easy Sales</p>
-                        <p className="text-slate-400 text-xs">User Dashboard</p>
+                <Link href="/dashboard" className="flex items-center gap-3">
+                    <div className="relative w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 shrink-0">
+                        <Image 
+                            src="/images/logo.jpg" 
+                            alt="Easy Sales" 
+                            width={32} 
+                            height={32} 
+                            className="object-contain"
+                        />
                     </div>
                 </Link>
             </div>
@@ -285,13 +287,17 @@ export default function DashboardNav() {
                 <NavContent />
             </aside>
 
-            {/* ── Mobile top bar ───────────────────────────────── */}
             <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-900 border-b border-slate-700/50 px-4 py-3 flex items-center justify-between">
                 <Link href="/dashboard" className="flex items-center gap-2">
-                    <div className="w-7 h-7 bg-linear-to-br from-emerald-400 to-green-600 rounded-lg flex items-center justify-center">
-                        <span className="text-white font-black text-xs">ES</span>
+                    <div className="relative w-8 h-8 bg-white rounded-md flex items-center justify-center p-0.5 shrink-0">
+                        <Image 
+                            src="/images/logo.jpg" 
+                            alt="Easy Sales" 
+                            width={28} 
+                            height={28} 
+                            className="object-contain"
+                        />
                     </div>
-                    <span className="text-white font-bold text-sm">Dashboard</span>
                 </Link>
                 <div className="flex items-center gap-3">
                     {(unreadCount > 0 || unreadMessages > 0) && (
