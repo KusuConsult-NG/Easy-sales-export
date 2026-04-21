@@ -5,7 +5,6 @@
 
 import crypto from 'crypto';
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!;
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 export interface PaystackVerifyResponse {
@@ -55,12 +54,15 @@ export async function verifyPaystackPayment(
     reference: string
 ): Promise<PaystackVerifyResponse> {
     try {
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!secretKey) throw new Error("Payment service not configured");
+
         const response = await fetch(
             `${PAYSTACK_BASE_URL}/transaction/verify/${encodeURIComponent(reference)}`,
             {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+                    'Authorization': `Bearer ${secretKey}`,
                     'Content-Type': 'application/json',
                 },
             }
@@ -95,13 +97,14 @@ export function verifyPaystackWebhook(
     signature: string
 ): boolean {
     try {
-        if (!PAYSTACK_SECRET_KEY) {
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!secretKey) {
             console.error('Webhook verification failed: PAYSTACK_SECRET_KEY is not set');
             return false;
         }
 
         const hash = crypto
-            .createHmac('sha512', PAYSTACK_SECRET_KEY)
+            .createHmac('sha512', secretKey)
             .update(payload)
             .digest('hex');
 
@@ -139,10 +142,13 @@ export async function initializePaystackPayment(
     reference: string;
 }> {
     try {
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!secretKey) throw new Error("Payment service not configured");
+
         const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
+                'Authorization': `Bearer ${secretKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
