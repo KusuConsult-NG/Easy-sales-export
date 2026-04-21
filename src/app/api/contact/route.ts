@@ -5,9 +5,7 @@ import { logger } from '@/lib/logger';
 import { Resend } from "resend";
 import { COMPANY_INFO } from "@/lib/constants";
 
-// If RESEND_API_KEY is missing, every send will fail silently — surface it as a clear config error
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
+
 
 export async function POST(request: NextRequest) {
     try {
@@ -30,6 +28,10 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+
+        // If RESEND_API_KEY is missing, every send will fail silently — surface it as a clear config error
+        const RESEND_API_KEY = process.env.RESEND_API_KEY;
+        const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
         // Guard: email service not configured
         if (!resend) {

@@ -6,19 +6,14 @@
  * preventing the client-side useSession() race condition.
  */
 
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireHubRegistration } from "@/lib/hub-guard";
 
 export default async function CooperativesOnboardingLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const session = await auth();
-
-    if (!session?.user) {
-        redirect("/auth/login?callbackUrl=/cooperatives/onboarding");
-    }
+    await requireHubRegistration();
 
     return <>{children}</>;
 }

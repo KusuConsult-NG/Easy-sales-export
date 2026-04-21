@@ -15,16 +15,16 @@ import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-// WhatsApp group URLs are server-side only (env vars, never in client code)
-const GROUP_URLS: Record<string, string | undefined> = {
-    wave_briefing: process.env.WAVE_WHATSAPP_GROUP_URL,
-    cooperative: process.env.COOPERATIVE_WHATSAPP_GROUP_URL,
-};
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://easysalesexport.com";
 
 export async function GET(req: NextRequest) {
     const token = req.nextUrl.searchParams.get("token");
+
+    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://easysalesexport.com";
+    const GROUP_URLS: Record<string, string | undefined> = {
+        wave_briefing: process.env.WAVE_WHATSAPP_GROUP_URL,
+        cooperative: process.env.COOPERATIVE_WHATSAPP_GROUP_URL,
+    };
 
     // --- 1. Basic input validation ---
     if (!token || token.length < 10) {

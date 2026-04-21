@@ -17,7 +17,6 @@ import {
     processWaveRegistration
 } from "@/lib/paystack-fulfillment";
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!;
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
 interface PaystackTx {
@@ -38,7 +37,7 @@ interface PaystackTx {
  * status param: 'success' | 'failed' | 'abandoned'
  * perPage is capped at 100 by Paystack.
  */
-async function fetchAllPaystackByStatus(status: string): Promise<PaystackTx[]> {
+async function fetchAllPaystackByStatus(status: string, PAYSTACK_SECRET_KEY: string): Promise<PaystackTx[]> {
     const all: PaystackTx[] = [];
     let page = 1;
 
@@ -83,6 +82,7 @@ async function paystackSyncHandler(_req: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
 
+        const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY!;
         if (!PAYSTACK_SECRET_KEY) {
             return NextResponse.json({ success: false, error: "PAYSTACK_SECRET_KEY not configured" }, { status: 500 });
         }
@@ -93,9 +93,9 @@ async function paystackSyncHandler(_req: NextRequest) {
         logger.info("[PaystackSync] Fetching success, failed, and abandoned transactions from Paystack...");
 
         const [successTxs, failedTxs, abandonedTxs] = await Promise.all([
-            fetchAllPaystackByStatus("success"),
-            fetchAllPaystackByStatus("failed"),
-            fetchAllPaystackByStatus("abandoned"),
+            fetchAllPaystackByStatus("success", PAYSTACK_SECRET_KEY),
+            fetchAllPaystackByStatus("failed", PAYSTACK_SECRET_KEY),
+            fetchAllPaystackByStatus("abandoned", PAYSTACK_SECRET_KEY),
         ]);
 
         // Deduplicate by reference (a tx should only appear in one bucket, but just in case)
