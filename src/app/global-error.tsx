@@ -5,6 +5,8 @@ import { logger } from "@/lib/logger";
 import { AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import Link from "next/link";
 
+import { logTelemetryAction } from "@/app/actions/telemetry";
+
 /** Returns true if the error is caused by a stale JS bundle after a new deployment */
 function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
     const msg = error?.message ?? "";
@@ -39,9 +41,11 @@ export default function GlobalError({
             return;
         }
 
-        // Log genuine errors to telemetry
-        logger.error("Next.js Global UI Boundary Caught Exception", error, {
+        // Log genuine errors to telemetry on the server
+        logTelemetryAction('error', "Next.js Global UI Boundary Caught Exception", {
             digest: error.digest,
+            message: error.message,
+            stack: error.stack,
             path: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
             fatal: true
         });

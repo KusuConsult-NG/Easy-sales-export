@@ -2,8 +2,22 @@
 
 import Link from 'next/link';
 import { Home, Search, ArrowLeft } from 'lucide-react';
+import { useEffect } from 'react';
+import { logTelemetryAction } from '@/app/actions/telemetry';
 
 export default function NotFound() {
+    useEffect(() => {
+        // Silently log the 404 so engineering knows about broken links/routes
+        const missingUrl = typeof window !== 'undefined' ? window.location.href : 'unknown';
+        const referrer = typeof document !== 'undefined' ? document.referrer : 'none';
+        
+        logTelemetryAction('warn', 'Page Not Found (404)', {
+            url: missingUrl,
+            referrer: referrer,
+            userAgent: navigator.userAgent
+        });
+    }, []);
+
     return (
         <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
             <div className="max-w-2xl w-full text-center">
