@@ -282,9 +282,25 @@ export async function registerAction(prevState: any, formData: FormData) {
             throw new Error("Failed to create user profile. Please try again.");
         }
 
-        // CRITICAL: Redirect to module selection page after registration
-        // Users MUST choose their module before accessing any dashboards
-        const redirectUrl = "/auth/get-started";
+        // CRITICAL: Check the host header to see if the user registered on a specific module domain.
+        // If they did, redirect them directly to that module's onboarding instead of the hub selector.
+        let redirectUrl = "/auth/get-started";
+        try {
+            const { headers } = await import("next/headers");
+            const headersList = await headers();
+            const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
+            const normalizedHost = host.replace(/^www\./, "");
+            
+            if (normalizedHost.includes("easysalesexportacademy.com")) redirectUrl = "/academy/setup";
+            else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
+            else if (normalizedHost.includes("market.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
+            else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
+            else if (normalizedHost.includes("easysalescooperative.com")) redirectUrl = "/cooperatives/onboarding";
+            else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";
+            
+        } catch (e) {
+            logger.warn("Could not determine host for post-registration redirect:", e);
+        }
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
