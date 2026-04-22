@@ -299,7 +299,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";
             
         } catch (e) {
-            logger.warn("Could not determine host for post-registration redirect:", e);
+            logger.warn("Could not determine host for post-registration redirect:", { error: e instanceof Error ? e.message : String(e) });
         }
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
