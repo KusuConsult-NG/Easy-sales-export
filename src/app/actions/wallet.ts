@@ -81,7 +81,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
     error?: string;
 }> {
     try {
-        if (amountNGN < 100) {
+        if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
             return { success: false, error: "Minimum wallet funding amount is ₦100" };
         }
 
@@ -243,6 +243,11 @@ export async function walletCheckoutAction(
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
+        // CRITICAL SECURITY FIX: Prevent negative-amount inflation attacks and NaN corruption
+        if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN <= 0) {
+            return { success: false, error: "Invalid checkout amount" };
+        }
+
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
 
         const newBalance = await db.runTransaction(async (t) => {
@@ -315,6 +320,10 @@ export async function withdrawFromWalletAction(
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
 ): Promise<{ success: boolean; withdrawalId?: string; error?: string }> {
     try {
+        if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
+            return { success: false, error: "Invalid withdrawal amount" };
+        }
+
         if (amountNGN < MIN_WITHDRAWAL) {
             return {
                 success: false,
