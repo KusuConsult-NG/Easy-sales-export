@@ -1,4 +1,6 @@
 import { logger } from "@/lib/logger";
+import { logTelemetryAction } from "@/app/actions/telemetry";
+import { z } from "zod";
 
 /**
  * Standardized response format for all Next.js Server Actions
@@ -24,12 +26,27 @@ export function withSafeAction<TArgs extends any[], TReturn>(
     return async (...args: TArgs): Promise<ActionResponse<TReturn>> => {
         try {
             return await actionFn(...args);
-        } catch (error) {
-            // Log full stack trace securely on the server
-            logger.error(`[Unhandled Exception in Action: ${actionName}]`, error);
+        } catch (error: any) {
+            // CRITICAL: Re-throw Next.js internal errors (redirects/not-found)
+            if (error && typeof error === 'object' && 'digest' in error) {
+                const digest = (error as any).digest;
+                if (typeof digest === 'string' && (digest.startsWith('NEXT_REDIRECT') || digest === 'NEXT_NOT_FOUND')) {
+                    throw error; // Let Next.js handle navigation natively
+                }
+            }
+
+            // Beautifully handle Zod validation errors without leaking stack traces or JSON
+            if (error instanceof z.ZodError) {
+                const firstIssue = error.issues[0];
+                const errorMessage = firstIssue ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : "Invalid input data";
+                return { success: false, error: errorMessage };
+            }
+
+            // Log full stack trace securely via our new Telemetry
+            const errorMessage = error instanceof Error ? error.message : "An unexpected server error occurred";
+            logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { stack: error?.stack });
 
             // Return safe string to client boundaries
-            const errorMessage = error instanceof Error ? error.message : "An unexpected server error occurred";
             return {
                 success: false,
                 error: errorMessage,
