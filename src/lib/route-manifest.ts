@@ -77,6 +77,7 @@ export const PROTECTED_PATHS = [
     "/export/buyer",
     "/export/(app)",
     "/onboarding",
+    "/hub/register",
     // Shared protected areas
     "/escrow",
     "/profile",
@@ -121,6 +122,7 @@ export const SHARED_DOMAIN_PATHS = [
     "/farm-nation",
     "/export",
     "/wave",
+    "/hub/register",
 ] as const;
 
 // ── Gated path segments ───────────────────────────────────────────────────────
