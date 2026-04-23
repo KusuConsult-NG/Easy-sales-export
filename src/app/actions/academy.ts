@@ -7,7 +7,7 @@ import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
-import { revalidatePath, unstable_cache } from "next/cache";
+import { revalidatePath, unstable_cache, revalidateTag } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -1118,6 +1118,8 @@ export async function createCourseAction(data: any): Promise<{ success: boolean;
             targetType: "course",
         });
 
+        revalidateTag("academy-courses");
+
         return { success: true, data: { id: docRef.id } };
     } catch (error: any) {
         logger.error("Create course error:", error);
@@ -1147,6 +1149,8 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
             details: "Updated details",
         });
 
+        revalidateTag("academy-courses");
+
         return { success: true };
     } catch (error: any) {
         logger.error("Update course error:", error);
@@ -1175,6 +1179,8 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
             targetType: "course",
             details: "Updated modules",
         });
+
+        revalidateTag("academy-courses");
 
         return { success: true };
     } catch (error: any) {
