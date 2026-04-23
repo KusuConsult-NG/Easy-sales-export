@@ -7,7 +7,7 @@ import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
-import { revalidatePath, unstable_cache } from "next/cache";
+import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -142,48 +142,40 @@ export async function getCoursesAction(
     limit: number = 12,
     lastDocId?: string
 ): Promise<{ success: boolean; data?: Course[]; meta?: { lastDocId: string | null }; error?: string }> {
-    const getCachedCourses = unstable_cache(
-        async () => {
-            try {
-                let q = db.collection(COLLECTIONS.ACADEMY_COURSES)
-                    .orderBy("createdAt", "desc");
+    try {
+        let q = db.collection(COLLECTIONS.ACADEMY_COURSES)
+            .orderBy("createdAt", "desc");
 
-                if (lastDocId) {
-                    const lastDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(lastDocId).get();
-                    if (lastDoc.exists) {
-                        q = q.startAfter(lastDoc);
-                    }
-                }
-
-                q = q.limit(limit);
-
-                const snapshot = await q.get();
-
-                const courses = snapshot.docs.map((doc) => {
-                    const d = doc.data();
-                    return {
-                        id: doc.id,
-                        ...d,
-                        // Serialize Timestamps → ISO strings so Next.js can
-                        // safely pass them from Server Actions to Client Components
-                        createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
-                        updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
-                    };
-                }) as Course[];
-
-                const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
-
-                return { success: true, data: courses, meta: { lastDocId: newLastDocId } };
-            } catch (error: any) {
-                logger.error("Failed to fetch courses:", error);
-                return { success: false, data: [], meta: { lastDocId: null }, error: error.message };
+        if (lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
             }
-        },
-        [`academy-courses`, limit.toString(), lastDocId || "none"],
-        { revalidate: 3600, tags: ["academy-courses"] }
-    );
+        }
 
-    return getCachedCourses();
+        q = q.limit(limit);
+
+        const snapshot = await q.get();
+
+        const courses = snapshot.docs.map((doc) => {
+            const d = doc.data();
+            return {
+                id: doc.id,
+                ...d,
+                // Serialize Timestamps → ISO strings so Next.js can
+                // safely pass them from Server Actions to Client Components
+                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
+                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
+            };
+        }) as Course[];
+
+        const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+        return { success: true, data: courses, meta: { lastDocId: newLastDocId } };
+    } catch (error: any) {
+        logger.error("Failed to fetch courses:", error);
+        return { success: false, data: [], meta: { lastDocId: null }, error: error.message };
+    }
 }
 
 /**
