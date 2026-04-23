@@ -879,56 +879,89 @@ export default function CourseManagerPage() {
                         <div className="space-y-4">
                             {/* Video Preview */}
                             {previewLesson.videoUrl && (
-                                <div className="rounded-xl overflow-hidden bg-black">
-                                    <video
-                                        src={previewLesson.videoUrl}
-                                        controls
-                                        className="w-full max-h-[60vh]"
-                                        autoPlay={false}
-                                    >
-                                        Your browser does not support video playback.
-                                    </video>
-                                </div>
-                            )}
-
-                            {/* PDF Preview */}
-                            {previewLesson.documentUrl && previewLesson.documentUrl.match(/\.pdf/i) && (
-                                <div className="rounded-xl overflow-hidden border border-slate-200">
-                                    <iframe
-                                        src={previewLesson.documentUrl}
-                                        className="w-full h-[60vh]"
-                                        title={previewLesson.title}
-                                    />
-                                </div>
-                            )}
-
-                            {/* Non-PDF Document (docx, etc.) — open externally */}
-                            {previewLesson.documentUrl && !previewLesson.documentUrl.match(/\.pdf/i) && (
-                                <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-                                    <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                                    <p className="text-slate-600 mb-4">This document type cannot be previewed inline.</p>
+                                <div className="space-y-3">
+                                    <div className="rounded-xl overflow-hidden bg-black">
+                                        <video
+                                            src={previewLesson.videoUrl}
+                                            controls
+                                            className="w-full max-h-[60vh]"
+                                            autoPlay={false}
+                                            crossOrigin="anonymous"
+                                        >
+                                            Your browser does not support video playback.
+                                        </video>
+                                    </div>
                                     <a
-                                        href={previewLesson.documentUrl}
+                                        href={previewLesson.videoUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm"
                                     >
                                         <ExternalLink className="w-4 h-4" />
-                                        Download & Open
+                                        Open Video in New Tab
                                     </a>
                                 </div>
                             )}
 
-                            {/* Excel Preview — download link */}
+                            {/* PDF Preview via Google Docs Viewer */}
+                            {previewLesson.documentUrl && previewLesson.documentUrl.match(/\.pdf/i) && (
+                                <div className="space-y-3">
+                                    <div className="rounded-xl overflow-hidden border border-slate-200">
+                                        <iframe
+                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.documentUrl)}&embedded=true`}
+                                            className="w-full h-[60vh]"
+                                            title={previewLesson.title}
+                                        />
+                                    </div>
+                                    <a
+                                        href={previewLesson.documentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition text-sm"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Download PDF
+                                    </a>
+                                </div>
+                            )}
+
+                            {/* Non-PDF Document (docx, etc.) via Google Docs Viewer */}
+                            {previewLesson.documentUrl && !previewLesson.documentUrl.match(/\.pdf/i) && (
+                                <div className="space-y-3">
+                                    <div className="rounded-xl overflow-hidden border border-slate-200">
+                                        <iframe
+                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.documentUrl)}&embedded=true`}
+                                            className="w-full h-[60vh]"
+                                            title={previewLesson.title}
+                                        />
+                                    </div>
+                                    <a
+                                        href={previewLesson.documentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition text-sm"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Download Document
+                                    </a>
+                                </div>
+                            )}
+
+                            {/* Excel Preview via Google Docs Viewer */}
                             {previewLesson.excelUrl && (
-                                <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
-                                    <FileSpreadsheet className="w-16 h-16 text-green-300 mx-auto mb-4" />
-                                    <p className="text-slate-600 mb-4">Spreadsheet files cannot be previewed inline.</p>
+                                <div className="space-y-3">
+                                    <div className="rounded-xl overflow-hidden border border-slate-200">
+                                        <iframe
+                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.excelUrl)}&embedded=true`}
+                                            className="w-full h-[60vh]"
+                                            title={previewLesson.title}
+                                        />
+                                    </div>
                                     <a
                                         href={previewLesson.excelUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm"
                                     >
                                         <ExternalLink className="w-4 h-4" />
                                         Download Spreadsheet
