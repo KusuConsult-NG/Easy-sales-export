@@ -868,117 +868,82 @@ export default function CourseManagerPage() {
                     </div>
                 </Modal>
 
-                {/* Content Preview Modal */}
+                {/* Fullscreen Content Preview */}
                 {previewLesson && (
-                    <Modal
-                        isOpen={!!previewLesson}
-                        onClose={() => setPreviewLesson(null)}
-                        title={`Preview: ${previewLesson.title}`}
-                        maxWidth="xl"
-                    >
-                        <div className="space-y-4">
-                            {/* Video Preview */}
-                            {previewLesson.videoUrl && (
-                                <div className="space-y-3">
-                                    <div className="rounded-xl overflow-hidden bg-black">
-                                        <video
-                                            src={previewLesson.videoUrl}
-                                            controls
-                                            className="w-full max-h-[60vh]"
-                                            autoPlay={false}
-                                            crossOrigin="anonymous"
-                                        >
-                                            Your browser does not support video playback.
-                                        </video>
-                                    </div>
+                    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 py-4 bg-black/80 border-b border-white/10">
+                            <div className="min-w-0">
+                                <h3 className="text-white font-bold text-lg truncate">{previewLesson.title}</h3>
+                                <p className="text-white/60 text-sm capitalize">{detectLessonType(previewLesson)} preview</p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                                {getLessonPreviewUrl(previewLesson) && (
                                     <a
-                                        href={previewLesson.videoUrl}
+                                        href={getLessonPreviewUrl(previewLesson)!}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition text-sm"
+                                        className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
                                     >
                                         <ExternalLink className="w-4 h-4" />
-                                        Open Video in New Tab
+                                        Download
                                     </a>
-                                </div>
-                            )}
-
-                            {/* PDF Preview via Google Docs Viewer */}
-                            {previewLesson.documentUrl && previewLesson.documentUrl.match(/\.pdf/i) && (
-                                <div className="space-y-3">
-                                    <div className="rounded-xl overflow-hidden border border-slate-200">
-                                        <iframe
-                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.documentUrl)}&embedded=true`}
-                                            className="w-full h-[60vh]"
-                                            title={previewLesson.title}
-                                        />
-                                    </div>
-                                    <a
-                                        href={previewLesson.documentUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition text-sm"
-                                    >
-                                        <ExternalLink className="w-4 h-4" />
-                                        Download PDF
-                                    </a>
-                                </div>
-                            )}
-
-                            {/* Non-PDF Document (docx, etc.) via Google Docs Viewer */}
-                            {previewLesson.documentUrl && !previewLesson.documentUrl.match(/\.pdf/i) && (
-                                <div className="space-y-3">
-                                    <div className="rounded-xl overflow-hidden border border-slate-200">
-                                        <iframe
-                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.documentUrl)}&embedded=true`}
-                                            className="w-full h-[60vh]"
-                                            title={previewLesson.title}
-                                        />
-                                    </div>
-                                    <a
-                                        href={previewLesson.documentUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition text-sm"
-                                    >
-                                        <ExternalLink className="w-4 h-4" />
-                                        Download Document
-                                    </a>
-                                </div>
-                            )}
-
-                            {/* Excel Preview via Google Docs Viewer */}
-                            {previewLesson.excelUrl && (
-                                <div className="space-y-3">
-                                    <div className="rounded-xl overflow-hidden border border-slate-200">
-                                        <iframe
-                                            src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.excelUrl)}&embedded=true`}
-                                            className="w-full h-[60vh]"
-                                            title={previewLesson.title}
-                                        />
-                                    </div>
-                                    <a
-                                        href={previewLesson.excelUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition text-sm"
-                                    >
-                                        <ExternalLink className="w-4 h-4" />
-                                        Download Spreadsheet
-                                    </a>
-                                </div>
-                            )}
-
-                            <div className="flex justify-end pt-2">
+                                )}
                                 <button
                                     onClick={() => setPreviewLesson(null)}
-                                    className="px-5 py-2 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition"
+                                    className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition"
                                 >
-                                    Close Preview
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
                         </div>
-                    </Modal>
+
+                        {/* Content */}
+                        <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+                            {/* Video */}
+                            {previewLesson.videoUrl && (
+                                <video
+                                    src={previewLesson.videoUrl}
+                                    controls
+                                    autoPlay={false}
+                                    className="max-w-full max-h-full rounded-xl"
+                                    style={{ maxHeight: 'calc(100vh - 100px)' }}
+                                >
+                                    Your browser does not support video playback.
+                                </video>
+                            )}
+
+                            {/* PDF — direct embed */}
+                            {previewLesson.documentUrl && previewLesson.documentUrl.match(/\.pdf/i) && (
+                                <iframe
+                                    src={previewLesson.documentUrl}
+                                    className="w-full max-w-5xl rounded-xl bg-white"
+                                    style={{ height: 'calc(100vh - 100px)' }}
+                                    title={previewLesson.title}
+                                />
+                            )}
+
+                            {/* DOCX — Google Docs Viewer */}
+                            {previewLesson.documentUrl && !previewLesson.documentUrl.match(/\.pdf/i) && (
+                                <iframe
+                                    src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.documentUrl)}&embedded=true`}
+                                    className="w-full max-w-5xl rounded-xl bg-white"
+                                    style={{ height: 'calc(100vh - 100px)' }}
+                                    title={previewLesson.title}
+                                />
+                            )}
+
+                            {/* Excel — Google Docs Viewer */}
+                            {previewLesson.excelUrl && (
+                                <iframe
+                                    src={`https://docs.google.com/gview?url=${encodeURIComponent(previewLesson.excelUrl)}&embedded=true`}
+                                    className="w-full max-w-5xl rounded-xl bg-white"
+                                    style={{ height: 'calc(100vh - 100px)' }}
+                                    title={previewLesson.title}
+                                />
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
