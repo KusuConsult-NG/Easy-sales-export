@@ -280,17 +280,25 @@ export default function CourseManagerPage() {
     };
 
     const saveModules = async (updatedModules: CourseModuleWithState[], silent = false) => {
-        // Remove UI state before saving
-        const modulesToSave = updatedModules.map(({ isExpanded, lessons, ...m }) => ({
-            ...m,
-            lessons: lessons.map(({ type, ...l }) => l)
-        }));
+        try {
+            // Remove UI state before saving and strip undefined values for Next.js Server Actions
+            const modulesToSave = updatedModules.map(({ isExpanded, lessons, ...m }) => ({
+                ...m,
+                lessons: lessons.map(({ type, ...l }) => l)
+            }));
 
-        const result = await updateCourseModulesAction(courseId, modulesToSave);
-        if (result.success) {
-            if (!silent) toast.success("Changes saved");
-        } else {
-            toast.error("Failed to save changes");
+            // Next.js Server Actions throw serialization errors if objects contain 'undefined'
+            const cleanModules = JSON.parse(JSON.stringify(modulesToSave));
+
+            const result = await updateCourseModulesAction(courseId, cleanModules);
+            if (result.success) {
+                if (!silent) toast.success("Changes saved");
+            } else {
+                toast.error(result.error || "Failed to save changes");
+            }
+        } catch (error: any) {
+            console.error("Failed to save modules:", error);
+            toast.error("An error occurred while saving modules");
         }
     };
 
