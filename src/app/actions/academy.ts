@@ -1167,6 +1167,8 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
             return { success: false, error: "Unauthorized" };
         }
 
+        logger.info(`[updateCourseModulesAction] Saving ${modules?.length} modules for course ${courseId}`);
+
         await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update({
             modules,
             updatedAt: FieldValue.serverTimestamp(),
