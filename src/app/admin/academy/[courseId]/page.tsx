@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Trash2, Plus, GripVertical, FileText, PlayCircle, HelpCircle, Upload, Save, Edit2, Loader2, ArrowLeft, Settings, UploadCloud, FileSpreadsheet } from "lucide-react";
+import { Trash2, Plus, GripVertical, FileText, PlayCircle, HelpCircle, Upload, Save, Edit2, Loader2, ArrowLeft, Settings, UploadCloud, FileSpreadsheet, Eye, X, ExternalLink } from "lucide-react";
 import { getCourseByIdAction, updateCourseAction, updateCourseModulesAction, type Course, type CourseModule, type Lesson, type Quiz } from "@/app/actions/academy";
 import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
@@ -35,6 +35,7 @@ export default function CourseManagerPage() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isCourseSettingsOpen, setIsCourseSettingsOpen] = useState(false);
     const [isAddModuleOpen, setIsAddModuleOpen] = useState(false);
+    const [previewLesson, setPreviewLesson] = useState<LessonWithState | null>(null);
     const [newModuleForm, setNewModuleForm] = useState<{
         title: string;
         description: string;
@@ -317,6 +318,18 @@ export default function CourseManagerPage() {
         }
     };
 
+    const detectLessonType = (lesson: LessonWithState): string => {
+        if (lesson.videoUrl) return 'video';
+        if (lesson.excelUrl) return 'excel';
+        if (lesson.documentUrl) return 'text';
+        if (lesson.type) return lesson.type;
+        return 'text';
+    };
+
+    const getLessonPreviewUrl = (lesson: LessonWithState): string | null => {
+        return lesson.videoUrl || lesson.documentUrl || lesson.excelUrl || null;
+    };
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -398,19 +411,26 @@ export default function CourseManagerPage() {
                                 <div className="p-2 space-y-2">
                                     {module.lessons.map((lesson, lIndex) => (
                                         <div key={lesson.id} className="flex items-center justify-between p-3 hover:bg-slate-50 transition rounded-lg group">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-slate-100 rounded-lg">
-                                                    {getIcon("video")}
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="p-2 bg-slate-100 rounded-lg shrink-0">
+                                                    {getIcon(detectLessonType(lesson))}
                                                 </div>
-                                                <div>
-                                                    <p className="font-medium text-slate-900 text-sm">{lesson.title}</p>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-slate-900 text-sm truncate">{lesson.title}</p>
                                                     <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                        <span className="capitalize">{detectLessonType(lesson)}</span>
+                                                        <span>·</span>
                                                         <span>{lesson.duration}</span>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="hidden group-hover:flex items-center gap-2">
+                                            <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                                                {getLessonPreviewUrl(lesson) && (
+                                                    <button onClick={() => setPreviewLesson(lesson)} className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-lg transition" title="Preview">
+                                                        <Eye className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 <button onClick={() => handleEditLesson(module.id, lesson)} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition" title="Edit Content">
                                                     <Edit2 className="w-4 h-4" />
                                                 </button>
@@ -847,6 +867,86 @@ export default function CourseManagerPage() {
                         </div>
                     </div>
                 </Modal>
+
+                {/* Content Preview Modal */}
+                {previewLesson && (
+                    <Modal
+                        isOpen={!!previewLesson}
+                        onClose={() => setPreviewLesson(null)}
+                        title={`Preview: ${previewLesson.title}`}
+                        maxWidth="xl"
+                    >
+                        <div className="space-y-4">
+                            {/* Video Preview */}
+                            {previewLesson.videoUrl && (
+                                <div className="rounded-xl overflow-hidden bg-black">
+                                    <video
+                                        src={previewLesson.videoUrl}
+                                        controls
+                                        className="w-full max-h-[60vh]"
+                                        autoPlay={false}
+                                    >
+                                        Your browser does not support video playback.
+                                    </video>
+                                </div>
+                            )}
+
+                            {/* PDF Preview */}
+                            {previewLesson.documentUrl && previewLesson.documentUrl.match(/\.pdf/i) && (
+                                <div className="rounded-xl overflow-hidden border border-slate-200">
+                                    <iframe
+                                        src={previewLesson.documentUrl}
+                                        className="w-full h-[60vh]"
+                                        title={previewLesson.title}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Non-PDF Document (docx, etc.) — open externally */}
+                            {previewLesson.documentUrl && !previewLesson.documentUrl.match(/\.pdf/i) && (
+                                <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
+                                    <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                                    <p className="text-slate-600 mb-4">This document type cannot be previewed inline.</p>
+                                    <a
+                                        href={previewLesson.documentUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Download & Open
+                                    </a>
+                                </div>
+                            )}
+
+                            {/* Excel Preview — download link */}
+                            {previewLesson.excelUrl && (
+                                <div className="text-center py-12 bg-slate-50 rounded-xl border border-slate-200">
+                                    <FileSpreadsheet className="w-16 h-16 text-green-300 mx-auto mb-4" />
+                                    <p className="text-slate-600 mb-4">Spreadsheet files cannot be previewed inline.</p>
+                                    <a
+                                        href={previewLesson.excelUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+                                    >
+                                        <ExternalLink className="w-4 h-4" />
+                                        Download Spreadsheet
+                                    </a>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={() => setPreviewLesson(null)}
+                                    className="px-5 py-2 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition"
+                                >
+                                    Close Preview
+                                </button>
+                            </div>
+                        </div>
+                    </Modal>
+                )}
             </div>
         </div>
     );
