@@ -310,6 +310,10 @@ export async function getAcademyStatsAction(): Promise<{
     data?: {
         stats: {
             totalApplications: number;
+            pending: number;
+            under_review: number;
+            approved: number;
+            rejected: number;
         }
     };
     error?: string;
@@ -322,10 +326,34 @@ export async function getAcademyStatsAction(): Promise<{
             return { error: "Unauthorized: Permission required", success: false };
         }
 
-        const countSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).count().get();
-        const totalApplications = countSnap.data().count;
+        const baseQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+        
+        const [
+            totalSnap,
+            pendingSnap,
+            underReviewSnap,
+            approvedSnap,
+            rejectedSnap
+        ] = await Promise.all([
+            baseQuery.count().get(),
+            baseQuery.where("status", "==", "pending").count().get(),
+            baseQuery.where("status", "==", "under_review").count().get(),
+            baseQuery.where("status", "==", "approved").count().get(),
+            baseQuery.where("status", "==", "rejected").count().get()
+        ]);
 
-        return { success: true, data: { stats: { totalApplications } } };
+        return { 
+            success: true, 
+            data: { 
+                stats: { 
+                    totalApplications: totalSnap.data().count,
+                    pending: pendingSnap.data().count,
+                    under_review: underReviewSnap.data().count,
+                    approved: approvedSnap.data().count,
+                    rejected: rejectedSnap.data().count,
+                } 
+            } 
+        };
     } catch (error: any) {
         logger.error("Get academy stats error:", error);
         return { success: false, error: "Failed to fetch academy stats" };

@@ -92,13 +92,19 @@ export default function AdminSellersPage() {
     // Note: useAdminData already applies local search text filters
     const filteredVerifications = verifications;
 
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportConfig, setExportConfig] = useState({
+        status: "all",
+        limit: 5000,
+    });
     const [isExporting, setIsExporting] = useState(false);
 
-    async function handleExportCSV() {
+    async function handleExportCSV(config: typeof exportConfig) {
+        setIsExportModalOpen(false);
         setIsExporting(true);
         showToast("Preparing export...", "info");
         try {
-            const result = await getStandardSellerVerificationsAction(filterStatus, undefined, 5000);
+            const result = await getStandardSellerVerificationsAction(config.status as FilterType, undefined, config.limit);
             if (!result || !result.success || !result.data || result.data.length === 0) {
                 showToast("No data available to export", "error");
                 return;
@@ -286,7 +292,13 @@ export default function AdminSellersPage() {
                     <span className="text-xs text-slate-500">Live</span>
                 </div>
                 <button
-                    onClick={handleExportCSV}
+                    onClick={() => {
+                        setExportConfig({
+                            status: filters.status || "all",
+                            limit: 5000
+                        });
+                        setIsExportModalOpen(true);
+                    }}
                     disabled={isExporting}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                 >
@@ -631,6 +643,68 @@ export default function AdminSellersPage() {
                             <button onClick={handleSaveEdit} disabled={editSaving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2">
                                 {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                 Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isExportModalOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">
+                                <Download className="w-5 h-5 text-blue-600" /> Export Sellers
+                            </h3>
+                            <button onClick={() => setIsExportModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Status Filter</label>
+                                <select
+                                    value={exportConfig.status}
+                                    onChange={(e) => setExportConfig(c => ({ ...c, status: e.target.value as any }))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Export Limit</label>
+                                <select
+                                    value={exportConfig.limit}
+                                    onChange={(e) => setExportConfig(c => ({ ...c, limit: Number(e.target.value) }))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                                >
+                                    <option value={5000}>All Available (Up to 5,000)</option>
+                                    <option value={1000}>Latest 1,000</option>
+                                    <option value={500}>Latest 500</option>
+                                    <option value={100}>Latest 100</option>
+                                </select>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    The active search term "{searchQuery || 'none'}" will also be applied to this export.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsExportModalOpen(false)}
+                                className="px-4 py-2 font-medium text-slate-600 hover:text-slate-800 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleExportCSV(exportConfig)}
+                                disabled={isExporting}
+                                className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2 disabled:opacity-50"
+                            >
+                                {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                Export CSV
                             </button>
                         </div>
                     </div>

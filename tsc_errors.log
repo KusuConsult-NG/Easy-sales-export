@@ -1,0 +1,11 @@
+src/app/actions/academy-admin.ts(490,9): error TS2322: Type '{ success: true; data: { message: string; }; }' is not assignable to type 'ActionState'.
+  Property 'error' is missing in type '{ success: true; data: { message: string; }; }' but required in type '{ error: null; success: true; data: { message: string; }; meta?: null | undefined; }'.
+src/app/admin/cooperatives/loans/page.tsx(181,19): error TS2339: Property 'userName' does not exist on type 'LoanApplication'.
+src/app/admin/cooperatives/loans/page.tsx(182,19): error TS2339: Property 'productName' does not exist on type 'LoanApplication'.
+src/app/admin/cooperatives/loans/page.tsx(185,26): error TS2769: No overload matches this call.
+  Overload 1 of 4, '(value: string | number | Date): Date', gave the following error.
+    Argument of type 'FieldValue | Timestamp' is not assignable to parameter of type 'string | number | Date'.
+      Type 'FieldValue' is not assignable to type 'string | number | Date'.
+  Overload 2 of 4, '(value: string | number): Date', gave the following error.
+    Argument of type 'FieldValue | Timestamp' is not assignable to parameter of type 'string | number'.
+      Type 'FieldValue' is not assignable to type 'string | number'.

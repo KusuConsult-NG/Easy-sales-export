@@ -296,7 +296,7 @@ export default function AdminAcademyApplicationsPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
-    const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
+    const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
     const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
@@ -427,8 +427,17 @@ export default function AdminAcademyApplicationsPage() {
         return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
     });
 
-    const counts = { pending: 0, under_review: 0, approved: 0, rejected: 0 };
-    applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
+    const counts = stats ? {
+        pending: stats.pending,
+        under_review: stats.under_review,
+        approved: stats.approved,
+        rejected: stats.rejected
+    } : { pending: 0, under_review: 0, approved: 0, rejected: 0 };
+    
+    // If stats are not yet loaded, fallback to computing from the fetched data
+    if (!stats) {
+        applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
+    }
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportConfig, setExportConfig] = useState({
