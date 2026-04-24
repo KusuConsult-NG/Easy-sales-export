@@ -6,6 +6,7 @@
  */
 
 import { redis } from './redis';
+import { Ratelimit } from '@upstash/ratelimit';
 
 interface RateLimitConfig {
     interval: number; // Time window in milliseconds
@@ -14,54 +15,26 @@ interface RateLimitConfig {
 
 /**
  * Create a distributed rate limiter with Redis backend
+ * Uses Upstash Ratelimit (sliding window) to prevent check-then-act race conditions
  */
 export function rateLimit(config: RateLimitConfig) {
+    const limiter = new Ratelimit({
+        redis: redis,
+        limiter: Ratelimit.slidingWindow(config.maxRequests, `${config.interval} ms`),
+        prefix: "@upstash/ratelimit_custom",
+        analytics: false,
+    });
+
     return {
         check: async (identifier: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }> => {
             const now = Date.now();
-            const key = `ratelimit:${identifier}`;
-
             try {
-                // Get current rate limit data from Redis
-                const data = await redis.get<{ count: number; resetTime: number }>(key);
-
-                // Initialize or reset if window expired
-                if (!data || now > data.resetTime) {
-                    const resetTime = now + config.interval;
-
-                    await redis.set(key, { count: 1, resetTime }, {
-                        px: config.interval, // Set expiry in milliseconds
-                    });
-
-                    return {
-                        success: true,
-                        limit: config.maxRequests,
-                        remaining: config.maxRequests - 1,
-                        reset: resetTime,
-                    };
-                }
-
-                // Check if limit exceeded
-                if (data.count >= config.maxRequests) {
-                    return {
-                        success: false,
-                        limit: config.maxRequests,
-                        remaining: 0,
-                        reset: data.resetTime,
-                    };
-                }
-
-                // Increment count atomically
-                const newCount = data.count + 1;
-                await redis.set(key, { count: newCount, resetTime: data.resetTime }, {
-                    px: data.resetTime - now, // Preserve original expiry
-                });
-
+                const { success, limit, remaining, reset } = await limiter.limit(identifier);
                 return {
-                    success: true,
-                    limit: config.maxRequests,
-                    remaining: config.maxRequests - newCount,
-                    reset: data.resetTime,
+                    success,
+                    limit,
+                    remaining,
+                    reset,
                 };
             } catch (error) {
                 // Redis error - fail open (allow request) but log

@@ -9,6 +9,7 @@ import { getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
 import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
+import { formatDate } from "@/lib/utils";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -204,15 +205,6 @@ export default function AdminWaveApplicationsPage() {
         }
     };
 
-    const formatDate = (date: Date) => {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit"
-        }).format(new Date(date));
-    };
 
     const getStatusColor = (status: ApplicationStatus) => {
         switch (status) {

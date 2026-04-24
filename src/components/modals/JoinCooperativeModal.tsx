@@ -27,13 +27,13 @@ async function joinCooperativeWrapper(
 ): Promise<JoinCooperativeState> {
     "use server";
 
-    const { auth } = await import("@/lib/auth");
+    const { requireSession } = await import("@/lib/session-guard");
     const { db } = await import("@/lib/firebase");
     const { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } = await import("firebase/firestore");
     const { COLLECTIONS } = await import("@/lib/types/firestore");
 
     try {
-        const session = await auth();
+        const { session } = await requireSession();
         if (!session?.user) {
             return { error: "You must be logged in to join a cooperative", success: false };
         }

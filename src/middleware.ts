@@ -218,6 +218,10 @@ export default async function middleware(req: any, event: any) {
         });
         return nextRes;
     }
+    // Return 401 JSON for unauthorized API requests instead of HTML redirect
+    if (req.nextUrl.pathname.startsWith('/api/') && res && res.status >= 300 && res.status <= 399) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     
     return res;
 }

@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -18,7 +18,7 @@ import { logger } from "@/lib/logger";
  */
 export async function GET(request: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json(
                 { success: false, data: null, error: "Unauthorized", meta: { cursor: null, hasMore: false } },
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(req: Request) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
         if (!isAdmin) {
             return NextResponse.json(

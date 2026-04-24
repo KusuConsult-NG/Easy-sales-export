@@ -8,18 +8,19 @@ import { cookies } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkModuleAccess } from "@/lib/module-access-check";
-import { auth } from "@/lib/auth"; // Use NextAuth session
-// import WaveSidebar from "./WaveSidebar"; // Removed in favor of global Sidebar
+import { requireHubRegistration } from "@/lib/hub-guard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function WaveLayoutContent({ children }: { children: React.ReactNode }) {
-    // Get NextAuth session
-    const session = await auth();
+    // 1. Authenticate and ensure fully registered
+    const sessionResult = await requireHubRegistration();
 
-    // Check if user is authenticated
-    if (!session?.user?.id) {
+    // 2. Ensure session is valid
+    if (!sessionResult.session) {
         redirect("/auth/login?module=wave");
     }
+
+    const { session } = sessionResult;
 
     // Verify session and check access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
     try {

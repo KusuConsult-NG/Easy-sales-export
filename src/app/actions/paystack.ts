@@ -1,6 +1,7 @@
 'use server';
 
 import { logger } from '@/lib/logger';
+import { requireSession } from '@/lib/session-guard';
 
 /**
  * Paystack Integration Server Actions
@@ -41,6 +42,9 @@ export interface BankVerificationResult {
  */
 export async function getBankList(): Promise<{ success: boolean; banks?: Bank[]; error?: string }> {
     try {
+        const sessionResult = await requireSession();
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
         if (!secretKey) {
@@ -86,6 +90,9 @@ export async function verifyBankAccount(
     bankCode: string
 ): Promise<BankVerificationResult> {
     try {
+        const sessionResult = await requireSession();
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+
         // Validation
         if (!accountNumber || !bankCode) {
             logger.warn('verifyBankAccount: Missing required parameters', { accountNumber: !!accountNumber, bankCode: !!bankCode });

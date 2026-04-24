@@ -19,6 +19,7 @@ import {
     RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { getProductsAction } from "@/app/actions/marketplace-buyer";
 import type { Product, ProductCategory } from "@/lib/types/marketplace";
 
@@ -321,10 +322,12 @@ export default function ProductsPage() {
                                             {/* Product Image */}
                                             <div className="h-44 bg-slate-100 relative overflow-hidden">
                                                 {product.images?.[0] ? (
-                                                    <img
+                                                    <Image
                                                         src={product.images[0]}
                                                         alt={product.title}
-                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        fill
+                                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                                        className="object-cover group-hover:scale-105 transition-transform duration-300"
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">

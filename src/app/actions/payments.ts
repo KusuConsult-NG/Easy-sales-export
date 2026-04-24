@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log-admin";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Payment Tracking & Verification System
@@ -44,6 +45,9 @@ export async function createPaymentRecordAction(data: {
     metadata?: Record<string, any>;
 }): Promise<{ success: boolean; error?: string; paymentId?: string }> {
     try {
+        const sessionResult = await requireSession();
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+
         const payment: Omit<PaymentRecord, "id"> = {
             ...data,
             status: "pending",
@@ -213,6 +217,9 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
  */
 export async function getUserPaymentHistoryAction(userId: string): Promise<PaymentRecord[]> {
     try {
+        const sessionResult = await requireSession();
+        if (sessionResult.error) return [];
+
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("userId", "==", userId)
             .get();

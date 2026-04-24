@@ -639,6 +639,11 @@ export async function submitExportOnboardingAction(
 
         await batch.commit();
 
+        // FAST STATS UPDATER (Non-blocking fallback safe)
+        db.collection("system_metadata").doc("export_stats")
+            .set({ pending: FieldValue.increment(1) }, { merge: true })
+            .catch(() => {});
+
         return {
             error: null,
             success: true,
@@ -1345,7 +1350,19 @@ export async function resubmitExportApplicationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        const oldData = snap.docs[0].data();
+        const oldStatus = oldData.status;
+
         await batch.commit();
+
+        // FAST STATS UPDATER (Non-blocking fallback safe)
+        const updates: any = { pending: FieldValue.increment(1), resubmitted: FieldValue.increment(1) };
+        if (oldStatus === 'rejected') updates.rejected = FieldValue.increment(-1);
+        if (oldStatus === 'approved') updates.approved = FieldValue.increment(-1);
+
+        db.collection("system_metadata").doc("export_stats")
+            .set(updates, { merge: true })
+            .catch(() => {});
 
         return { success: true, data: null, meta: null };
     } catch (error) {

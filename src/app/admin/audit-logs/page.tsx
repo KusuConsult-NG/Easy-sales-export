@@ -114,8 +114,13 @@ export default function AdminAuditLogsPage() {
 
     function formatDate(timestamp: any): string {
         if (!timestamp) return "Unknown";
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleString();
+        try {
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            if (isNaN(date.getTime())) return "Unknown";
+            return date.toLocaleString();
+        } catch (e) {
+            return "Unknown";
+        }
     }
 
     function formatAction(action: string | undefined): string {

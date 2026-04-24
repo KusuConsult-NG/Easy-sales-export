@@ -8,6 +8,7 @@ import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
 import { MapPin, ArrowUpRight, Trash2, Loader2 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function FarmNationListingsPage() {
     const { showToast } = useToast();
@@ -52,7 +53,7 @@ export default function FarmNationListingsPage() {
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden shrink-0 relative">
                         {item.images?.[0] ? (
-                            <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover" />
+                            <Image src={item.images[0]} alt={item.title} fill sizes="48px" className="object-cover" />
                         ) : (
                             <div className="w-full h-full flex items-center justify-center text-slate-400">
                                 <MapPin className="w-5 h-5" />

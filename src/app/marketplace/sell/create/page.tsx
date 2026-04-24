@@ -18,6 +18,7 @@ import {
     Loader2
 } from "lucide-react";
 import { createProductAction } from "@/app/actions/marketplace";
+import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
 
 const initialState = { success: false };
@@ -201,11 +202,16 @@ export default function CreateProductPage() {
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                             {images.map((img, idx) => (
                                 <div key={idx} className="relative group">
-                                    <img
-                                        src={img}
-                                        alt={`Product ${idx + 1}`}
-                                        className="w-full h-32 object-cover rounded-xl"
-                                    />
+                                    <div className="relative w-full h-32 rounded-xl overflow-hidden">
+                                        <Image
+                                            src={img}
+                                            alt={`Product ${idx + 1}`}
+                                            fill
+                                            sizes="200px"
+                                            className="object-cover"
+                                            unoptimized
+                                        />
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={() => removeImage(idx)}

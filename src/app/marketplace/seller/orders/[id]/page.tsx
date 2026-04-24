@@ -15,7 +15,7 @@ import {
 import { getOrderByIdForSellerAction } from "@/app/actions/order-management";
 import { updateOrderStatusAction } from "@/app/actions/order-management";
 import { useToast } from "@/contexts/ToastContext";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
 
 export default function SellerOrderDetailPage() {
@@ -80,16 +80,6 @@ export default function SellerOrderDetailPage() {
         return configs[status] ?? configs.processing;
     };
 
-    const formatDate = (date: any) => {
-        if (!date) return "—";
-        const ts = date?.seconds
-            ? date.seconds * 1000
-            : date instanceof Date ? date.getTime() : Date.parse(date);
-        return new Date(ts).toLocaleDateString("en-NG", {
-            day: "numeric", month: "long", year: "numeric",
-            hour: "2-digit", minute: "2-digit",
-        });
-    };
 
     if (loading) {
         return (
@@ -292,12 +282,12 @@ export default function SellerOrderDetailPage() {
                     <div className="space-y-3 text-sm">
                         <div className="flex justify-between">
                             <span className="text-slate-500">Order Placed</span>
-                            <span className="font-medium text-slate-900">{formatDate(order.createdAt)}</span>
+                            <span className="font-medium text-slate-900">{formatDateTime(order.createdAt)}</span>
                         </div>
                         {order.updatedAt && (
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Last Updated</span>
-                                <span className="font-medium text-slate-900">{formatDate(order.updatedAt)}</span>
+                                <span className="font-medium text-slate-900">{formatDateTime(order.updatedAt)}</span>
                             </div>
                         )}
                         {order.trackingNumber && (
@@ -309,7 +299,7 @@ export default function SellerOrderDetailPage() {
                         {order.estimatedDeliveryDate && (
                             <div className="flex justify-between">
                                 <span className="text-slate-500">Est. Delivery</span>
-                                <span className="font-medium text-slate-900">{formatDate(order.estimatedDeliveryDate)}</span>
+                                <span className="font-medium text-slate-900">{formatDateTime(order.estimatedDeliveryDate)}</span>
                             </div>
                         )}
                     </div>

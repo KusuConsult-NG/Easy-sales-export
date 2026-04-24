@@ -12,7 +12,17 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getContributionReportsAction } from "@/app/actions/cooperative-admin";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import dynamic from "next/dynamic";
+
+const ContributionTrendChart = dynamic(() => import("@/components/admin/ContributionTrendChart"), {
+    ssr: false,
+    loading: () => (
+        <div className="flex items-center justify-center p-12 text-gray-400">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="ml-2">Loading chart...</span>
+        </div>
+    )
+});
 
 export default function AdminContributionsPage() {
     const [loading, setLoading] = useState(true);
@@ -113,27 +123,7 @@ export default function AdminContributionsPage() {
                     <h2 className="text-xl font-bold text-gray-900 mb-6">
                         6-Month Contribution Trend
                     </h2>
-                    {reports?.monthlyTrend && reports.monthlyTrend.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={reports.monthlyTrend}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                <XAxis dataKey="month" stroke="#9CA3AF" />
-                                <YAxis stroke="#9CA3AF" />
-                                <Tooltip
-                                    contentStyle={{
-                                        backgroundColor: "#1F2937",
-                                        border: "none",
-                                        borderRadius: "0.5rem",
-                                        color: "#fff",
-                                    }}
-                                    formatter={(value: any) => formatCurrency(value)}
-                                />
-                                <Bar dataKey="amount" fill="#10B981" radius={[8, 8, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <p className="text-center text-gray-500 py-8">No trend data available</p>
-                    )}
+                    <ContributionTrendChart monthlyTrend={reports?.monthlyTrend} />
                 </div>
 
                 {/* Top Contributors */}

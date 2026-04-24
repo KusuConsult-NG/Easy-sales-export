@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { getCached, setCache } from "@/lib/redis";
 
 // ============================================================================
 // RESOURCES MANAGEMENT
@@ -510,12 +511,31 @@ export async function getStandardWaveApplicationsAction(options: {
         
         q = q.limit(fetchLimit);
 
-        const [snapshot, countSnap] = await Promise.all([
-            q.get(),
-            countQ.count().get()
-        ]);
+        // Redis Caching for Count Query
+        const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
+        let totalCount = 0;
+        
+        try {
+            const cachedCount = await getCached<number>(cacheKey);
+            if (cachedCount !== null) {
+                totalCount = cachedCount;
+            }
+        } catch (e) {
+            // cache bypass
+        }
+
+        const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
-        const totalCount = countSnap.data().count;
+        
+        if (totalCount === 0) {
+            const countSnap = await countQ.count().get();
+            totalCount = countSnap.data().count;
+            try {
+                await setCache(cacheKey, totalCount, 120);
+            } catch (e) {
+                // silent fail
+            }
+        }
 
         // Fetch all connected users
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];

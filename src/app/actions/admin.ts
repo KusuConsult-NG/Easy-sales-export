@@ -1,5 +1,7 @@
 "use server";
 
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+
 import { ZodError } from "zod";
 
 import { db, adminAuth } from "@/lib/firebase-admin";
@@ -10,7 +12,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import {
     WaveApplicationReviewSchema,
@@ -40,7 +42,7 @@ type ActionState =
 // Approve/Reject WAVE Application
 // ============================================
 
-export async function approveWaveApplicationAction(
+async function _approveWaveApplicationAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
@@ -175,7 +177,7 @@ export async function approveWaveApplicationAction(
     }
 }
 
-export async function rejectWaveApplicationAction(
+async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
 ): Promise<ActionState> {
@@ -287,7 +289,7 @@ export async function rejectWaveApplicationAction(
 // Process Withdrawal Request
 // ============================================
 
-export async function processWithdrawalAction(
+async function _processWithdrawalAction(
     withdrawalId: string,
     action: "approve" | "reject",
     reasoning?: string
@@ -415,7 +417,7 @@ export async function processWithdrawalAction(
 // User Verification Toggle
 // ============================================
 
-export async function toggleUserVerificationAction(
+async function _toggleUserVerificationAction(
     userId: string
 ): Promise<ActionState> {
     try {
@@ -481,7 +483,7 @@ export async function toggleUserVerificationAction(
 // User KYC Verification Toggle
 // ============================================
 
-export async function toggleUserKycVerificationAction(
+async function _toggleUserKycVerificationAction(
     userId: string,
     field: 'bvn' | 'nin' | 'tin' | 'cac',
     currentStatus: boolean
@@ -576,7 +578,7 @@ export async function toggleUserKycVerificationAction(
 // Get WAVE Applications (Admin)
 // ============================================
 
-export async function getWaveApplicationsAction(
+async function _getWaveApplicationsAction(
     statusFilter?: "pending" | "approved" | "rejected",
     limit = 50,
     lastCreatedAt?: Date | string
@@ -630,7 +632,7 @@ export async function getWaveApplicationsAction(
 // Get Pending Withdrawals (Admin)
 // ============================================
 
-export async function getPendingWithdrawalsAction(
+async function _getPendingWithdrawalsAction(
     limit = 50,
     lastCreatedAt?: Date | string,
     statusFilter: "pending" | "completed" | "rejected" | "approved_pending_payout" | "all" = "pending"
@@ -690,7 +692,7 @@ export async function getPendingWithdrawalsAction(
 // Land Verification (Admin)
 // ============================================
 
-export async function getPendingLandListings(limit = 50): Promise<{
+async function _getPendingLandListings(limit = 50): Promise<{
     error: string | null;
     success: boolean;
     listings?: any[];
@@ -723,7 +725,7 @@ export async function getPendingLandListings(limit = 50): Promise<{
     }
 }
 
-export async function verifyLandListing(
+async function _verifyLandListing(
     listingId: string,
     decision: "approved" | "rejected",
     reason: string
@@ -848,7 +850,7 @@ export async function verifyLandListing(
 // Loan Application Management (Admin)
 // ============================================
 
-export async function getPendingLoanApplications(): Promise<{
+async function _getPendingLoanApplications(): Promise<{
     error: string | null;
     success: boolean;
     applications?: any[];
@@ -883,7 +885,7 @@ export async function getPendingLoanApplications(): Promise<{
 // Export Window Management (Admin)
 // ============================================
 
-export async function getAllExportRequestsAction(
+async function _getAllExportRequestsAction(
     statusFilter?: "pending" | "in_transit" | "delivered" | "completed" | "all",
     limit = 50,
     lastDocId?: string
@@ -975,7 +977,7 @@ export async function getAllExportRequestsAction(
     }
 }
 
-export async function approveLoanApplication(
+async function _approveLoanApplication(
     applicationId: string
 ): Promise<ActionState> {
     try {
@@ -1215,7 +1217,7 @@ export async function approveLoanApplication(
     }
 }
 
-export async function rejectLoanApplication(
+async function _rejectLoanApplication(
     applicationId: string,
     reason: string
 ): Promise<ActionState> {
@@ -1335,7 +1337,7 @@ export async function rejectLoanApplication(
  * Unlock a rate-limited user account
  * Allows admins to manually reset login attempt counters
  */
-export async function unlockUserAccount(email: string): Promise<ActionState> {
+async function _unlockUserAccount(email: string): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1391,7 +1393,7 @@ interface GetUsersOptions {
     toDate?: string;    // ISO date string – createdAt <= toDate
 }
 
-export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
+async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
     error: string | null;
     success: boolean;
     users?: any[];
@@ -1606,7 +1608,7 @@ export async function getUsersAction(options: GetUsersOptions = {}): Promise<{
 
 
 // Update User Roles Action
-export async function updateUserRolesAction(
+async function _updateUserRolesAction(
     userId: string,
     roles: string[]
 ): Promise<ActionState> {
@@ -1675,7 +1677,7 @@ export async function updateUserRolesAction(
 // Seller Verification (Marketplace)
 // ============================================
 
-export async function approveSellerVerificationAction(
+async function _approveSellerVerificationAction(
     verificationId: string
 ): Promise<ActionState> {
     try {
@@ -1807,7 +1809,23 @@ export async function approveSellerVerificationAction(
 // Export Onboarding Approval
 // ============================================
 
-export async function approveExportOnboardingAction(
+async function updateExportStatsAtomic(decrementStatus?: 'pending' | 'approved' | 'rejected' | 'resubmitted' | null, incrementStatus?: 'pending' | 'approved' | 'rejected' | 'resubmitted' | null) {
+    try {
+        const statsRef = db.collection("system_metadata").doc("export_stats");
+        const updates: any = {};
+        if (decrementStatus) updates[decrementStatus] = FieldValue.increment(-1);
+        if (incrementStatus) updates[incrementStatus] = FieldValue.increment(1);
+        
+        if (Object.keys(updates).length > 0) {
+            // Fire and forget without blocking
+            statsRef.set(updates, { merge: true }).catch(e => logger.error("Background stat update failed", e));
+        }
+    } catch (e) {
+        logger.error("Failed to prepare export stats atomically", e);
+    }
+}
+
+async function _approveExportOnboardingAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
@@ -1906,7 +1924,10 @@ export async function approveExportOnboardingAction(
             userId: userId,
         });
 
-            return {
+        // FAST STATS UPDATER (Non-blocking fallback safe)
+        updateExportStatsAtomic('pending', 'approved');
+
+        return {
             error: null,
             success: true,
             message: "Export application approved successfully",
@@ -1921,7 +1942,7 @@ export async function approveExportOnboardingAction(
  * Request revision / correction from an export applicant.
  * Sets status to "revision_required" and stores the admin's note.
  */
-export async function requestExportApplicationRevisionAction(
+async function _requestExportApplicationRevisionAction(
     applicationId: string,
     revisionNote: string
 ): Promise<ActionState> {
@@ -2013,13 +2034,89 @@ export async function requestExportApplicationRevisionAction(
         }
 
         logger.info(`[Export Revision] Application ${applicationId} marked revision_required by admin ${session.user.id}`);
+        
+        // FAST STATS UPDATER (Non-blocking fallback safe)
+        updateExportStatsAtomic('pending', null);
+        
         return { error: null, success: true, message: "Revision note sent to applicant" };
     } catch (error: any) {
         logger.error("Request export revision error:", error);
         return { error: "Failed to send revision request", success: false };
     }
 }
-export async function getStandardExportApplicationsAction(options: {
+
+async function _getExportApplicationsStatsAction(): Promise<{
+    success: boolean;
+    data?: {
+        pending: number;
+        approved: number;
+        rejected: number;
+        resubmitted: number;
+    };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = "admin:export-stats:global";
+
+        try {
+            const cached = await getCached<any>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {
+            // quiet fail on cache read
+        }
+
+        // ALWAYS use dynamic count to ensure 100% accuracy and avoid stale metadata sync issues.
+        // If the document doesn't exist yet, compute dynamically.
+        const [
+            pendingReviewCountSnap,
+            pendingCountSnap,
+            approvedCountSnap,
+            rejectedCountSnap
+        ] = await Promise.all([
+            db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending_review").count().get(),
+            db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "approved").count().get(),
+            db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "rejected").count().get()
+        ]);
+
+        const resubmittedSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+            .where("resubmittedAt", "!=", null)
+            .count()
+            .get()
+            .catch(() => ({ data: () => ({ count: 0 }) })); 
+
+        const payload = {
+            success: true,
+            data: {
+                pending: (pendingReviewCountSnap.data().count || 0) + (pendingCountSnap.data().count || 0),
+                approved: approvedCountSnap.data().count || 0,
+                rejected: rejectedCountSnap.data().count || 0,
+                resubmitted: resubmittedSnap.data().count || 0
+            }
+        };
+
+        try {
+            await setCache(cacheKey, payload, 120); // Cache for 2 minutes
+        } catch (e) {}
+
+        return payload;
+    } catch (error) {
+        logger.error("Get export application stats error:", error);
+        return { success: false, error: "Failed to fetch export stats" };
+    }
+}
+async function _getStandardExportApplicationsAction(options: {
     limit?: number;
     search?: string;
     status?: "pending_review" | "approved" | "rejected" | "revision_required" | "pending" | "all";
@@ -2040,13 +2137,14 @@ export async function getStandardExportApplicationsAction(options: {
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
         
         if (options.status && options.status !== "all") {
-            // Cannot use orderBy without a composite index when using 'where'
-            q = q.where("status", "==", options.status)
-                 .limit(fetchLimit);
-        } else {
-            q = q.orderBy("createdAt", "desc")
-                 .limit(fetchLimit);
+            if (options.status === "pending") {
+                q = q.where("status", "in", ["pending", "pending_review"]);
+            } else {
+                q = q.where("status", "==", options.status);
+            }
         }
+        
+        q = q.orderBy("createdAt", "desc").limit(fetchLimit + 1);
 
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(options.lastDocId).get();
@@ -2056,16 +2154,20 @@ export async function getStandardExportApplicationsAction(options: {
         }
 
         const snapshot = await q.get();
-        const applications = serializeDocs(snapshot.docs);
+        let applications = serializeDocs(snapshot.docs);
+        
+        const hasMore = applications.length > fetchLimit;
+        applications = applications.slice(0, fetchLimit);
+        const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
-        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
                 const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
-                userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
+                userSnaps.docs.forEach((d: any) => userMap.set(d.id, serializeValue(d.data())));
             }
         }
 
@@ -2124,16 +2226,14 @@ export async function getStandardExportApplicationsAction(options: {
             );
         }
 
-        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
-
         return { 
             success: true, 
             data: finalForms,
             lastDocId: nextCursor,
-            hasMore: !!nextCursor,
+            hasMore: hasMore,
             meta: {
                 totalFetched: applications.length,
-                hasMore: !!nextCursor
+                hasMore: hasMore
             }
         };
     } catch (error) {
@@ -2142,7 +2242,7 @@ export async function getStandardExportApplicationsAction(options: {
     }
 }
 
-export async function rejectExportApplicationAction(
+async function _rejectExportApplicationAction(
 
     applicationId: string,
     reason: string
@@ -2248,6 +2348,9 @@ export async function rejectExportApplicationAction(
             reason: reason
         });
 
+        // FAST STATS UPDATER (Non-blocking fallback safe)
+        updateExportStatsAtomic('pending', 'rejected');
+
         return {
             error: null,
             success: true,
@@ -2262,7 +2365,7 @@ export async function rejectExportApplicationAction(
 // Academy Application Management (Admin)
 // ============================================
 
-export async function getAcademyApplicationsAction(
+async function _getAcademyApplicationsAction(
     statusFilter?: "pending" | "under_review" | "approved" | "rejected"
 ): Promise<{
     error: string | null;
@@ -2336,7 +2439,7 @@ export async function getAcademyApplicationsAction(
     }
 }
 
-export async function approveAcademyApplicationAction(
+async function _approveAcademyApplicationAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
@@ -2445,7 +2548,7 @@ export async function approveAcademyApplicationAction(
     }
 }
 
-export async function rejectAcademyApplicationAction(
+async function _rejectAcademyApplicationAction(
     applicationId: string,
     reason: string
 ): Promise<ActionState> {
@@ -2500,7 +2603,7 @@ export async function rejectAcademyApplicationAction(
 // Mark Academy Application Under Review
 // ============================================
 
-export async function markAcademyApplicationUnderReviewAction(
+async function _markAcademyApplicationUnderReviewAction(
     applicationId: string
 ): Promise<ActionState> {
     try {
@@ -2537,7 +2640,7 @@ export async function markAcademyApplicationUnderReviewAction(
 // Platform Settings (Admin)
 // ============================================
 
-export async function savePlatformSettingsAction(
+async function _savePlatformSettingsAction(
     settings: {
         platformName: string;
         supportEmail: string;
@@ -2572,7 +2675,7 @@ export async function savePlatformSettingsAction(
     }
 }
 
-export async function getPlatformSettingsAction(): Promise<{
+async function _getPlatformSettingsAction(): Promise<{
     platformName: string;
     supportEmail: string;
     contactPhone: string;
@@ -2646,7 +2749,7 @@ const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
     "title", "location.state", "location.lga",
 ];
 
-export async function editApplicationAction(params: {
+async function _editApplicationAction(params: {
     collection: string;
     docId: string;
     fields: Partial<EditableApplicationFields>;
@@ -2751,7 +2854,7 @@ export async function editApplicationAction(params: {
  * Only approved sellers should receive the badge; the UI can enforce this but
  * the action itself only requires admin permission.
  */
-export async function toggleVerifiedBadgeAction(
+async function _toggleVerifiedBadgeAction(
     verificationId: string
 ): Promise<ActionState> {
     try {
@@ -2841,7 +2944,7 @@ export async function toggleVerifiedBadgeAction(
 // Manual Academy Enrollment (Admin)
 // ============================================
 
-export async function manualAcademyEnrollmentAction(
+async function _manualAcademyEnrollmentAction(
     userId: string,
     plan: "foundation" | "standard" | "elite"
 ): Promise<ActionState> {
@@ -2928,7 +3031,7 @@ const InviteLegacyMemberSchema = z.object({
     firstName: z.string().min(1, "First name is optional but recommended for personalization").optional(),
 });
 
-export async function inviteLegacyMemberAction(
+async function _inviteLegacyMemberAction(
     data: z.infer<typeof InviteLegacyMemberSchema>
 ): Promise<{ error: string | null; success: boolean }> {
     try {
@@ -3054,7 +3157,7 @@ export async function inviteLegacyMemberAction(
     }
 }
 
-export async function getStandardSellerVerificationsAction(
+async function _getStandardSellerVerificationsAction(
     statusFilter?: "pending" | "approved" | "rejected" | "suspended" | "all",
     cursorId?: string,
     limitCount: number = 50
@@ -3099,7 +3202,7 @@ export async function getStandardSellerVerificationsAction(
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
                 const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
-                userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
+                userSnaps.docs.forEach(d => userMap.set(d.id, serializeValue(d.data())));
             }
         }
 
@@ -3132,7 +3235,7 @@ export async function getStandardSellerVerificationsAction(
 }
 
 
-export async function getMarketplaceUsersAction(options: {
+async function _getMarketplaceUsersAction(options: {
     limit?: number;
     search?: string;
     roleFilter?: "all" | "buyer_only" | "seller_only" | "both";
@@ -3230,3 +3333,40 @@ export async function getMarketplaceUsersAction(options: {
         return { success: false, error: "Internal server error" };
     }
 }
+
+
+// --- SAFE ACTION WRAPPERS ---
+export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveApplicationAction", _approveWaveApplicationAction);
+export const rejectWaveApplicationAction = withFlexibleSafeAction("rejectWaveApplicationAction", _rejectWaveApplicationAction);
+export const processWithdrawalAction = withFlexibleSafeAction("processWithdrawalAction", _processWithdrawalAction);
+export const toggleUserVerificationAction = withFlexibleSafeAction("toggleUserVerificationAction", _toggleUserVerificationAction);
+export const toggleUserKycVerificationAction = withFlexibleSafeAction("toggleUserKycVerificationAction", _toggleUserKycVerificationAction);
+export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicationsAction", _getWaveApplicationsAction);
+export const getPendingWithdrawalsAction = withFlexibleSafeAction("getPendingWithdrawalsAction", _getPendingWithdrawalsAction);
+export const getPendingLandListings = withFlexibleSafeAction("getPendingLandListings", _getPendingLandListings);
+export const verifyLandListing = withFlexibleSafeAction("verifyLandListing", _verifyLandListing);
+export const getPendingLoanApplications = withFlexibleSafeAction("getPendingLoanApplications", _getPendingLoanApplications);
+export const getAllExportRequestsAction = withFlexibleSafeAction("getAllExportRequestsAction", _getAllExportRequestsAction);
+export const approveLoanApplication = withFlexibleSafeAction("approveLoanApplication", _approveLoanApplication);
+export const rejectLoanApplication = withFlexibleSafeAction("rejectLoanApplication", _rejectLoanApplication);
+export const unlockUserAccount = withFlexibleSafeAction("unlockUserAccount", _unlockUserAccount);
+export const getUsersAction = withFlexibleSafeAction("getUsersAction", _getUsersAction);
+export const updateUserRolesAction = withFlexibleSafeAction("updateUserRolesAction", _updateUserRolesAction);
+export const approveSellerVerificationAction = withFlexibleSafeAction("approveSellerVerificationAction", _approveSellerVerificationAction);
+export const approveExportOnboardingAction = withFlexibleSafeAction("approveExportOnboardingAction", _approveExportOnboardingAction);
+export const requestExportApplicationRevisionAction = withFlexibleSafeAction("requestExportApplicationRevisionAction", _requestExportApplicationRevisionAction);
+export const getExportApplicationsStatsAction = withFlexibleSafeAction("getExportApplicationsStatsAction", _getExportApplicationsStatsAction);
+export const getStandardExportApplicationsAction = withFlexibleSafeAction("getStandardExportApplicationsAction", _getStandardExportApplicationsAction);
+export const rejectExportApplicationAction = withFlexibleSafeAction("rejectExportApplicationAction", _rejectExportApplicationAction);
+export const getAcademyApplicationsAction = withFlexibleSafeAction("getAcademyApplicationsAction", _getAcademyApplicationsAction);
+export const approveAcademyApplicationAction = withFlexibleSafeAction("approveAcademyApplicationAction", _approveAcademyApplicationAction);
+export const rejectAcademyApplicationAction = withFlexibleSafeAction("rejectAcademyApplicationAction", _rejectAcademyApplicationAction);
+export const markAcademyApplicationUnderReviewAction = withFlexibleSafeAction("markAcademyApplicationUnderReviewAction", _markAcademyApplicationUnderReviewAction);
+export const savePlatformSettingsAction = withFlexibleSafeAction("savePlatformSettingsAction", _savePlatformSettingsAction);
+export const getPlatformSettingsAction = withFlexibleSafeAction("getPlatformSettingsAction", _getPlatformSettingsAction);
+export const editApplicationAction = withFlexibleSafeAction("editApplicationAction", _editApplicationAction);
+export const toggleVerifiedBadgeAction = withFlexibleSafeAction("toggleVerifiedBadgeAction", _toggleVerifiedBadgeAction);
+export const manualAcademyEnrollmentAction = withFlexibleSafeAction("manualAcademyEnrollmentAction", _manualAcademyEnrollmentAction);
+export const inviteLegacyMemberAction = withFlexibleSafeAction("inviteLegacyMemberAction", _inviteLegacyMemberAction);
+export const getStandardSellerVerificationsAction = withFlexibleSafeAction("getStandardSellerVerificationsAction", _getStandardSellerVerificationsAction);
+export const getMarketplaceUsersAction = withFlexibleSafeAction("getMarketplaceUsersAction", _getMarketplaceUsersAction);

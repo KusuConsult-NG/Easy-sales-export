@@ -9,7 +9,7 @@
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { History as HistoryIcon, Download, Search, Calendar, ChevronDown, Loader2 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { getTransactionsAction } from "@/app/actions/cooperative";
 import type { CooperativeTransaction } from "@/lib/types/cooperative";
 
@@ -35,15 +35,6 @@ export default function CooperativeHistoryPage() {
         loadData();
     }, []);
 
-    const formatDate = (date: Date | string) => {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit"
-        }).format(new Date(date));
-    };
 
     const filteredTransactions = transactions.filter(t => {
         const matchesSearch = t.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -141,7 +132,7 @@ export default function CooperativeHistoryPage() {
                                 {filteredTransactions.map((t) => (
                                     <tr key={t.id} className="hover:bg-slate-50 transition">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                                            {formatDate(t.date)}
+                                            {formatDateTime(t.date)}
                                         </td>
                                         <td className="px-6 py-4 text-sm font-medium text-slate-900">
                                             {t.description || "Transaction"}

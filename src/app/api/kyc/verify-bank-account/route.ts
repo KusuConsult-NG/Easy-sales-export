@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 
@@ -14,7 +14,7 @@ import { withRateLimit } from '@/lib/rate-limit';
  */
 async function verifyBankAccountHandler(req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }

@@ -2,6 +2,7 @@
 
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * Quick diagnostic action to check if the broadcast system can read users.
@@ -17,6 +18,16 @@ export async function diagnoseBroadcastAction(): Promise<{
     error?: string;
 }> {
     try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { 
+            success: false, 
+            usersCollectionName: COLLECTIONS.USERS,
+            totalUserDocs: 0,
+            usersWithEmail: 0,
+            sampleFields: [],
+            error: sessionResult.error 
+        };
+
         const db = getAdminDb();
         const collectionName = COLLECTIONS.USERS;
         

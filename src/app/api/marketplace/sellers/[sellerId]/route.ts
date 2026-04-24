@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ export async function GET(
             reviews: { avgRating, reviewCount },
         });
     } catch (err: unknown) {
-        console.error("[GET /api/marketplace/sellers/:id]", err);
+        logger.error("[GET /api/marketplace/sellers/:id]", err);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

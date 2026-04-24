@@ -1,19 +1,19 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
-    const session = await auth();
+    const sessionResult = await requireSession();
 
-    // Verify authentication and admin role
-    if (!session?.user) {
-        redirect("/auth/login?callbackUrl=/admin");
+    // Verify authentication
+    if (!sessionResult.session) {
+        const errorMessage = sessionResult.error?.error || "Authentication required";
+        redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
 
-    // Strict Role Check - Allow 'admin' and 'super_admin'
-    // Note: session.user.roles is an array
-    const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+    // Strict Role Check - Allow 'admin' and 'super_admin' using synchronized live roles
+    const isAdmin = sessionResult.session.user.roles?.includes("admin") || sessionResult.session.user.roles?.includes("super_admin");
 
     if (!isAdmin) {
         redirect("/dashboard");

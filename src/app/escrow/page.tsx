@@ -11,22 +11,8 @@ import {
     releaseEscrowFunds
 } from "@/app/actions/escrow-actions";
 import { type EscrowTransaction, type EscrowStatus } from "@/types/escrow";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
-// Helper to safely format dates that might be Timestamps or Dates
-const formatDate = (date: any) => {
-    if (!date) return "";
-    // Handle Firestore Timestamp
-    if (typeof date.toDate === "function") {
-        return date.toDate().toLocaleDateString();
-    }
-    // Handle Date object
-    if (date instanceof Date) {
-        return date.toLocaleDateString();
-    }
-    // Handle string/number
-    return new Date(date).toLocaleDateString();
-};
 
 const STEPS = [
     {

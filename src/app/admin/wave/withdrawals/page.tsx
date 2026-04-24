@@ -5,6 +5,7 @@ import { DollarSign, CheckCircle, XCircle, Loader2, AlertCircle, Clock, User } f
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getStandardWaveWithdrawalsAction } from "@/app/actions/wave-admin";
+import { formatDateTime } from "@/lib/utils";
 
 interface WaveWithdrawal {
     withdrawalId: string;
@@ -103,11 +104,7 @@ export default function AdminWaveWithdrawalsPage() {
     const formatCurrency = (amt: number) =>
         new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(amt);
 
-    const formatDate = (ts: any) => {
-        if (!ts) return "—";
-        const d = ts?.toDate ? ts.toDate() : new Date(ts);
-        return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
-    };
+
 
     return (
         <div className="min-h-screen bg-slate-50 p-8">
@@ -182,8 +179,8 @@ export default function AdminWaveWithdrawalsPage() {
                             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                                 <div className="flex items-center gap-2 text-xs text-slate-500">
                                     <Clock className="w-4 h-4" />
-                                    Requested: {formatDate(wd.requestedAt)}
-                                    {wd.processedAt && ` • Processed: ${formatDate(wd.processedAt)}`}
+                                    Requested: {formatDateTime(wd.requestedAt)}
+                                    {wd.processedAt && ` • Processed: ${formatDateTime(wd.processedAt)}`}
                                 </div>
 
                                 {wd.status === "pending" && (

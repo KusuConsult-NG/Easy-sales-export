@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import type { AuditLogEntry, AuditAction, AuditSeverity } from "@/lib/audit-log";
+import { getCached, setCache } from "@/lib/redis";
 
 /**
  * Get audit logs with enhanced filtering
@@ -193,6 +194,16 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
             return { success: false, error: "Admin access required" };
         }
 
+        const cacheKey = `admin:audit-stats:${days}`;
+        try {
+            const cachedStats = await getCached<any>(cacheKey);
+            if (cachedStats) {
+                return { success: true, stats: cachedStats };
+            }
+        } catch (e) {
+            // cache bypass on error
+        }
+
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
@@ -235,6 +246,12 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
             .map(([userId, data]) => ({ userId, userEmail: data.email, count: data.count }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
+
+        try {
+            await setCache(cacheKey, stats, 120); // Cache for 2 minutes
+        } catch (e) {
+            // silent fail
+        }
 
         return { success: true, stats };
     } catch (error: any) {

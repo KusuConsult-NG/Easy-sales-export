@@ -7,16 +7,16 @@
  */
 
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 export default async function CooperativesPaymentLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    const session = await auth();
+    const sessionResult = await requireSession();
 
-    if (!session?.user) {
+    if (!sessionResult.session) {
         redirect("/auth/login?callbackUrl=/cooperatives/payment");
     }
 

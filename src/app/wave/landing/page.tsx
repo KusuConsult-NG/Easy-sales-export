@@ -17,7 +17,7 @@ import { checkWaveStatusAction } from "@/app/actions/wave";
 
 function ClickToPlayVideo({ videoId }: { videoId: string }) {
     const [playing, setPlaying] = useState(false);
-    const thumbnail = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+    const [imgSrc, setImgSrc] = useState(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`);
     return (
         <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-green-100 bg-slate-900">
             {playing ? (
@@ -35,12 +35,12 @@ function ClickToPlayVideo({ videoId }: { videoId: string }) {
                     className="absolute inset-0 w-full h-full group focus:outline-none"
                     aria-label="Play RH-WAVE 774 video"
                 >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={thumbnail}
+                    <Image
+                        src={imgSrc}
                         alt="RH-WAVE 774 video thumbnail"
-                        className="w-full h-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`; }}
+                        fill
+                        className="object-cover"
+                        onError={() => setImgSrc(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`)}
                     />
                     <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition flex items-center justify-center">
                         <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">

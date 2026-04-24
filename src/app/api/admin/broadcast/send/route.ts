@@ -6,12 +6,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "firebase-admin/firestore";
 import { collectRecipients } from "@/app/actions/broadcast";
+import { logger } from "@/lib/logger";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -47,7 +48,7 @@ function buildEmailHtml(subject: string, body: string, recipientEmail?: string):
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user?.id) {
             return NextResponse.json({ success: false, error: "Not authenticated" }, { status: 401 });
         }
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
                 successCount += chunk.length;
             } else {
                 failCount += chunk.length;
-                console.error("[Broadcast API] Batch failure:", res.error);
+                logger.error("[Broadcast API] Batch failure:", res.error);
             }
 
             if (i + BATCH < validRecipients.length) await sleep(500);
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
             logId: logRef.id,
         });
     } catch (error: any) {
-        console.error("[Broadcast API] Fatal error:", error);
+        logger.error("[Broadcast API] Fatal error:", error);
         return NextResponse.json({ success: false, sent: 0, failed: 0, error: error.message }, { status: 500 });
     }
 }

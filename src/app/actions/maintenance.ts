@@ -5,15 +5,16 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { requireAdmin } from "@/lib/require-admin";
 
 /**
  * Cleanup Abandoned Drafts
  * Deletes 'draft' land listings older than 30 days.
  */
 export async function cleanupAbandonedDraftsAction(): Promise<{ success: boolean; count?: number; error?: string }> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required" };
     try {
-        // Note: Administrative actions are protected by middleware and layout checks.
-        // Direct auth() call removed to avoid dependency issues.
 
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days ago

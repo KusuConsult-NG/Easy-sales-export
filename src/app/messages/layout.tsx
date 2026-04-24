@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireHubRegistration } from "@/lib/hub-guard";
 import DashboardNav from "@/components/dashboard/DashboardNav";
 
 export default async function MessagesLayout({
@@ -7,9 +7,9 @@ export default async function MessagesLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const session = await auth();
+    const sessionResult = await requireHubRegistration();
 
-    if (!session?.user) {
+    if (!sessionResult.session) {
         redirect("/auth/login?callbackUrl=/messages");
     }
 

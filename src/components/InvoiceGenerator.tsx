@@ -1,7 +1,5 @@
 "use client";
 
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { FileText, Download } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from "@/contexts/ToastContext";
@@ -44,9 +42,11 @@ export default function InvoiceGenerator({
     const [isGenerating, setIsGenerating] = useState(false);
     const { showToast } = useToast();
 
-    const generatePDF = () => {
+    const generatePDF = async () => {
         setIsGenerating(true);
         try {
+            const { jsPDF } = await import('jspdf');
+            const autoTable = (await import('jspdf-autotable')).default;
             const doc = new jsPDF();
 
             // Colors

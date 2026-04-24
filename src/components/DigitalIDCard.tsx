@@ -2,6 +2,7 @@
 
 import { Download, ShieldCheck } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
 
 interface DigitalIDCardProps {
     memberNumber: string;
@@ -158,11 +159,15 @@ export default function DigitalIDCard({
 
                     {/* QR Code */}
                     <div className="flex flex-col items-center justify-center bg-white rounded-xl p-4">
-                        <img
-                            src={qrCodeDataUrl}
-                            alt="QR Code"
-                            className="w-full h-auto"
-                        />
+                        <div className="relative w-full aspect-square max-w-[200px]">
+                            <Image
+                                src={qrCodeDataUrl}
+                                alt="QR Code"
+                                fill
+                                className="object-contain"
+                                sizes="200px"
+                            />
+                        </div>
                         <p className="text-xs text-gray-600 mt-2 text-center">
                             Scan to verify
                         </p>

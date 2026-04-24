@@ -2,14 +2,14 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { FEATURE_METADATA } from "@/lib/feature-toggles";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export async function POST() {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user?.roles?.includes("super_admin")) {
             return NextResponse.json({ success: false, message: "Super Admin access required" }, { status: 403 });
         }

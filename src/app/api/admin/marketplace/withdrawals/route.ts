@@ -7,13 +7,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
+import { logger } from "@/lib/logger";
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ withdrawals });
     } catch (error: any) {
-        console.error("[admin/marketplace/withdrawals] GET error:", error);
+        logger.error("[admin/marketplace/withdrawals] GET error:", error);
         return NextResponse.json(
             { error: error.message || "Failed to fetch withdrawals" },
             { status: 500 }

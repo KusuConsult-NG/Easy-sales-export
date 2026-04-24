@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { Resend } from "resend";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +134,7 @@ function buildEmailHtml(name: string | null, type: string, amount: number, statu
 export async function POST(req: NextRequest) {
     try {
         // ── Auth guard: super_admin only ─────────────────────────────────────
-        const session = await auth();
+        const session = (await requireSession()).session;
         const roles: string[] = (session?.user as any)?.roles ?? [];
         if (!roles.includes("super_admin") && !roles.includes("admin")) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -217,7 +218,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ sent, skipped, errors, results, dryRun });
 
     } catch (err: any) {
-        console.error("[Recovery Emails] Error:", err);
+        logger.error("[Recovery Emails] Error:", err);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

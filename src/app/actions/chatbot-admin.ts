@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import {
     getAdminChatSessions,
     getChatThread,
@@ -14,9 +14,10 @@ import type { ChatbotModule } from "@/lib/chatbot-knowledge";
 
 // ─── Guards ──────────────────────────────────────────────────────────────────
 async function requireSuperAdmin() {
-    const session = await auth();
-    if (!session?.user?.id) throw new Error("Not authenticated");
-    const roles: string[] = (session.user as any).roles ?? [];
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) throw new Error("Not authenticated");
+    const { session } = sessionResult;
+    const roles: string[] = session.user.roles ?? [];
     if (!roles.includes("super_admin")) throw new Error("Requires super_admin role");
     return session.user;
 }

@@ -7,6 +7,7 @@ import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
 import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useAdminData } from "@/hooks/useAdminData";
+import { formatDate } from "@/lib/utils";
 
 interface User {
     id: string;
@@ -165,13 +166,7 @@ export default function AdminUsersPage() {
         setIsEnrollingAcademy(false);
     };
 
-    const formatDate = (date: Date) => {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "short",
-            day: "numeric"
-        }).format(new Date(date));
-    };
+
 
     async function handleExportCSV() {
         setIsExporting(true);

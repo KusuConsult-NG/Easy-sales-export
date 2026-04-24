@@ -41,6 +41,7 @@
     "scripts",
     "tests",
     "__tests__",
-    "e2e"
+    "e2e",
+    "test-*.ts"
   ]
 }

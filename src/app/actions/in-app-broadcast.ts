@@ -18,6 +18,7 @@
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAdmin } from "@/lib/require-admin";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,8 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
 export async function collectRecipientUserIds(
     filters: InAppBroadcastFilters
 ): Promise<{ userId: string; name: string }[]> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) throw new Error("Unauthorized: admin role required");
     const db = getAdminDb();
     const recipients: Map<string, { userId: string; name: string }> = new Map();
 
@@ -256,6 +259,8 @@ export async function collectRecipientUserIds(
 export async function previewInAppBroadcastAction(
     filters: InAppBroadcastFilters
 ): Promise<InAppBroadcastPreview> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { count: 0, sample: [], error: "Unauthorized: admin role required" };
     try {
         const recipients = await collectRecipientUserIds(filters);
         return {
@@ -279,6 +284,8 @@ export async function sendInAppBroadcastAction(
     link?: string,
     linkText?: string
 ): Promise<InAppBroadcastResult> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, delivered: 0, error: "Unauthorized: admin role required" };
     try {
         const db = getAdminDb();
         const recipients = await collectRecipientUserIds(filters);

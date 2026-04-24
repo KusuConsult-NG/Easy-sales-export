@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { withRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -18,14 +18,16 @@ import { withRateLimit } from "@/lib/rate-limit";
  */
 async function uploadHandler(request: NextRequest) {
     try {
-        const session = await auth();
+        const sessionResult = await requireSession();
 
-        if (!session?.user) {
+        if (!sessionResult.session) {
             return NextResponse.json(
-                { success: false, error: "You must be logged in to upload files." },
+                { success: false, error: sessionResult.error.error },
                 { status: 401 }
             );
         }
+        
+        const { session } = sessionResult;
 
         const formData = await request.formData();
         const file = formData.get("file") as File;

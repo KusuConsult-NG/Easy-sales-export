@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { logger } from "@/lib/logger";
 
 // You can optionally verify the Resend Webhook Signature here 
 // using the Svix library if you configure RESEND_WEBHOOK_SECRET.
@@ -39,11 +40,11 @@ export async function POST(req: NextRequest) {
                     "svix-signature": svix_signature,
                 });
             } catch (err) {
-                console.error("[Resend Webhook Error]: Invalid signature", err);
+                logger.error("[Resend Webhook] Invalid signature", err);
                 return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
             }
         } else {
-            console.warn("[Resend Webhook Warning]: RESEND_WEBHOOK_SECRET is not set. Bypassing signature validation.");
+            logger.warn("[Resend Webhook] RESEND_WEBHOOK_SECRET is not set — bypassing signature validation.");
             body = JSON.parse(payloadText);
         }
 
@@ -74,13 +75,13 @@ export async function POST(req: NextRequest) {
                     source: "webhook"
                 }, { merge: true }); // Merge in case it already exists
 
-                console.log(`[Resend Webhook] Excluded email ${emailToExclude} due to ${eventType}`);
+                logger.info(`[Resend Webhook] Excluded email ${emailToExclude} due to ${eventType}`);
             }
         }
 
         return NextResponse.json({ received: true });
     } catch (error: any) {
-        console.error("[Resend Webhook Error]:", error);
+        logger.error("[Resend Webhook] Error:", error);
         // It's best practice to return a 200/202 to webhooks even if process fails 
         // to prevent infinite retry loops from the provider if the failure is unrecoverable,
         // unless you actively want Resend to retry.

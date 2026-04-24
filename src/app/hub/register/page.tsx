@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Hub Registration Landing Page
@@ -9,11 +8,12 @@ import { auth } from "@/lib/auth";
  * Users must fully register their base profile before boarding any module.
  */
 export default async function HubRegisterPage() {
-    const session = await auth();
+    const sessionResult = await requireSession();
 
-    // If unauthenticated, they need to create an account
-    if (!session?.user) {
-        redirect("/auth/register");
+    // If unauthenticated, banned, or session expired, redirect to login with the error message
+    if (!sessionResult.session) {
+        const errorMessage = sessionResult.error?.error || "Authentication required";
+        redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
 
     // If authenticated, it means they are caught by the Hub Guard because their 

@@ -4,11 +4,11 @@ import { NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 export async function GET() {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }

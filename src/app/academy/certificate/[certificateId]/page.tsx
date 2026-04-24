@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
+import Image from "next/image";
 import { getCourseByIdAction, getUserProgressAction, type Course, type UserProgress } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -168,12 +169,13 @@ export default function CertificatePage() {
                         {/* Logo & Title */}
                         <div className="text-center mb-12">
                             <div className="inline-block mb-6 bg-white rounded-xl shadow-md p-3 border border-slate-100">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
+                                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                                <Image
                                     src="/images/logo.jpg"
                                     alt="Easy Sales Export Academy"
+                                    width={200}
+                                    height={64}
                                     className="h-16 w-auto object-contain mx-auto"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                 />
                             </div>
                             <p className="text-sm font-bold tracking-widest uppercase text-blue-600 mb-2">Easy Sales Export Academy</p>

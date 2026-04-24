@@ -131,8 +131,13 @@ export default function AdminWaveResourcesPage() {
 
     function formatDate(timestamp: any): string {
         if (!timestamp) return "Unknown";
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-        return date.toLocaleDateString();
+        try {
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            if (isNaN(date.getTime())) return "Unknown";
+            return date.toLocaleDateString();
+        } catch (e) {
+            return "Unknown";
+        }
     }
 
     return (

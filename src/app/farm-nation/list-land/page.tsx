@@ -9,6 +9,7 @@ import {
     ArrowLeft, Check, X, Plus, Loader2
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useStorage } from "@/hooks/use-storage";
 import { submitLandListingAction } from "@/app/actions/land-listings";
 import { useToast } from "@/contexts/ToastContext";
@@ -500,11 +501,16 @@ export default function ListLandPage() {
                                                                 </div>
                                                             </div>
                                                         )}
-                                                        <img
-                                                            src={URL.createObjectURL(img)}
-                                                            alt={`Land ${index + 1}`}
-                                                            className="w-full h-24 object-cover rounded-lg"
-                                                        />
+                                                        <div className="relative w-full h-24 rounded-lg overflow-hidden">
+                                                            <Image
+                                                                src={URL.createObjectURL(img)}
+                                                                alt={`Land ${index + 1}`}
+                                                                fill
+                                                                className="object-cover"
+                                                                sizes="150px"
+                                                                unoptimized
+                                                            />
+                                                        </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => removeImage(index)}

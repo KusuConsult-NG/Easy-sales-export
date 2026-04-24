@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
     ArrowLeft, Download, Loader2, Lock, Clock, CreditCard,
     CheckCircle, IdCard, Shield, Camera, Upload, RefreshCw,
@@ -154,13 +155,16 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                 {/* Passport photo */}
                 <div className="shrink-0">
                     {data.passportPhotoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                            src={data.passportPhotoUrl}
-                            alt="Passport"
-                            crossOrigin="anonymous"
-                            className="w-20 h-24 object-cover rounded-lg border-2 border-white/40 shadow-lg"
-                        />
+                        <div className="relative w-20 h-24 rounded-lg border-2 border-white/40 shadow-lg overflow-hidden">
+                            <Image
+                                src={data.passportPhotoUrl}
+                                alt="Passport"
+                                fill
+                                crossOrigin="anonymous"
+                                className="object-cover"
+                                sizes="80px"
+                            />
+                        </div>
                     ) : (
                         <div className="w-20 h-24 rounded-lg border-2 border-white/30 bg-white/10 flex items-center justify-center">
                             <IdCard className="w-8 h-8 text-white/40" />

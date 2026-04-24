@@ -1,6 +1,7 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/lib/firebase-admin";
 import { AggregateField } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -12,6 +13,8 @@ import { logger } from "@/lib/logger";
  */
 export async function getPlatformMetricsAction() {
     try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
 
         // 1. Transactions - Aggregate from actual historical collections 
         const [paystackSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
@@ -52,6 +55,9 @@ export async function getPlatformMetricsAction() {
  */
 export async function getGlobalPendingApprovalsAction() {
     try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
+
         const [
             wave,
             cooperative,

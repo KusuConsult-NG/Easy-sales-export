@@ -10,16 +10,20 @@
 import { redirect } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { checkModuleAccess } from "@/lib/module-access-check";
-import { auth } from "@/lib/auth";
+import { requireHubRegistration } from "@/lib/hub-guard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
 export default async function SellerLayout({ children }: { children: React.ReactNode }) {
-    const session = await auth();
+    // 1. Authenticate and ensure fully registered
+    const sessionResult = await requireHubRegistration();
 
-    if (!session?.user?.id) {
+    // 2. Ensure session is valid
+    if (!sessionResult.session) {
         redirect("/marketplace/login");
     }
+
+    const { session } = sessionResult;
 
     try {
         const userId = session.user.id;

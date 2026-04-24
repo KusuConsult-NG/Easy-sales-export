@@ -92,6 +92,14 @@ export async function getCooperativeStatsAction(): Promise<{
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = adminScope ? `admin:coop-stats:${adminScope}` : "admin:coop-stats:global";
+
+        try {
+            const cached = await getCached<any>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {}
+
         // ── PAID MEMBERS COUNT (Paystack-authoritative) ──────────────────────
         // Read from PROCESSED_PAYMENTS where type is cooperative_membership_registration
         // and status is completed. This matches exactly what Paystack reports, because
@@ -204,8 +212,8 @@ export async function getCooperativeStatsAction(): Promise<{
                 ? ((monthlyContributions - previousMonthContributions) / previousMonthContributions) * 100
                 : 0;
 
-        return {
-            success: true,
+        const payload = {
+            success: true as const,
             data: {
                 stats: {
                     totalMembers,
@@ -229,6 +237,12 @@ export async function getCooperativeStatsAction(): Promise<{
             },
             meta: null
         };
+
+        try {
+            await setCache(cacheKey, payload, 120);
+        } catch (e) {}
+
+        return payload;
     } catch (error) {
         logger.error("Get cooperative stats error:", error);
         return { success: false, error: "Failed to fetch statistics" };
@@ -567,6 +581,14 @@ export async function getContributionReportsAction(options?: {
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = adminScope ? `admin:coop-reports:${adminScope}` : "admin:coop-reports:global";
+
+        try {
+            const cached = await getCached<any>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {}
+
         // memberCount and averageContribution are derived from cooperative_transactions
         // (the Paystack-authoritative collection) — never from a different collection
         // to avoid cross-collection count drift.
@@ -645,8 +667,8 @@ export async function getContributionReportsAction(options?: {
 
         const monthlyTrend = monthlyTrendData.map(b => ({ month: b.month, amount: b.amount }));
 
-        return {
-            success: true,
+        const payload = {
+            success: true as const,
             data: {
                 reports: {
                     totalContributions,
@@ -658,6 +680,12 @@ export async function getContributionReportsAction(options?: {
             },
             meta: null
         };
+
+        try {
+            await setCache(cacheKey, payload, 120);
+        } catch (e) {}
+
+        return payload;
     } catch (error) {
         logger.error("Get contribution reports error:", error);
         return { success: false, error: "Failed to generate report" };

@@ -10,6 +10,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import {
     MapPin, Clock, Zap, Users, ExternalLink, ShoppingBag,
     ArrowLeft, Loader2, Camera,
@@ -181,7 +182,9 @@ export default function VillageMarketEventPage() {
                                     <div key={p.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition">
                                         <div className="h-36 bg-slate-100 flex items-center justify-center">
                                             {p.imageUrl ? (
-                                                <img src={p.imageUrl} alt={p.title} className="w-full h-full object-cover" />
+                                                <div className="relative w-full h-full">
+                                                    <Image src={p.imageUrl} alt={p.title} fill sizes="300px" className="object-cover" />
+                                                </div>
                                             ) : (
                                                 <Camera className="w-10 h-10 text-slate-300" />
                                             )}

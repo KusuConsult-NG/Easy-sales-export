@@ -10,15 +10,19 @@
 import { logger } from "@/lib/logger";
 import { redirect } from "next/navigation";
 import { checkModuleAccess } from "@/lib/module-access-check";
-import { auth } from "@/lib/auth";
+import { requireHubRegistration } from "@/lib/hub-guard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function FarmNationLayoutContent({ children }: { children: React.ReactNode }) {
-    const session = await auth();
+    // 1. Authenticate and ensure fully registered
+    const sessionResult = await requireHubRegistration();
 
-    if (!session?.user?.id) {
+    // 2. Ensure session is valid
+    if (!sessionResult.session) {
         redirect("/auth/login?module=farm-nation");
     }
+
+    const { session } = sessionResult;
 
     try {
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "farm-nation");

@@ -342,6 +342,16 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
 
+    const { getCached, setCache } = await import("@/lib/redis");
+    const cacheKey = "admin:finance-overview:global";
+
+    try {
+        const cached = await getCached<FinancialOverview>(cacheKey);
+        if (cached) return cached;
+    } catch(e) {
+        // quiet fail on cache read
+    }
+
     let totalRevenue = 0;
     let totalEscrowVolume = 0;
     let totalLoansDisbursed = 0;
@@ -437,7 +447,13 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         // Silently skip — collection may not exist yet
     }
 
-    return { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions, totalSuccessfulCount, totalAbandonedCount, totalFailedCount };
+    const payload: FinancialOverview = { success: true, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions, totalSuccessfulCount, totalAbandonedCount, totalFailedCount };
+
+    try {
+        await setCache(cacheKey, payload, 120); // Cache for 2 minutes
+    } catch(e) {}
+
+    return payload;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

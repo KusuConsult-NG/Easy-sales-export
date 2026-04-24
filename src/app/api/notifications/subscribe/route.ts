@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
@@ -10,7 +10,7 @@ import { FieldValue } from "firebase-admin/firestore";
  * Body: { token: string }
  */
 export async function POST(req: NextRequest) {
-    const session = await auth();
+    const session = (await requireSession()).session;
     if (!session?.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
  * Removes the FCM token (user opts out of push notifications).
  */
 export async function DELETE(_req: NextRequest) {
-    const session = await auth();
+    const session = (await requireSession()).session;
     if (!session?.user?.id) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

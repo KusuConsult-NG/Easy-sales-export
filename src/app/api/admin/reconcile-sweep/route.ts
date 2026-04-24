@@ -1,14 +1,14 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { logger } from '@/lib/logger';
 
 export async function GET() {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
 
         // 1. Authenticate Request
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {

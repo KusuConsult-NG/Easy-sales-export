@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server";
 import { getUsersAction } from "@/app/actions/admin";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -13,7 +13,7 @@ export async function GET() {
     }
 
     // Require authenticated admin session even in dev/staging
-    const session = await auth();
+    const session = (await requireSession()).session;
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

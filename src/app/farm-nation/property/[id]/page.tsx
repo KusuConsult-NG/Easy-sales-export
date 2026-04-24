@@ -66,13 +66,10 @@ export default function PropertyDetailsPage() {
             }));
 
             // Check tier
-            try {
-                getUserTierAction().then((res) => {
-                    if (res?.data?.tier) setUserTier(res.data.tier as "Basic" | "Premium");
-                }).catch((err: any) => { console.warn("Failed to fetch user tier:", err?.message); });
-            } catch (e) {
-                // Tier check is non-critical; page still works without it
-            }
+            // Tier check is non-critical — page functions without it
+            getUserTierAction().then((res) => {
+                if (res?.data?.tier) setUserTier(res.data.tier as "Basic" | "Premium");
+            }).catch(() => { /* non-critical: tier defaults to null (Basic view) */ });
         }
     }, [status, session]);
 

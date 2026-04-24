@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { buildSystemPrompt, type ChatbotModule } from "@/lib/chatbot-knowledge";
 import {
     detectEscalation,
@@ -61,7 +61,7 @@ async function isAiAssistantEnabled(): Promise<boolean> {
 export async function POST(req: NextRequest) {
     try {
         // 1. Auth guard
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user?.id) {
             return NextResponse.json({ error: "Authentication required" }, { status: 401 });
         }

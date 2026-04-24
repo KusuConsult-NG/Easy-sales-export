@@ -32,11 +32,17 @@ export default function ExportDetailsModal({
 }: ExportDetailsModalProps) {
     const formatDate = (date: Date | undefined) => {
         if (!date) return "Not set";
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric"
-        }).format(new Date(date));
+        try {
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return "Invalid Date";
+            return new Intl.DateTimeFormat("en-NG", {
+                year: "numeric",
+                month: "long",
+                day: "numeric"
+            }).format(d);
+        } catch (e) {
+            return "Invalid Date";
+        }
     };
 
     const getStatusColor = (status: ExportStatus) => {

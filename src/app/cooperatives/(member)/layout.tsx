@@ -8,20 +8,22 @@ import { cookies } from "next/headers";
 import { logger } from '@/lib/logger';
 import { redirect } from "next/navigation";
 import { checkModuleAccess } from "@/lib/module-access-check";
-import { auth } from "@/lib/auth"; // Use NextAuth session
+import { requireHubRegistration } from "@/lib/hub-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 // import CooperativeSidebar from "./CooperativeSidebar"; // Removed in favor of global Sidebar
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 async function CooperativeLayoutContent({ children }: { children: React.ReactNode }) {
-    // Get NextAuth session
-    const session = await auth();
+    // 1. Authenticate and ensure fully registered
+    const sessionResult = await requireHubRegistration();
 
-    // Check if user is authenticated
-    if (!session?.user?.id) {
+    // 2. Ensure session is valid
+    if (!sessionResult.session) {
         redirect("/auth/login?module=cooperatives&redirect=/cooperatives");
     }
+
+    const { session } = sessionResult;
 
     let userProfile = {
         firstName: "",

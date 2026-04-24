@@ -1,4 +1,4 @@
-import { auth } from "@/lib/auth";
+import { requireHubRegistration } from "@/lib/hub-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { redirect } from "next/navigation";
@@ -20,14 +20,16 @@ export default async function CooperativeOnboardingPage(
     const searchParams = props.searchParams ? await props.searchParams : {};
     const token = typeof searchParams.token === 'string' ? searchParams.token : undefined;
 
-    const session = await auth();
+    const sessionResult = await requireHubRegistration();
 
-    if (!session?.user) {
+    if (!sessionResult.session) {
         const callbackUrl = token 
             ? `/cooperatives/onboarding?token=${token}` 
             : "/cooperatives/onboarding";
         redirect(`/auth/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
     }
+
+    const { session } = sessionResult;
 
     let paymentStatus = "pending";
     try {

@@ -7,6 +7,7 @@ import {
     ArrowLeft, Plus, X, Upload
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
 
@@ -427,11 +428,16 @@ export default function AddProductPage() {
                                             <div className="grid grid-cols-3 gap-4 mb-4">
                                                 {media.images.map((img, index) => (
                                                     <div key={index} className="relative">
-                                                        <img
-                                                            src={URL.createObjectURL(img)}
-                                                            alt={`Product ${index + 1}`}
-                                                            className="w-full h-32 object-cover rounded-lg"
-                                                        />
+                                                        <div className="relative w-full h-32 rounded-lg overflow-hidden">
+                                                            <Image
+                                                                src={URL.createObjectURL(img)}
+                                                                alt={`Product ${index + 1}`}
+                                                                fill
+                                                                className="object-cover"
+                                                                sizes="200px"
+                                                                unoptimized
+                                                            />
+                                                        </div>
                                                         <button
                                                             type="button"
                                                             onClick={() => removeImage(index)}

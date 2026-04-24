@@ -1,6 +1,6 @@
 
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { runSchemaStandardizationAction } from "@/app/actions/schema-standardization";
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 
     if (!hasValidSecret) {
         // Fall back to session-based auth for admin users
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user?.roles?.includes("super_admin")) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }

@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * In-App Notification System
@@ -104,7 +105,19 @@ export async function markNotificationAsReadAction(
     notificationId: string
 ): Promise<{ success: boolean; error?: string }> {
     try {
-        await db.collection(COLLECTIONS.NOTIFICATIONS).doc(notificationId).update({
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthenticated" };
+        const { session } = sessionResult;
+
+        // Verify ownership — only the notification's owner can mark it read
+        const docRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc(notificationId);
+        const snap = await docRef.get();
+        if (!snap.exists) return { success: false, error: "Notification not found" };
+        if (snap.data()?.userId !== session.user.id) {
+            return { success: false, error: "Forbidden" };
+        }
+
+        await docRef.update({
             read: true,
             readAt: FieldValue.serverTimestamp(),
         });

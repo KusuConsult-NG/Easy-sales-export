@@ -13,6 +13,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendEmailNotification, sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAdmin } from "@/lib/require-admin";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -121,9 +122,9 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
 export async function collectRecipients(
     filters: BroadcastFilters
 ): Promise<{ name: string; email: string }[]> {
-    console.log("[Broadcast] collectRecipients called with filters:", JSON.stringify(filters));
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) throw new Error("Unauthorized: admin role required");
     const db = getAdminDb();
-    console.log("[Broadcast] getAdminDb() succeeded");
     const recipients: Map<string, { name: string; email: string }> = new Map();
 
     const add = (email: string, name: string) => {
@@ -140,7 +141,6 @@ export async function collectRecipients(
             break;
         }
         case "all": {
-            console.log(`[Broadcast] Querying collection: '${COLLECTIONS.USERS}'`);
             const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").get();
             for (const d of (await stream).docs) {
                 const u: any = d.data();
@@ -444,9 +444,7 @@ export async function collectRecipients(
         }
     }
 
-    const result = Array.from(recipients.values());
-    console.log(`[Broadcast] collectRecipients returning ${result.length} recipients`);
-    return result;
+    return Array.from(recipients.values());
 }
 
 // ── Actions ────────────────────────────────────────────────────────────────
@@ -457,16 +455,15 @@ export async function collectRecipients(
 export async function previewBroadcastAction(
     filters: BroadcastFilters
 ): Promise<BroadcastPreviewResult> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { count: 0, sample: [], error: "Unauthorized: admin role required" };
     try {
-        console.log("[Broadcast] previewBroadcastAction called");
         const recipients = await collectRecipients(filters);
-        console.log(`[Broadcast] preview result: ${recipients.length} recipients`);
         return {
             count: recipients.length,
             sample: recipients.slice(0, 3),
         };
     } catch (error: any) {
-        console.error("[Broadcast] previewBroadcastAction ERROR:", error);
         return { count: 0, sample: [], error: error.message };
     }
 }
@@ -480,6 +477,8 @@ export async function sendBroadcastAction(
     subject: string,
     body: string
 ): Promise<{ success: boolean; sent: number; failed: number; logId?: string; error?: string }> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, sent: 0, failed: 0, error: "Unauthorized: admin role required" };
     try {
         const recipients = await collectRecipients(filters);
         if (recipients.length === 0) {
@@ -571,6 +570,8 @@ export async function sendBroadcastAction(
  * SMS (sms_broadcast_logs), sorted newest-first (last 100 total).
  */
 export async function getBroadcastHistoryAction(): Promise<{ logs: BroadcastLog[]; error?: string }> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { logs: [], error: "Unauthorized: admin role required" };
     try {
         const db = getAdminDb();
 

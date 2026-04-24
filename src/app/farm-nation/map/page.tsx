@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { logger } from '@/lib/logger';
 import dynamic from "next/dynamic";
 import { Filter, Grid, MapIcon, Search } from "lucide-react";
+import Image from "next/image";
 
 // Dynamically import map component to avoid SSR issues
 const MapView = dynamic(() => import("@/components/farm-nation/MapView"), {
@@ -300,12 +301,14 @@ export default function FarmNationMapPage() {
                                 className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow cursor-pointer"
                                 onClick={() => router.push(`/farm-nation/property/${listing.id}`)}
                             >
-                                <div className="h-48 bg-slate-200">
+                                <div className="relative h-48 bg-slate-200">
                                     {listing.images[0] && (
-                                        <img
+                                        <Image
                                             src={listing.images[0]}
                                             alt={listing.title}
-                                            className="w-full h-full object-cover"
+                                            fill
+                                            className="object-cover"
+                                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                                         />
                                     )}
                                 </div>

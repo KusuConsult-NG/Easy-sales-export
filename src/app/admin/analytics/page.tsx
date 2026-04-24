@@ -17,21 +17,17 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getDashboardStatsAction } from "@/app/actions/admin-analytics";
-import {
-    LineChart,
-    Line,
-    BarChart,
-    Bar,
-    PieChart,
-    Pie,
-    Cell,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    Legend,
-} from "recharts";
+import dynamic from "next/dynamic";
+
+const AnalyticsCharts = dynamic(() => import("@/components/admin/AnalyticsCharts"), {
+    ssr: false,
+    loading: () => (
+        <div className="flex items-center justify-center p-12 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin" />
+            <span className="ml-2">Loading charts...</span>
+        </div>
+    )
+});
 
 export default function AdminAnalyticsPage() {
     const [loading, setLoading] = useState(true);
@@ -209,87 +205,14 @@ export default function AdminAnalyticsPage() {
                     </div>
                 </div>
 
-                {/* Charts Row 1 */}
+                <AnalyticsCharts
+                    revenueByMonth={revenueByMonth}
+                    userGrowthByMonth={userGrowthByMonth}
+                    moduleUsage={moduleUsage}
+                />
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    {/* Revenue Trend */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-slate-900 mb-6">
-                            Revenue Trend (6 Months)
-                        </h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <LineChart data={revenueByMonth}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
-                                <YAxis stroke="#94a3b8" fontSize={12} />
-                                <Tooltip
-                                    contentStyle={tooltipStyle}
-                                    formatter={(value: any) => formatCurrency(value)}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="revenue"
-                                    stroke="#10b981"
-                                    strokeWidth={3}
-                                    dot={{ fill: "#10b981", r: 5 }}
-                                    activeDot={{ r: 7, stroke: "#10b981", strokeWidth: 2, fill: "#fff" }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-
-                    {/* User Growth */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-slate-900 mb-6">
-                            User Growth (6 Months)
-                        </h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={userGrowthByMonth}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                                <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
-                                <YAxis stroke="#94a3b8" fontSize={12} />
-                                <Tooltip contentStyle={tooltipStyle} />
-                                <Bar dataKey="users" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-
-                {/* Charts Row 2 */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    {/* Module Usage */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-slate-900 mb-6">
-                            Module Usage
-                        </h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <PieChart>
-                                <Pie
-                                    data={moduleUsage}
-                                    dataKey="count"
-                                    nameKey="module"
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={110}
-                                    label={false}
-                                >
-                                    {(moduleUsage || []).map((_entry: any, index: number) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    contentStyle={tooltipStyle}
-                                    formatter={(value: any, name: any) => [value, name]}
-                                />
-                                <Legend
-                                    iconType="circle"
-                                    formatter={(value) => (
-                                        <span style={{ color: "#475569", fontSize: 12 }}>{value}</span>
-                                    )}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-
+                    <div></div> {/* Spacer since Module Usage is now handled by AnalyticsCharts inside its own grid */}
                     {/* Recent Transactions */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm">
                         <div className="flex items-center justify-between mb-6">

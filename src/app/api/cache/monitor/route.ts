@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, CACHE_TTL } from '@/lib/redis';
-import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Redis Cache Monitoring API
@@ -12,7 +12,7 @@ import { auth } from '@/lib/auth';
  */
 export async function GET(request: NextRequest) {
     // ADMIN AUTHENTICATION REQUIRED
-    const session = await auth();
+    const session = (await requireSession()).session;
     if (!session?.user?.roles?.includes('admin') &&
         !session?.user?.roles?.includes('super_admin')) {
         return NextResponse.json(
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
     // ADMIN AUTHENTICATION REQUIRED
-    const session = await auth();
+    const session = (await requireSession()).session;
     if (!session?.user?.roles?.includes('admin') &&
         !session?.user?.roles?.includes('super_admin')) {
         return NextResponse.json(

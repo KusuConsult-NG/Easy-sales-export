@@ -641,23 +641,33 @@ export async function escalateDisputeAction(
 
     try {
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
-        const snap = await disputeRef.get();
-        if (!snap.exists) return { success: false, error: "Dispute not found" };
+        let disputeData: Dispute | null = null;
 
-        const data = snap.data() as Dispute;
-        if (!(["open", "under_review"] as const).includes(data.status as "open" | "under_review")) {
-            return { success: false, error: `Dispute cannot be escalated — current status: ${data.status}` };
-        }
-        if ((data as any).escalated) {
-            return { success: false, error: "Dispute is already escalated" };
-        }
+        // Atomic read-validate-write inside a transaction to eliminate the
+        // double-escalation race condition that existed with a bare .update().
+        await db.runTransaction(async (tx) => {
+            const snap = await tx.get(disputeRef);
+            if (!snap.exists) throw new Error("Dispute not found");
 
-        await disputeRef.update({
-            escalated: true,
-            escalatedAt: FieldValue.serverTimestamp(),
-            escalatedBy: (adminCheck as { userId: string }).userId,
-            status: "under_review",
+            const data = snap.data() as Dispute;
+            if (!(["open", "under_review"] as const).includes(data.status as "open" | "under_review")) {
+                throw new Error(`Dispute cannot be escalated — current status: ${data.status}`);
+            }
+            if ((data as any).escalated) {
+                throw new Error("Dispute is already escalated");
+            }
+
+            disputeData = data;
+
+            tx.update(disputeRef, {
+                escalated: true,
+                escalatedAt: FieldValue.serverTimestamp(),
+                escalatedBy: (adminCheck as { userId: string }).userId,
+                status: "under_review",
+            });
         });
+
+        const data = disputeData as unknown as Dispute;
 
         await createAdminAuditLog({
             action: "dispute_escalated",

@@ -16,6 +16,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/termii";
 import { FieldValue } from "firebase-admin/firestore";
+import { requireAdmin } from "@/lib/require-admin";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -397,6 +398,8 @@ async function collectSmsRecipients(
 export async function previewSmsBroadcastAction(
     filters: SmsFilters
 ): Promise<SmsBroadcastPreview> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { count: 0, sample: [], error: "Unauthorized: admin role required" };
     try {
         const recipients = await collectSmsRecipients(filters);
         return {
@@ -416,6 +419,8 @@ export async function sendSmsBroadcastAction(
     filters: SmsFilters,
     message: string
 ): Promise<SmsBroadcastResult> {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, sent: 0, failed: 0, skipped: 0, error: "Unauthorized: admin role required" };
     try {
         const recipients = await collectSmsRecipients(filters);
         if (recipients.length === 0) {

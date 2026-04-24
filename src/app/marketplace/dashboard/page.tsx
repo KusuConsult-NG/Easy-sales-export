@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 
 export const dynamic = 'force-dynamic';
 
 export default async function MarketplaceDashboardRedirect() {
-    const session = await auth();
+    const { session } = await requireSession();
     
     if (!session || !session.user) {
         redirect("/auth/login?callbackUrl=/marketplace/dashboard");

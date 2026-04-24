@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { logger } from "@/lib/logger";
 
@@ -13,7 +13,7 @@ const SETTINGS_DOC = "platform_settings/notifications";
  */
 export async function GET() {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
@@ -42,7 +42,7 @@ export async function GET() {
  */
 export async function POST(request: Request) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }

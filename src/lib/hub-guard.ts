@@ -17,22 +17,36 @@ export async function requireHubRegistration() {
     // 1. Session verification
     const sessionResult = await requireSession();
     
-    // Automatically block users who are not even authenticated
+    // Automatically block users who are not even authenticated or are banned
     if (!sessionResult.session) {
-        redirect("/hub/register");
+        // Proper handling of the nested error object structure (result.error.error)
+        const errorMessage = sessionResult.error?.error || "Authentication required";
+        redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
+    
     let shouldRedirect = false;
     
     // 2. Extrapolate db record for registration verification
     try {
-        const db = getAdminDb();
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(sessionResult.session.user.id).get();
+        const { getCached, CacheKeys } = await import("@/lib/redis");
+        const cacheKey = CacheKeys.userProfile(sessionResult.session.user.id);
         
-        if (!userDoc.exists) {
+        // Leverage cached user data populated by requireSession
+        let userData: any = await getCached(cacheKey);
+        
+        // Maintain live Firestore validation fallback to prevent stale session exploits
+        if (!userData) {
+            const db = getAdminDb();
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(sessionResult.session.user.id).get();
+            
+            if (userDoc.exists) {
+                userData = userDoc.data();
+            }
+        }
+        
+        if (!userData) {
             shouldRedirect = true;
         } else {
-            const userData = userDoc.data();
-            
             // 3. Define "Fully Registered" Status
             const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
             const hasEmail = Boolean(userData?.email);

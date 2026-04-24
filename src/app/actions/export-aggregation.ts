@@ -6,6 +6,8 @@ import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { requireAdmin } from "@/lib/require-admin";
+import { requireSession } from "@/lib/session-guard";
 
 /**
  * Export Aggregation System
@@ -54,6 +56,9 @@ export async function createExportWindowAction(data: {
     adminId: string;
 }) {
     try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
+
         const window: Omit<ExportWindow, "id"> = {
             title: data.title,
             commodity: data.commodity,
@@ -117,6 +122,9 @@ export async function bookExportSlotAction(data: {
     volume: number;
 }) {
     try {
+        const sessionResult = await requireSession();
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
 
@@ -188,6 +196,9 @@ export async function bookExportSlotAction(data: {
  */
 export async function getUserExportSlotsAction(userId: string) {
     try {
+        const sessionResult = await requireSession();
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+
         const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 
         const snapshot = await q.get();

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Shield, Trash2, Clock, CheckCircle, XCircle, Search, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { formatDateTime } from "@/lib/utils";
 
 interface PasswordResetRecord {
     id: string;
@@ -70,10 +71,7 @@ export default function AdminPasswordResetsPage() {
     const used = records.filter(r => r.used).length;
     const active = records.filter(r => !r.used && Date.now() <= r.expiry).length;
 
-    const formatDate = (d: string | number) =>
-        new Intl.DateTimeFormat("en-NG", {
-            dateStyle: "medium", timeStyle: "short"
-        }).format(new Date(d));
+
 
     const isExpired = (expiry: number) => Date.now() > expiry;
 
@@ -174,10 +172,10 @@ export default function AdminPasswordResetsPage() {
                                                     {status}
                                                 </span>
                                             </td>
-                                            <td className="px-5 py-3.5 text-sm text-slate-500">{formatDate(r.createdAt)}</td>
-                                            <td className="px-5 py-3.5 text-sm text-slate-500">{formatDate(r.expiry)}</td>
+                                            <td className="px-5 py-3.5 text-sm text-slate-500">{formatDateTime(r.createdAt)}</td>
+                                            <td className="px-5 py-3.5 text-sm text-slate-500">{formatDateTime(r.expiry)}</td>
                                             <td className="px-5 py-3.5 text-sm text-slate-500">
-                                                {r.usedAt ? formatDate(r.usedAt) : "—"}
+                                                {r.usedAt ? formatDateTime(r.usedAt) : "—"}
                                             </td>
                                         </tr>
                                     );

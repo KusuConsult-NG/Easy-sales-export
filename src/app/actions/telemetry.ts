@@ -6,6 +6,16 @@ export async function logTelemetryAction(level: 'debug' | 'info' | 'warn' | 'err
     try {
         if (level === 'error') {
             logger.error(message, undefined, payload);
+            
+            // Explicitly report to Sentry for Railway production
+            try {
+                const Sentry = await import("@sentry/nextjs");
+                Sentry.captureException(new Error(message), {
+                    extra: payload
+                });
+            } catch (sentryErr) {
+                // Sentry might not be initialized
+            }
         } else if (level === 'warn') {
             logger.warn(message, payload);
         } else if (level === 'info') {

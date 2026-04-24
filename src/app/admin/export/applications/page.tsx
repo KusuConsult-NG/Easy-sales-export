@@ -37,7 +37,8 @@ import {
     approveExportOnboardingAction,
     rejectExportApplicationAction,
     requestExportApplicationRevisionAction,
-    getStandardExportApplicationsAction
+    getStandardExportApplicationsAction,
+    getExportApplicationsStatsAction
 } from "@/app/actions/admin";
 import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
@@ -96,8 +97,13 @@ function statusBadge(status: string) {
 
 function formatDate(ts: any): string {
     if (!ts) return "—";
-    const d = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(d);
+    try {
+        const d = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
+        if (isNaN(d.getTime())) return "—";
+        return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium" }).format(d);
+    } catch (e) {
+        return "—";
+    }
 }
 
 export default function AdminExportApplicationsPage() {
@@ -130,6 +136,9 @@ export default function AdminExportApplicationsPage() {
     const [editingApp, setEditingApp] = useState<ExportApplication | null>(null);
     const [revisionNote, setRevisionNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
+    
+    // Global Stats state
+    const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0, resubmitted: 0 });
 
     const statusFilter = (filters.status as AppStatus | "all") || "pending";
 
@@ -139,6 +148,15 @@ export default function AdminExportApplicationsPage() {
             updateFilter("status", "pending");
         }
     }, [filters.status, updateFilter]);
+
+    // Fetch Global Stats when applications array changes (e.g., after approval/rejection)
+    useEffect(() => {
+        getExportApplicationsStatsAction().then((res) => {
+            if (res.success && res.data) {
+                setStats(res.data);
+            }
+        }).catch(console.error);
+    }, [applications]);
 
     async function handleApprove(app: StandardPendingForm<ExportApplication>) {
         if (!confirm(`Approve application for ${app.user.name}?`)) return;
@@ -236,11 +254,6 @@ export default function AdminExportApplicationsPage() {
         }
     };
 
-    const pendingCount = applications.filter(
-        (a) => a.status === "pending_review" || a.status === "pending"
-    ).length;
-    const resubmittedCount = applications.filter((a) => a.data.resubmittedAt).length;
-
     return (
         <div className="min-h-screen bg-slate-50 p-4 sm:p-8">
             {/* Header */}
@@ -265,10 +278,10 @@ export default function AdminExportApplicationsPage() {
             {/* Stats Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 {[
-                    { label: "Pending Review", value: pendingCount, color: "text-yellow-600" },
-                    { label: "Approved", value: applications.filter((a) => a.status === "approved").length, color: "text-green-600" },
-                    { label: "Rejected", value: applications.filter((a) => a.status === "rejected").length, color: "text-red-600" },
-                    { label: "Resubmitted", value: resubmittedCount, color: "text-orange-600" },
+                    { label: "Pending Review", value: stats.pending, color: "text-yellow-600" },
+                    { label: "Approved", value: stats.approved, color: "text-green-600" },
+                    { label: "Rejected", value: stats.rejected, color: "text-red-600" },
+                    { label: "Resubmitted", value: stats.resubmitted, color: "text-orange-600" },
                 ].map((s) => (
                     <div key={s.label} className="bg-white rounded-xl border border-slate-200 p-4">
                         <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">{s.label}</p>

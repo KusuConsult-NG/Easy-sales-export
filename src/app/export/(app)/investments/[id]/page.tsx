@@ -5,6 +5,7 @@ import { ArrowLeft, TrendingUp, Calendar, Clock, CheckCircle2, DollarSign, MapPi
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getMyExportInvestmentsAction } from "@/app/actions/export";
+import { formatDate } from "@/lib/utils";
 
 type InvestmentSlot = {
     id: string;
@@ -67,7 +68,6 @@ export default function InvestmentDetailPage() {
     }
 
     const totalPayout = investment.amount + (investment.expectedReturn || 0);
-    const formatDate = (d: Date | null) => d ? new Date(d).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" }) : "—";
     const statusColors: Record<string, string> = {
         active: "bg-green-500",
         completed: "bg-blue-500",

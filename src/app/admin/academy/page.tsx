@@ -8,6 +8,7 @@ import { getCoursesAction, type Course } from "@/app/actions/academy";
 import { toast } from "sonner";
 import { Timestamp } from "firebase/firestore";
 import { useAdminData } from "@/hooks/useAdminData";
+import { formatDate } from "@/lib/utils";
 
 export default function AcademyAdminPage() {
     const {
@@ -58,16 +59,7 @@ export default function AcademyAdminPage() {
         );
     };
 
-    // Helper to format date safely
-    const formatDate = (date: Timestamp | Date | any) => {
-        if (!date) return 'N/A';
-        // Handle Firestore Timestamp
-        if (date.seconds) {
-            return new Date(date.seconds * 1000).toLocaleDateString();
-        }
-        // Handle Date object or string
-        return new Date(date).toLocaleDateString();
-    };
+
 
     return (
         <div className="min-h-screen bg-slate-50 py-8 px-4">

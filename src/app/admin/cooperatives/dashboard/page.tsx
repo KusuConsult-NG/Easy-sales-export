@@ -20,7 +20,17 @@ import {
     getContributionReportsAction,
     getRecentActivityAction,
 } from "@/app/actions/cooperative-admin";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import dynamic from "next/dynamic";
+
+const DashboardLineChart = dynamic(() => import("@/components/admin/DashboardLineChart"), {
+    ssr: false,
+    loading: () => (
+        <div className="flex flex-col items-center justify-center py-10 text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-gray-400 mb-2" />
+            <span className="text-gray-500 text-sm">Loading chart...</span>
+        </div>
+    )
+});
 import Link from "next/link";
 
 export default function AdminCooperativeDashboardPage() {
@@ -230,28 +240,7 @@ export default function AdminCooperativeDashboardPage() {
                             Contribution Trend
                         </h2>
                         {reports?.monthlyTrend && reports.monthlyTrend.length > 0 ? (
-                            <ResponsiveContainer width="100%" height={250}>
-                                <LineChart data={reports.monthlyTrend}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                                    <XAxis dataKey="month" stroke="#9CA3AF" />
-                                    <YAxis stroke="#9CA3AF" />
-                                    <Tooltip
-                                        contentStyle={{
-                                            backgroundColor: "#1F2937",
-                                            border: "none",
-                                            borderRadius: "0.5rem",
-                                            color: "#fff",
-                                        }}
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="amount"
-                                        stroke="#10B981"
-                                        strokeWidth={3}
-                                        dot={{ fill: "#10B981", r: 4 }}
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
+                            <DashboardLineChart monthlyTrend={reports.monthlyTrend} />
                         ) : (
                             <div className="flex flex-col items-center justify-center py-10 text-center">
                                 <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mb-3">

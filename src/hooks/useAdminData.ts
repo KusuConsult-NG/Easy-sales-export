@@ -42,7 +42,11 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
         latestRef.current = { search, filters, fetchAction, limit };
     });
 
+    // Track the latest fetch request to prevent race conditions
+    const fetchIdRef = useRef(0);
+
     const fetchData = useCallback(async (page: number, resetCursors = false) => {
+        const currentFetchId = ++fetchIdRef.current;
         setLoading(true);
         setError(null);
 
@@ -68,6 +72,12 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
 
             const result = await fn(params);
 
+            // Prevent race conditions: Ignore if a newer fetch was initiated
+            if (currentFetchId !== fetchIdRef.current) {
+                logger.debug('[useAdminData] Ignoring stale fetch response', { page, search: s });
+                return;
+            }
+
             if (result.success) {
                 const items = result.data || result.loans || result.properties || result.users || [];
                 setData(items);
@@ -92,14 +102,17 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
                 logger.warn('[useAdminData] Fetch returned error', { page, error: msg });
             }
         } catch (err: any) {
+            // Prevent race conditions even on errors
+            if (currentFetchId !== fetchIdRef.current) return;
+            
             const msg = err.message || 'An error occurred';
             setError(msg);
             logger.error('[useAdminData] Fetch threw exception', { page, error: msg });
         } finally {
-            setLoading(false);
+            if (currentFetchId === fetchIdRef.current) {
+                setLoading(false);
+            }
         }
-        // fetchData has no external deps — it reads everything from latestRef at call-time.
-         
     }, []);
 
 

@@ -22,7 +22,7 @@ import {
     Clock,
     IdCard,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 import { getDashboardDataAction } from "@/app/actions/cooperative-dashboard";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
@@ -56,13 +56,6 @@ export default function CooperativeDashboardPage() {
         loadData();
     }, []);
 
-    const formatDate = (date: Date | string) => {
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        }).format(new Date(date));
-    };
 
     const getActivityIcon = (type: string) => {
         switch (type) {

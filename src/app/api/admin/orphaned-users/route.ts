@@ -8,14 +8,14 @@ export const dynamic = 'force-dynamic';
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 import { detectOrphanedUsers, repairAllOrphanedUsers, repairOrphanedUser } from '@/lib/orphaned-user-repair';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
     try {
         // Check admin authentication
-        const session = await auth();
+        const session = (await requireSession()).session;
 
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         // Check admin authentication
-        const session = await auth();
+        const session = (await requireSession()).session;
 
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

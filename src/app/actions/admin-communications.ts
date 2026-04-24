@@ -1,11 +1,10 @@
 'use server';
 
 import { logger } from '@/lib/logger';
-import { requireSession } from "@/lib/session-guard";
+import { requireAdmin } from "@/lib/require-admin";
 import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
-import { auth } from '@/lib/auth';
 import { serializeDocs } from '@/lib/firestore-serialize';
 
 export interface SendBulkEmailState {
@@ -24,7 +23,7 @@ export interface CreateAnnouncementState {
  * Get recipient emails based on segment
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
-    console.log(`[AdminComms] getRecipientEmails called with segment: '${segment}'`);
+    logger.info(`[AdminComms] getRecipientEmails called with segment: '${segment}'`);
     try {
         const query = db.collection(COLLECTIONS.USERS);
         let snapshot;
@@ -42,7 +41,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 if (data.email) emails.push(data.email);
                 count++;
             }
-            console.log(`[AdminComms] cooperative segment: ${count} docs found`);
+            logger.info(`[AdminComms] cooperative segment: ${count} docs found`);
         } else {
             let stream: any;
             switch (segment) {
@@ -64,7 +63,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                         if (email) emails.push(email);
                         waveCount++;
                     }
-                    console.log(`[AdminComms] wave segment: ${waveCount} docs found`);
+                    logger.info(`[AdminComms] wave segment: ${waveCount} docs found`);
                     return [...new Set(emails)];
                 }
                 case 'all':
@@ -81,14 +80,13 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 }
                 mainCount++;
             }
-            console.log(`[AdminComms] segment '${segment}': ${mainCount} docs processed`);
+            logger.info(`[AdminComms] segment '${segment}': ${mainCount} docs processed`);
         }
 
-        console.log(`[AdminComms] Returning ${emails.length} emails (deduped: ${[...new Set(emails)].length})`);
+        logger.info(`[AdminComms] Returning ${emails.length} emails (deduped: ${[...new Set(emails)].length})`);
         return [...new Set(emails)];
     } catch (error) {
-        console.error('[AdminComms] ERROR in getRecipientEmails:', error);
-        logger.error('Error fetching recipient emails:', error);
+        logger.error('[AdminComms] ERROR in getRecipientEmails:', error);
         return [];
     }
 }
@@ -98,27 +96,14 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  * Accepts recipients segment, subject, and HTML body
  */
 export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
+    const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
-        const { session } = sessionResult;
-        // Check if user is admin
-        const userRef = db.collection(COLLECTIONS.USERS).doc(session?.user?.id || 'unknown');
-        const userDoc = await userRef.get();
-        const userData = userDoc.data();
-
-        if (!session?.user || !userData?.roles?.includes('admin')) {
-            // simplified check, relying on session claims is faster but verifying in DB is safer for critical actions
-            if (!session?.user?.roles?.includes('admin')) {
-                return { success: false, error: 'Unauthorized' };
-            }
-        }
-
         const recipients = formData.get('recipients') as string;
         const subject = formData.get('subject') as string;
         const body = formData.get('body') as string;
 
-        console.log(`[AdminComms] sendBulkEmailAction — recipients: '${recipients}', subject: '${subject?.substring(0, 50)}', body length: ${body?.length || 0}`);
+        logger.info(`[AdminComms] sendBulkEmailAction — recipients: '${recipients}', subject: '${subject?.substring(0, 50)}', body length: ${body?.length || 0}`);
 
         if (!recipients || !subject || !body) {
             return { success: false, error: 'All fields are required' };
@@ -176,7 +161,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             body,
             recipientCount: successfulSends,
             attemptedCount: emails.length,
-            sentBy: session.user.id,
+            sentBy: adminCheck.userId,
             sentAt: FieldValue.serverTimestamp(),
             status: hasError ? 'partial' : 'sent',
             error: hasError ? lastError : null
@@ -197,13 +182,9 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
  * Displayed on user dashboards
  */
 export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> {
+    const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
-        const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin')) {
-            return { success: false, error: 'Unauthorized' };
-        }
 
         const title = formData.get('title') as string;
         const message = formData.get('message') as string;
@@ -219,7 +200,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             message,
             priority,
             active: true,
-            createdBy: session.user.id,
+            createdBy: adminCheck.userId,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp()
         });
@@ -244,14 +225,9 @@ export interface GetEmailHistoryState {
  * Fetch admin email send history from Firestore (email_history collection)
  */
 export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
+    const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
-        const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: 'Unauthorized' };
-        if (!session.user.roles?.includes('admin') && !session.user.roles?.includes('super_admin')) {
-            return { success: false, error: 'Unauthorized' };
-        }
 
         const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
             .orderBy('sentAt', 'desc')

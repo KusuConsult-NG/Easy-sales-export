@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { getBroadcastHistoryAction } from "@/app/actions/broadcast";
 import type { BroadcastLog, BroadcastAudience } from "@/app/actions/broadcast";
+import { formatDateTime } from "@/lib/utils";
 
 const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     all: "All Users",
@@ -34,13 +35,7 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     csv_upload: "CSV Upload",
 };
 
-function formatDate(d: Date | string) {
-    const dt = typeof d === "string" ? new Date(d) : d;
-    return dt.toLocaleDateString("en-NG", {
-        day: "numeric", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit",
-    });
-}
+
 
 function StatusBadge({ status }: { status: BroadcastLog["status"] }) {
     const map = {
@@ -97,7 +92,7 @@ function LogRow({ log }: { log: BroadcastLog }) {
                             {AUDIENCE_LABELS[log.audience] ?? log.audience}
                             {log.filters?.state ? ` · ${log.filters.state}` : ""}
                         </span>
-                        <span>{formatDate(log.sentAt)}</span>
+                        <span>{formatDateTime(log.sentAt)}</span>
                         <span className="text-slate-400">by {log.sentByName}</span>
                     </div>
                 </div>

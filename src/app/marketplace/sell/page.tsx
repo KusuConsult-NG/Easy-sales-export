@@ -8,6 +8,7 @@ import {
     Plus, Edit, Trash2, BarChart3, Loader2, AlertCircle
 } from "lucide-react";
 import { getSellerProductsAction, getSellerVerificationAction, deleteProductAction } from "@/app/actions/marketplace";
+import Image from "next/image";
 import type { Product } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -243,10 +244,12 @@ export default function SellerDashboardPage() {
                                 {/* Product Image */}
                                 <div className="relative h-48 bg-slate-200">
                                     {product.images && product.images.length > 0 ? (
-                                        <img
+                                        <Image
                                             src={product.images[0]}
                                             alt={product.title}
-                                            className="w-full h-full object-cover"
+                                            fill
+                                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                            className="object-cover"
                                         />
                                     ) : (
                                         <div className="flex items-center justify-center h-full">

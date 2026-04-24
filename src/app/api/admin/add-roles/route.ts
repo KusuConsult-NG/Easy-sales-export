@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -32,7 +32,7 @@ const VALID_ROLES: UserRole[] = [
  */
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         const callerRoles = session?.user?.roles ?? [];
         const isAdmin = callerRoles.includes("admin") || callerRoles.includes("super_admin");
 
@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
  */
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         const callerRoles = session?.user?.roles ?? [];
         const isSuperAdmin = callerRoles.includes("super_admin");
         const isAdmin = callerRoles.includes("admin") || isSuperAdmin;

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Vercel Hobby max; upgrade to 300 on Pro if needed
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
@@ -77,7 +77,7 @@ async function fetchAllPaystackByStatus(status: string, PAYSTACK_SECRET_KEY: str
 async function paystackSyncHandler(_req: NextRequest) {
     try {
         // ── Auth guard ────────────────────────────────────────────────────────
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }

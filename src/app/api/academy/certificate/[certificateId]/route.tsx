@@ -4,7 +4,7 @@ import { renderToStream } from "@react-pdf/renderer";
 import { CertificateDocument } from "@/components/pdf/CertificateDocument";
 import { db } from "@/lib/firebase-admin"; // Use Admin SDK for security
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 
 export async function GET(
@@ -31,7 +31,7 @@ export async function GET(
         const courseData = courseDoc.data();
 
 
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json({ error: "Authentication required" }, { status: 401 });
         }

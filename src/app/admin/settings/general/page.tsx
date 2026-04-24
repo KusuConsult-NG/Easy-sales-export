@@ -18,8 +18,12 @@ export default function GeneralSettingsPage() {
     });
 
     useEffect(() => {
-        getPlatformSettingsAction().then((data) => {
-            setSettings(data);
+        getPlatformSettingsAction().then((data: any) => {
+            if (data?.success === false) {
+                toast.error(data.error || "Failed to load settings");
+            } else {
+                setSettings(data);
+            }
             setLoading(false);
         });
     }, []);

@@ -20,11 +20,17 @@ export default function DateRangePicker({ value, onChange, placeholder = "Select
 
     const formatDate = (date: Date | null) => {
         if (!date) return "";
-        return new Intl.DateTimeFormat("en-NG", {
-            year: "numeric",
-            month: "short",
-            day: "numeric"
-        }).format(date);
+        try {
+            const d = new Date(date);
+            if (isNaN(d.getTime())) return "Invalid Date";
+            return new Intl.DateTimeFormat("en-NG", {
+                year: "numeric",
+                month: "short",
+                day: "numeric"
+            }).format(d);
+        } catch (e) {
+            return "Invalid Date";
+        }
     };
 
     function handleApply() {

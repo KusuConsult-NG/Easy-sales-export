@@ -7,7 +7,7 @@
  */
 
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requireHubRegistration } from "@/lib/hub-guard";
 import DashboardNav from "@/components/dashboard/DashboardNav";
 
 export default async function DashboardLayout({
@@ -15,11 +15,7 @@ export default async function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const session = await auth();
-
-    if (!session?.user) {
-        redirect("/auth/login?callbackUrl=/dashboard");
-    }
+    await requireHubRegistration();
 
     return (
         <div className="min-h-screen bg-slate-50">

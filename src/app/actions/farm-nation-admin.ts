@@ -27,6 +27,14 @@ export async function getFarmNationStatsAction(): Promise<{
             return { error: "Unauthorized: Permission required", success: false };
         }
 
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = "admin:farm-nation-stats:global";
+
+        try {
+            const cached = await getCached<any>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {}
+
         const countSnap = await db.collection(COLLECTIONS.USERS)
             .where('serviceRegistrations.farmNation.status', '!=', null)
             .count()
@@ -34,7 +42,13 @@ export async function getFarmNationStatsAction(): Promise<{
         
         const totalApplications = countSnap.data().count;
 
-        return { success: true, data: { stats: { totalApplications } } };
+        const payload = { success: true as const, data: { stats: { totalApplications } } };
+
+        try {
+            await setCache(cacheKey, payload, 120);
+        } catch (e) {}
+
+        return payload;
     } catch (error: any) {
         logger.error("Get farm nation stats error:", error);
         return { success: false, error: "Failed to fetch farm nation stats" };

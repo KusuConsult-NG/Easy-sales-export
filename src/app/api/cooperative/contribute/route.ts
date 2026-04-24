@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-import { auth } from '@/lib/auth';
+import { requireSession } from "@/lib/session-guard";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user) {
             return NextResponse.json(
                 { error: 'Unauthorized - You must be logged in' },

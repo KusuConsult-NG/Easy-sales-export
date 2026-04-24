@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -11,7 +11,7 @@ import { withRateLimit } from "@/lib/rate-limit";
 /** GET /api/admin/password-resets — list all reset token records */
 async function getPasswordResetsHandler(_req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
@@ -46,7 +46,7 @@ export const GET = withRateLimit(getPasswordResetsHandler);
 /** DELETE /api/admin/password-resets — purge expired and used tokens */
 async function deletePasswordResetsHandler(_req: NextRequest) {
     try {
-        const session = await auth();
+        const session = (await requireSession()).session;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
