@@ -152,34 +152,56 @@ export default function AdminWaveApplicationsPage() {
         setEditSaving(false);
     };
 
-    function handleExportCSV() {
+    async function handleExportCSV() {
         if (applications.length === 0) return;
-        const headers = [
-            "Application ID", "Surname", "First Name", "Email", "Phone",
-            "State", "LGA", "NIN", "BVN", "Voter Card",
-            "Bank Name", "Account Number", "Status", "Applied Date"
-        ];
-        const rows = applications.map(app => [
-            app.id, app.data.surname || "", app.data.firstName || "",
-            app.user.email || "", app.data.phone || "",
-            app.data.stateOfResidence || "", app.data.lgaOfResidence || "",
-            app.data.nin || "", app.data.bvn || "", app.data.votersCardNumber || "",
-            app.data.bankName || "", app.data.accountNumber || "",
-            app.status, new Date(app.data.createdAt).toLocaleDateString("en-NG")
-        ]);
-        const csvContent = [
-            headers.join(","),
-            ...rows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-        ].join("\n");
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `wave_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        
+        try {
+            showToast("Preparing export...", "success");
+            
+            // Fetch all applications matching the current filters (high limit for export)
+            const result = await getStandardWaveApplicationsAction({
+                limit: 5000,
+                status: filters.status,
+                search: search
+            });
+
+            if (!result.success || !result.data) {
+                throw new Error(result.error || "Failed to fetch data for export");
+            }
+
+            const exportData = result.data;
+
+            const headers = [
+                "Application ID", "Surname", "First Name", "Email", "Phone",
+                "State", "LGA", "NIN", "BVN", "Voter Card",
+                "Bank Name", "Account Number", "Status", "Applied Date"
+            ];
+            const rows = exportData.map(app => [
+                app.id, app.data.surname || "", app.data.firstName || "",
+                app.user.email || "", app.data.phone || "",
+                app.data.stateOfResidence || "", app.data.lgaOfResidence || "",
+                app.data.nin || "", app.data.bvn || "", app.data.votersCardNumber || "",
+                app.data.bankName || "", app.data.accountNumber || "",
+                app.status, new Date(app.data.createdAt).toLocaleDateString("en-NG")
+            ]);
+            const csvContent = [
+                headers.join(","),
+                ...rows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+            ].join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `wave_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast("Export downloaded successfully", "success");
+        } catch (error: any) {
+            console.error("Export error:", error);
+            showToast(error.message || "Failed to export data", "error");
+        }
     };
 
     const formatDate = (date: Date) => {

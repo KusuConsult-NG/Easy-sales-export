@@ -195,24 +195,45 @@ export default function AdminExportApplicationsPage() {
         setEditSaving(false);
     };
 
-    function handleExportCSV() {
+    async function handleExportCSV() {
         if (!applications.length) return;
-        const rows = applications.map((a) => [
-            a.user.name,
-            a.user.email || "",
-            a.status,
-            formatDate(a.data.createdAt),
-            a.data.bank?.bankName || "",
-            a.data.bank?.accountNumber || "",
-        ]);
-        const header = ["Name", "Email", "Status", "Submitted", "Bank", "Account No"];
-        const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
-        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `export_applications_${Date.now()}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+
+        try {
+            showToast("Preparing export...", "success");
+
+            const result = await getStandardExportApplicationsAction({
+                limit: 5000,
+                status: filters.status,
+                search: search
+            });
+
+            if (!result.success || !result.data) {
+                throw new Error(result.error || "Failed to fetch data for export");
+            }
+
+            const exportData = result.data;
+
+            const rows = exportData.map((a) => [
+                a.user.name,
+                a.user.email || "",
+                a.status,
+                formatDate(a.data.createdAt),
+                a.data.bank?.bankName || "",
+                a.data.bank?.accountNumber || "",
+            ]);
+            const header = ["Name", "Email", "Status", "Submitted", "Bank", "Account No"];
+            const csv = [header, ...rows].map((r) => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+            const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `export_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast("Export downloaded successfully", "success");
+        } catch (error: any) {
+            console.error("Export error:", error);
+            showToast(error.message || "Failed to export data", "error");
+        }
     };
 
     const pendingCount = applications.filter(

@@ -63,12 +63,32 @@ export default function BriefingRegistrationsPage() {
         ));
     }, [registrations, searchQuery]);
 
-    function handleExportCSV() {
+    async function handleExportCSV() {
         if (registrations.length === 0) return;
         setIsExporting(true);
         try {
+            showToast("Preparing export...", "success");
+            const result = await getBriefingRegistrationsAction(null, 5000);
+            if (!result.success || !result.data) {
+                throw new Error(result.error || "Failed to fetch registrations for export");
+            }
+            
+            const exportData = result.data;
+            
+            // Re-apply local search if necessary
+            let finalData = exportData as BriefingRegistration[];
+            if (searchQuery.trim()) {
+                const q = searchQuery.toLowerCase();
+                finalData = finalData.filter(r =>
+                    r.fullName?.toLowerCase().includes(q) ||
+                    r.email?.toLowerCase().includes(q) ||
+                    r.phoneNumber?.toLowerCase().includes(q) ||
+                    r.state?.toLowerCase().includes(q)
+                );
+            }
+
             const headers = ["Name", "Email", "Phone", "State", "Role", "Status", "Registered Date"];
-            const rows = registrations.map(r => [
+            const rows = finalData.map(r => [
                 r.fullName || "",
                 r.email || "",
                 r.phoneNumber || "",
@@ -93,7 +113,7 @@ export default function BriefingRegistrationsPage() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showToast(`Exported ${registrations.length} registrations to CSV`, "success");
+            showToast(`Exported ${finalData.length} registrations to CSV`, "success");
         } catch (err) {
             console.error("CSV export error:", err);
             showToast("Failed to export CSV", "error");

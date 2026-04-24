@@ -466,3 +466,30 @@ export async function getStandardAcademyApplicationsAction(options: {
         return { success: false, error: "Failed to fetch normalized applications" };
     }
 }
+
+/**
+ * Log Academy Export Action
+ */
+export async function logAcademyExportAction(
+    details: { count: number, filters: any }
+): Promise<ActionState> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        
+        await createAdminAuditLog({
+            action: "data_export",
+            userId: session.user.id,
+            targetId: "academy_applications",
+            targetType: "export",
+            details: `Exported ${details.count} academy applications. Filters: ${JSON.stringify(details.filters)}`,
+            metadata: details
+        });
+
+        return { error: null, success: true, data: { message: "Export logged." } };
+    } catch (error: any) {
+        logger.error("Error logging export:", error);
+        return { error: "An unexpected error occurred", success: false };
+    }
+}

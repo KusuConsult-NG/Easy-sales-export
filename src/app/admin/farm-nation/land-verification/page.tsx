@@ -103,32 +103,53 @@ export default function AdminLandVerificationPage() {
         }
     };
 
-    function handleExportCSV() {
+    async function handleExportCSV() {
         if (verifications.length === 0) return;
-        const headers = [
-            "Owner Name", "Title", "Category", "State", "LGA",
-            "Size", "Unit", "Total Price (₦)", "GPS Lat", "GPS Lng",
-            "Verification Status", "Submitted Date"
-        ];
-        const rows = verifications.map(v => [
-            v.ownerName || "", v.title || "", v.category || "",
-            v.state || "", v.lga || "",
-            v.size, v.unit || "", v.totalPrice,
-            v.gpsCoordinates?.latitude || "", v.gpsCoordinates?.longitude || "",
-            v.verificationStatus || "",
-            new Date(v.createdAt).toLocaleDateString("en-NG")
-        ]);
-        const csv = [
-            headers.join(","),
-            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-        ].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `land_verifications_${filterStatus}_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+        
+        try {
+            showToast("Preparing export...", "success");
+            
+            // Fetch all items matching the current filter (limit 5000)
+            const result = await getAdminLandVerificationsAction({
+                limit: 5000,
+                status: filters.status
+            });
+
+            if (!result.success || !result.data) {
+                throw new Error(result.error || "Failed to fetch data for export");
+            }
+
+            const exportData = result.data;
+            
+            const headers = [
+                "Owner Name", "Title", "Category", "State", "LGA",
+                "Size", "Unit", "Total Price (₦)", "GPS Lat", "GPS Lng",
+                "Verification Status", "Submitted Date"
+            ];
+            const rows = exportData.map(v => [
+                v.ownerName || "", v.title || "", v.category || "",
+                v.state || "", v.lga || "",
+                v.size, v.unit || "", v.totalPrice,
+                v.gpsCoordinates?.latitude || "", v.gpsCoordinates?.longitude || "",
+                v.verificationStatus || "",
+                new Date(v.createdAt).toLocaleDateString("en-NG")
+            ]);
+            const csv = [
+                headers.join(","),
+                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+            ].join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `land_verifications_${filterStatus}_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+            showToast("Export downloaded successfully", "success");
+        } catch (error: any) {
+            console.error("Export error:", error);
+            showToast(error.message || "Failed to export data", "error");
+        }
     };
 
     // We'll compute stats loosely locally based on loaded data.

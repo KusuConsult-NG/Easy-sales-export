@@ -108,15 +108,48 @@ export default function AdminWaveMembersPage() {
     async function handleExportCSV() {
         setIsExporting(true);
         try {
-            // Build CSV from the already-loaded members data (no extra fetch needed)
+            // Fetch all matching records for the current filter/search ignoring pagination limit
+            const result = await getStandardWaveApplicationsAction({
+                status: "approved",
+                limit: 5000,
+                search: searchQuery,
+            });
+            
+            if (!result.success || !result.data) {
+                showToast("Failed to fetch data for export", "error");
+                setIsExporting(false);
+                return;
+            }
+
+            const exportData = result.data.map((item: any) => {
+                const data = item.data;
+                return {
+                    id: item.user.id || item.id,
+                    enrolledAt: data.approvalTimestamp?.toDate?.() || data.reviewedAt?.toDate?.() || data.createdAt?.toDate?.() || new Date(),
+                    applicationId: item.id,
+                    fullName: data.fullName,
+                    surname: data.surname,
+                    firstName: data.firstName,
+                    email: item.user.email,
+                    phone: item.user.phone,
+                    stateOfResidence: item.user.state,
+                    lgaOfResidence: item.user.lga,
+                    bankName: data.bankName,
+                    accountNumber: data.accountNumber,
+                    farmSize: data.farmSize,
+                    nin: data.nin,
+                    bvn: data.bvn,
+                };
+            });
+
             const headers = [
                 "Full Name", "Email", "Phone", "State", "LGA",
                 "Bank Name", "Account Number", "Farm Size",
                 "NIN", "BVN", "Enrolled Date", "Application ID"
             ];
 
-            const rows = members.map(m => [
-                getDisplayName(m),
+            const rows = exportData.map((m: any) => [
+                getDisplayName(m as WaveMember),
                 m.email || "",
                 m.phone || "",
                 m.stateOfResidence || "",
@@ -132,7 +165,7 @@ export default function AdminWaveMembersPage() {
 
             const csvContent = [
                 headers.join(","),
-                ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+                ...rows.map(row => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
             ].join("\n");
 
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -145,7 +178,7 @@ export default function AdminWaveMembersPage() {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showToast(`Exported ${members.length} members to CSV`, "success");
+            showToast(`Exported ${exportData.length} members to CSV`, "success");
         } catch (err) {
             logger.error("CSV export error:", err);
             showToast("Failed to export CSV", "error");

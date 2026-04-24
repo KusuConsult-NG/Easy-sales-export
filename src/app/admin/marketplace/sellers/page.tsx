@@ -92,32 +92,60 @@ export default function AdminSellersPage() {
     // Note: useAdminData already applies local search text filters
     const filteredVerifications = verifications;
 
-    function handleExportCSV() {
-        if (verifications.length === 0) return;
-        const headers = [
-            "Business Name", "Business Type", "Owner Name", "Email", "Phone",
-            "State", "LGA", "Address", "Bank Name", "Account Number", "Account Name",
-            "Status", "Applied Date"
-        ];
-        const rows = verifications.map(v => [
-            v.data.businessName || "", v.data.businessType || "",
-            v.user.name || "", v.user.email || "", v.data.phone || "",
-            v.data.state || "", v.data.lga || "", v.data.address || "",
-            v.data.bankDetails?.bankName || "", v.data.bankDetails?.accountNumber || "", v.data.bankDetails?.accountName || "",
-            v.status, new Date(v.data.createdAt || Date.now()).toLocaleDateString("en-NG")
-        ]);
-        const csv = [
-            headers.join(","),
-            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-        ].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `seller_verifications_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
-    };
+    const [isExporting, setIsExporting] = useState(false);
+
+    async function handleExportCSV() {
+        setIsExporting(true);
+        showToast("Preparing export...", "info");
+        try {
+            const result = await getStandardSellerVerificationsAction(filterStatus, undefined, 5000);
+            if (!result || !result.success || !result.data || result.data.length === 0) {
+                showToast("No data available to export", "error");
+                return;
+            }
+
+            let exportData = result.data as StandardPendingForm<SellerVerification>[];
+
+            if (searchQuery) {
+                const s = searchQuery.toLowerCase();
+                exportData = exportData.filter(v => 
+                    v.data.businessName?.toLowerCase().includes(s) ||
+                    (v.data.email || v.user.email)?.toLowerCase().includes(s) ||
+                    v.data.phone?.toLowerCase().includes(s)
+                );
+            }
+
+            const headers = [
+                "Business Name", "Business Type", "Owner Name", "Email", "Phone",
+                "State", "LGA", "Address", "Bank Name", "Account Number", "Account Name",
+                "Status", "Applied Date"
+            ];
+            const rows = exportData.map(v => [
+                v.data.businessName || "", v.data.businessType || "",
+                v.user.name || "", v.user.email || "", v.data.phone || "",
+                v.data.state || "", v.data.lga || "", v.data.address || "",
+                v.data.bankDetails?.bankName || "", v.data.bankDetails?.accountNumber || "", v.data.bankDetails?.accountName || "",
+                v.status, new Date(v.data.createdAt || Date.now()).toLocaleDateString("en-NG")
+            ]);
+            const csv = [
+                headers.join(","),
+                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+            ].join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `seller_verifications_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+            showToast("Export successful", "success");
+        } catch (error) {
+            logger.error("Export CSV error:", error);
+            showToast("Failed to initiate export", "error");
+        } finally {
+            setIsExporting(false);
+        }
+    }
 
     async function handleApprove(verificationId: string) {
         if (!confirm("Approve this seller?")) return;
@@ -259,10 +287,11 @@ export default function AdminSellersPage() {
                 </div>
                 <button
                     onClick={handleExportCSV}
-                    disabled={verifications.length === 0}
+                    disabled={isExporting}
                     className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                 >
-                    <Download className="w-4 h-4" /> Export CSV ({verifications.length})
+                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {isExporting ? "Preparing Export..." : `Export CSV (${stats.total}+)`}
                 </button>
             </div>
 

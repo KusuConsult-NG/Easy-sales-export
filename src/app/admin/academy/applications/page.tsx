@@ -5,7 +5,7 @@ import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
     Search, Eye, BookOpen, GraduationCap, DollarSign,
     X, User, Phone, Mail, MapPin, Briefcase, Calendar,
-    Target, Award
+    Target, Award, Download
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -14,7 +14,7 @@ import {
     markAcademyApplicationUnderReviewAction
 } from "@/app/actions/admin";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
-import { getStandardAcademyApplicationsAction, getAcademyStatsAction } from "@/app/actions/academy-admin";
+import { getStandardAcademyApplicationsAction, getAcademyStatsAction, logAcademyExportAction } from "@/app/actions/academy-admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useEffect } from "react";
 
@@ -297,6 +297,7 @@ export default function AdminAcademyApplicationsPage() {
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         getAcademyStatsAction().then(res => {
@@ -429,6 +430,95 @@ export default function AdminAcademyApplicationsPage() {
     const counts = { pending: 0, under_review: 0, approved: 0, rejected: 0 };
     applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
 
+    const handleExportCSV = async () => {
+        setIsExporting(true);
+        showToast("Preparing export...", "success");
+        try {
+            const result = await getStandardAcademyApplicationsAction({
+                limit: 5000,
+                search: search.trim() ? search : undefined,
+                status: statusFilter === "all" ? undefined : statusFilter
+            });
+
+            if (!result.success || !result.data) {
+                showToast("Failed to fetch data for export", "error");
+                return;
+            }
+
+            let exportApps = result.data.map((stdApp: any) => {
+                const d = stdApp.data;
+                const pi = d.personalInfo || {};
+                return {
+                    id: stdApp.id,
+                    personalInfo: {
+                        fullName: stdApp.user.name,
+                        email: stdApp.user.email,
+                        phone: pi.phone ?? d.phone ?? stdApp.user.phone ?? "",
+                    },
+                    status: stdApp.status,
+                    submittedAt: d.submittedAt || d.createdAt,
+                    paymentStatus: d.paymentStatus,
+                    paymentAmount: d.paymentAmount ? Number(d.paymentAmount) : 0,
+                    plan: d.plan,
+                    stateOfOrigin: d.stateOfOrigin,
+                    lga: d.lga,
+                };
+            });
+
+            // Apply payment filter just like the UI
+            exportApps = exportApps.filter((a: any) => {
+                if (paymentFilter === "all") return true;
+                if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
+                return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
+            });
+
+            const headers = [
+                "Application ID", "Full Name", "Email", "Phone",
+                "Status", "Payment Status", "Amount Paid", "Plan",
+                "State", "LGA", "Submitted At"
+            ];
+            const rows = exportApps.map((app: any) => [
+                app.id,
+                app.personalInfo.fullName || "",
+                app.personalInfo.email || "",
+                app.personalInfo.phone || "",
+                app.status,
+                app.paymentStatus || "unpaid",
+                app.paymentAmount || 0,
+                app.plan || "",
+                app.stateOfOrigin || "",
+                app.lga || "",
+                app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("en-NG") : ""
+            ]);
+            const csvContent = [
+                headers.join(","),
+                ...rows.map((row: any) => row.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+            ].join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `academy_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Log audit action
+            await logAcademyExportAction({
+                count: exportApps.length,
+                filters: { status: statusFilter, search, payment: paymentFilter }
+            });
+            
+            showToast(`Exported ${exportApps.length} applications`, "success");
+        } catch (error) {
+            console.error(error);
+            showToast("Failed to export applications", "error");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 p-8">
             {/* Header */}
@@ -438,6 +528,16 @@ export default function AdminAcademyApplicationsPage() {
                     <p className="text-slate-600">Live — {stats ? stats.totalApplications.toLocaleString() : applications.length} total applications</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                    {filtered.length > 0 && (
+                        <button
+                            onClick={handleExportCSV}
+                            disabled={isExporting}
+                            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold transition shadow-sm border border-slate-700 flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {isExporting ? "Exporting..." : "Export CSV"}
+                        </button>
+                    )}
                     <button
                         onClick={() => setIsEnrollModalOpen(true)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition shadow-sm border border-blue-500"

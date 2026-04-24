@@ -156,31 +156,50 @@ export default function AdminLoansPage() {
         }
     };
 
-    function handleExportCSV() {
+    async function handleExportCSV() {
         if (applications.length === 0) return;
-        const headers = [
-            "Name", "Email", "Loan Product", "Amount (₦)",
-            "Interest Rate", "Duration (months)", "Monthly Payment (₦)",
-            "Purpose", "Status", "Applied Date"
-        ];
-        const rows = applications.map(a => [
-            a.userName || "", a.userEmail || "",
-            a.productName || "", a.amount,
-            `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
-            a.purpose || "", a.status,
-            new Date(a.appliedAt).toLocaleDateString("en-NG")
-        ]);
-        const csv = [
-            headers.join(","),
-            ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
-        ].join("\n");
-        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `loan_applications_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a); URL.revokeObjectURL(url);
+        try {
+            showToast("Preparing export...", "success");
+            
+            const result = await getAdminLoanApplicationsAction({
+                statusFilter: filterStatus,
+                limit: 5000,
+            });
+
+            if (!result.success || !result.data) {
+                throw new Error(result.error || "Failed to fetch data for export");
+            }
+
+            const exportData = result.data;
+
+            const headers = [
+                "Name", "Email", "Loan Product", "Amount (₦)",
+                "Interest Rate", "Duration (months)", "Monthly Payment (₦)",
+                "Purpose", "Status", "Applied Date"
+            ];
+            const rows = exportData.map(a => [
+                a.userName || "", a.userEmail || "",
+                a.productName || "", a.amount,
+                `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
+                a.purpose || "", a.status,
+                new Date(a.appliedAt).toLocaleDateString("en-NG")
+            ]);
+            const csv = [
+                headers.join(","),
+                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+            ].join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `loan_applications_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a); URL.revokeObjectURL(url);
+            showToast("Export downloaded successfully", "success");
+        } catch (error: any) {
+            console.error("Export error:", error);
+            showToast(error.message || "Failed to export data", "error");
+        }
     };
 
     const stats = {

@@ -51,7 +51,7 @@ export async function getBriefingRegistrationsAction(
             return { success: false, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
         }
 
-        const pageSize = Math.min(Math.max(limit, 1), 50);
+        const pageSize = Math.min(Math.max(limit, 1), 5000);
 
         let query: FirebaseFirestore.Query = db
             .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
