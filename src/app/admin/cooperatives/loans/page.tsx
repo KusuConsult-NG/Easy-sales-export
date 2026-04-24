@@ -178,11 +178,11 @@ export default function AdminLoansPage() {
                 "Purpose", "Status", "Applied Date"
             ];
             const rows = exportData.map(a => [
-                a.userName || "", a.userEmail || "",
-                a.productName || "", a.amount,
+                a.fullName || "", a.userEmail || "",
+                a.tier || "", a.amount,
                 `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
                 a.purpose || "", a.status,
-                new Date(a.appliedAt).toLocaleDateString("en-NG")
+                new Date(a.appliedAt as any).toLocaleDateString("en-NG")
             ]);
             const csv = [
                 headers.join(","),
