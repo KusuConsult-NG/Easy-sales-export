@@ -430,14 +430,22 @@ export default function AdminAcademyApplicationsPage() {
     const counts = { pending: 0, under_review: 0, approved: 0, rejected: 0 };
     applications.forEach(a => { counts[a.status] = (counts[a.status] ?? 0) + 1; });
 
-    const handleExportCSV = async () => {
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+    const [exportConfig, setExportConfig] = useState({
+        status: "all" as ApplicationStatus | "all",
+        payment: "all" as "all" | "completed" | "pending",
+        limit: 5000,
+    });
+
+    const handleExportCSV = async (config: typeof exportConfig) => {
+        setIsExportModalOpen(false);
         setIsExporting(true);
         showToast("Preparing export...", "success");
         try {
             const result = await getStandardAcademyApplicationsAction({
-                limit: 5000,
+                limit: config.limit,
                 search: search.trim() ? search : undefined,
-                status: statusFilter === "all" ? undefined : statusFilter
+                status: config.status === "all" ? undefined : config.status
             });
 
             if (!result.success || !result.data) {
@@ -467,8 +475,8 @@ export default function AdminAcademyApplicationsPage() {
 
             // Apply payment filter just like the UI
             exportApps = exportApps.filter((a: any) => {
-                if (paymentFilter === "all") return true;
-                if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
+                if (config.payment === "all") return true;
+                if (config.payment === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
                 return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
             });
 
@@ -498,7 +506,7 @@ export default function AdminAcademyApplicationsPage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `academy_applications_${statusFilter}_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.download = `academy_applications_${config.status}_${new Date().toISOString().slice(0, 10)}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -507,7 +515,7 @@ export default function AdminAcademyApplicationsPage() {
             // Log audit action
             await logAcademyExportAction({
                 count: exportApps.length,
-                filters: { status: statusFilter, search, payment: paymentFilter }
+                filters: { status: config.status, search, payment: config.payment }
             });
             
             showToast(`Exported ${exportApps.length} applications`, "success");
@@ -530,7 +538,14 @@ export default function AdminAcademyApplicationsPage() {
                 <div className="flex flex-wrap items-center gap-3">
                     {filtered.length > 0 && (
                         <button
-                            onClick={handleExportCSV}
+                            onClick={() => {
+                                setExportConfig({
+                                    status: statusFilter,
+                                    payment: paymentFilter,
+                                    limit: 5000
+                                });
+                                setIsExportModalOpen(true);
+                            }}
                             disabled={isExporting}
                             className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold transition shadow-sm border border-slate-700 flex items-center gap-2 disabled:opacity-50"
                         >
@@ -762,6 +777,82 @@ export default function AdminAcademyApplicationsPage() {
                 isOpen={isEnrollModalOpen}
                 onClose={() => setIsEnrollModalOpen(false)}
             />
+            {/* Export Settings Modal */}
+            {isExportModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between p-5 border-b border-slate-100">
+                            <h3 className="font-bold text-lg flex items-center gap-2">
+                                <Download className="w-5 h-5 text-slate-500" />
+                                Export Applications
+                            </h3>
+                            <button onClick={() => setIsExportModalOpen(false)} className="p-1 hover:bg-slate-100 rounded-lg transition text-slate-500">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Status Filter</label>
+                                <select
+                                    value={exportConfig.status}
+                                    onChange={(e) => setExportConfig(c => ({ ...c, status: e.target.value as any }))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                                >
+                                    <option value="all">All Statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="under_review">Under Review</option>
+                                    <option value="approved">Approved</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Payment Status</label>
+                                <select
+                                    value={exportConfig.payment}
+                                    onChange={(e) => setExportConfig(c => ({ ...c, payment: e.target.value as any }))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                                >
+                                    <option value="all">Any Payment Status</option>
+                                    <option value="completed">Paid / Completed</option>
+                                    <option value="pending">Unpaid / Pending</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Export Limit</label>
+                                <select
+                                    value={exportConfig.limit}
+                                    onChange={(e) => setExportConfig(c => ({ ...c, limit: Number(e.target.value) }))}
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                                >
+                                    <option value={5000}>All Available (Up to 5,000)</option>
+                                    <option value={1000}>Latest 1,000</option>
+                                    <option value={500}>Latest 500</option>
+                                    <option value={100}>Latest 100</option>
+                                </select>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    The active search term "{search || 'none'}" will also be applied to this export.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsExportModalOpen(false)}
+                                className="px-4 py-2 font-medium text-slate-600 hover:text-slate-800 transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleExportCSV(exportConfig)}
+                                className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2"
+                            >
+                                <Download className="w-4 h-4" />
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }
