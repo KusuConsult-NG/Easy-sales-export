@@ -27,16 +27,55 @@ export interface BriefingRegistrationsResult {
 }
 
 /**
- * Fetch WAVE Briefing Registrations with cursor-based pagination (Admin Only)
+ * Options for fetching briefing registrations with server-side filters.
+ */
+export interface BriefingRegistrationOpts {
+    lastDocId?: string | null;
+    limit?: number;
+    /** Filter by Nigerian state */
+    state?: string;
+    /** Filter by role (e.g. "investor", "farm_owner") */
+    role?: string;
+    /** Filter by status ("registered", "attended", "cancelled") */
+    status?: string;
+    /** Free-text search — applied client-side (Firestore has no LIKE) */
+    search?: string;
+}
+
+/**
+ * Fetch WAVE Briefing Registrations with cursor-based pagination & server-side filters (Admin Only)
  *
- * @param cursor - ISO timestamp of the last item's createdAt from previous page
- * @param limit  - number of records per page (default 25, max 50)
+ * Supports filtering by state, role, and status via Firestore .where() clauses.
+ * Free-text search is applied client-side after fetch.
+ *
+ * @param opts - pagination + filter options
  */
 export async function getBriefingRegistrationsAction(
-    cursor?: string | null,
-    limit = 25
+    opts: BriefingRegistrationOpts | string | null = {},
+    limitArg?: number
 ): Promise<BriefingRegistrationsResult> {
     try {
+        // --- Normalise arguments: support old (cursor, limit) and new (opts) signatures ---
+        let cursor: string | null | undefined;
+        let limit = 25;
+        let filterState: string | undefined;
+        let filterRole: string | undefined;
+        let filterStatus: string | undefined;
+        let searchQuery: string | undefined;
+
+        if (typeof opts === "string" || opts === null) {
+            // Legacy call: getBriefingRegistrationsAction(cursor, limit)
+            cursor = opts;
+            limit = limitArg ?? 25;
+        } else if (opts && typeof opts === "object") {
+            cursor = opts.lastDocId;
+            limit = opts.limit ?? limitArg ?? 25;
+            filterState = opts.state && opts.state !== "all" ? opts.state : undefined;
+            filterRole = opts.role && opts.role !== "all" ? opts.role : undefined;
+            filterStatus = opts.status && opts.status !== "all" ? opts.status : undefined;
+            searchQuery = opts.search?.trim().toLowerCase() || undefined;
+        }
+
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
             return { success: false, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
@@ -53,10 +92,21 @@ export async function getBriefingRegistrationsAction(
 
         const pageSize = Math.min(Math.max(limit, 1), 5000);
 
+        // --- Build Firestore query with server-side filters ---
         let query: FirebaseFirestore.Query = db
-            .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)
-            .orderBy("createdAt", "desc")
-            .limit(pageSize + 1); // +1 to detect hasMore
+            .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
+
+        if (filterState) {
+            query = query.where("state", "==", filterState);
+        }
+        if (filterRole) {
+            query = query.where("role", "==", filterRole);
+        }
+        if (filterStatus) {
+            query = query.where("status", "==", filterStatus);
+        }
+
+        query = query.orderBy("createdAt", "desc").limit(pageSize + 1); // +1 to detect hasMore
 
         if (cursor) {
             const cursorDate = new Date(cursor);
@@ -65,16 +115,23 @@ export async function getBriefingRegistrationsAction(
             }
         }
 
+        // Build count query with same filters
+        let countQuery: FirebaseFirestore.Query = db
+            .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
+        if (filterState) countQuery = countQuery.where("state", "==", filterState);
+        if (filterRole) countQuery = countQuery.where("role", "==", filterRole);
+        if (filterStatus) countQuery = countQuery.where("status", "==", filterStatus);
+
         const [snapshot, countSnap] = await Promise.all([
             query.get(),
-            db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).count().get()
+            countQuery.count().get()
         ]);
         
         const hasMore = snapshot.docs.length > pageSize;
         const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
         const totalCount = countSnap.data().count;
 
-        const data: BriefingRegistration[] = docs.map(doc => {
+        let data: BriefingRegistration[] = docs.map(doc => {
             const d = doc.data();
             return {
                 id: doc.id,
@@ -86,6 +143,15 @@ export async function getBriefingRegistrationsAction(
                 confirmationSent: d.confirmationSent ?? false,
             } as BriefingRegistration;
         });
+
+        // --- Client-side free-text search (Firestore has no full-text search) ---
+        if (searchQuery) {
+            data = data.filter(r =>
+                r.fullName?.toLowerCase().includes(searchQuery!) ||
+                r.email?.toLowerCase().includes(searchQuery!) ||
+                r.phoneNumber?.toLowerCase().includes(searchQuery!)
+            );
+        }
 
         const nextCursor = hasMore && docs.length > 0
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
