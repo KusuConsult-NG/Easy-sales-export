@@ -122,16 +122,58 @@ export async function getBriefingRegistrationsAction(
         if (filterRole) countQuery = countQuery.where("role", "==", filterRole);
         if (filterStatus) countQuery = countQuery.where("status", "==", filterStatus);
 
-        const [snapshot, countSnap] = await Promise.all([
-            query.get(),
-            countQuery.count().get()
-        ]);
+        let snapshot: any;
+        let countSnap: any;
+
+        try {
+            const results = await Promise.all([
+                query.get(),
+                countQuery.count().get()
+            ]);
+            snapshot = results[0];
+            countSnap = results[1];
+        } catch (e: any) {
+            // Fallback for when composite indexes are missing on production
+            if (e.message && e.message.includes("index")) {
+                logger.warn("Missing composite index, falling back to in-memory filter...");
+                let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
+                if (filterState) fallbackQuery = fallbackQuery.where("state", "==", filterState);
+                if (filterRole) fallbackQuery = fallbackQuery.where("role", "==", filterRole);
+                if (filterStatus) fallbackQuery = fallbackQuery.where("status", "==", filterStatus);
+                
+                const allDocsSnap = await fallbackQuery.get();
+                const allDocs = allDocsSnap.docs;
+                
+                // Sort chronologically in memory to mimic orderBy("createdAt", "desc")
+                allDocs.sort((a, b) => {
+                    const timeA = a.data().createdAt?.toMillis?.() ?? 0;
+                    const timeB = b.data().createdAt?.toMillis?.() ?? 0;
+                    return timeB - timeA;
+                });
+                
+                let startIndex = 0;
+                if (cursor) {
+                    const cursorTime = new Date(cursor).getTime();
+                    if (!isNaN(cursorTime)) {
+                        while (startIndex < allDocs.length && (allDocs[startIndex].data().createdAt?.toMillis?.() ?? 0) >= cursorTime) {
+                            startIndex++;
+                        }
+                    }
+                }
+                
+                const slicedDocs = allDocs.slice(startIndex, startIndex + pageSize + 1);
+                snapshot = { docs: slicedDocs };
+                countSnap = { data: () => ({ count: allDocs.length }) };
+            } else {
+                throw e; // rethrow other errors
+            }
+        }
         
         const hasMore = snapshot.docs.length > pageSize;
         const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
         const totalCount = countSnap.data().count;
 
-        let data: BriefingRegistration[] = docs.map(doc => {
+        let data: BriefingRegistration[] = docs.map((doc: any) => {
             const d = doc.data();
             return {
                 id: doc.id,
@@ -159,8 +201,8 @@ export async function getBriefingRegistrationsAction(
 
         return { success: true, data,
             meta: { cursor: nextCursor, hasMore, totalCount } };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("getBriefingRegistrationsAction error:", error);
-        return { success: false, error: "Failed to fetch registrations", meta: { cursor: null, hasMore: false, totalCount: 0 } };
+        return { success: false, error: error.message || "Failed to fetch registrations", meta: { cursor: null, hasMore: false, totalCount: 0 } };
     }
 }
