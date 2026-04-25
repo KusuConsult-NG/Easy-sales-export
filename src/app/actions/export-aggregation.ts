@@ -211,28 +211,3 @@ export async function getUserExportSlotsAction(userId: string) {
     }
 }
 
-/**
- * Calculate time remaining for export window
- */
-export function calculateTimeRemaining(endDate: Date): {
-    days: number;
-    hours: number;
-    minutes: number;
-    seconds: number;
-    expired: boolean;
-} {
-    const now = new Date().getTime();
-    const end = new Date(endDate).getTime();
-    const diff = end - now;
-
-    if (diff <= 0) {
-        return { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true };
-    }
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-    return { days, hours, minutes, seconds, expired: false };
-}
