@@ -97,10 +97,7 @@ export default function CooperativeDirectoryPage() {
                                     <h3 className="font-bold text-slate-900 group-hover:text-purple-600 transition">
                                         {member.name}
                                     </h3>
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${member.role.includes("Premium")
-                                        ? "bg-purple-100 text-purple-700"
-                                        : "bg-slate-100 text-slate-600"
-                                        }`}>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700`}>
                                         {member.role}
                                     </span>
                                 </div>

@@ -64,14 +64,18 @@ export async function getGlobalPendingApprovalsAction() {
             exportOnboarding,
             sellers,
             land,
-            loans
+            loans,
+            waveWithdrawals,
+            cooperativeWithdrawals
         ] = await Promise.all([
             db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("membershipStatus", "==", "pending").count().get(),
             db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending").count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending").count().get(),
-            db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending").count().get()
+            db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "pending").count().get()
         ]);
 
         const counts = {
@@ -80,7 +84,8 @@ export async function getGlobalPendingApprovalsAction() {
             export: exportOnboarding.data().count || 0,
             sellers: sellers.data().count || 0,
             land: land.data().count || 0,
-            loans: loans.data().count || 0
+            loans: loans.data().count || 0,
+            withdrawals: (waveWithdrawals.data().count || 0) + (cooperativeWithdrawals.data().count || 0)
         };
 
         const totalPending = Object.values(counts).reduce((sum, count) => sum + count, 0);

@@ -8,6 +8,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
 
+import { getPlatformFees } from "@/lib/system-settings";
+
 /**
  * Server Actions for Order Management
  */
@@ -16,6 +18,7 @@ export interface CreateOrderState {
     success: boolean;
     error?: string;
     orderId?: string;
+    orderIds?: string[];
     paymentUrl?: string;
 }
 
@@ -52,15 +55,15 @@ export async function createOrderAction(
 
         const userId = session.user.id;
 
+        const fees = await getPlatformFees();
+        
         // 🔒 TRANSACTION: Prevent Overselling
         return await db.runTransaction(async (transaction) => {
             // 1. Read all products first (Concurrency requirement)
             const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
             const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
-            const orderItems: any[] = [];
-            let subtotal = 0;
-            let sellerId = "";
+            const sellerOrders = new Map<string, { items: any[], subtotal: number }>();
 
             // 2. Validate Inventory & Calculate Logic
             for (let i = 0; i < items.length; i++) {
@@ -84,8 +87,13 @@ export async function createOrderAction(
                 }
 
                 const totalPrice = tier.price * item.quantity;
-                subtotal += totalPrice;
-                if (i === 0) sellerId = product.sellerId; // Simple single-seller assumption for now
+                const sellerId = product.sellerId;
+
+                if (!sellerOrders.has(sellerId)) {
+                    sellerOrders.set(sellerId, { items: [], subtotal: 0 });
+                }
+                const so = sellerOrders.get(sellerId)!;
+                so.subtotal += totalPrice;
 
                 // 2b. Decrement Inventory in Transaction
                 transaction.update(productRefs[i], {
@@ -93,7 +101,7 @@ export async function createOrderAction(
                     updatedAt: FieldValue.serverTimestamp(),
                 });
 
-                orderItems.push({
+                so.items.push({
                     productId: item.productId,
                     productTitle: product.title,
                     quantity: item.quantity,
@@ -103,40 +111,45 @@ export async function createOrderAction(
                 });
             }
 
-            const deliveryFee = 5000;
-            const total = subtotal + deliveryFee;
+            const orderIds: string[] = [];
+            const deliveryFeePerSeller = fees.baseDeliveryFee; // Dynamic fee instead of hardcoded 5000
 
-            // 3. Create Order
-            const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc();
-            const orderId = orderRef.id;
+            for (const [sellerId, data] of sellerOrders.entries()) {
+                const total = data.subtotal + deliveryFeePerSeller;
+                
+                // 3. Create Order
+                const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc();
+                const orderId = orderRef.id;
+                orderIds.push(orderId);
 
-            const orderData: Partial<Order> = {
-                id: orderId,
-                orderNumber: `ORD-${Date.now()}`,
-                buyerId: userId,
-                sellerId,
-                items: orderItems,
-                deliveryAddress: {
-                    recipientName: session.user.name || "",
-                    recipientPhone: deliveryAddress.phone,
-                    street: deliveryAddress.street,
-                    city: deliveryAddress.city,
-                    state: deliveryAddress.state,
-                    lga: deliveryAddress.lga,
-                },
-                subtotal,
-                deliveryFee,
-                serviceFee: 0,
-                totalAmount: total,
-                status: "pending_payment",
-                buyerConfirmed: false,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            };
+                const orderData: Partial<Order> = {
+                    id: orderId,
+                    orderNumber: `ORD-${Date.now()}-${sellerId.slice(0,4)}`,
+                    buyerId: userId,
+                    sellerId,
+                    items: data.items,
+                    deliveryAddress: {
+                        recipientName: session.user.name || "",
+                        recipientPhone: deliveryAddress.phone,
+                        street: deliveryAddress.street,
+                        city: deliveryAddress.city,
+                        state: deliveryAddress.state,
+                        lga: deliveryAddress.lga,
+                    },
+                    subtotal: data.subtotal,
+                    deliveryFee: deliveryFeePerSeller,
+                    serviceFee: 0,
+                    totalAmount: total,
+                    status: "pending_payment",
+                    buyerConfirmed: false,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                };
 
-            transaction.set(orderRef, orderData);
+                transaction.set(orderRef, orderData);
+            }
 
-            return { success: true, orderId, };
+            return { success: true, orderId: orderIds[0], orderIds };
         });
 
     } catch (error: any) {

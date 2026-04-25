@@ -22,8 +22,6 @@ export default function PropertyDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const [userTier, setUserTier] = useState<"Basic" | "Premium" | null>(null);
-    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
     const [showInquiryModal, setShowInquiryModal] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const { showToast } = useToast();
@@ -65,11 +63,6 @@ export default function PropertyDetailsPage() {
                 email: session.user.email || ""
             }));
 
-            // Check tier
-            // Tier check is non-critical — page functions without it
-            getUserTierAction().then((res) => {
-                if (res?.data?.tier) setUserTier(res.data.tier as "Basic" | "Premium");
-            }).catch(() => { /* non-critical: tier defaults to null (Basic view) */ });
         }
     }, [status, session]);
 
@@ -369,7 +362,6 @@ export default function PropertyDetailsPage() {
                         <div className="bg-white rounded-2xl p-6 shadow-sm">
                             <h3 className="text-lg font-bold text-slate-900 mb-4">Seller Information</h3>
 
-                            {userTier === "Premium" ? (
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-3">
                                         <User className="w-5 h-5 text-slate-400" />
@@ -386,14 +378,6 @@ export default function PropertyDetailsPage() {
                                         </div>
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer" onClick={() => setShowUpgradeModal(true)}>
-                                    <Lock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                                    <p className="text-sm text-center text-blue-800">
-                                        Upgrade to Premium to view full seller contact details
-                                    </p>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
@@ -467,34 +451,6 @@ export default function PropertyDetailsPage() {
                 </div>
             )}
 
-            {/* Upgrade Modal */}
-            {showUpgradeModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl p-8 max-w-md w-full">
-                        <Lock className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-                        <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">
-                            Premium Membership Required
-                        </h2>
-                        <p className="text-slate-600 text-center mb-6">
-                            Upgrade to Premium to view full seller contact details.
-                        </p>
-                        <div className="flex gap-3">
-                            <button
-                                onClick={() => setShowUpgradeModal(false)}
-                                className="flex-1 px-6 py-3 border border-slate-300 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={() => router.push("/cooperatives")}
-                                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition"
-                            >
-                                Upgrade Now
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

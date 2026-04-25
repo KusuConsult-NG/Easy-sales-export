@@ -8,7 +8,7 @@ import PersonalInfoStep from "./steps/PersonalInfoStep";
 import EducationStep from "./steps/EducationStep";
 import InterestsStep from "./steps/InterestsStep";
 import ReviewStep from "./ReviewStep";
-import { checkAcademyStatusAction, checkAcademyPaymentStatusAction, initiateAcademyPaymentAction, submitAcademyApplicationAction, getAcademyApplicationAction, resubmitAcademyApplicationAction } from "@/app/actions/academy";
+import { checkAcademyStatusAction, submitAcademyApplicationAction, getAcademyApplicationAction, resubmitAcademyApplicationAction } from "@/app/actions/academy";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import { AlertTriangle } from "lucide-react";
@@ -51,8 +51,6 @@ export default function AcademyApplicationPage() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [isPaying, setIsPaying] = useState(false);
-    const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("unpaid");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
@@ -86,13 +84,9 @@ export default function AcademyApplicationPage() {
                             if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
                         }
                         setIsEditMode(true);
-                        const payStatus = await checkAcademyPaymentStatusAction();
-                        setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     } else {
                         // Stay on page — do NOT auto-redirect pending users
-                        const payStatus = await checkAcademyPaymentStatusAction();
-                        setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     }
                 } else if (status.data === "approved" || status.data === "active") {
@@ -116,14 +110,9 @@ export default function AcademyApplicationPage() {
                         if (d.revisionNote) setRevisionNote(d.revisionNote);
                     }
                     setIsRevisionMode(true);
-                    // Check payment status — user already paid previously
-                    const payStatus = await checkAcademyPaymentStatusAction();
-                    setPaymentStatus(payStatus.data || "unpaid");
+                    setIsRevisionMode(true);
                     setIsLoading(false);
                 } else {
-                    // Check payment status
-                    const payStatus = await checkAcademyPaymentStatusAction();
-                    setPaymentStatus(payStatus.data || "unpaid");
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -272,23 +261,6 @@ export default function AcademyApplicationPage() {
         setErrors({});
     };
 
-    async function handlePayment() {
-        setIsPaying(true);
-        try {
-            const result = await initiateAcademyPaymentAction();
-            if (result.success && result.data?.paymentUrl) {
-                window.location.href = result.data.paymentUrl;
-            } else {
-                showToast(result.error || "Failed to initiate payment", "error");
-            }
-        } catch (error) {
-            logger.error("Payment initiation error:", error);
-            showToast("Failed to initiate payment. Please try again.", "error");
-        } finally {
-            setIsPaying(false);
-        }
-    };
-
     async function handleSubmit() {
         if (!validateStep(4)) return;
 
@@ -316,83 +288,7 @@ export default function AcademyApplicationPage() {
         }
     };
 
-    // Payment gate: show payment screen if not yet paid
-    if (paymentStatus === "unpaid") {
-        return (
-            <div className="min-h-screen bg-slate-50">
-                {/* Header */}
-                <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white py-12">
-                    <div className="max-w-4xl mx-auto px-6 text-center">
-                        <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>
-                        <p className="text-blue-100 mb-2">
-                            Join thousands of successful agripreneurs who transformed their careers
-                        </p>
-                        <p className="text-xs text-blue-200/80 uppercase tracking-widest font-semibold">
-                            Powered by Easy Sales Export
-                        </p>
-                    </div>
-                </div>
 
-                {/* Payment Card */}
-                <div className="max-w-lg mx-auto px-6 -mt-8">
-                    <div className="bg-white rounded-3xl shadow-xl p-8">
-                        <div className="text-center mb-8">
-                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CreditCard className="w-8 h-8 text-blue-600" />
-                            </div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Registration Payment</h2>
-                            <p className="text-slate-600">
-                                A one-time registration fee is required to proceed with your Academy application.
-                            </p>
-                        </div>
-
-                        <div className="bg-blue-50 rounded-2xl p-6 mb-6">
-                            <div className="flex items-center justify-between mb-4">
-                                <span className="text-slate-700 font-medium">Registration Fee</span>
-                                <span className="text-3xl font-extrabold text-blue-700">₦5,000</span>
-                            </div>
-                            <ul className="space-y-2 text-sm text-slate-600">
-                                <li className="flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                                    Full access to learner application portal
-                                </li>
-                                <li className="flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                                    Access to free courses upon approval
-                                </li>
-                                <li className="flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                                    Certificate eligibility for completed courses
-                                </li>
-                            </ul>
-                        </div>
-
-                        <button
-                            onClick={handlePayment}
-                            disabled={isPaying}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-blue-300 disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                            {isPaying ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <Shield className="w-5 h-5" />
-                                    Pay ₦5,000 to Continue
-                                </>
-                            )}
-                        </button>
-
-                        <p className="text-center text-xs text-slate-400 mt-4">
-                            Secured by Paystack. Your payment information is encrypted.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="min-h-screen bg-slate-50">

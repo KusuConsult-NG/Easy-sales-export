@@ -251,11 +251,11 @@ export async function listPropertyAction(input: PropertyListingInput) {
         }
 
         const userData = userDoc.data()!;
-        if (!userData.cooperativeTier || userData.cooperativeTier === "Basic") {
+        if (!userData.serviceRegistrations?.cooperative?.status || userData.serviceRegistrations.cooperative.status !== "approved") {
             return {
                 success: false,
                 data: null,
-                error: "Premium tier required to list properties. Contribute at least ₦20,000.",
+                error: "Cooperative membership required to list properties. Please complete your cooperative registration.",
                 meta: null
             };
         }
@@ -399,11 +399,11 @@ export async function initiatePropertyPurchaseAction(
         }
 
         const userData = userDoc.data()!;
-        if (!userData.cooperativeTier || userData.cooperativeTier === "Basic") {
+        if (!userData.serviceRegistrations?.cooperative?.status || userData.serviceRegistrations.cooperative.status !== "approved") {
             return {
                 success: false,
                 data: null,
-                error: "Premium tier required. Contribute at least ₦20,000.",
+                error: "Cooperative membership required. Please complete your cooperative registration.",
                 meta: null
             };
         }

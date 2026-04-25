@@ -9,7 +9,7 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminLoanApplicationsAction } from "@/app/actions/loans";
+import { getAdminLoanApplicationsAction, getAdminLoanStatsAction } from "@/app/actions/loans";
 import { Loader2 } from "lucide-react";
 
 type LoanApplication = {
@@ -67,6 +67,15 @@ export default function AdminLoansPage() {
     const [selectedApplication, setSelectedApplication] = useState<LoanApplication | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Server-side stats
+    const [serverStats, setServerStats] = useState<{ total: number; pending: number; approved: number; rejected: number } | null>(null);
+    const [statsLoading, setStatsLoading] = useState(true);
+    useEffect(() => {
+        getAdminLoanStatsAction().then((res) => {
+            if (res.success && res.stats) setServerStats(res.stats);
+        }).finally(() => setStatsLoading(false));
+    }, []);
 
     // Apply local search filtering on top of server data
     const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
@@ -203,10 +212,10 @@ export default function AdminLoansPage() {
     };
 
     const stats = {
-        total: applications.length,
-        pending: applications.filter(a => a.status === "pending").length,
-        approved: applications.filter(a => ["approved", "disbursed", "active"].includes(a.status)).length,
-        rejected: applications.filter(a => a.status === "rejected").length,
+        total: serverStats?.total ?? applications.length,
+        pending: serverStats?.pending ?? applications.filter(a => a.status === "pending").length,
+        approved: serverStats?.approved ?? applications.filter(a => ["approved", "disbursed", "active"].includes(a.status)).length,
+        rejected: serverStats?.rejected ?? applications.filter(a => a.status === "rejected").length,
     };
 
     return (
@@ -241,7 +250,10 @@ export default function AdminLoansPage() {
                             </div>
                             <p className="text-sm text-slate-600">{label}</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900">{value}</p>
+                        {statsLoading
+                            ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mt-1" />
+                            : <p className="text-3xl font-bold text-slate-900">{value}</p>
+                        }
                     </div>
                 ))}
             </div>

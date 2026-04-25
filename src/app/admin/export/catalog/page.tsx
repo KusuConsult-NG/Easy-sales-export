@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminExportCatalogAction, createExportCatalogAction, deleteExportCatalogAction } from "@/app/actions/export-admin";
+import { getAdminExportCatalogAction, createExportCatalogAction, deleteExportCatalogAction, getExportCatalogStatsAction } from "@/app/actions/export-admin";
 
 interface CatalogProduct {
     id?: string;
@@ -160,6 +160,13 @@ export default function AdminExportCatalogPage() {
 
     const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
 
+    const [serverTotal, setServerTotal] = useState<number | null>(null);
+    useEffect(() => {
+        getExportCatalogStatsAction().then(r => {
+            if (r.success && r.data) setServerTotal(r.data.totalProducts);
+        });
+    }, []);
+
     const {
         data: products,
         loading: isLoading,
@@ -235,13 +242,16 @@ export default function AdminExportCatalogPage() {
                 )}
             </div>
 
-            {/* Stats */}
+            {/* Stats — server-side count for total; category/certification counts are derived locally from current page */}
             <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-white rounded-xl p-4 border border-slate-200">
                     <div className="flex items-center gap-3">
                         <Package className="w-8 h-8 text-blue-500" />
                         <div>
-                            <p className="text-2xl font-bold text-slate-900">{products.length}</p>
+                            {serverTotal === null
+                                ? <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+                                : <p className="text-2xl font-bold text-slate-900">{serverTotal.toLocaleString()}</p>
+                            }
                             <p className="text-sm text-slate-500">Total Products</p>
                         </div>
                     </div>
@@ -251,7 +261,7 @@ export default function AdminExportCatalogPage() {
                         <Globe className="w-8 h-8 text-emerald-500" />
                         <div>
                             <p className="text-2xl font-bold text-slate-900">{[...new Set(products.map(p => p.category))].length}</p>
-                            <p className="text-sm text-slate-500">Categories</p>
+                            <p className="text-sm text-slate-500">Categories (this page)</p>
                         </div>
                     </div>
                 </div>
@@ -260,7 +270,7 @@ export default function AdminExportCatalogPage() {
                         <Award className="w-8 h-8 text-amber-500" />
                         <div>
                             <p className="text-2xl font-bold text-slate-900">{[...new Set(products.flatMap(p => p.certifications))].length}</p>
-                            <p className="text-sm text-slate-500">Unique Certifications</p>
+                            <p className="text-sm text-slate-500">Certifications (this page)</p>
                         </div>
                     </div>
                 </div>

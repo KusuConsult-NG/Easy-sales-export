@@ -32,7 +32,7 @@ export const cooperativeMembershipSchema = z.object({
     nextOfKinAddress: z.string().min(10, "Next of kin address is required"),
 
     // Membership Tier
-    membershipTier: z.enum(["basic", "premium"], {
+    membershipTier: z.enum(["Member"], {
         message: "Please select membership tier"
     }),
 });
@@ -61,8 +61,8 @@ export type CooperativeMembershipRecord = {
         address: string;
     };
     // Membership details
-    membershipTier: "basic" | "premium";
-    registrationFee: number; // ₦10,000 or ₦20,000
+    membershipTier: "Member";
+    registrationFee: number; // ₦5,000
     membershipStatus: "pending" | "approved" | "active" | "rejected" | "suspended";
     paymentReference?: string;
     paymentStatus: "pending" | "completed" | "failed";
@@ -187,7 +187,7 @@ export type CooperativeMembership = {
     loanBalance: number;
     memberSince: Date;
     monthlyTarget: number;
-    membershipTier: "basic" | "premium";
+    membershipTier: "Member";
     membershipStatus: "pending" | "approved" | "active" | "rejected" | "suspended";
     paymentStatus: "pending" | "completed" | "failed";
 };

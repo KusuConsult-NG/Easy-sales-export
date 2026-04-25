@@ -567,7 +567,7 @@ export default function CooperativeLandingPage() {
                                 Join Today. Move from registration to real participation.
                             </p>
                             <p className="text-xl text-purple-600 font-bold">
-                                One-time registration fee: ₦10,000
+                                One-time registration fee: ₦5,000
                             </p>
                         </div>
                         <Link

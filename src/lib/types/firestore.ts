@@ -283,7 +283,7 @@ export interface CooperativeMember {
     residentialAddress?: string; // Added: admin members modal shows this
     occupation?: string;         // Added: admin members modal shows this
     registrationFee?: number;    // Added: admin table shows this
-    membershipTier?: "basic" | "premium";
+    membershipTier?: "Member" | string; // Unified single tier (legacy: "basic" | "premium" migrated)
     // Next of kin written during onboarding
     nextOfKin?: {
         name: string;
@@ -885,6 +885,7 @@ export const COLLECTIONS = {
     COURSE_ENROLLMENTS: "course_enrollments",
     COURSE_CERTIFICATES: "course_certificates",
     CERTIFICATES: "certificates",
+    ACADEMY_SETTINGS: "academy_settings",
 
     // CMS & Admin
     ANNOUNCEMENTS: "announcements",
@@ -923,7 +924,7 @@ export const COLLECTIONS = {
     PROPERTY_PURCHASES: "propertyPurchases",
 
     // Withdrawal Requests
-    WITHDRAWAL_REQUESTS: "withdrawal_requests",
+
 
     // Marketplace Products & Sellers
     MARKETPLACE_PRODUCTS: "marketplace_products",

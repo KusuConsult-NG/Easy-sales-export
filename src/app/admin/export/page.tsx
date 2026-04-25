@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { getAllExportRequestsAction } from "@/app/actions/admin";
 import { updateExportStatusAction } from "@/app/actions/export";
+import { getExportRequestStatsAction } from "@/app/actions/export-admin";
 import type { ExportWindow } from "@/lib/types/firestore";
 
 export default function AdminExportPage() {
@@ -19,6 +20,8 @@ export default function AdminExportPage() {
     const [filter, setFilter] = useState("all");
     const [lastDocId, setLastDocId] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
+    const [stats, setStats] = useState({ total: 0, pending: 0, inTransit: 0, delivered: 0, completed: 0 });
+    const [statsLoading, setStatsLoading] = useState(true);
 
     // Load exports with useCallback to prevent recreating on every render
     const loadExports = useCallback(async (reset = true) => {
@@ -65,6 +68,13 @@ export default function AdminExportPage() {
             setLoadingMore(false);
         }
     }, [filter, lastDocId, showToast]);
+
+    // Server-side stats — fetched once, independent of filter/pagination
+    useEffect(() => {
+        getExportRequestStatsAction().then(result => {
+            if (result.success && result.data) setStats(result.data);
+        }).finally(() => setStatsLoading(false));
+    }, []);
 
     // Data fetching on filter change
     useEffect(() => {
@@ -145,29 +155,31 @@ export default function AdminExportPage() {
                     ))}
                 </div>
 
-                {/* Stats */}
+                {/* Stats — server-side aggregation */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Total Requests</p>
-                        <p className="text-2xl font-bold text-slate-900">{exports.length}</p>
+                        {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-300 mt-1" /> : (
+                            <p className="text-2xl font-bold text-slate-900">{stats.total.toLocaleString()}</p>
+                        )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">Pending Action</p>
-                        <p className="text-2xl font-bold text-amber-600">
-                            {exports.filter(e => e.status === 'pending').length}
-                        </p>
+                        {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-amber-300 mt-1" /> : (
+                            <p className="text-2xl font-bold text-amber-600">{stats.pending.toLocaleString()}</p>
+                        )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                         <p className="text-xs text-slate-500 mb-1">In Transit</p>
-                        <p className="text-2xl font-bold text-blue-600">
-                            {exports.filter(e => e.status === 'in_transit').length}
-                        </p>
+                        {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-300 mt-1" /> : (
+                            <p className="text-2xl font-bold text-blue-600">{stats.inTransit.toLocaleString()}</p>
+                        )}
                     </div>
                     <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                        <p className="text-xs text-slate-500 mb-1">Total Volume</p>
-                        <p className="text-2xl font-bold text-emerald-600">
-                            {exports.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0).toLocaleString()} <span className="text-xs text-slate-400 font-normal">NGN</span>
-                        </p>
+                        <p className="text-xs text-slate-500 mb-1">Completed</p>
+                        {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-emerald-300 mt-1" /> : (
+                            <p className="text-2xl font-bold text-emerald-600">{stats.completed.toLocaleString()}</p>
+                        )}
                     </div>
                 </div>
 

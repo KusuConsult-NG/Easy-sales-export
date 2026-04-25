@@ -110,24 +110,12 @@ export default function FarmNationLandingPage() {
 
             {/* Stats Section */}
             <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
+                <div className="flex justify-center mb-16">
+                    <div className="bg-white rounded-2xl p-8 elevation-2 text-center min-w-[220px]">
                         <div className="text-4xl font-bold text-teal-600 mb-2">
                             {totalCount !== null ? `${totalCount}+` : <Loader2 className="w-8 h-8 animate-spin text-teal-400 mx-auto" />}
                         </div>
                         <div className="text-slate-600 font-medium">Properties Listed</div>
-                    </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-teal-600 mb-2">36 States</div>
-                        <div className="text-slate-600 font-medium">Nationwide Coverage</div>
-                    </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-teal-600 mb-2">₦8.5B+</div>
-                        <div className="text-slate-600 font-medium">Properties Value</div>
-                    </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-teal-600 mb-2">850+</div>
-                        <div className="text-slate-600 font-medium">Successful Deals</div>
                     </div>
                 </div>
             </div>

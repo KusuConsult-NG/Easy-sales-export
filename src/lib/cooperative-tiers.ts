@@ -1,10 +1,9 @@
 /**
  * Cooperative Tier System
- * - Basic: ₦10,000 contribution
- * - Premium: ₦20,000 contribution
+ * - Member
  */
 
-export type CooperativeTier = "Basic" | "Premium";
+export type CooperativeTier = "Member";
 
 export interface TierRequirements {
     name: CooperativeTier;
@@ -15,22 +14,9 @@ export interface TierRequirements {
 }
 
 export const COOPERATIVE_TIERS: Record<CooperativeTier, TierRequirements> = {
-    Basic: {
-        name: "Basic",
-        minContribution: 10000,
-        maxLoanMultiplier: 2,
-        benefits: [
-            "Access to cooperative loans",
-            "2x contribution loan limit",
-            "Monthly interest rate: 2.5%",
-            "6-month maximum repayment period",
-            "Group savings benefits",
-        ],
-        color: "blue",
-    },
-    Premium: {
-        name: "Premium",
-        minContribution: 20000,
+    Member: {
+        name: "Member",
+        minContribution: 5000,
         maxLoanMultiplier: 3,
         benefits: [
             "Access to cooperative loans",
@@ -38,7 +24,6 @@ export const COOPERATIVE_TIERS: Record<CooperativeTier, TierRequirements> = {
             "Monthly interest rate: 2%",
             "12-month maximum repayment period",
             "Priority loan processing",
-            "Export aggregation priority slots",
             "Group savings benefits",
         ],
         color: "emerald",
@@ -49,10 +34,7 @@ export const COOPERATIVE_TIERS: Record<CooperativeTier, TierRequirements> = {
  * Calculate user tier based on total contribution
  */
 export function calculateUserTier(totalContribution: number): CooperativeTier {
-    if (totalContribution >= COOPERATIVE_TIERS.Premium.minContribution) {
-        return "Premium";
-    }
-    return "Basic";
+    return "Member";
 }
 
 /**
@@ -69,24 +51,20 @@ export function getMaxLoanAmount(totalContribution: number): number {
 export function isEligibleForLoan(
     totalContribution: number,
     requestedAmount: number,
-    hasActiveLoan: boolean
+    currentLoanBalance: number = 0
 ): { eligible: boolean; reason?: string } {
-    if (hasActiveLoan) {
-        return { eligible: false, reason: "You have an active loan. Please repay before applying again." };
-    }
-
-    if (totalContribution < COOPERATIVE_TIERS.Basic.minContribution) {
+    if (totalContribution < COOPERATIVE_TIERS.Member.minContribution) {
         return {
             eligible: false,
-            reason: `Minimum contribution of ₦${COOPERATIVE_TIERS.Basic.minContribution.toLocaleString()} required`,
+            reason: `Minimum contribution of ₦${COOPERATIVE_TIERS.Member.minContribution.toLocaleString()} required`,
         };
     }
 
     const maxLoan = getMaxLoanAmount(totalContribution);
-    if (requestedAmount > maxLoan) {
+    if ((requestedAmount + currentLoanBalance) > maxLoan) {
         return {
             eligible: false,
-            reason: `Maximum loan amount for your tier is ₦${maxLoan.toLocaleString()}`,
+            reason: `Requested amount plus current loan balance exceeds your maximum limit of ₦${maxLoan.toLocaleString()}`,
         };
     }
 
@@ -112,15 +90,26 @@ export function calculateRepaymentSchedule(
     startDate: Date = new Date()
 ): RepaymentInstallment[] {
     const schedule: RepaymentInstallment[] = [];
-    const monthlyPayment = loanAmount / durationMonths;
+    const r = monthlyInterestRate / 100;
+    const n = durationMonths;
+    const monthlyPayment = (loanAmount * (r * Math.pow(1 + r, n))) / (Math.pow(1 + r, n) - 1);
+    
+    let remainingPrincipal = loanAmount;
 
     for (let i = 1; i <= durationMonths; i++) {
         const dueDate = new Date(startDate);
         dueDate.setMonth(dueDate.getMonth() + i);
 
-        const interestAmount = loanAmount * (monthlyInterestRate / 100);
-        const principalAmount = monthlyPayment;
+        const interestAmount = remainingPrincipal * r;
+        let principalAmount = monthlyPayment - interestAmount;
+        
+        // Handle rounding differences on final payment
+        if (i === durationMonths) {
+            principalAmount = remainingPrincipal;
+        }
+
         const totalAmount = principalAmount + interestAmount;
+        remainingPrincipal -= principalAmount;
 
         schedule.push({
             installmentNumber: i,
@@ -165,12 +154,12 @@ export function calculateLoanCost(
  * Get tier interest rate
  */
 export function getTierInterestRate(tier: CooperativeTier): number {
-    return tier === "Premium" ? 2.0 : 2.5;
+    return 2.0;
 }
 
 /**
  * Get tier max duration
  */
 export function getTierMaxDuration(tier: CooperativeTier): number {
-    return tier === "Premium" ? 12 : 6;
+    return 12;
 }

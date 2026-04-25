@@ -306,7 +306,7 @@ export default function ExportOnboardingPage() {
                                 Higher Returns
                             </p>
                             <p className="text-orange-700">
-                                Access premium export opportunities with 18-22% ROI
+                                Access verified export opportunities with competitive, contract-backed returns
                             </p>
                         </div>
                     </div>

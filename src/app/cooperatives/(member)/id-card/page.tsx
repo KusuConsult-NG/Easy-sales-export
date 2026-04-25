@@ -112,17 +112,12 @@ function PassportUploadWidget({ onUploaded }: { onUploaded: (url: string, name: 
 // ── ID Card Component ─────────────────────────────────────────────────────────
 
 function IdCardFace({ data }: { data: MemberIdCardData }) {
-    const isPremium = data.membershipTier === "premium";
-
     return (
         <div
             id="cooperative-id-card"
             style={{ fontFamily: "'Arial', sans-serif", width: "340px", minHeight: "210px" }}
             className={`relative overflow-hidden rounded-2xl shadow-2xl select-none
-                ${isPremium
-                    ? "bg-linear-to-br from-amber-700 via-yellow-600 to-amber-800"
-                    : "bg-linear-to-br from-purple-800 via-purple-700 to-indigo-800"
-                }`}
+                bg-linear-to-br from-purple-800 via-purple-700 to-indigo-800`}
         >
             {/* Decorative circles */}
             <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/5" />
@@ -143,8 +138,8 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                     <p className="text-white/70 text-[10px] font-semibold uppercase tracking-widest leading-tight">Cooperative Membership</p>
                 </div>
                 <div className="flex flex-col items-end shrink-0 pl-2">
-                    <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isPremium ? "bg-yellow-300 text-yellow-900" : "bg-purple-300 text-purple-900"}`}>
-                        {isPremium ? "★ PREMIUM" : "BASIC"}
+                    <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-300 text-purple-900`}>
+                        MEMBER
                     </div>
                     <Shield className="w-5 h-5 text-white/40 mt-1" />
                 </div>
@@ -192,7 +187,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-white/60">Valid Until</span>
-                            <span className={`font-bold ${isPremium ? "text-yellow-300" : "text-white"}`}>{fmtShort(data.validUntil)}</span>
+                            <span className={`font-bold text-white`}>{fmtShort(data.validUntil)}</span>
                         </div>
                     </div>
                 </div>
@@ -223,7 +218,7 @@ function PaymentRequiredGate() {
             </div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">Payment Required</h2>
             <p className="text-slate-500 text-sm mb-6">
-                Your membership ID card is generated after your ₦10,000 membership fee is verified on Paystack.
+                Your membership ID card is generated after your ₦5,000 membership fee is verified on Paystack.
             </p>
             <Link
                 href="/cooperatives/onboarding"
@@ -463,7 +458,7 @@ export default function CooperativeIdCardPage() {
                                 {[
                                     ["Full Name", result.data.fullName],
                                     ["Member No.", result.data.memberNumber],
-                                    ["Tier", result.data.membershipTier === "premium" ? "★ Premium" : "Basic"],
+                                    ["Tier", "Member"],
                                     ["Gender", result.data.gender],
                                     ["State of Origin", result.data.stateOfOrigin],
                                     ["Issue Date", fmt(result.data.joinedAt)],

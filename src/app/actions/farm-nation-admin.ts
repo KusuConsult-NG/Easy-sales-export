@@ -300,6 +300,70 @@ export async function getStandardFarmNationRegistrantsAction(options: {
     }
 }
 
+/**
+ * Get aggregate counts for land_listings by verification status.
+ * Uses Firestore COUNT queries — independent of pagination.
+ */
+export async function getFarmNationVerificationStatsAction(): Promise<{
+    success: boolean;
+    data?: {
+        stats: {
+            total: number;
+            pending: number;
+            verified: number;
+            rejected: number;
+        };
+    };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = "admin:farm-nation-verification-stats";
+
+        try {
+            const cached = await getCached<any>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {}
+
+        const [totalSnap, pendingSnap, verifiedSnap, rejectedSnap] = await Promise.all([
+            db.collection("land_listings").count().get(),
+            db.collection("land_listings").where("verificationStatus", "==", "pending").count().get(),
+            db.collection("land_listings").where("verificationStatus", "==", "verified").count().get(),
+            db.collection("land_listings").where("verificationStatus", "==", "rejected").count().get(),
+        ]);
+
+        const payload = {
+            success: true as const,
+            data: {
+                stats: {
+                    total:    totalSnap.data().count,
+                    pending:  pendingSnap.data().count,
+                    verified: verifiedSnap.data().count,
+                    rejected: rejectedSnap.data().count,
+                },
+            },
+        };
+
+        try {
+            await setCache(cacheKey, payload, 60); // 60-second cache
+        } catch (e) {}
+
+        return payload;
+    } catch (error: any) {
+        logger.error("getFarmNationVerificationStatsAction error:", error);
+        return { success: false, error: "Failed to fetch verification stats" };
+    }
+}
+
 export async function getAdminLandVerificationsAction(options: {
     limit?: number;
     search?: string;

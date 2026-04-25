@@ -8,7 +8,7 @@ import {
     GraduationCap, BookOpen, Target, CheckCircle,
     ArrowRight, ArrowLeft, Rocket, Loader2, Clock, XCircle, Home, CreditCard, Shield
 } from "lucide-react";
-import { checkAcademyStatusAction, submitAcademyApplicationAction, AcademyApplicationData, initiateAcademyPaymentAction, checkAcademyPaymentStatusAction } from "@/app/actions/academy";
+import { checkAcademyStatusAction, submitAcademyApplicationAction, AcademyApplicationData } from "@/app/actions/academy";
 import { getUserProfileAction } from "@/app/actions/profile";
 import { useToast } from "@/contexts/ToastContext";
 import { logger } from "@/lib/logger";
@@ -27,9 +27,7 @@ export default function AcademyOnboardingPage() {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [isPaymentLoading, setIsPaymentLoading] = useState(false);
     const [applicationStatus, setApplicationStatus] = useState<string | null>(null);
-    const [paymentStatus, setPaymentStatus] = useState<string>("pending");
 
     // Resolved structured name from Firestore (not JWT string split)
     const [resolvedFirstName, setResolvedFirstName] = useState("");
@@ -73,11 +71,7 @@ export default function AcademyOnboardingPage() {
                     if (p.stateOfOrigin) setState(p.stateOfOrigin);
                 }
 
-                // 2. Check payment status
-                const pStatus = await checkAcademyPaymentStatusAction();
-                setPaymentStatus(pStatus.data || "unpaid");
-
-                // 3. Check application status
+                // 2. Check application status
                 const status = await checkAcademyStatusAction();
                 setApplicationStatus(status.data || "none");
 
@@ -96,22 +90,6 @@ export default function AcademyOnboardingPage() {
 
         checkStatus();
     }, [sessionStatus, router]);
-
-    async function handlePayNow(planName: "foundation" | "standard" | "elite") {
-        setIsPaymentLoading(true);
-        try {
-            const result = await initiateAcademyPaymentAction(planName);
-            if (result.success && result.data?.paymentUrl) {
-                window.location.href = result.data.paymentUrl;
-            } else {
-                showToast(result.error || "Failed to initiate payment", "error");
-                setIsPaymentLoading(false);
-            }
-        } catch {
-            showToast("An unexpected error occurred", "error");
-            setIsPaymentLoading(false);
-        }
-    };
 
     function handleInterestToggle(interest: InterestArea) {
         setInterests(prev =>
@@ -187,125 +165,6 @@ export default function AcademyOnboardingPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-slate-50">
                 <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            </div>
-        );
-    }
-
-    // PAYMENT GATE: Show plan selection and payment screen if not yet paid
-    if (paymentStatus !== "completed" && !applicationStatus) {
-        const plans = [
-            {
-                name: "Foundation",
-                price: "₦25,000",
-                amount: 25000,
-                description: "Essential knowledge for starting your agro-export journey correctly.",
-                features: ["Export fundamentals", "Agro-business structure", "Basic market access strategy"],
-                highlight: false,
-            },
-            {
-                name: "Standard",
-                price: "₦50,000",
-                amount: 50000,
-                description: "Deep dive into strategies, compliance, and scaling your operations.",
-                features: ["Advanced export strategies", "Comprehensive compliance training", "Cooperative opportunity positioning"],
-                highlight: true,
-            },
-            {
-                name: "Elite",
-                price: "₦100,000",
-                amount: 100000,
-                description: "The complete playbook for high-level execution and dominance.",
-                features: ["Full ecosystem mastery", "Direct market linkages", "Priority positioning strategy"],
-                highlight: false,
-            },
-        ];
-
-        return (
-            <div className="min-h-screen bg-linear-to-br from-blue-50 to-indigo-50">
-                {/* Navigation */}
-                <div className="border-b border-slate-200 bg-white">
-                    <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-                        <Link
-                            href="/academy"
-                            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            Back
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium"
-                        >
-                            <Home className="w-4 h-4" />
-                            Hub
-                        </Link>
-                    </div>
-                </div>
-
-                <div className="max-w-5xl mx-auto px-4 py-12">
-                    {/* Header */}
-                    <div className="text-center mb-12">
-                        <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <GraduationCap className="w-10 h-10 text-blue-600" />
-                        </div>
-                        <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 mb-2">Choose Your Program</h1>
-                        <p className="text-slate-600 text-lg">Select a plan to get started with the Academy</p>
-                    </div>
-
-                    {/* Plan Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        {plans.map((plan, index) => (
-                            <div
-                                key={index}
-                                className={`relative bg-white rounded-2xl overflow-hidden transition-all duration-300 cursor-pointer ${plan.highlight
-                                    ? 'shadow-2xl scale-[1.02] border-2 border-blue-600 z-10'
-                                    : 'shadow-lg border border-slate-200 hover:shadow-xl hover:border-blue-300'
-                                    }`}
-                            >
-                                {plan.highlight && (
-                                    <div className="bg-blue-600 text-white text-center py-2 font-bold text-sm uppercase tracking-wider">
-                                        Most Popular
-                                    </div>
-                                )}
-                                <div className="p-6">
-                                    <h3 className="text-xl font-bold text-slate-900 mb-2">{plan.name} Program</h3>
-                                    <div className="flex items-baseline mb-4">
-                                        <span className="text-3xl font-extrabold text-blue-600">{plan.price}</span>
-                                    </div>
-                                    <p className="text-sm text-slate-600 mb-6 pb-6 border-b border-slate-100">
-                                        {plan.description}
-                                    </p>
-                                    <ul className="space-y-3 mb-6">
-                                        {plan.features.map((feature, fIdx) => (
-                                            <li key={fIdx} className="flex items-start gap-2">
-                                                <CheckCircle className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
-                                                <span className="text-sm text-slate-700">{feature}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <button
-                                        onClick={() => handlePayNow(plan.name.toLowerCase() as "foundation" | "standard" | "elite")}
-                                        disabled={isPaymentLoading}
-                                        className={`w-full py-3 rounded-xl font-bold text-center transition-all flex items-center justify-center gap-2 ${plan.highlight
-                                            ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200'
-                                            : 'bg-slate-100 text-slate-900 hover:bg-slate-200'
-                                            } disabled:opacity-50`}
-                                    >
-                                        {isPaymentLoading ? (
-                                            <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</>
-                                        ) : (
-                                            <><CreditCard className="w-5 h-5" /> Pay {plan.price}</>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <p className="text-xs text-slate-400 text-center">
-                        Secured by Paystack • 256-bit encryption
-                    </p>
-                </div>
             </div>
         );
     }

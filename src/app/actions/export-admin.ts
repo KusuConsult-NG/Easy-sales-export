@@ -115,6 +115,91 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
     }
 }
 
+// ============================================
+// Export Request Stats (server-side COUNT)
+// ============================================
+
+export async function getExportRequestStatsAction(): Promise<{
+    success: boolean;
+    error?: string;
+    data?: {
+        total: number;
+        pending: number;
+        inTransit: number;
+        delivered: number;
+        completed: number;
+    };
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        const { session } = sessionResult;
+        if (!session?.user?.roles?.some((r: string) => r === "admin" || r === "super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const db = getAdminDb();
+        const col = db.collection(COLLECTIONS.EXPORT_WINDOWS);
+
+        const [totalSnap, pendingSnap, inTransitSnap, deliveredSnap, completedSnap] = await Promise.all([
+            col.count().get(),
+            col.where("status", "==", "pending").count().get(),
+            col.where("status", "==", "in_transit").count().get(),
+            col.where("status", "==", "delivered").count().get(),
+            col.where("status", "==", "completed").count().get(),
+        ]);
+
+        return {
+            success: true,
+            data: {
+                total: totalSnap.data().count,
+                pending: pendingSnap.data().count,
+                inTransit: inTransitSnap.data().count,
+                delivered: deliveredSnap.data().count,
+                completed: completedSnap.data().count,
+            },
+        };
+    } catch (error: any) {
+        logger.error("Get export request stats error:", error);
+        return { success: false, error: "Failed to fetch export stats" };
+    }
+}
+
+// ============================================
+// Export Catalog Stats (server-side COUNT)
+// ============================================
+
+export async function getExportCatalogStatsAction(): Promise<{
+    success: boolean;
+    error?: string;
+    data?: {
+        totalProducts: number;
+    };
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        const { session } = sessionResult;
+        if (!session?.user?.roles?.some((r: string) => r === "admin" || r === "super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const db = getAdminDb();
+        const snap = await db.collection(COLLECTIONS.EXPORT_CATALOG)
+            .where("isActive", "==", true)
+            .count()
+            .get();
+
+        return {
+            success: true,
+            data: { totalProducts: snap.data().count },
+        };
+    } catch (error: any) {
+        logger.error("Get export catalog stats error:", error);
+        return { success: false, error: "Failed to fetch catalog stats" };
+    }
+}
+
 export async function deleteExportCatalogAction(productId: string): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();

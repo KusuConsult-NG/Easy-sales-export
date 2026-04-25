@@ -33,7 +33,7 @@ export interface CooperativeMember {
     };
 
     // Membership Details
-    membershipTier: "basic" | "premium"; // ₦10,000 or ₦20,000
+    membershipTier: "Member"; // Unified single tier
     registrationFee: number;
     membershipStatus: "pending" | "approved" | "suspended";
     paymentReference: string;

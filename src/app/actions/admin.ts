@@ -660,10 +660,11 @@ async function _getPendingWithdrawalsAction(
                     .limit(limit);
         };
 
-        // Query both standard withdrawals AND cooperative_withdrawals
-        const [stdSnap, coopSnap] = await Promise.all([
+        // Query standard withdrawals, cooperative_withdrawals AND wave_withdrawals
+        const [stdSnap, coopSnap, waveSnap] = await Promise.all([
             buildQuery(COLLECTIONS.WITHDRAWALS).get(),
             buildQuery(COLLECTIONS.COOPERATIVE_WITHDRAWALS).get(),
+            buildQuery(COLLECTIONS.WAVE_WITHDRAWALS).get(),
         ]);
 
         const toRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot, source: string) =>
@@ -672,6 +673,7 @@ async function _getPendingWithdrawalsAction(
         const all = [
             ...stdSnap.docs.map(d => toRecord(d, "withdrawal")),
             ...coopSnap.docs.map(d => toRecord(d, "cooperative_withdrawal")),
+            ...waveSnap.docs.map(d => toRecord(d, "wave_withdrawal")),
         ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, limit);
 
@@ -1004,12 +1006,12 @@ async function _approveLoanApplication(
         const loanData = loanDoc.data()!;
 
         // Validate tier eligibility
-        const tierMultiplier = loanData.tier === "Premium" ? 5 : 2.5;
+        const tierMultiplier = 2.0; // Member tier multiplier
         const maxLoanAmount = loanData.contributionAmount * tierMultiplier;
 
         if (loanData.amount > maxLoanAmount) {
             return {
-                error: `Loan amount exceeds maximum for ${loanData.tier} tier (₦${maxLoanAmount.toLocaleString()})`,
+                error: `Loan amount exceeds maximum for Member tier (₦${maxLoanAmount.toLocaleString()})`,
                 success: false,
             };
         }
@@ -3370,3 +3372,44 @@ export const manualAcademyEnrollmentAction = withFlexibleSafeAction("manualAcade
 export const inviteLegacyMemberAction = withFlexibleSafeAction("inviteLegacyMemberAction", _inviteLegacyMemberAction);
 export const getStandardSellerVerificationsAction = withFlexibleSafeAction("getStandardSellerVerificationsAction", _getStandardSellerVerificationsAction);
 export const getMarketplaceUsersAction = withFlexibleSafeAction("getMarketplaceUsersAction", _getMarketplaceUsersAction);
+
+/**
+ * Admin: Server-side COUNT aggregations for the seller verifications dashboard.
+ * Returns accurate totals independent of pagination limits.
+ */
+export async function getAdminSellerStatsAction(): Promise<{
+    success: boolean;
+    stats?: { total: number; pending: number; approved: number; rejected: number };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const { session } = sessionResult;
+
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const col = db.collection(COLLECTIONS.SELLER_VERIFICATIONS);
+        const [total, pending, approved, rejected] = await Promise.all([
+            col.count().get(),
+            col.where("status", "==", "pending").count().get(),
+            col.where("status", "==", "approved").count().get(),
+            col.where("status", "==", "rejected").count().get(),
+        ]);
+
+        return {
+            success: true,
+            stats: {
+                total: total.data().count,
+                pending: pending.data().count,
+                approved: approved.data().count,
+                rejected: rejected.data().count,
+            },
+        };
+    } catch (error: any) {
+        logger.error("getAdminSellerStatsAction error:", error);
+        return { success: false, error: error.message };
+    }
+}

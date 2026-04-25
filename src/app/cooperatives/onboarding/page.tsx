@@ -42,5 +42,5 @@ export default async function CooperativeOnboardingPage(
     }
 
     // Pass token and real paymentStatus to client
-    return <OnboardingClient initialTier="basic" paymentStatus={paymentStatus} inviteToken={token} />;
+    return <OnboardingClient initialTier="Member" paymentStatus={paymentStatus} inviteToken={token} />;
 }

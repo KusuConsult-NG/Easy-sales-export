@@ -85,7 +85,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                         </div>
                         <div className="flex justify-between items-center">
                             <span>Platform fee</span>
-                            <span className="font-semibold">2.5% per transaction</span>
+                            <span className="font-semibold">5% per transaction</span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span>Withdrawal limit</span>

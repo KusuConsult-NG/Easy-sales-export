@@ -276,7 +276,7 @@ export default function ExportDashboardPage() {
                                 <h3 className="font-bold text-white">New Opportunities</h3>
                             </div>
                             <p className="text-sm text-orange-100 mb-4">
-                                New export windows are now open for investment with up to 22% ROI.
+                                New export windows are open for investment. Book your slot before capacity fills up.
                             </p>
                             <Link
                                 href="/export/opportunities"

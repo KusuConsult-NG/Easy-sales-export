@@ -763,206 +763,9 @@ export interface AcademyApplicationData {
     };
 }
 
-const ACADEMY_REGISTRATION_FEE = 5000; // ₦5,000
 
-/**
- * Initiate academy onboarding payment (must pay before submitting application)
- */
-export async function initiateAcademyPaymentAction(
-    plan?: "foundation" | "standard" | "elite" | "registration"
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized' };
-        const { session } = sessionResult;
 
-        const userId = session.user.id;
 
-        // Check if already paid
-        const existingApp = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-            .where("userId", "==", userId)
-            .where("paymentStatus", "==", "completed")
-            .limit(1)
-            .get();
-
-        if (!existingApp.empty) {
-            return { error: "You have already paid. Please proceed to complete your application.", success: false };
-        }
-
-        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!paystackSecretKey) {
-            return { error: "Payment system not configured", success: false };
-        }
-
-        let amount = ACADEMY_REGISTRATION_FEE; // Default to 5000 (Registration)
-        const purpose = "academy_registration";
-
-        if (plan && plan !== "registration") {
-            if (plan === "foundation") amount = 25000;
-            else if (plan === "standard") amount = 50000;
-            else if (plan === "elite") amount = 100000;
-        } else {
-            plan = "registration";
-        }
-
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${paystackSecretKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                email: session.user.email,
-                amount: amount * 100, // Kobo
-                channels: ["bank_transfer"],
-                metadata: {
-                    userId,
-                    type: "academy_registration", // Required for webhook routing
-                    purpose: "academy_registration", // Kept for backward compat with verifyAcademyPaymentAction
-                    plan, // Store the plan!
-                },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
-            }),
-        });
-
-        if (!paystackResponse.ok) {
-            return { error: "Failed to initialize payment", success: false };
-        }
-
-        const paystackData = await paystackResponse.json();
-
-        if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return { error: "Failed to generate payment link", success: false };
-        }
-
-        return {
-            success: true,
-            data: { paymentUrl: paystackData.data.authorization_url },
-        };
-    } catch (error) {
-        logger.error("Academy payment init failed:", error);
-        return { error: "Failed to initiate payment", success: false };
-    }
-}
-
-/**
- * Verify academy registration payment callback
- */
-export async function verifyAcademyPaymentAction(reference: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized' };
-        const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Authentication required" };
-
-        const verify = await verifyPaystackPayment(reference);
-        if (!verify.status || verify.data.status !== "success") {
-            return { success: false, error: "Payment verification failed" };
-        }
-
-        const metadata = verify.data.metadata;
-        if (metadata.purpose !== "academy_registration") {
-            return { success: false, error: "Invalid payment type" };
-        }
-
-        const existingRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-
-        await db.runTransaction(async (t) => {
-            const tExistingDoc = await t.get(existingRef);
-            if (tExistingDoc.exists) {
-                throw new Error("Payment already processed");
-            }
-
-            const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
-            const userDoc = await t.get(userRef);
-            const userData = userDoc.data();
-
-            // Mark payment as completed for the user using dot notation to prevent overwriting
-            t.update(userRef, {
-                "serviceRegistrations.academy.paymentStatus": "completed",
-                "serviceRegistrations.academy.paymentReference": reference,
-                "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
-                "serviceRegistrations.academy.plan": metadata.plan || "foundation",
-                "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
-                "updatedAt": FieldValue.serverTimestamp(),
-            });
-
-            // Auto-create academy_applications record so admin can see paid users
-            const applicationId = `ACADEMY-${Date.now()}-${(Date.now() / 10000000000).toString(36).substring(2, 11)}`;
-            const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
-
-            t.set(appRef, {
-                userId: session.user.id,
-                applicationId,
-                personalInfo: {
-                    fullName: userData?.fullName || userData?.name || session.user.name || "Unknown",
-                    email: userData?.email || session.user.email || "Unknown",
-                    phone: userData?.phone || userData?.phoneNumber || "",
-                },
-                education: {
-                    educationLevel: "Not provided (auto-created from payment)",
-                    fieldOfStudy: "Not provided",
-                },
-                interests: {
-                    learningPaths: [],
-                    topics: "",
-                    goals: "",
-                },
-                status: "pending",
-                paymentStatus: "completed",
-                paymentReference: reference,
-                paymentAmount: verify.data.amount / 100,
-                plan: metadata.plan || "foundation",
-                submittedAt: FieldValue.serverTimestamp(),
-                source: "payment_callback",
-            });
-
-            // Link the application to the user
-            t.update(userRef, {
-                "serviceRegistrations.academy.applicationId": applicationId,
-                "serviceRegistrations.academy.status": "pending",
-            });
-
-            // Mark the payment as processed globally
-            t.set(existingRef, {
-                reference,
-                type: "academy_registration",
-                userId: session.user.id,
-                amount: verify.data.amount / 100,
-                processedAt: FieldValue.serverTimestamp(),
-            });
-        });
-
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Academy payment verification error:", error);
-        return { success: false, error: error.message === "Payment already processed" ? error.message : "Failed to verify payment" };
-    }
-}
-
-/**
- * Check if user has paid for academy registration
- */
-export async function checkAcademyPaymentStatusAction(): Promise<{ success: boolean; data?: "paid" | "unpaid"; meta?: any; error?: string }> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: true, data: "unpaid" };
-        const { session } = sessionResult;
-        if (!session?.user?.id) return { success: true, data: "unpaid" };
-
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
-
-        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed") {
-            return { success: true, data: "paid" };
-        }
-
-        return { success: true, data: "unpaid" };
-    } catch (error) {
-        logger.error("Check academy payment status error:", error);
-        return { success: true, data: "unpaid" };
-    }
-}
 
 /**
  * Submit Academy learner application
@@ -1179,6 +982,34 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
         return { success: true };
     } catch (error: any) {
         logger.error("Update modules error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function deleteCourseAction(courseId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized' };
+        const { session } = sessionResult;
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).delete();
+
+        await createAdminAuditLog({
+            action: "course_deleted",
+            userId: session.user.id,
+            targetId: courseId,
+            targetType: "course",
+            details: "Deleted course",
+        });
+
+        revalidatePath("/admin/academy", "page");
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Delete course error:", error);
         return { success: false, error: error.message };
     }
 }

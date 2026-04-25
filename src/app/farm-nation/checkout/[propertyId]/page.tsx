@@ -22,7 +22,7 @@ export default function CheckoutPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [userTier, setUserTier] = useState<"Basic" | "Premium" | null>(null);
+    const [userTier, setUserTier] = useState<"Member" | null>(null);
     const [agreed, setAgreed] = useState(false);
 
     const [buyerInfo, setBuyerInfo] = useState({
@@ -55,7 +55,7 @@ export default function CheckoutPage() {
             getUserTierAction().then((res) => {
                 const tier = res.data?.tier;
                 setUserTier(tier || null);
-                if (tier !== "Premium") {
+                if (tier !== "Member") {
                     router.push(`/farm-nation/property/${propertyId}`);
                 }
             });

@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X, Store } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { initializeOrderPaymentAction, type CartItem } from "@/app/actions/marketplace-payment";
+import { initializeOrderPaymentAction, calculateDeliveryAction, type CartItem } from "@/app/actions/marketplace-payment";
 import { useToast } from "@/contexts/ToastContext";
 import PhoneInput, { isValidNigerianPhone } from "@/components/ui/PhoneInput";
 import type { Product } from "@/lib/types/marketplace";
@@ -34,6 +34,8 @@ export default function CheckoutPage() {
         state: "",
         lga: "",
     });
+    const [deliveryFee, setDeliveryFee] = useState<number>(0);
+    const [isCalculatingFee, setIsCalculatingFee] = useState(true);
     const [isClient, setIsClient] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -53,8 +55,38 @@ export default function CheckoutPage() {
         }
     }, [router, session]);
 
+    // Calculate delivery fee when cart is loaded
+    useEffect(() => {
+        async function fetchFee() {
+            if (cart.length === 0) return;
+            setIsCalculatingFee(true);
+            try {
+                const cartItems: CartItem[] = cart.map(item => ({
+                    id: item.id,
+                    title: item.title,
+                    sellerId: item.sellerId,
+                    price: item.pricingTiers[0]?.price || 0,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                }));
+                const res = await calculateDeliveryAction(cartItems);
+                if (res.success) {
+                    setDeliveryFee(res.fee);
+                } else {
+                    setDeliveryFee(0);
+                    showToast(res.error || "Failed to calculate delivery fee", "error");
+                }
+            } catch (err) {
+                setDeliveryFee(0);
+                showToast("Error calculating delivery fee", "error");
+            } finally {
+                setIsCalculatingFee(false);
+            }
+        }
+        fetchFee();
+    }, [cart, showToast]);
+
     const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity, 0);
-    const deliveryFee = 5000;
 
     async function handlePaystackCheckout() {
         if (!session) {
@@ -238,11 +270,23 @@ export default function CheckoutPage() {
                                 </div>
                                 <div className="flex justify-between text-slate-600">
                                     <span>Delivery Fee</span>
-                                    <span>{formatCurrency(deliveryFee)}</span>
+                                    <span>
+                                        {isCalculatingFee ? (
+                                            <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                                        ) : (
+                                            formatCurrency(deliveryFee)
+                                        )}
+                                    </span>
                                 </div>
                                 <div className="pt-3 border-t border-slate-200 flex justify-between text-lg font-bold">
                                     <span className="text-slate-900">Total</span>
-                                    <span className="text-primary">{formatCurrency(subtotal + deliveryFee)}</span>
+                                    <span className="text-primary">
+                                        {isCalculatingFee ? (
+                                            <span className="text-sm font-normal text-slate-400">Calculating...</span>
+                                        ) : (
+                                            formatCurrency(subtotal + deliveryFee)
+                                        )}
+                                    </span>
                                 </div>
                             </div>
 
@@ -270,7 +314,7 @@ export default function CheckoutPage() {
                             {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
                                 <button
                                     onClick={handlePaystackCheckout}
-                                    disabled={isProcessing || !email || !phone}
+                                    disabled={isProcessing || isCalculatingFee || !email || !phone}
                                     className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                 >
                                     {isProcessing ? (

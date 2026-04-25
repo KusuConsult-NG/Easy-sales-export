@@ -97,6 +97,7 @@ export type AuditAction =
     // LMS Actions
     | 'course_created'
     | 'course_updated'
+    | 'course_deleted'
     | 'course_enrolled'
     | 'course_completed'
     | 'certificate_issued'

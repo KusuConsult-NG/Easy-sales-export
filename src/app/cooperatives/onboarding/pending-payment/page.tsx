@@ -18,8 +18,8 @@ function PendingPaymentContent() {
         // Use ref from URL params if available (set during checkout)
         return searchParams.get("ref") || "COOP-PAY-" + Math.random().toString(36).substr(2, 9).toUpperCase();
     });
-    const amount = parseInt(searchParams.get("amount") || "15000", 10);
-    const tier = searchParams.get("tier") || "Standard";
+    const amount = parseInt(searchParams.get("amount") || "5000", 10);
+    const tier = "Member";
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4">

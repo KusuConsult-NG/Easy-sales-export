@@ -415,7 +415,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
 
     let pendingPayoutAmount = 0;
     const [coopPayoutsR, wavePayoutsR] = await Promise.allSettled([
-        db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
+        db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
         db.collection(COLLECTIONS.WAVE_WITHDRAWALS).where("status", "==", "approved_pending_payout").aggregate({ total: AggregateField.sum("amount") }).get(),
     ]);
     pendingPayoutAmount =

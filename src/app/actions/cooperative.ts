@@ -52,7 +52,7 @@ import { revalidatePath } from "next/cache";
  * Creates a partial membership record and initializes Paystack
  */
 export async function initiateCooperativePaymentAction(
-    tier: "basic" | "premium"
+    tier: string = "Member"
 ): Promise<{
     success: boolean;
     meta?: any;
@@ -68,15 +68,21 @@ export async function initiateCooperativePaymentAction(
         }
 
         const userId = session.user.id;
-        const registrationFee = tier === "basic" ? 10000 : 20000;
+        const registrationFee = 5000; // Standard member registration fee
 
         // Create or update partial membership record
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
 
-        // Check if already paid
+        // Check if already active or paid
         const memberDoc = await memberRef.get();
-        if (memberDoc.exists && memberDoc.data()?.paymentStatus === "completed") {
-            return { error: "You have already paid. Please proceed to onboarding.", success: false };
+        if (memberDoc.exists) {
+            const data = memberDoc.data();
+            if (data?.membershipStatus === "active") {
+                return { error: "You are already an active cooperative member.", success: false };
+            }
+            if (data?.paymentStatus === "completed") {
+                return { error: "You have already paid. Please proceed to onboarding.", success: false };
+            }
         }
 
         await memberRef.set({
@@ -168,7 +174,7 @@ export async function registerCooperativeMemberAction(
         const memberData = existingMember.data();
 
         let isLegacyImport = false;
-        let membershipTier = (memberData?.membershipTier ?? "basic") as "basic" | "premium";
+        let membershipTier = (memberData?.membershipTier ?? "Member") as "Member";
 
         if (inviteToken) {
             if (existingMember.exists && memberData?.onboardingCompleted) {
@@ -184,6 +190,10 @@ export async function registerCooperativeMemberAction(
             // Legacy check
             if (!existingMember.exists) {
                 return { error: "No membership record found. Please complete payment first.", success: false };
+            }
+
+            if (memberData?.onboardingCompleted) {
+                return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false };
             }
 
             // 🔒 Verify Payment Status
@@ -617,7 +627,7 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
             loanBalance: membershipData.loanBalance || 0,
             memberSince: membershipData.memberSince?.toDate?.() || membershipData.createdAt?.toDate?.() || new Date(),
             monthlyTarget: membershipData.monthlyTarget || 50000,
-            membershipTier: membershipData.membershipTier || "basic",
+            membershipTier: membershipData.membershipTier || "Member",
             membershipStatus: membershipData.membershipStatus || "pending",
             paymentStatus: membershipData.paymentStatus || "pending",
         };
@@ -678,7 +688,7 @@ export async function getUserTierAction(): Promise<{
     success: boolean;
     meta?: any;
     data?: {
-        tier: "Basic" | "Premium" | null;
+        tier: "Member" | null;
         totalContributions: number;
     }
 }> {
@@ -1061,7 +1071,7 @@ export async function getDirectoryMembersAction(): Promise<{
             return {
                 id: doc.id,
                 name: `${data.firstName} ${data.lastName}`,
-                role: data.membershipTier === "premium" ? "Premium Member" : "Basic Member",
+                role: "Member",
                 location: `${data.lga}, ${data.stateOfOrigin}`,
                 occupation: data.occupation,
                 joined: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "Recent",
@@ -1202,7 +1212,7 @@ export async function resubmitCooperativeApplicationAction(
 export type MemberIdCardData = {
     fullName: string;
     memberNumber: string;
-    membershipTier: "basic" | "premium";
+    membershipTier: "Member";
     gender: string;
     stateOfOrigin: string;
     passportPhotoUrl: string | null;
@@ -1256,7 +1266,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
                 data: {
                     fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
                     memberNumber: "",
-                    membershipTier: d.membershipTier || "basic",
+                    membershipTier: d.membershipTier || "Member",
                     gender: d.gender || "",
                     stateOfOrigin: d.stateOfOrigin || "",
                     passportPhotoUrl: d.documents?.passportPhoto?.url || null,
@@ -1281,7 +1291,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
             data: {
                 fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
                 memberNumber,
-                membershipTier: d.membershipTier || "basic",
+                membershipTier: d.membershipTier || "Member",
                 gender: d.gender || "",
                 stateOfOrigin: d.stateOfOrigin || "",
                 passportPhotoUrl: d.documents?.passportPhoto?.url || null,

@@ -1,47 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home, ShoppingBag, Truck, FileCheck, Users } from "lucide-react";
+import { ArrowRight, Package, Shield, TrendingUp, Clock, Globe, CheckCircle, DollarSign, Home, ShoppingBag, Truck, FileCheck, Users, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BackToHub from "@/components/common/BackToHub";
 import { checkExportStatusAction } from "@/app/actions/export";
+import { getActiveExportWindowsAction } from "@/app/actions/export-aggregation";
 
 export default function ExportWindowsLandingPage() {
     const { status: sessionStatus } = useSession();
     const router = useRouter();
 
+    // Live export windows for the "Active Opportunities" section
+    const [liveWindows, setLiveWindows] = useState<any[]>([]);
+    const [windowsLoading, setWindowsLoading] = useState(true);
 
-
-
-
-    const opportunities = [
-        {
-            commodity: "Yam Tubers Export - Phase 2",
-            destination: "🇬🇧 United Kingdom",
-            roi: "22%",
-            duration: "6 months",
-            minInvestment: "₦100,000",
-            icon: "🌾"
-        },
-        {
-            commodity: "Sesame Seeds Export",
-            destination: "🇦🇪 Dubai, UAE",
-            roi: "20%",
-            duration: "4 months",
-            minInvestment: "₦50,000",
-            icon: "🌰"
-        },
-        {
-            commodity: "Hibiscus Export",
-            destination: "🇺🇸 United States",
-            roi: "18%",
-            duration: "5 months",
-            minInvestment: "₦75,000",
-            icon: "🌺"
-        }
-    ];
+    useEffect(() => {
+        getActiveExportWindowsAction().then(result => {
+            if (result.success) setLiveWindows((result.data || []).slice(0, 3));
+        }).finally(() => setWindowsLoading(false));
+    }, []);
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -92,65 +72,65 @@ export default function ExportWindowsLandingPage() {
                 </div>
             </div>
 
-            {/* Stats Section */}
-            <div className="max-w-7xl mx-auto px-8 -mt-16 relative z-10">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-16">
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-orange-600 mb-2">250+</div>
-                        <div className="text-slate-600 font-medium">Export Windows</div>
-                    </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-orange-600 mb-2">₦15B+</div>
-                        <div className="text-slate-600 font-medium">Total Invested</div>
-                    </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-orange-600 mb-2">98%</div>
-                        <div className="text-slate-600 font-medium">Success Rate</div>
-                    </div>
-                    <div className="bg-white rounded-2xl p-6 elevation-2 text-center">
-                        <div className="text-4xl font-bold text-orange-600 mb-2">18-22%</div>
-                        <div className="text-slate-600 font-medium">Average ROI</div>
-                    </div>
-                </div>
-            </div>
 
-            {/* Active Opportunities */}
+            {/* Active Opportunities — live from Firestore */}
             <div className="max-w-7xl mx-auto px-8 py-16">
                 <h2 className="text-3xl md:text-4xl font-bold text-center text-slate-900 mb-4">
                     Active Export Opportunities
                 </h2>
                 <p className="text-center text-slate-600 mb-12 max-w-2xl mx-auto">
-                    Verified export contracts ready for funding with attractive returns
+                    Verified export contracts ready for funding
                 </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
-                    {opportunities.map((opp, index) => (
-                        <div key={index} className="bg-white rounded-2xl p-6 elevation-2">
-                            <div className="text-5xl mb-4">{opp.icon}</div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-3">
-                                {opp.commodity}
-                            </h3>
-                            <div className="space-y-3 mb-6">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600">Destination</span>
-                                    <span className="font-semibold text-slate-900">{opp.destination}</span>
+                {windowsLoading ? (
+                    <div className="flex justify-center py-16">
+                        <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
+                    </div>
+                ) : liveWindows.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center mb-8">
+                        <Package className="w-14 h-14 text-slate-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-bold text-slate-700 mb-1">No Open Windows Right Now</h3>
+                        <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                            New export windows open regularly. Register your interest and we&apos;ll notify you when the next one launches.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                        {liveWindows.map((win) => {
+                            const filled = win.targetVolume > 0
+                                ? Math.min(100, Math.round(((win.currentVolume || 0) / win.targetVolume) * 100))
+                                : 0;
+                            return (
+                                <div key={win.id} className="bg-white rounded-2xl p-6 elevation-2">
+                                    <div className="text-5xl mb-4">📦</div>
+                                    <h3 className="text-xl font-bold text-slate-900 mb-3">
+                                        {win.title || win.commodity}
+                                    </h3>
+                                    <div className="space-y-3 mb-4">
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-slate-600">Destination</span>
+                                            <span className="font-semibold text-slate-900">{win.destination}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-slate-600">Price / kg</span>
+                                            <span className="font-bold text-orange-600">₦{Number(win.slotPrice || 0).toLocaleString()}</span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="text-slate-600">Volume Filled</span>
+                                            <span className="font-semibold text-slate-900">{filled}%</span>
+                                        </div>
+                                    </div>
+                                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-orange-500 rounded-full"
+                                            style={{ width: `${filled}%` }}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600">ROI</span>
-                                    <span className="font-bold text-green-600">{opp.roi}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600">Duration</span>
-                                    <span className="font-semibold text-slate-900">{opp.duration}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-slate-600">Min. Investment</span>
-                                    <span className="font-semibold text-slate-900">{opp.minInvestment}</span>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 <div className="text-center">
                     <Link
@@ -242,7 +222,7 @@ export default function ExportWindowsLandingPage() {
                             Attractive Returns
                         </h3>
                         <p className="text-slate-600">
-                            Earn 18-22% ROI on verified agricultural export contracts within 4-6 months.
+                            Earn competitive returns on verified agricultural export contracts. Return rates vary per window.
                         </p>
                     </div>
                 </div>

@@ -23,7 +23,7 @@ import NextOfKinStep from "./steps/NextOfKinStep";
 import DocumentUploadStep from "./steps/DocumentUploadStep";
 
 interface OnboardingContentProps {
-    initialTier: "basic" | "premium";
+    initialTier: "Member";
     paymentStatus: string; // "pending" | "completed"
     inviteToken?: string;
 }
@@ -45,7 +45,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [isLegacyImport, setIsLegacyImport] = useState(false);
     const [validInviteToken, setValidInviteToken] = useState<string | null>(null);
 
-    const [tier] = useState<"basic" | "premium">(initialTier);
+    const [tier] = useState<"Member">("Member");
 
     const [personalInfo, setPersonalInfo] = useState({
         firstName: "",
@@ -257,7 +257,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     async function handlePayNow() {
         setIsPaymentLoading(true);
         try {
-            const result = await initiateCooperativePaymentAction("basic");
+            const result = await initiateCooperativePaymentAction("Member");
             if (result.success && result.data?.paymentUrl) {
                 window.location.href = result.data.paymentUrl;
             } else {
@@ -512,7 +512,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                         ) : (
                                             <>
                                                 <p className="font-semibold text-green-800">Payment Confirmed</p>
-                                                <p className="text-sm text-green-700">Your ₦10,000 membership fee has been received.</p>
+                                                <p className="text-sm text-green-700">Your ₦5,000 membership fee has been received.</p>
                                             </>
                                         )}
                                     </div>
@@ -550,7 +550,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             <div className="space-y-6">
                                 <div className="text-center py-6 border-2 border-dashed border-purple-200 rounded-2xl bg-purple-50">
                                     <p className="text-sm font-semibold text-purple-600 uppercase tracking-widest mb-2">One-Time Membership Fee</p>
-                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">₦10,000</div>
+                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">₦5,000</div>
                                     <p className="text-slate-500 text-sm">Pay once. Access forever.</p>
                                 </div>
 
@@ -588,7 +588,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                         ) : (
                                             <>
                                                 <CreditCard className="w-5 h-5" />
-                                                Pay ₦10,000 Now
+                                                Pay ₦5,000 Now
                                             </>
                                         )}
                                     </button>

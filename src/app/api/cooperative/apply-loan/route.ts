@@ -54,13 +54,6 @@ async function applyLoanHandler(request: NextRequest) {
             );
         }
 
-        // Check membership tier - must be Premium for loans
-        if (membershipData.membershipTier !== "premium") {
-            return NextResponse.json(
-                { success: false, message: "Only Premium members (₦20,000 tier) can apply for loans. Please upgrade your membership." },
-                { status: 403 }
-            );
-        }
 
         // Get loan product details (Admin SDK)
         const productDoc = await db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId).get();

@@ -14,7 +14,7 @@ import { useSearchParams } from "next/navigation";
 function CooperativeSuccessContent() {
     const searchParams = useSearchParams();
     const membershipId = searchParams.get("ref") || "COOP-2026-PENDING";
-    const tier = searchParams.get("tier") || "Standard";
+    const tier = "Member";
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

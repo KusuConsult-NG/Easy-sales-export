@@ -151,7 +151,7 @@ async function paystackSyncHandler(_req: NextRequest) {
                             } else if (type === "export_investment") {
                                 await processExportInvestment(reference, amountNGN, userId, metadata.exportId);
                             } else if (type === "cooperative_membership_registration") {
-                                const tier = metadata.membershipTier || metadata.plan || "basic";
+                                const tier = metadata.membershipTier || metadata.plan || "Member";
                                 // Legacy payments from old portal may not have membershipId — fall back to userId
                                 const membershipId = metadata.membershipId || userId;
                                 await processCooperativeRegistration(reference, amountNGN, userId, tier, membershipId);

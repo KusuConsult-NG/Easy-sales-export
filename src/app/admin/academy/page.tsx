@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { getCoursesAction, type Course } from "@/app/actions/academy";
+import { getCoursesAction, deleteCourseAction, type Course } from "@/app/actions/academy";
 import { toast } from "sonner";
 import { Timestamp } from "firebase/firestore";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -43,20 +43,36 @@ export default function AcademyAdminPage() {
         course.instructor.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const getStatusBadge = (status: string = 'draft') => {
+    const getLevelBadge = (level: string = 'beginner') => {
         const styles = {
-            published: "bg-green-100 text-green-800",
-            draft: "bg-yellow-100 text-yellow-800",
-            archived: "bg-slate-100 text-slate-800",
+            beginner: "bg-blue-100 text-blue-800",
+            intermediate: "bg-purple-100 text-purple-800",
+            advanced: "bg-orange-100 text-orange-800",
         };
-        // Default to draft if status is undefined or unknown
-        const statusKey = (status in styles) ? status : 'draft';
+        // Default to beginner if level is undefined or unknown
+        const levelKey = (level in styles) ? level : 'beginner';
 
         return (
-            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${styles[statusKey as keyof typeof styles]}`}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${styles[levelKey as keyof typeof styles]}`}>
+                {level.charAt(0).toUpperCase() + level.slice(1)}
             </span>
         );
+    };
+
+    const handleDeleteCourse = async (courseId: string) => {
+        if (!confirm("Are you sure you want to delete this course? This action cannot be undone.")) return;
+        
+        try {
+            const res = await deleteCourseAction(courseId);
+            if (res.success) {
+                toast.success("Course deleted successfully");
+                loadCourses();
+            } else {
+                toast.error(res.error || "Failed to delete course");
+            }
+        } catch (error: any) {
+            toast.error("Failed to delete course");
+        }
     };
 
 
@@ -113,8 +129,13 @@ export default function AcademyAdminPage() {
                                             <BookOpen className="w-12 h-12" />
                                         </div>
                                     )}
-                                    <div className="absolute top-4 right-4">
-                                        {getStatusBadge(course.level)} {/* Using level as badge for now, or add status to type if needed */}
+                                    <div className="absolute top-4 right-4 flex gap-2">
+                                        {course.tier && (
+                                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                                                {course.tier.charAt(0).toUpperCase() + course.tier.slice(1)}
+                                            </span>
+                                        )}
+                                        {getLevelBadge(course.level)}
                                     </div>
                                 </div>
                                 <div className="p-6 flex-1 flex flex-col">
@@ -142,7 +163,11 @@ export default function AcademyAdminPage() {
                                             >
                                                 <Edit className="w-4 h-4" />
                                             </Link>
-                                            <button className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors" title="Delete Course">
+                                            <button 
+                                                onClick={() => course.id && handleDeleteCourse(course.id)}
+                                                className="p-2 hover:bg-red-50 rounded-lg text-red-600 transition-colors" 
+                                                title="Delete Course"
+                                            >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>

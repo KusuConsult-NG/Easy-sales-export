@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { logger } from '@/lib/logger';
+import { motion } from "framer-motion";
 import Link from "next/link";
 import {
     Users,
@@ -175,45 +176,61 @@ export default function AdminDashboardPage() {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ staggerChildren: 0.1 }}
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8"
+                >
                     {statCards.map((stat, index) => {
                         const Icon = stat.icon;
                         const c = colorClasses[stat.color] ?? colorClasses.blue;
 
                         return (
-                            <Link
+                            <motion.div
                                 key={index}
-                                href={stat.href}
-                                className="group bg-white rounded-xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.4 }}
                             >
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className={`p-3 rounded-lg ${c.bgLight}`}>
-                                        <Icon className={`w-6 h-6 ${c.text}`} />
+                                <Link
+                                    href={stat.href}
+                                    className="group block h-full bg-white rounded-2xl p-6 shadow-sm ring-1 ring-slate-200/50 hover:shadow-xl hover:-translate-y-1 hover:ring-blue-100 transition-all duration-300"
+                                >
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className={`p-3 rounded-xl ${c.bgLight}`}>
+                                            <Icon className={`w-6 h-6 ${c.text}`} />
+                                        </div>
+                                        <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
                                     </div>
-                                    <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
-                                </div>
 
-                                <p className="text-sm text-slate-600 mb-1">
-                                    {stat.label}
-                                </p>
-                                <p className="text-3xl font-bold text-slate-900 mb-2">
-                                    {stat.value}
-                                </p>
-                                <p className="text-xs text-slate-500">
-                                    {stat.change}
-                                </p>
-                            </Link>
+                                    <p className="text-sm font-medium text-slate-500 mb-1">
+                                        {stat.label}
+                                    </p>
+                                    <p className="text-3xl font-bold text-slate-900 mb-2 tracking-tight">
+                                        {stat.value}
+                                    </p>
+                                    <p className="text-xs text-slate-400 font-medium">
+                                        {stat.change}
+                                    </p>
+                                </Link>
+                            </motion.div>
                         );
                     })}
-                </div>
+                </motion.div>
 
                 {/* Quick Actions */}
-                <div className="mb-8">
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="mb-8"
+                >
                     <h2 className="text-xl font-bold text-slate-900 mb-4">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                         <Link
                             href="/admin/cooperatives/loans"
-                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm flex items-start gap-4"
+                            className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
                             <div className="p-2.5 bg-amber-50 rounded-lg shrink-0">
                                 <AlertCircle className="w-5 h-5 text-amber-600" />
@@ -231,7 +248,7 @@ export default function AdminDashboardPage() {
 
                         <Link
                             href="/admin/farm-nation"
-                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm flex items-start gap-4"
+                            className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
                             <div className="p-2.5 bg-indigo-50 rounded-lg shrink-0">
                                 <FileText className="w-5 h-5 text-indigo-600" />
@@ -249,7 +266,7 @@ export default function AdminDashboardPage() {
 
                         <Link
                             href="/admin/cooperatives/members"
-                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm border border-blue-100 flex items-start gap-4"
+                            className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
                             <div className="p-2.5 bg-blue-50 rounded-lg shrink-0">
                                 <Users className="w-5 h-5 text-blue-600" />
@@ -267,7 +284,7 @@ export default function AdminDashboardPage() {
 
                         <Link
                             href="/admin/communications"
-                            className="group bg-white rounded-xl p-5 hover:shadow-md transition-all shadow-sm border border-green-100 flex items-start gap-4"
+                            className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4"
                         >
                             <div className="p-2.5 bg-green-50 rounded-lg shrink-0">
                                 <Mail className="w-5 h-5 text-green-600" />
@@ -283,12 +300,17 @@ export default function AdminDashboardPage() {
                             <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
                         </Link>
                     </div>
-                </div>
+                </motion.div>
 
                 {/* Recent Transactions + Module Registration */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.3 }}
+                    className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+                >
                     {/* Recent Transactions */}
-                    <div className="bg-white rounded-2xl p-6 shadow-sm">
+                    <div className="bg-white rounded-2xl p-6 shadow-sm ring-1 ring-slate-200/50">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-lg font-bold text-slate-900">
                                 Recent Transactions
@@ -359,19 +381,21 @@ export default function AdminDashboardPage() {
                     {/* Module Registration Chart */}
                     <div>
                         {moduleStatsLoading ? (
-                            <div className="bg-white rounded-2xl shadow-sm p-8 flex items-center justify-center gap-3 text-slate-400 text-sm h-full">
+                            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 p-8 flex items-center justify-center gap-3 text-slate-400 text-sm h-full">
                                 <Loader2 className="w-5 h-5 animate-spin" />
                                 Loading registration stats...
                             </div>
                         ) : moduleStats ? (
-                            <RegistrationPieChart stats={moduleStats} />
+                            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 h-full p-2">
+                                <RegistrationPieChart stats={moduleStats} />
+                            </div>
                         ) : (
-                            <div className="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm h-full flex items-center justify-center">
+                            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 p-8 text-center text-slate-400 text-sm h-full flex items-center justify-center">
                                 No registration data available
                             </div>
                         )}
                     </div>
-                </div>
+                </motion.div>
             </div>
         </div>
     );

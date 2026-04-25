@@ -36,7 +36,7 @@ export interface User {
     role?: string;
 
     // Membership
-    membershipTier?: "Basic" | "Premium" | "Gold";
+    membershipTier?: "Member";
     cooperativeTier?: "tier1" | "tier2";
     memberSince?: Date | any;
     isActive?: boolean;

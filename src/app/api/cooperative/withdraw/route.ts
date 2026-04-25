@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check for existing pending withdrawal requests (Admin SDK)
-        const existingWithdrawalsSnapshot = await db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS)
+        const existingWithdrawalsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS)
             .where('userId', '==', userId)
             .where('status', '==', 'pending')
             .get();
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Create withdrawal request (Admin SDK with server timestamps)
-        const withdrawalRef = db.collection(COLLECTIONS.WITHDRAWAL_REQUESTS).doc();
+        const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
         const withdrawalData = {
             userId,
             userEmail: session.user.email,

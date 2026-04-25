@@ -293,30 +293,36 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             };
         }
 
-        // 🔒 Collection-level uniqueness checks (catches multi-account fraud)
-        if (emailSnap && !emailSnap.empty) {
-            return {
-                success: false,
-                error: "An application with this email address already exists in the WAVE program."
-            };
-        }
-        if (!phoneSnap.empty) {
-            return {
-                success: false,
-                error: "An application with this phone number already exists in the WAVE program."
-            };
-        }
-        if (!ninSnap.empty) {
-            return {
-                success: false,
-                error: "An application with this NIN already exists in the WAVE program."
-            };
-        }
+        // 🔒 Collection-level uniqueness checks (catches multi-account fraud while allowing resubmissions)
+        const checkDuplicate = (snap: any, field: string) => {
+            if (!snap || snap.empty) return null;
+            for (const doc of snap.docs) {
+                const data = doc.data();
+                if (data.userId !== session.user.id) {
+                    return `An application with this ${field} already exists in the WAVE program under a different account.`;
+                }
+                // If it's the same user but status is not rejected/revision_required, block it
+                if (data.status !== 'rejected' && data.status !== 'revision_required') {
+                    return `Your application using this ${field} is currently ${data.status}.`;
+                }
+            }
+            return null;
+        };
 
-        // Allow users with revision_required status to resubmit — handled below
+        const emailErr = checkDuplicate(emailSnap, 'email address');
+        if (emailErr) return { success: false, error: emailErr };
 
-        // Generate application ID
-        const applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        const phoneErr = checkDuplicate(phoneSnap, 'phone number');
+        if (phoneErr) return { success: false, error: phoneErr };
+
+        const ninErr = checkDuplicate(ninSnap, 'NIN');
+        if (ninErr) return { success: false, error: ninErr };
+
+        // Allow users with revision_required or rejected status to resubmit by reusing their application ID
+        let applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
+        if (!applicationId) {
+            applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
+        }
 
         // Save to Firestore
         await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).set({
@@ -719,14 +725,34 @@ export async function syncShipmentWithCarrierAction(shipmentId: string): Promise
         const provider = getLogisticsProvider();
         const updates = await provider.trackShipment(shipmentData.trackingNumber);
 
-        // Merge updates? Or just append new ones? 
-        // For simplicity, we just take the latest status from the provider
+        // Merge updates to preserve existing admin notes
         if (updates.length > 0) {
             const latest = updates[updates.length - 1];
 
+            const existingUpdates = shipmentData.updates || [];
+            const mergedUpdates = [...existingUpdates];
+
+            for (const carrierUpdate of updates) {
+                // Compare by status and location to prevent duplicates and preserve admin notes
+                const isDuplicate = existingUpdates.some(
+                    ex => ex.status === carrierUpdate.status && ex.location === carrierUpdate.location
+                );
+
+                if (!isDuplicate) {
+                    mergedUpdates.push(carrierUpdate);
+                }
+            }
+
+            // Sort chronologically
+            mergedUpdates.sort((a, b) => {
+                const timeA = (a.timestamp as any)?.toDate ? (a.timestamp as any).toDate().getTime() : new Date(a.timestamp).getTime();
+                const timeB = (b.timestamp as any)?.toDate ? (b.timestamp as any).toDate().getTime() : new Date(b.timestamp).getTime();
+                return timeA - timeB;
+            });
+
             await shipmentRef.update({
                 status: latest.status,
-                updates: updates, // Overwrite with authoritative history from carrier
+                updates: mergedUpdates,
                 lastSyncedAt: FieldValue.serverTimestamp()
             });
 
@@ -813,7 +839,7 @@ export async function calculateEarningsAction(userId: string): Promise<{ success
         // Fetch past withdrawals to subtract from paidAmount to get true available balance
         const withdrawalsSnap = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
             .where("userId", "==", userId)
-            .where("status", "in", ["pending", "approved", "completed"])
+            .where("status", "in", ["pending", "approved", "approved_pending_payout", "completed"])
             .get();
         
         let withdrawnAmount = 0;

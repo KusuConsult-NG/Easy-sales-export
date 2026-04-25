@@ -33,7 +33,7 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
             points: [
                 "All transactions protected by escrow",
                 "Payments released after delivery confirmation",
-                "Platform fee: 2.5% per transaction",
+                "Platform fee: 5% per transaction",
                 "Refund policy for disputed orders"
             ]
         },

@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminLandVerificationsAction } from "@/app/actions/farm-nation-admin";
+import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction } from "@/app/actions/farm-nation-admin";
 
 type LandVerification = {
     id: string;
@@ -53,6 +53,19 @@ export default function AdminLandVerificationPage() {
     const [selectedVerification, setSelectedVerification] = useState<LandVerification | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Server-side aggregate stats — independent of pagination
+    const [serverStats, setServerStats] = useState<{
+        total: number; pending: number; verified: number; rejected: number;
+    } | null>(null);
+
+    useEffect(() => {
+        getFarmNationVerificationStatsAction().then((result) => {
+            if (result.success && result.data?.stats) {
+                setServerStats(result.data.stats);
+            }
+        }).catch(() => {});
+    }, []);
 
     const filteredVerifications = verifications;
 
@@ -152,11 +165,10 @@ export default function AdminLandVerificationPage() {
         }
     };
 
-    // We'll compute stats loosely locally based on loaded data.
-    // For standard dashboard counting, you might want a global stats call.
-    const stats = {
-        total: verifications.length,
-        pending: verifications.filter(v => v.verificationStatus === "pending").length,
+    // Use server-side stats when available; fall back to local page counts while loading
+    const stats = serverStats ?? {
+        total:    verifications.length,
+        pending:  verifications.filter(v => v.verificationStatus === "pending").length,
         verified: verifications.filter(v => v.verificationStatus === "verified").length,
         rejected: verifications.filter(v => v.verificationStatus === "rejected").length,
     };

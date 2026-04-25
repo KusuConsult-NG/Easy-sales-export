@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
                     const exportId = metadata.exportId;
                     await processExportInvestment(reference, amountPaidv, userId, exportId);
                 } else if (type === "cooperative_membership_registration") {
-                    const tier = metadata.membershipTier || metadata.plan || "basic";
+                    const tier = metadata.membershipTier || metadata.plan || "Member";
                     // Legacy payments from old portal may not have membershipId — fall back to userId
                     const membershipId = metadata.membershipId || userId;
                     await processCooperativeRegistration(reference, amountPaidv, userId, tier, membershipId);

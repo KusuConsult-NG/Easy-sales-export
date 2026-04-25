@@ -129,7 +129,7 @@ export async function GET(request: NextRequest) {
                 otherName: data.otherName || data.middleName || fallbackUser.otherName || "",
                 email: data.email || fallbackUser.email || "",
                 phone: data.phone || fallbackUser.phone || "",
-                membershipTier: data.membershipTier || "basic",
+                membershipTier: data.membershipTier || "Member",
                 registrationFee: data.registrationFee || 0,
                 membershipStatus: data.membershipStatus || "pending",
                 paymentStatus: data.paymentStatus || "pending",

@@ -20,7 +20,7 @@ export interface LoanApplication {
     durationMonths: number;
     status: "pending" | "approved" | "rejected" | "disbursed" | "repaid";
     contributionAmount: number;
-    tier: "Basic" | "Premium";
+    tier: "Member";
     interestRate: number;
     totalRepayment: number;
     monthlyPayment: number;
@@ -43,7 +43,7 @@ export async function submitLoanApplicationAction(formData: {
     purpose: string;
     durationMonths: number;
     contributionAmount: number;
-    tier: "Basic" | "Premium";
+    tier: "Member";
 }): Promise<{ success: boolean; error?: string; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
@@ -95,12 +95,15 @@ export async function submitLoanApplicationAction(formData: {
             .where("status", "in", ["approved", "disbursed"])
             .get();
 
-        const hasActiveLoan = !activeLoansSnapshot.empty;
+        const currentLoanBalance = activeLoansSnapshot.docs.reduce((acc, doc) => {
+            const data = doc.data();
+            return acc + (data.amount || 0);
+        }, 0);
 
         const eligibility = isEligibleForLoan(
             formData.contributionAmount,
             formData.amount,
-            hasActiveLoan
+            currentLoanBalance
         );
 
         if (!eligibility.eligible) {
@@ -265,6 +268,47 @@ export async function getAdminLoanApplicationsAction(options: {
 }
 
 /**
+ * Admin: Server-side COUNT aggregations for the loan applications dashboard.
+ * Returns accurate totals independent of pagination limits.
+ */
+export async function getAdminLoanStatsAction(): Promise<{
+    success: boolean;
+    stats?: { total: number; pending: number; approved: number; rejected: number };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const { session } = sessionResult;
+
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const col = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
+        const [total, pending, approved, rejected] = await Promise.all([
+            col.count().get(),
+            col.where("status", "==", "pending").count().get(),
+            col.where("status", "in", ["approved", "disbursed", "active"]).count().get(),
+            col.where("status", "==", "rejected").count().get(),
+        ]);
+
+        return {
+            success: true,
+            stats: {
+                total: total.data().count,
+                pending: pending.data().count,
+                approved: approved.data().count,
+                rejected: rejected.data().count,
+            },
+        };
+    } catch (error: any) {
+        logger.error("getAdminLoanStatsAction error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Admin: Approve loan
  */
 export async function approveLoanAction(
@@ -309,8 +353,16 @@ export async function approveLoanAction(
 
             const activeLoansSnapshot = await transaction.get(activeLoansQuery);
 
-            if (!activeLoansSnapshot.empty) {
-                throw new Error("User already has an active loan. Cannot approve new loan.");
+            let currentLoanBalance = 0;
+            activeLoansSnapshot.forEach(doc => {
+                currentLoanBalance += (doc.data().amount || 0);
+            });
+
+            const { getMaxLoanAmount } = await import("@/lib/cooperative-tiers");
+            const maxLoan = getMaxLoanAmount(appData.contributionAmount);
+
+            if (currentLoanBalance + appData.amount > maxLoan) {
+                throw new Error(`Total active loan balance plus this new loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
             }
 
             // Approve the loan

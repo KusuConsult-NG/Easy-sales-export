@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
                 fullName,
                 email,
                 phone,
-                data.membershipTier || "basic",
+                data.membershipTier || "Member",
                 (data.registrationFee || 0).toString(),
                 data.paymentStatus || "pending",
                 data.membershipStatus || "pending",

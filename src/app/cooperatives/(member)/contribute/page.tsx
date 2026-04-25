@@ -20,19 +20,12 @@ export default function ContributePage() {
 
     // Calculate which tier this contribution would reach
     const getTierPreview = (contributionAmount: number) => {
-        if (contributionAmount >= COOPERATIVE_TIERS.Premium.minContribution) {
+        if (contributionAmount >= COOPERATIVE_TIERS.Member.minContribution) {
             return {
-                tier: 'Premium',
-                color: 'from-purple-500 to-pink-500',
-                benefits: COOPERATIVE_TIERS.Premium.benefits,
-                maxLoan: contributionAmount * COOPERATIVE_TIERS.Premium.maxLoanMultiplier,
-            };
-        } else if (contributionAmount >= COOPERATIVE_TIERS.Basic.minContribution) {
-            return {
-                tier: 'Basic',
-                color: 'from-blue-500 to-cyan-500',
-                benefits: COOPERATIVE_TIERS.Basic.benefits,
-                maxLoan: contributionAmount * COOPERATIVE_TIERS.Basic.maxLoanMultiplier,
+                tier: 'Member',
+                color: 'from-emerald-500 to-teal-500',
+                benefits: COOPERATIVE_TIERS.Member.benefits,
+                maxLoan: contributionAmount * COOPERATIVE_TIERS.Member.maxLoanMultiplier,
             };
         }
         return null;
@@ -198,14 +191,14 @@ export default function ContributePage() {
                                         ₦{tierPreview.maxLoan.toLocaleString()}
                                     </p>
                                     <p className="text-sm text-white/80 mt-1">
-                                        {COOPERATIVE_TIERS[tierPreview.tier as 'Basic' | 'Premium'].maxLoanMultiplier}x your contribution
+                                        {COOPERATIVE_TIERS[tierPreview.tier as 'Member'].maxLoanMultiplier}x your contribution
                                     </p>
                                 </div>
 
                                 <div>
                                     <p className="text-white/90 mb-3 font-medium">Benefits</p>
                                     <ul className="space-y-2">
-                                        {tierPreview.benefits.map((benefit, index) => (
+                                        {tierPreview.benefits.map((benefit: string, index: number) => (
                                             <li key={index} className="flex items-start gap-2">
                                                 <Zap className="w-4 h-4 mt-0.5 shrink-0" />
                                                 <span className="text-sm text-white/90">{benefit}</span>
@@ -221,37 +214,6 @@ export default function ContributePage() {
                                 </p>
                             </div>
                         )}
-
-                        {/* Tier Comparison */}
-                        <div className="bg-white rounded-xl shadow-lg p-6">
-                            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-                                Tier Comparison
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-                                    <div>
-                                        <p className="font-medium text-slate-900">Basic Tier</p>
-                                        <p className="text-sm text-slate-500">
-                                            ₦10,000+ contribution
-                                        </p>
-                                    </div>
-                                    <p className="text-lg font-semibold text-blue-600">
-                                        2x Loan
-                                    </p>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="font-medium text-slate-900">Premium Tier</p>
-                                        <p className="text-sm text-slate-500">
-                                            ₦20,000+ contribution
-                                        </p>
-                                    </div>
-                                    <p className="text-lg font-semibold text-purple-600">
-                                        3x Loan
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>

@@ -12,7 +12,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import RejectionModal from "@/components/admin/RejectionModal";
 import { useAdminData } from "@/hooks/useAdminData";
-import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction } from "@/app/actions/admin";
+import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction, getAdminSellerStatsAction } from "@/app/actions/admin";
 
 import { StandardPendingForm } from "@/lib/types/admin";
 
@@ -88,6 +88,15 @@ export default function AdminSellersPage() {
 
     // Badge toggle state
     const [isBadgeProcessing, setIsBadgeProcessing] = useState(false);
+
+    // Server-side stats
+    const [serverStats, setServerStats] = useState<{ total: number; pending: number; approved: number; rejected: number } | null>(null);
+    const [statsLoading, setStatsLoading] = useState(true);
+    useEffect(() => {
+        getAdminSellerStatsAction().then((res) => {
+            if (res.success && res.stats) setServerStats(res.stats);
+        }).finally(() => setStatsLoading(false));
+    }, []);
 
     // Note: useAdminData already applies local search text filters
     const filteredVerifications = verifications;
@@ -274,10 +283,10 @@ export default function AdminSellersPage() {
     };
 
     const stats = {
-        total: verifications.length,
-        pending: verifications.filter(v => v.status === "pending").length,
-        approved: verifications.filter(v => v.status === "approved").length,
-        rejected: verifications.filter(v => v.status === "rejected").length,
+        total: serverStats?.total ?? verifications.length,
+        pending: serverStats?.pending ?? verifications.filter(v => v.status === "pending").length,
+        approved: serverStats?.approved ?? verifications.filter(v => v.status === "approved").length,
+        rejected: serverStats?.rejected ?? verifications.filter(v => v.status === "rejected").length,
     };
 
     return (
@@ -322,7 +331,10 @@ export default function AdminSellersPage() {
                             </div>
                             <p className="text-sm text-slate-600">{label}</p>
                         </div>
-                        <p className="text-3xl font-bold text-slate-900">{value}</p>
+                        {statsLoading
+                            ? <Loader2 className="w-5 h-5 animate-spin text-slate-400 mt-1" />
+                            : <p className="text-3xl font-bold text-slate-900">{value}</p>
+                        }
                     </div>
                 ))}
             </div>

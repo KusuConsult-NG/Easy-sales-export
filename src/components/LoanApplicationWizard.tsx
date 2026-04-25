@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ArrowRight, ArrowLeft, Check, Calculator, FileText, Upload } from "lucide-react";
-import { calculateLoanCost, COOPERATIVE_TIERS, type CooperativeTier } from "@/lib/cooperative-tiers";
+import { calculateLoanCost, COOPERATIVE_TIERS, getTierInterestRate, type CooperativeTier } from "@/lib/cooperative-tiers";
 import { logger } from "@/lib/logger";
 
 interface LoanApplicationWizardProps {
@@ -34,7 +34,7 @@ export default function LoanApplicationWizard({
     const tierInfo = COOPERATIVE_TIERS[tier];
     const maxLoan = contributionAmount * tierInfo.maxLoanMultiplier;
     const loanCost = formData.amount > 0
-        ? calculateLoanCost(formData.amount, tierInfo.maxLoanMultiplier === 3 ? 2 : 2.5, formData.durationMonths)
+        ? calculateLoanCost(formData.amount, getTierInterestRate(tier), formData.durationMonths)
         : null;
 
     function handleNext() {
@@ -115,8 +115,8 @@ export default function LoanApplicationWizard({
                             >
                                 <option value={3}>3 months</option>
                                 <option value={6}>6 months</option>
-                                {tier === "Premium" && <option value={9}>9 months</option>}
-                                {tier === "Premium" && <option value={12}>12 months</option>}
+                                <option value={9}>9 months</option>
+                                <option value={12}>12 months</option>
                             </select>
                         </div>
                     </div>
@@ -170,7 +170,7 @@ export default function LoanApplicationWizard({
                                 </div>
                                 <div>
                                     <p className="text-blue-100 text-sm">Monthly Interest</p>
-                                    <p className="text-2xl font-bold">{tier === "Premium" ? "2%" : "2.5%"}</p>
+                                    <p className="text-2xl font-bold">2.0%</p>
                                 </div>
                                 <div>
                                     <p className="text-blue-100 text-sm">Total Interest</p>

@@ -21,7 +21,7 @@ type MembershipApplication = {
     otherName?: string;
     email: string;
     phone: string;
-    membershipTier: "basic" | "premium";
+    membershipTier: "Member";
     registrationFee: number;
     membershipStatus: "pending" | "approved" | "suspended";
     paymentStatus: "pending" | "completed" | "failed";
@@ -580,7 +580,7 @@ export default function CooperativeMembersPage() {
                                                 <div className="text-xs text-slate-500">{app.data.stateOfOrigin || "—"}</div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border ${app.data.membershipTier === 'premium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border bg-blue-50 text-blue-700 border-blue-200`}>
                                                     {app.data.membershipTier}
                                                 </span>
                                             </td>
@@ -713,10 +713,9 @@ export default function CooperativeMembersPage() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="text-xs text-slate-500 font-medium">Tier:</span>
-                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize
-                                    ${selectedApplication.data.membershipTier === "premium" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-bold capitalize bg-blue-100 text-blue-700`}
                                 >
-                                    {selectedApplication.data.membershipTier || "basic"}
+                                    {selectedApplication.data.membershipTier || "Member"}
                                 </span>
                             </div>
                             <div className="ml-auto text-xs text-slate-500">
