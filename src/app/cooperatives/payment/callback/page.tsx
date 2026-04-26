@@ -42,7 +42,7 @@ function PaymentCallbackContent() {
             }, 0);
             return;
         }
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         verifyPayment(reference);
     }, [searchParams, verifyPayment]);
 

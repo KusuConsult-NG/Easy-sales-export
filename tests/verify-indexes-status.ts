@@ -47,7 +47,7 @@ async function run() {
     for (const check of checks) {
         try {
             const snap = await check.run();
-            let val = snap.data().total;
+            const val = snap.data().total;
             console.log(`[✅ READY] ${check.name} -> Value Resolved: ₦${val.toLocaleString()}`);
         } catch (e: any) {
             allSuccessful = false;

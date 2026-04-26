@@ -115,7 +115,7 @@ async function runQA() {
     
     
     const reportPath = "./system_audit_report.md";
-    let reportContent = `# FULL PLATFORM QA VERIFICATION REPORT
+    const reportContent = `# FULL PLATFORM QA VERIFICATION REPORT
 Generated at: ${new Date().toISOString()}
 
 ## 1. Metrics Consistency Audit

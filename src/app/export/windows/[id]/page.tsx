@@ -33,7 +33,7 @@ export default function ExportWindowDetailPage() {
 
     useEffect(() => {
         if (windowId) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+             
             loadWindow();
         }
     }, [windowId, loadWindow]);

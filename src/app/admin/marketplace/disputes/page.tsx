@@ -27,6 +27,10 @@ const DISPUTE_REASON_LABELS: Record<string, string> = {
     other: "Other Issue",
 };
 
+const calculateDaysAgo = (date: Date) => {
+    return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+};
+
 export default function AdminDisputesPage() {
     const router = useRouter();
     const { showToast } = useToast();
@@ -225,9 +229,7 @@ export default function AdminDisputesPage() {
                             const disputeDate = (dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
                                 ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
                                 : new Date(dispute.createdAt as unknown as string | number | Date);
-                            const daysAgo = Math.floor(
-                                (Date.now() - disputeDate.getTime()) / (1000 * 60 * 60 * 24)
-                            );
+                            const daysAgo = calculateDaysAgo(disputeDate);
 
                             return (
                                 <div

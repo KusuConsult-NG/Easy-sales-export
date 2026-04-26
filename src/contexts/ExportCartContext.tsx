@@ -63,7 +63,7 @@ export function ExportCartProvider({ children }: { children: React.ReactNode }) 
         } catch {
             // Ignore parse errors
         }
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         setIsHydrated(true);
     }, []);
 

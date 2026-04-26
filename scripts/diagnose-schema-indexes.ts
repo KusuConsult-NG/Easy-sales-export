@@ -48,7 +48,7 @@ const COMPLEX_QUERIES = {
 
 async function checkMissingIndexes() {
     console.log("\n🔍 ================== CHECKING MISSING COMPOSITE INDEXES ==================");
-    let missingIndexes = [];
+    const missingIndexes = [];
 
     for (const [collection, queries] of Object.entries(COMPLEX_QUERIES)) {
         for (const q of queries) {

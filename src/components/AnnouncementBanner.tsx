@@ -12,7 +12,7 @@ export default function AnnouncementBanner() {
         // Load dismissed from localStorage
         const stored = localStorage.getItem("dismissed_announcements");
         if (stored) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+             
             setDismissed(new Set(JSON.parse(stored)));
         }
 

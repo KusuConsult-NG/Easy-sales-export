@@ -205,7 +205,7 @@ export default function EscrowDashboardPage() {
     }, []);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         loadTransactions();
     }, [loadTransactions]);
 

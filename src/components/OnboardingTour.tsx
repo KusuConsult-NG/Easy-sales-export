@@ -42,7 +42,7 @@ export default function OnboardingTour({ isOpen, onComplete, userRole }: Onboard
 
     useEffect(() => {
         if (isOpen) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+             
             setIsVisible(true);
         }
     }, [isOpen]);

@@ -27,7 +27,7 @@ export default function NotificationCenter() {
     // Real-time Firestore listener
     useEffect(() => {
         if (!session?.user?.id) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
+             
             setLoading(false);
             return;
         }

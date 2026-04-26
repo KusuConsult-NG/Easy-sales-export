@@ -169,7 +169,7 @@ export default function CertificatePage() {
                         {/* Logo & Title */}
                         <div className="text-center mb-12">
                             <div className="inline-block mb-6 bg-white rounded-xl shadow-md p-3 border border-slate-100">
-                                {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                                { }
                                 <Image
                                     src="/images/logo.jpg"
                                     alt="Easy Sales Export Academy"

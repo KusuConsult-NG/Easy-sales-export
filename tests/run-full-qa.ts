@@ -107,7 +107,7 @@ async function runQA() {
     
     // Write out the comparison JSON report mapping DB, API, and UI text elements
     const reportPath = "./system_audit_report.md";
-    let reportContent = `# MULTI-LAYER QA VERIFICATION REPORT
+    const reportContent = `# MULTI-LAYER QA VERIFICATION REPORT
 Generated at: ${new Date().toISOString()}
 
 ## 1. Metrics Consistency Audit

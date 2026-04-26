@@ -580,9 +580,9 @@ export async function submitQuizScoreAction(
             const courseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
             if (courseDoc.exists) {
                 const course = courseDoc.data() as Course;
-                const module = course.modules?.find((m) => m.id === moduleId);
+                const courseModule = course.modules?.find((m) => m.id === moduleId);
 
-                if (module?.quiz && score >= module.quiz.passingScore) {
+                if (courseModule?.quiz && score >= courseModule.quiz.passingScore) {
                     if (!progress.completedModules) progress.completedModules = [];
                     if (!progress.completedModules.includes(moduleId)) {
                         progress.completedModules.push(moduleId);

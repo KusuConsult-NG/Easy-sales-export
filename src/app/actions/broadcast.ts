@@ -319,7 +319,7 @@ export async function collectRecipients(
             break;
         }
         case "farm_nation_users": {
-            let fnQ: any = db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "!=", null);
+            const fnQ: any = db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "!=", null);
             if (filters.moduleStatus && filters.moduleStatus !== "all") {
                 // Can't chain != + == on different fields without composite index — filter in-memory
             }

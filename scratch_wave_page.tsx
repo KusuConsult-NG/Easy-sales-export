@@ -70,7 +70,7 @@ export default function AdminWaveApplicationsPage() {
             unsubscribeRef.current();
         }
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         setIsLoading(true);
         setError(null);
 

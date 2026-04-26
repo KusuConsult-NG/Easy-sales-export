@@ -18,7 +18,7 @@ initializeApp({
 async function generateReport() {
     console.log("EXECUTING INDEPENDENT SYSTEM AUDIT...");
     const db = getFirestore();
-    let report = [];
+    const report = [];
     report.push("# FULL PLATFORM QA VERIFICATION REPORT");
     report.push(`*Generated at: ${new Date().toISOString()}*\n`);
 

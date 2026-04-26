@@ -174,7 +174,7 @@ export async function registerCooperativeMemberAction(
         const memberData = existingMember.data();
 
         let isLegacyImport = false;
-        let membershipTier = (memberData?.membershipTier ?? "Member") as "Member";
+        const membershipTier = (memberData?.membershipTier ?? "Member") as "Member";
 
         if (inviteToken) {
             if (existingMember.exists && memberData?.onboardingCompleted) {

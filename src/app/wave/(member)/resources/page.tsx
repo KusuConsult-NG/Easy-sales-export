@@ -106,7 +106,7 @@ export default function WaveResourcesPage() {
             );
         }
 
-        // eslint-disable-next-line react-hooks/set-state-in-effect
+         
         setFilteredResources(filtered);
     }, [selectedCategory, searchQuery, resources]);
     // ...

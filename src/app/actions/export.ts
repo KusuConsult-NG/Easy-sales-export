@@ -690,7 +690,7 @@ export async function getUserExportInvestmentsAction(
         const userId = session.user.id;
 
         // Fetch user's active Paystack-verified EXPORT_INVESTMENTS
-        let query = db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+        const query = db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
             .where("investorId", "==", userId)
 
         const snapshotRaw = await query.get();

@@ -157,7 +157,7 @@ export default function BroadcastHistoryPage() {
         setLogs(res.logs);
     };
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+     
     useEffect(() => { load(); }, []);
 
     return (

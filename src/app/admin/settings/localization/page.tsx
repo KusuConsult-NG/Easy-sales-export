@@ -460,7 +460,7 @@ export default function LocalizationSettingsPage() {
                                     YYYY: String(now.getFullYear()),
                                     MMM: now.toLocaleString("en", { month: "short" }),
                                 };
-                                let date = settings.dateFormat
+                                const date = settings.dateFormat
                                     .replace("DD", parts.DD)
                                     .replace("MMM", parts.MMM)
                                     .replace("MM", parts.MM)

@@ -151,7 +151,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
             if (errorParam !== "CredentialsSignin") {
                 setTimeout(() => showToast(message, "error"), 500);
             } else {
-                // eslint-disable-next-line react-hooks/set-state-in-effect
+                 
                 setError(message);
             }
         }

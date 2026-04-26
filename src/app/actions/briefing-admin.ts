@@ -137,7 +137,7 @@ export async function getBriefingRegistrationsAction(
             if (e.message && String(e.message).toLowerCase().includes("index")) {
                 logger.warn("Missing composite index, falling back to in-memory filter...");
                 try {
-                    let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
+                    const fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
                     
                     const allDocsSnap = await fallbackQuery.get();
                     let allDocs = allDocsSnap.docs;
