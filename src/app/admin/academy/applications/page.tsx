@@ -118,6 +118,7 @@ function ApplicationDetailModal({
     onApprove,
     onReject,
     onReview,
+    onUpdatePayment,
     processingId,
 }: {
     app: AcademyApplication;

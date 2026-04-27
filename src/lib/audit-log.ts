@@ -118,6 +118,7 @@ export type AuditAction =
     | 'export_investment'
     | 'system_cleanup'
     | 'academy_manual_enroll'
+    | 'academy_update_payment'
     // Export Actions
     | 'export_create'
     | 'export_status_update'
