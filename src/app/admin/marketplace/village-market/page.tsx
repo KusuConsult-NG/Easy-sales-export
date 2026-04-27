@@ -214,6 +214,8 @@ function AddMerchantModal({ eventId, onClose, onAdded }: { eventId: string; onCl
 export default function AdminVillageMarketPage() {
     const { showToast } = useToast();
 
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
     const {
         data: events,
         loading,
@@ -226,7 +228,8 @@ export default function AdminVillageMarketPage() {
         fetchAction: async (opts) => {
             const result = await getAdminVillageMarketEventsAction({
                 limit: opts.limit || 20,
-                lastDocId: opts.lastDocId
+                lastDocId: opts.lastDocId,
+                sortOrder: sortOrder
             });
             return {
                 success: result.success,
@@ -235,7 +238,8 @@ export default function AdminVillageMarketPage() {
                 error: result.error
             };
         },
-        limit: 20
+        limit: 20,
+        dependencies: [sortOrder]
     });
 
     const [showCreate, setShowCreate] = useState(false);
@@ -257,12 +261,22 @@ export default function AdminVillageMarketPage() {
                     <h1 className="text-3xl font-bold text-slate-900 mb-1">Village Market Events</h1>
                     <p className="text-slate-600">Create and manage flash-sale events and external merchants</p>
                 </div>
-                <button
-                    onClick={() => setShowCreate(true)}
-                    className="px-5 py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition flex items-center gap-2"
-                >
-                    <Plus className="w-5 h-5" /> Create Event
-                </button>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <select
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+                        className="px-4 py-2.5 rounded-xl text-sm font-bold border border-slate-300 text-slate-700 bg-white"
+                    >
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                    </select>
+                    <button
+                        onClick={() => setShowCreate(true)}
+                        className="px-5 py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition flex items-center gap-2"
+                    >
+                        <Plus className="w-5 h-5" /> Create Event
+                    </button>
+                </div>
             </div>
 
             {loading ? (

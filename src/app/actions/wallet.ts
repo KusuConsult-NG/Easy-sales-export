@@ -553,6 +553,7 @@ export async function getAdminWalletWithdrawalsAction(options: {
     status?: string;
     limit?: number;
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{
     success: boolean;
     data?: any[];
@@ -573,15 +574,16 @@ export async function getAdminWalletWithdrawalsAction(options: {
         }
 
         const fetchLimit = options.limit || 25;
+        const sortDirection = options.sortOrder || "desc";
         let query = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
             .where("type", "==", "withdrawal")
-            .orderBy("createdAt", "desc");
+            .orderBy("createdAt", sortDirection);
 
         if (options.status && options.status !== "all") {
             query = db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
                 .where("type", "==", "withdrawal")
                 .where("status", "==", options.status)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", sortDirection);
         }
 
         if (options.lastDocId) {

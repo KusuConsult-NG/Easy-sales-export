@@ -45,6 +45,8 @@ export default function AdminReviewsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
 
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
     const {
         data: reviews,
         loading,
@@ -59,7 +61,8 @@ export default function AdminReviewsPage() {
             const result = await getAdminReviewsAction({
                 statusFilter: statusFilter,
                 limit: opts.limit || 20,
-                lastDocId: opts.lastDocId
+                lastDocId: opts.lastDocId,
+                sortOrder: sortOrder
             });
             return {
                 success: result.success,
@@ -69,7 +72,7 @@ export default function AdminReviewsPage() {
             };
         },
         limit: 20,
-        dependencies: [statusFilter]
+        dependencies: [statusFilter, sortOrder]
     });
 
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -177,7 +180,7 @@ export default function AdminReviewsPage() {
 
                 {/* Filters */}
                 <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Search */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -213,6 +216,21 @@ export default function AdminReviewsPage() {
                                     <option value="rejected">Rejected</option>
                                 </select>
                             </div>
+                        </div>
+
+                        {/* Sort */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Sort Order
+                            </label>
+                            <select
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none"
+                            >
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </select>
                         </div>
                     </div>
                 </div>

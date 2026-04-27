@@ -38,6 +38,8 @@ export default function AdminDisputesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<DisputeStatus | "all">("all");
 
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
     const {
         data: filteredDisputes,
         loading,
@@ -52,7 +54,8 @@ export default function AdminDisputesPage() {
                 status: statusFilter,
                 limit: opts.limit || 20,
                 search: searchQuery,
-                lastDocId: opts.lastDocId
+                lastDocId: opts.lastDocId,
+                sortOrder: sortOrder
             });
             return {
                 success: result.success,
@@ -62,7 +65,7 @@ export default function AdminDisputesPage() {
             };
         },
         limit: 20,
-        dependencies: [statusFilter, searchQuery]
+        dependencies: [statusFilter, searchQuery, sortOrder]
     });
 
     // Note: To get accurate global stats you would need a separate stats endpoint
@@ -175,7 +178,7 @@ export default function AdminDisputesPage() {
 
                 {/* Filters */}
                 <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Search */}
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -212,6 +215,21 @@ export default function AdminDisputesPage() {
                                     <option value="closed">Closed</option>
                                 </select>
                             </div>
+                        </div>
+
+                        {/* Sort */}
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                Sort Order
+                            </label>
+                            <select
+                                value={sortOrder}
+                                onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none"
+                            >
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </select>
                         </div>
                     </div>
                 </div>

@@ -189,6 +189,7 @@ export async function getAdminDisputesAction(options: {
     limit?: number;
     search?: string;
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}) {
     try {
         const sessionResult = await requireSession();
@@ -204,12 +205,13 @@ export async function getAdminDisputesAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", "desc");
+        const sortDirection = options.sortOrder || "desc";
+        let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", sortDirection);
 
         if (options.status && options.status !== "all") {
             queryRef = db.collection(COLLECTIONS.DISPUTES)
                 .where("status", "==", options.status)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", sortDirection);
         }
 
         if (options.escalated !== undefined) {
@@ -217,7 +219,7 @@ export async function getAdminDisputesAction(options: {
             // In case of error, we can catch it or we might need index.
             queryRef = db.collection(COLLECTIONS.DISPUTES)
                 .where("escalated", "==", options.escalated)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", sortDirection);
         }
 
         if (options.lastDocId) {
@@ -233,11 +235,11 @@ export async function getAdminDisputesAction(options: {
             return {
                 ...data,
                 id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined,
+                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
+                updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
+                resolvedAt: data.resolvedAt ? (data.resolvedAt as Timestamp).toDate().toISOString() : null,
             };
-        }) as Dispute[];
+        }) as any[];
 
         if (options.search) {
             const q = options.search.toLowerCase();

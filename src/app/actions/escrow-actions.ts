@@ -77,6 +77,7 @@ export async function getAllEscrowTransactionsAdmin(options: {
     limit?: number;
     lastDocId?: string;
     search?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{ success: boolean; transactions?: EscrowTransaction[]; error?: string; hasMore?: boolean; lastDocId?: string }> {
     try {
         const sessionResult = await requireSession();
@@ -91,12 +92,13 @@ export async function getAllEscrowTransactionsAdmin(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc");
+        const sortDirection = options.sortOrder || "desc";
+        let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", sortDirection);
 
         if (options.status) {
             q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("status", "==", options.status)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", sortDirection);
         }
 
         if (options.lastDocId) {
@@ -125,13 +127,13 @@ export async function getAllEscrowTransactionsAdmin(options: {
                 releaseRequestedBy: data.releaseRequestedBy,
                 releasedBy: data.releasedBy,
                 participants: data.participants ?? [data.buyerId, data.sellerId].filter(Boolean),
-                createdAt: (data.createdAt as Timestamp)?.toDate(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate(),
-                paidAt: (data.paidAt as Timestamp)?.toDate(),
-                releasedAt: (data.releasedAt as Timestamp)?.toDate(),
-                refundedAt: (data.refundedAt as Timestamp)?.toDate(),
-                releaseRequestedAt: (data.releaseRequestedAt as Timestamp)?.toDate(),
-            } as EscrowTransaction;
+                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
+                updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
+                paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,
+                releasedAt: data.releasedAt ? (data.releasedAt as Timestamp).toDate().toISOString() : null,
+                refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
+                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null,
+            } as any;
         });
 
         // Client-side search if specified

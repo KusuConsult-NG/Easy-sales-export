@@ -338,6 +338,7 @@ export async function getAdminReviewsAction(options: {
     statusFilter?: "all" | "pending" | "approved" | "rejected";
     limit?: number;
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}) {
     try {
         const sessionResult = await requireSession();
@@ -353,14 +354,15 @@ export async function getAdminReviewsAction(options: {
         }
 
         const fetchLimit = options.limit || 20;
+        const sortDirection = options.sortOrder || "desc";
 
         let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .orderBy("createdAt", "desc");
+            .orderBy("createdAt", sortDirection);
 
         if (options.statusFilter && options.statusFilter !== "all") {
             query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
                 .where("status", "==", options.statusFilter)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", sortDirection);
         }
 
         if (options.lastDocId) {

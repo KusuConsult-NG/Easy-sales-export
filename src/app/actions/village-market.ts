@@ -336,6 +336,7 @@ export async function removeFlashSaleProductAction(
 export async function getAdminVillageMarketEventsAction(options: {
     limit?: number;
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{
     success: boolean;
     data?: VillageMarketEvent[];
@@ -355,7 +356,8 @@ export async function getAdminVillageMarketEventsAction(options: {
         }
 
         const fetchLimit = options.limit || 25;
-        let query = db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).orderBy("createdAt", "desc");
+        const sortDirection = options.sortOrder || "desc";
+        let query = db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).orderBy("createdAt", sortDirection);
 
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(options.lastDocId).get();

@@ -147,6 +147,14 @@ export default function MarketplaceBuyersPage() {
                                 {label}
                             </button>
                         ))}
+                        <select
+                            value={filters.sortOrder || "desc"}
+                            onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                            className="px-4 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        >
+                            <option value="desc">Newest First</option>
+                            <option value="asc">Oldest First</option>
+                        </select>
                     </div>
                 </div>
             </div>

@@ -36,6 +36,8 @@ export default function AdminWalletWithdrawalsPage() {
     const { showToast } = useToast();
     const [statusFilter, setStatusFilter] = useState("pending");
 
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
     const {
         data: withdrawals,
         loading,
@@ -50,7 +52,8 @@ export default function AdminWalletWithdrawalsPage() {
             const result = await getAdminWalletWithdrawalsAction({
                 status: statusFilter,
                 limit: opts.limit || 25,
-                lastDocId: opts.lastDocId
+                lastDocId: opts.lastDocId,
+                sortOrder: sortOrder
             });
             return {
                 success: result.success,
@@ -60,7 +63,7 @@ export default function AdminWalletWithdrawalsPage() {
             };
         },
         limit: 25,
-        dependencies: [statusFilter]
+        dependencies: [statusFilter, sortOrder]
     });
 
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -90,16 +93,28 @@ export default function AdminWalletWithdrawalsPage() {
             </div>
 
             {/* Filter */}
-            <div className="flex items-center gap-3 mb-6">
-                {["pending", "processing", "approved", "completed", "rejected", "all"].map((s) => (
-                    <button
-                        key={s}
-                        onClick={() => setStatusFilter(s)}
-                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${statusFilter === s ? "bg-slate-900 text-white" : "bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"}`}
+            <div className="flex flex-col sm:flex-row items-center gap-3 mb-6">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {["pending", "processing", "approved", "completed", "rejected", "all"].map((s) => (
+                        <button
+                            key={s}
+                            onClick={() => setStatusFilter(s)}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${statusFilter === s ? "bg-slate-900 text-white" : "bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"}`}
+                        >
+                            {s.charAt(0).toUpperCase() + s.slice(1)}
+                        </button>
+                    ))}
+                </div>
+                <div className="ml-auto flex items-center gap-2 w-full sm:w-auto">
+                    <select
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-300 text-slate-700 bg-white w-full sm:w-auto"
                     >
-                        {s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                ))}
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                    </select>
+                </div>
             </div>
 
             {loading && (

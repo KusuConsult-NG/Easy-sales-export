@@ -168,7 +168,7 @@ export default function AdminEscrowPage() {
 
                 {/* Filters */}
                 <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Search</label>
                             <div className="relative">
@@ -177,7 +177,7 @@ export default function AdminEscrowPage() {
                                     type="text"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Search by ID, email, product, reference..."
+                                    placeholder="Search..."
                                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary focus:border-transparent text-sm"
                                 />
                             </div>
@@ -196,6 +196,17 @@ export default function AdminEscrowPage() {
                                     ))}
                                 </select>
                             </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Sort</label>
+                            <select
+                                value={filters.sortOrder || "desc"}
+                                onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary appearance-none text-sm"
+                            >
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
+                            </select>
                         </div>
                     </div>
                 </div>
