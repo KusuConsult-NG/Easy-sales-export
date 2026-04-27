@@ -19,7 +19,7 @@ import { COMPANY_INFO } from "@/lib/constants";
 import { getModuleConfig } from "@/lib/module-config";
 import NotificationCenter from "./NotificationCenter";
 
-import { logoutAction } from "@/app/actions/auth";
+import { signOut as nextAuthSignOut } from "next-auth/react";
 import { hasAppAccess, type AppIdentifier } from "@/lib/role-app-mapping";
 import type { UserRole } from "@/lib/types/roles";
 import { GLOBAL_NAV_ITEMS, MODULE_NAVIGATION, type NavigationItem } from "@/lib/sidebar-config";
@@ -468,7 +468,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
                             } catch (e) {
                                 console.error("Firebase signout failed", e);
                             }
-                            await logoutAction();
+                            await nextAuthSignOut({ callbackUrl: "/auth/login" });
                         }}
                         className={cn(
                             "w-full flex items-center text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all font-medium text-sm text-left rounded-xl",
@@ -638,7 +638,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
                                 } catch (e) {
                                     console.error("Firebase signout failed", e);
                                 }
-                                await logoutAction();
+                                await nextAuthSignOut({ callbackUrl: "/auth/login" });
                             }}
                             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-all font-medium text-sm text-left"
                         >

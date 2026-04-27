@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
 import { getModuleConfig } from "@/lib/module-config";
 import NotificationCenter from "./NotificationCenter";
-import { logoutAction } from "@/app/actions/auth";
+import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { db } from "@/lib/firebase";
@@ -559,7 +559,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                                     const { auth }    = await import("@/lib/firebase");
                                     await signOut(auth);
                                 } catch (e) { console.error("Firebase signout failed", e); }
-                                await logoutAction();
+                                await nextAuthSignOut({ callbackUrl: "/auth/login" });
                             }}
                             className={cn(
                                 "w-full flex items-center text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-xl transition-all text-sm font-medium",

@@ -88,16 +88,16 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
 
             if (isValidCallback) {
                 console.log("Using explicit callback URL:", rawCallback);
-                router.push(rawCallback);
+                window.location.assign(rawCallback);
             } else {
                 // No valid callback — use smart redirect based on user's roles
                 try {
                     const redirectResult = await getPostLoginRedirect(formData.email);
                     if (redirectResult.success && redirectResult.data?.redirectUrl) {
                         console.log("Using smart redirect:", redirectResult.data.redirectUrl);
-                        router.push(redirectResult.data.redirectUrl);
+                        window.location.assign(redirectResult.data.redirectUrl);
                     } else {
-                        router.push("/dashboard");
+                        window.location.assign("/dashboard");
                     }
                 } catch (redirectErr: any) {
                     // UnrecognizedActionError = stale JS bundle after a new deployment.
@@ -116,7 +116,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
 
                     // Any other error: still signed in, just go to dashboard
                     console.error("getPostLoginRedirect failed, falling back to /dashboard:", redirectErr);
-                    router.push("/dashboard");
+                    window.location.assign("/dashboard");
                 }
             }
 

@@ -6,8 +6,6 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X, LayoutDashboard, LogIn, LogOut } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
-import { logoutAction } from "@/app/actions/auth";
-
 export default function HubNavigation() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isEcosystemOpen, setIsEcosystemOpen] = useState(false);
@@ -23,7 +21,7 @@ export default function HubNavigation() {
         } catch (e) {
             console.error("Firebase signout failed", e);
         }
-        await logoutAction();
+        await signOut({ callbackUrl: "/auth/login" });
     };
 
     const navItems = [
