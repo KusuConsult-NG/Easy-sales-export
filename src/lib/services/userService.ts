@@ -25,13 +25,16 @@ const PROTECTED_FIELDS = [
  * This guarantees the Anti-Corruption rules across the Firebase database.
  */
 function validateUserState(user: any) {
+    // Safely get roles as an array (handle FieldValue.arrayUnion which is an object, not an array)
+    const roles = Array.isArray(user.roles) ? user.roles : [];
+
     // 1. Role / Verification integrity check
-    if (user.roles?.includes("seller") && user.sellerVerificationStatus !== "approved" && user.isVerified !== true) {
+    if (roles.includes("seller") && user.sellerVerificationStatus !== "approved" && user.isVerified !== true) {
         throw new Error("Data Integrity Error: Cannot assign 'seller' role without 'approved' verification status.");
     }
     
     // 2. Cooperative integrity check
-    if (user.roles?.includes("farmer") && !user.cooperativeMembershipId && user.cooperativeTier === undefined) {
+    if (roles.includes("farmer") && !user.cooperativeMembershipId && user.cooperativeTier === undefined) {
          throw new Error("Data Integrity Error: Farmer role assigned but missing Cooperative mapping logic.");
     }
     

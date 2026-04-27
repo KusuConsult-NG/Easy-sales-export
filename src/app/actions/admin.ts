@@ -1868,8 +1868,8 @@ async function _approveExportOnboardingAction(
         // 3. Update User Profile (Verify, Add Role, Activate Service)
         await atomicUpdateUser(userId, {
             isVerified: true,
-            "services.export.status": "active",
-            "services.export.approvedAt": FieldValue.serverTimestamp(),
+            "serviceRegistrations.export.status": "approved",
+            "serviceRegistrations.export.approvedAt": FieldValue.serverTimestamp(),
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("export_participant"),
