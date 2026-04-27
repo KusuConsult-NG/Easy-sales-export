@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 /**
  * Farm Nation Property Management Actions
@@ -808,6 +809,12 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             residentialAddress: data.profile.address,
         });
 
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Farm Nation onboarding:", err);
+        }
+
         return {
             success: true,
             data: {
@@ -1075,6 +1082,12 @@ export async function resubmitFarmNationApplicationAction(
                 .filter(Boolean).join(" ").trim(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Farm Nation resubmission:", err);
+        }
 
         return { success: true, data: null, meta: null };
     } catch (error: any) {

@@ -17,6 +17,7 @@ import type { SellerVerification, Product, CartItem, Order, ProductCategory, Del
 import { hasRole } from "@/lib/role-utils";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { unstable_cache } from "next/cache";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -186,6 +187,12 @@ export async function submitSellerVerificationAction(
             sellerVerificationId: verificationId,
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Seller Verification:", err);
+        }
 
         return { success: true, verificationId, };
     } catch (error: any) {
@@ -395,6 +402,12 @@ export async function submitMarketplaceOnboardingAction(
         }
 
         await userRef.update(userUpdate);
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Marketplace Onboarding:", err);
+        }
 
         return { success: true, data: { verificationId } };
 
@@ -1345,6 +1358,12 @@ export async function resubmitSellerVerificationAction(
             'serviceRegistrations.marketplace.status': 'pending',
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Seller resubmission:", err);
+        }
 
         return { success: true };
     } catch (error: any) {

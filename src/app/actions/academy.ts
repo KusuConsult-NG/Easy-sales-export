@@ -10,6 +10,7 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 /**
  * Check Academy application status for current user
@@ -863,6 +864,12 @@ export async function submitAcademyApplicationAction(
             targetType: "academy_application",
             details: `Learner application submitted for ${applicationData.personalInfo.firstName || ''} ${applicationData.personalInfo.lastName || applicationData.personalInfo.fullName || ''}`.trim(),
         });
+
+        try {
+            await invalidateUserCache(session.user.id);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Academy application:", err);
+        }
 
         return { success: true, data: { applicationId: finalApplicationId } };
     } catch (error: any) {

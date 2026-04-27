@@ -11,6 +11,7 @@ import { z } from "zod";
 import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { Resend } from "resend";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -438,6 +439,12 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             }
         } catch (emailError) {
             logger.error("WAVE application email notification failed (non-blocking):", emailError);
+        }
+
+        try {
+            await invalidateUserCache(session.user.id);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after WAVE application:", err);
         }
 
         return {

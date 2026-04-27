@@ -6,6 +6,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import {
     contributionSchema,
@@ -365,6 +366,12 @@ export async function registerCooperativeMemberAction(
 
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Cooperative application:", err);
+        }
 
         return {
             error: null,
@@ -1197,6 +1204,12 @@ export async function resubmitCooperativeApplicationAction(
         });
 
         await batch.commit();
+
+        try {
+            await invalidateUserCache(session.user.id);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Cooperative application resubmission:", err);
+        }
 
         return { success: true, data: { message: "Application resubmitted successfully." }, meta: null };
     } catch (error) {

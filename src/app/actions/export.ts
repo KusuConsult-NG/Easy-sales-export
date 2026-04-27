@@ -526,6 +526,7 @@ export async function getExportWindowDetailsAction(
 // ============================================
 
 import { uploadFileToStorage } from "@/lib/storage-admin";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 export async function submitExportOnboardingAction(
     prevState: any,
@@ -643,6 +644,12 @@ export async function submitExportOnboardingAction(
         db.collection("system_metadata").doc("export_stats")
             .set({ pending: FieldValue.increment(1) }, { merge: true })
             .catch(() => {});
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Export application:", err);
+        }
 
         return {
             error: null,
@@ -1363,6 +1370,12 @@ export async function resubmitExportApplicationAction(
         db.collection("system_metadata").doc("export_stats")
             .set(updates, { merge: true })
             .catch(() => {});
+
+        try {
+            await invalidateUserCache(userId);
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Export application resubmission:", err);
+        }
 
         return { success: true, data: null, meta: null };
     } catch (error) {
