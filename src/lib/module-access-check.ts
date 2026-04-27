@@ -77,7 +77,16 @@ export async function checkModuleAccess(
         // Layer 2 — serviceRegistrations check
         if (regKey) {
             const serviceRegistrations = userData.serviceRegistrations || {};
-            const registration = serviceRegistrations[regKey];
+            let registration = serviceRegistrations[regKey];
+            
+            // Legacy fallbacks for keys that changed over time
+            if (!registration && regKey === "cooperatives") {
+                registration = serviceRegistrations["cooperative"];
+            }
+            if (!registration && regKey === "farmNation") {
+                registration = serviceRegistrations["farm_nation"];
+            }
+
             const VALID_STATUSES = ["approved", "active"];
 
             if (VALID_STATUSES.includes(registration?.status)) {
