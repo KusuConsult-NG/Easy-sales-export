@@ -14,7 +14,7 @@ import {
     markAcademyApplicationUnderReviewAction
 } from "@/app/actions/admin";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
-import { getStandardAcademyApplicationsAction, getAcademyStatsAction, logAcademyExportAction } from "@/app/actions/academy-admin";
+import { getStandardAcademyApplicationsAction, getAcademyStatsAction, logAcademyExportAction, updateAcademyApplicationPaymentAction } from "@/app/actions/academy-admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useEffect } from "react";
 
@@ -125,8 +125,16 @@ function ApplicationDetailModal({
     onApprove: (id: string) => void;
     onReject: (id: string) => void;
     onReview: (id: string) => void;
+    onUpdatePayment: (id: string, status: "pending" | "completed" | "paid", amount: number, plan: string) => void;
     processingId: string | null;
 }) {
+    const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+    const [paymentForm, setPaymentForm] = useState({
+        status: app.paymentStatus === "completed" || app.paymentStatus === "paid" ? "completed" : "pending",
+        amount: app.paymentAmount || 0,
+        plan: app.plan || "registration",
+    });
+
     const d = app._raw || {};
     const pi = d.personalInfo || {};
     const edu = d.education || app.education || {};
@@ -221,16 +229,76 @@ function ApplicationDetailModal({
 
                     {/* Payment */}
                     <section>
-                        <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
-                            <DollarSign className="w-4 h-4" /> Payment Details
-                        </h3>
-                        <div className="bg-slate-50 rounded-xl px-4 py-2">
-                            <Row label="Plan" value={app.plan} />
-                            <Row label="Payment Status" value={app.paymentStatus} />
-                            <Row label="Amount Paid" value={app.paymentAmount != null ? `₦${app.paymentAmount.toLocaleString()}` : undefined} />
-                            <Row label="Reference" value={app.paymentReference ?? undefined} />
-                            <Row label="Source" value={app.source} />
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-700 uppercase tracking-wider">
+                                <DollarSign className="w-4 h-4" /> Payment Details
+                            </h3>
+                            <button
+                                onClick={() => setIsUpdatingPayment(!isUpdatingPayment)}
+                                className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition px-2 py-1 rounded hover:bg-blue-50"
+                            >
+                                {isUpdatingPayment ? "Cancel Edit" : "Edit Payment"}
+                            </button>
                         </div>
+                        
+                        {isUpdatingPayment ? (
+                            <div className="bg-blue-50 rounded-xl px-4 py-3 border border-blue-100">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Status</label>
+                                        <select 
+                                            value={paymentForm.status} 
+                                            onChange={e => setPaymentForm(p => ({ ...p, status: e.target.value as any }))}
+                                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-sm"
+                                        >
+                                            <option value="pending">Pending / Unpaid</option>
+                                            <option value="completed">Completed / Paid</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Amount Paid (₦)</label>
+                                        <input 
+                                            type="number"
+                                            value={paymentForm.amount} 
+                                            onChange={e => setPaymentForm(p => ({ ...p, amount: Number(e.target.value) }))}
+                                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-sm"
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-semibold text-slate-700 mb-1">Plan Enrolled</label>
+                                        <select 
+                                            value={paymentForm.plan} 
+                                            onChange={e => setPaymentForm(p => ({ ...p, plan: e.target.value }))}
+                                            className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-sm"
+                                        >
+                                            <option value="registration">Registration Only</option>
+                                            <option value="foundation">Foundation</option>
+                                            <option value="standard">Standard</option>
+                                            <option value="advanced">Advanced</option>
+                                            <option value="elite">Elite</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end">
+                                    <button
+                                        onClick={() => onUpdatePayment(app.id, paymentForm.status as any, paymentForm.amount, paymentForm.plan)}
+                                        disabled={!!processingId}
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg flex items-center gap-2 disabled:opacity-50"
+                                    >
+                                        {processingId === app.id + "_payment" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+                                        Save Payment
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 rounded-xl px-4 py-2">
+                                <Row label="Plan" value={app.plan} />
+                                <Row label="Payment Status" value={app.paymentStatus} />
+                                <Row label="Amount Paid" value={app.paymentAmount != null ? `₦${app.paymentAmount.toLocaleString()}` : undefined} />
+                                <Row label="Reference" value={app.paymentReference ?? undefined} />
+                                <Row label="Source" value={app.source} />
+                            </div>
+                        )}
                     </section>
 
                     {/* Meta */}
@@ -418,6 +486,19 @@ export default function AdminAcademyApplicationsPage() {
             await fetchData();
         } else {
             showToast(result.error || "Failed to mark under review", "error");
+        }
+        setProcessingId(null);
+    }
+
+    async function handleUpdatePayment(id: string, status: "pending" | "completed" | "paid", amount: number, plan: string) {
+        setProcessingId(id + "_payment");
+        const result = await updateAcademyApplicationPaymentAction(id, status, amount, plan);
+        if (result.success) {
+            showToast("Payment details updated", "success");
+            setSelectedApp(null);
+            await fetchData();
+        } else {
+            showToast(result.error || "Failed to update payment", "error");
         }
         setProcessingId(null);
     }
@@ -778,6 +859,7 @@ export default function AdminAcademyApplicationsPage() {
                     onApprove={handleApprove}
                     onReject={handleReject}
                     onReview={handleMarkUnderReview}
+                    onUpdatePayment={handleUpdatePayment}
                     processingId={processingId}
                 />
             )}

@@ -255,6 +255,66 @@ export async function rejectAcademyApplicationAction(
 }
 
 /**
+ * Update Academy Application Payment Status (Admin)
+ */
+export async function updateAcademyApplicationPaymentAction(
+    applicationId: string,
+    paymentStatus: "pending" | "completed" | "paid",
+    paymentAmount: number,
+    plan: string
+): Promise<ActionState> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+            return { error: "Unauthorized: Permission required", success: false };
+        }
+
+        const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
+        const appDoc = await appRef.get();
+
+        if (!appDoc.exists) {
+            return { error: "Application not found", success: false };
+        }
+
+        const appData = appDoc.data()!;
+
+        await appRef.update({
+            paymentStatus,
+            paymentAmount,
+            plan,
+            paymentVerifiedAt: paymentStatus === "completed" || paymentStatus === "paid" ? FieldValue.serverTimestamp() : null,
+            paymentVerifiedBy: paymentStatus === "completed" || paymentStatus === "paid" ? session.user.id : null,
+        });
+
+        if (appData.userId) {
+            await db.collection(COLLECTIONS.USERS).doc(appData.userId).update({
+                "serviceRegistrations.academy.paymentStatus": paymentStatus,
+                "serviceRegistrations.academy.plan": plan
+            });
+        }
+
+        await createAdminAuditLog({
+            action: "academy_update_payment",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "academy_application",
+            details: `Updated Academy application payment: ${paymentStatus}, amount: ₦${paymentAmount}, plan: ${plan}`,
+        });
+
+        return {
+            error: null,
+            success: true,
+            data: { message: "Payment status updated successfully" }
+        };
+    } catch (error: any) {
+        logger.error("Update Academy application payment error:", error);
+        return { error: "Failed to update payment status", success: false };
+    }
+}
+
+/**
  * Get Pending Academy Applications (Admin)
  */
 export async function getPendingAcademyApplicationsAction(): Promise<{
