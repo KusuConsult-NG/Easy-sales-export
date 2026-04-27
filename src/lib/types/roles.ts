@@ -8,6 +8,7 @@
 export type UserRole =
     | "general_user"        // Basic platform access
     | "buyer"              // Can purchase from marketplace
+    | "marketplace_buyer"  // Can purchase from marketplace (new standardized role)
     | "seller"             // Can sell on marketplace  
     | "land_owner"         // Owns land for farming
     | "farmer"             // Farm operator
@@ -44,6 +45,7 @@ export const LEGACY_ROLE_MAP: Record<LegacyRole, UserRole> = {
 export const ROLE_HIERARCHY: Record<UserRole, number> = {
     general_user: 1,
     buyer: 2,
+    marketplace_buyer: 2,
     seller: 2,
     land_owner: 2,
     farmer: 2,
@@ -63,6 +65,7 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
 export const ROLE_LABELS: Record<UserRole, string> = {
     general_user: "General User",
     buyer: "Buyer",
+    marketplace_buyer: "Marketplace Buyer",
     seller: "Seller",
     land_owner: "Land Owner",
     farmer: "Farmer / Farm Operator",

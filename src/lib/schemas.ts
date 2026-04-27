@@ -226,6 +226,7 @@ export const LoanApplicationReviewSchema = z.object({
 const UserRoleSchema = z.enum([
     "general_user",
     "buyer",
+    "marketplace_buyer",
     "seller",
     "land_owner",
     "farmer",
@@ -233,6 +234,7 @@ const UserRoleSchema = z.enum([
     "export_participant",
     "cooperative_member",
     "wave_participant",
+    "academy_participant",
     "field_officer",
     "admin",
     "super_admin"

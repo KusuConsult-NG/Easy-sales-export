@@ -41,7 +41,9 @@ service cloud.firestore {
       // EXPANDED: users can update their own profile including KYC identity fields
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                         'fullName', 'phone', 'address', 'businessType', 'updatedAt',
+                         // Core profile fields written by updateUserProfileAction
+                         'firstName', 'lastName', 'otherName', 'fullName',
+                         'phone', 'address', 'location', 'bio', 'businessType', 'updatedAt',
                          // KYC / Identity fields (collected or live-verified)
                          'nin', 'ninVerified', 'votersCardNumber',
                          'bvn', 'bvnVerified', 'idType', 'idNumber', 'idVerified',
@@ -511,12 +513,12 @@ service cloud.firestore {
     match /marketplace_products/{productId} {
       allow read: if isSignedIn();
       
+      // Sellers can create products if their serviceRegistrations.marketplace shows approved status
       allow create: if isSignedIn() &&
                        request.resource.data.sellerId == request.auth.uid &&
                        request.resource.data.price > 0 &&
                        request.resource.data.stock >= 0 &&
-                       exists(/databases/$(database)/documents/marketplace_sellers/$(request.auth.uid)) &&
-                       get(/databases/$(database)/documents/marketplace_sellers/$(request.auth.uid)).data.status == 'approved';
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.serviceRegistrations.marketplace.status == 'approved';
       
       allow update: if isOwner(resource.data.sellerId) || isAdmin();
       allow delete: if isOwner(resource.data.sellerId) || isAdmin();
@@ -693,10 +695,8 @@ service cloud.firestore {
     // Written server-side by uploadDocumentAction — clients cannot write directly
     // ============================================
     match /_document_uploads/{uploadId} {
-      // Owner can read their own uploaded documents  
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      // Admin can read all
-      allow read: if isAdmin();
+      // Owner can read their own uploaded documents; Admin can read all
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
       // Writes only via Admin SDK (no client write allowed)
       allow create: if false;
       allow update: if isAdmin();
