@@ -106,11 +106,11 @@ export default function ProfilePage() {
                     setSaveMessage({ type: 'success', text: 'Email updated! You will be signed out to apply the change.' });
                     setTimeout(() => signOut({ callbackUrl: "/auth/login" }), 2500);
                 } else {
-                    setSaveMessage({ type: 'success', text: 'Profile updated successfully! Redirecting to dashboard…' });
-                    // Always redirect to dashboard after saving — especially when the hub guard
-                    // sent the user here to complete their profile (?notice=complete-your-hub-registration).
-                    // Even without the notice param, the user should be able to return to the dashboard.
-                    setTimeout(() => router.push("/dashboard"), 1500);
+                    setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
+                    // Only auto-redirect when the hub guard sent the user here to complete registration
+                    if (notice === 'complete-your-hub-registration') {
+                        setTimeout(() => router.push("/dashboard"), 1500);
+                    }
                 }
             } else {
                 setSaveMessage({ type: 'error', text: result.error || 'Failed to update profile' });

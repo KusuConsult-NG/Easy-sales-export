@@ -40,7 +40,7 @@ const APP_TO_ROLES: Partial<Record<AppIdentifier, string[]>> = {
     export:       ["export_participant"],
     cooperatives: ["cooperative_member"],
     "farm-nation": ["farmer", "land_owner", "investor"],
-    marketplace:  ["buyer", "seller"],
+    marketplace:  ["buyer", "seller", "marketplace_buyer"],
 };
 
 /**

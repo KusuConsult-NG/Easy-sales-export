@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/session-guard";
+import { db } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 export const dynamic = 'force-dynamic';
 
@@ -11,12 +13,28 @@ export default async function MarketplaceDashboardRedirect() {
     }
 
     const roles = session.user.roles || [];
-    
-    // If they are a seller, take them to seller dashboard
-    if (roles.includes("seller")) {
-        redirect("/marketplace/seller/dashboard");
+
+    // Check Firestore for authoritative accountType (JWT may be stale)
+    try {
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const registration = userDoc.data()?.serviceRegistrations?.marketplace;
+        const accountType = registration?.accountType;
+
+        // Sellers and "both" always go to seller dashboard
+        if (accountType === "seller" || accountType === "both" || roles.includes("seller")) {
+            redirect("/marketplace/seller/dashboard");
+        }
+        // Buyers (including marketplace_buyer role) go to buyer dashboard
+        if (accountType === "buyer" || roles.includes("marketplace_buyer") || roles.includes("buyer")) {
+            redirect("/marketplace/buyer/dashboard");
+        }
+    } catch {
+        // Fallback to JWT roles if Firestore read fails
+        if (roles.includes("seller")) {
+            redirect("/marketplace/seller/dashboard");
+        }
     }
-    
-    // Otherwise, assume buyer or general user
-    redirect("/marketplace/buyer/dashboard");
+
+    // Default: not yet onboarded — send to onboarding
+    redirect("/marketplace/onboarding");
 }

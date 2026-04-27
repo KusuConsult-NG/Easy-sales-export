@@ -48,11 +48,13 @@ export async function requireHubRegistration() {
             shouldRedirect = true;
         } else {
             // 3. Define "Fully Registered" Status
+            // NOTE: phone is intentionally NOT required here — social/Google login users
+            // never provide a phone during signup. Requiring it caused an infinite loop
+            // where users were trapped on /profile forever. Phone can be added voluntarily.
             const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
             const hasEmail = Boolean(userData?.email);
-            const hasPhone = Boolean(userData?.phone);
             
-            const isFullyRegistered = hasName && hasEmail && hasPhone;
+            const isFullyRegistered = hasName && hasEmail;
             
             if (!isFullyRegistered) {
                 shouldRedirect = true;
