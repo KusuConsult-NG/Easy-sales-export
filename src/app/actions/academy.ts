@@ -829,6 +829,9 @@ export async function submitAcademyApplicationAction(
                 userId: session.user.id,
                 applicationId,
                 status: "pending",
+                paymentStatus: "pending", // Default to unpaid/pending
+                paymentAmount: 0,
+                plan: "registration",
                 submittedAt: FieldValue.serverTimestamp(),
                 reviewedAt: null,
                 reviewedBy: null,
@@ -840,6 +843,7 @@ export async function submitAcademyApplicationAction(
                 "serviceRegistrations.academy.status": "pending",
                 "serviceRegistrations.academy.applicationId": applicationId,
                 "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
+                "serviceRegistrations.academy.paymentStatus": "pending",
                 firstName: applicationData.personalInfo.firstName,
                 lastName: applicationData.personalInfo.lastName,
                 otherName: applicationData.personalInfo.otherName || null,
