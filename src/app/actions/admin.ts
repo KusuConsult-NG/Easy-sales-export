@@ -3258,6 +3258,7 @@ async function _getMarketplaceUsersAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
         // Only fetch users who have explicitly onboarded to the marketplace
         q = q.where("serviceRegistrations.marketplace.status", "in", ["active", "approved", "pending", "suspended", "rejected", "under_review"]);
 
