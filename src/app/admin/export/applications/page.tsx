@@ -231,15 +231,21 @@ export default function AdminExportApplicationsPage() {
 
             const exportData = result.data;
 
-            const rows = exportData.map((a) => [
-                a.user.name,
-                a.user.email || "",
-                a.status,
-                formatDate(a.data.createdAt),
-                a.data.bank?.bankName || "",
-                a.data.bank?.accountNumber || "",
-            ]);
-            const header = ["Name", "Email", "Status", "Submitted", "Bank", "Account No"];
+            const rows = exportData.map((a) => {
+                const phone = a.data.profile?.phone || a.data.kyc?.kycData?.phone || a.user.phone || "";
+                const state = a.data.kyc?.kycData?.state || "";
+                return [
+                    a.user.name,
+                    a.user.email || "",
+                    phone,
+                    state,
+                    a.status,
+                    formatDate(a.data.createdAt),
+                    a.data.bank?.bankName || "",
+                    a.data.bank?.accountNumber || "",
+                ];
+            });
+            const header = ["Name", "Email", "Phone", "Location", "Status", "Submitted", "Bank", "Account No"];
             const csv = [header, ...rows].map((r) => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
             const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
             const a = document.createElement("a");

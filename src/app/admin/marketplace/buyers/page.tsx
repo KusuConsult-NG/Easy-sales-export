@@ -14,6 +14,8 @@ interface MarketplaceUser {
     name: string;
     email: string;
     phone?: string;
+    state?: string;
+    lga?: string;
     roles: string[];
     buyerRole: BuyerRole;
     totalOrders?: number;
@@ -60,8 +62,8 @@ export default function MarketplaceBuyersPage() {
     };
 
     function handleExport() {
-        const headers = ["Name", "Email", "Role", "Status", "Joined"];
-        const rows = filtered.map(u => [u.name, u.email, u.buyerRole.replace("_", " "), u.status || "—", u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"]);
+        const headers = ["Name", "Email", "Phone", "State", "LGA", "Role", "Status", "Joined"];
+        const rows = filtered.map(u => [u.name, u.email, u.phone || "—", u.state || "—", u.lga || "—", u.buyerRole.replace("_", " "), u.status || "—", u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"]);
         const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);

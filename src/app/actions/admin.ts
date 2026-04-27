@@ -3297,6 +3297,8 @@ async function _getMarketplaceUsersAction(options: {
                 name: data.fullName || data.name || "Unknown",
                 email: data.email,
                 phone: data.phone || "",
+                state: data.address?.state || data.stateOfOrigin || "",
+                lga: data.address?.lga || data.lga || "",
                 roles: data.roles || [],
                 buyerRole,
                 status: data.status || "active",

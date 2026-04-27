@@ -268,6 +268,75 @@ export async function getAdminLoanApplicationsAction(options: {
 }
 
 /**
+ * Admin: Get loan applications with user details for export
+ */
+export async function getAdminLoanApplicationsExportAction(options: {
+    statusFilter?: "all" | "pending" | "approved" | "rejected" | "disbursed" | "active" | "completed";
+}): Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const { session } = sessionResult;
+        
+        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let query = db.collection(COLLECTIONS.LOAN_APPLICATIONS).orderBy("appliedAt", "desc");
+
+        if (options.statusFilter && options.statusFilter !== "all") {
+            query = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("status", "==", options.statusFilter)
+                .orderBy("appliedAt", "desc");
+        }
+
+        const snapshot = await query.limit(5000).get();
+        const loans = serializeDocs(snapshot.docs) as any[];
+
+        const userIds = [...new Set(loans.map(loan => loan.userId))];
+        const userMap = new Map<string, any>();
+
+        for (let i = 0; i < userIds.length; i += 100) {
+            const batch = userIds.slice(i, i + 100);
+            const refs = batch.map(id => db.collection(COLLECTIONS.USERS).doc(id));
+            try {
+                const userDocs = await db.getAll(...refs);
+                userDocs.forEach(doc => {
+                    if (doc.exists) {
+                        userMap.set(doc.id, doc.data());
+                    }
+                });
+            } catch (err) {
+                logger.error("Failed to fetch batch users for loan export", err);
+            }
+        }
+
+        const enrichedLoans = loans.map(loan => {
+            const user = userMap.get(loan.userId) || {};
+            return {
+                ...loan,
+                phone: user.phone || "",
+                state: user.address?.state || user.stateOfOrigin || "",
+                lga: user.address?.lga || user.lga || ""
+            };
+        });
+
+        return { 
+            success: true, 
+            data: enrichedLoans
+        };
+    } catch (error: any) {
+        logger.error("Failed to fetch admin loan applications for export:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+
+/**
  * Admin: Server-side COUNT aggregations for the loan applications dashboard.
  * Returns accurate totals independent of pagination limits.
  */

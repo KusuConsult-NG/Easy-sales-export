@@ -9,7 +9,7 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminLoanApplicationsAction, getAdminLoanStatsAction } from "@/app/actions/loans";
+import { getAdminLoanApplicationsAction, getAdminLoanStatsAction, getAdminLoanApplicationsExportAction } from "@/app/actions/loans";
 import { Loader2 } from "lucide-react";
 
 type LoanApplication = {
@@ -170,9 +170,8 @@ export default function AdminLoansPage() {
         try {
             showToast("Preparing export...", "success");
             
-            const result = await getAdminLoanApplicationsAction({
+            const result = await getAdminLoanApplicationsExportAction({
                 statusFilter: filterStatus,
-                limit: 5000,
             });
 
             if (!result.success || !result.data) {
@@ -182,12 +181,12 @@ export default function AdminLoansPage() {
             const exportData = result.data;
 
             const headers = [
-                "Name", "Email", "Loan Product", "Amount (₦)",
+                "Name", "Email", "Phone", "State", "LGA", "Loan Product", "Amount (₦)",
                 "Interest Rate", "Duration (months)", "Monthly Payment (₦)",
                 "Purpose", "Status", "Applied Date"
             ];
             const rows = exportData.map(a => [
-                a.fullName || "", a.userEmail || "",
+                a.fullName || "", a.userEmail || "", a.phone || "", a.state || "", a.lga || "",
                 a.tier || "", a.amount,
                 `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
                 a.purpose || "", a.status,
