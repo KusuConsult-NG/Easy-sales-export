@@ -14,8 +14,8 @@ export default function AdminMarketplacePage() {
             bg: "bg-amber-100"
         },
         {
-            title: "Marketplace Users",
-            description: "Manage buyers, sellers, and dual-role accounts",
+            title: "Marketplace Buyers",
+            description: "Manage marketplace buyers and view their profiles",
             icon: Users,
             href: "/admin/marketplace/buyers",
             color: "text-blue-600",

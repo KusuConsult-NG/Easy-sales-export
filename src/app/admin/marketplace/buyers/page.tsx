@@ -87,8 +87,8 @@ export default function MarketplaceBuyersPage() {
         <div className="p-8">
             <div className="mb-8 flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Marketplace Users</h1>
-                    <p className="text-slate-600">View and manage buyers, sellers, and dual-role users</p>
+                    <h1 className="text-3xl font-bold text-slate-900 mb-2">Marketplace Buyers</h1>
+                    <p className="text-slate-600">View and manage marketplace buyers and their profiles</p>
                 </div>
                 <button
                     onClick={handleExport}
