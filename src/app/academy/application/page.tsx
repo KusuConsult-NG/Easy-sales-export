@@ -8,7 +8,7 @@ import PersonalInfoStep from "./steps/PersonalInfoStep";
 import EducationStep from "./steps/EducationStep";
 import InterestsStep from "./steps/InterestsStep";
 import ReviewStep from "./ReviewStep";
-import { checkAcademyStatusAction, submitAcademyApplicationAction, getAcademyApplicationAction, resubmitAcademyApplicationAction } from "@/app/actions/academy";
+import { checkAcademyStatusAction, submitAcademyApplicationAction, getAcademyApplicationAction, resubmitAcademyApplicationAction, checkAcademyPaymentStatusAction, initiateAcademyPaymentAction } from "@/app/actions/academy";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import { AlertTriangle } from "lucide-react";
@@ -51,6 +51,9 @@ export default function AcademyApplicationPage() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPaying, setIsPaying] = useState(false);
+    const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("unpaid");
+    const [selectedPlan, setSelectedPlan] = useState<"foundation" | "advanced" | "elite">("foundation");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
@@ -84,13 +87,23 @@ export default function AcademyApplicationPage() {
                             if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
                         }
                         setIsEditMode(true);
+                        const payStatus = await checkAcademyPaymentStatusAction();
+                        setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     } else {
                         // Stay on page — do NOT auto-redirect pending users
+                        const payStatus = await checkAcademyPaymentStatusAction();
+                        setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     }
                 } else if (status.data === "approved" || status.data === "active") {
-                    router.replace("/academy/dashboard");
+                    const payStatus = await checkAcademyPaymentStatusAction();
+                    if (payStatus.data === "unpaid") {
+                        setPaymentStatus("unpaid");
+                        setIsLoading(false);
+                    } else {
+                        router.replace("/academy/dashboard");
+                    }
                 } else if (status.data === "revision_required") {
                     // Pre-populate form with existing data
                     const result = await getAcademyApplicationAction();
@@ -110,9 +123,12 @@ export default function AcademyApplicationPage() {
                         if (d.revisionNote) setRevisionNote(d.revisionNote);
                     }
                     setIsRevisionMode(true);
-                    setIsRevisionMode(true);
+                    const payStatus = await checkAcademyPaymentStatusAction();
+                    setPaymentStatus(payStatus.data || "unpaid");
                     setIsLoading(false);
                 } else {
+                    const payStatus = await checkAcademyPaymentStatusAction();
+                    setPaymentStatus(payStatus.data || "unpaid");
                     setIsLoading(false);
                 }
             } catch (error) {
@@ -261,6 +277,23 @@ export default function AcademyApplicationPage() {
         setErrors({});
     };
 
+    async function handlePayment() {
+        setIsPaying(true);
+        try {
+            const result = await initiateAcademyPaymentAction(selectedPlan);
+            if (result.success && result.data?.paymentUrl) {
+                window.location.href = result.data.paymentUrl;
+            } else {
+                showToast(result.error || "Failed to initiate payment", "error");
+            }
+        } catch (error) {
+            logger.error("Payment initiation error:", error);
+            showToast("Failed to initiate payment. Please try again.", "error");
+        } finally {
+            setIsPaying(false);
+        }
+    };
+
     async function handleSubmit() {
         if (!validateStep(4)) return;
 
@@ -288,7 +321,109 @@ export default function AcademyApplicationPage() {
         }
     };
 
+    // Payment gate: show payment screen if not yet paid
+    if (paymentStatus === "unpaid") {
+        const PLANS = [
+            { id: "foundation", name: "Foundation Plan", price: 25000 },
+            { id: "advanced", name: "Advanced Plan", price: 50000 },
+            { id: "elite", name: "Elite Plan", price: 100000 },
+        ] as const;
 
+        return (
+            <div className="min-h-screen bg-slate-50">
+                {/* Header */}
+                <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white py-12">
+                    <div className="max-w-4xl mx-auto px-6 text-center">
+                        <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>
+                        <p className="text-blue-100 mb-2">
+                            Join thousands of successful agripreneurs who transformed their careers
+                        </p>
+                        <p className="text-xs text-blue-200/80 uppercase tracking-widest font-semibold">
+                            Powered by Easy Sales Export
+                        </p>
+                    </div>
+                </div>
+
+                {/* Payment Card */}
+                <div className="max-w-lg mx-auto px-6 -mt-8">
+                    <div className="bg-white rounded-3xl shadow-xl p-8">
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <CreditCard className="w-8 h-8 text-blue-600" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Select Academy Plan</h2>
+                            <p className="text-slate-600">
+                                Choose a learning plan that fits your career goals to proceed with your application.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4 mb-6">
+                            {PLANS.map(plan => (
+                                <button
+                                    key={plan.id}
+                                    onClick={() => setSelectedPlan(plan.id)}
+                                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                                        selectedPlan === plan.id ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-blue-200"
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                            selectedPlan === plan.id ? "border-blue-600" : "border-slate-300"
+                                        }`}>
+                                            {selectedPlan === plan.id && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
+                                        </div>
+                                        <span className={`font-semibold ${selectedPlan === plan.id ? "text-blue-900" : "text-slate-700"}`}>
+                                            {plan.name}
+                                        </span>
+                                    </div>
+                                    <span className="text-xl font-bold text-slate-900">
+                                        ₦{plan.price.toLocaleString()}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <ul className="space-y-2 text-sm text-slate-600 mb-6 px-2">
+                            <li className="flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
+                                Full access to learner application portal
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
+                                Access to relevant courses upon approval
+                            </li>
+                            <li className="flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
+                                Certificate eligibility for completed courses
+                            </li>
+                        </ul>
+
+                        <button
+                            onClick={handlePayment}
+                            disabled={isPaying}
+                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-blue-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {isPaying ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    <Shield className="w-5 h-5" />
+                                    Pay ₦{PLANS.find(p => p.id === selectedPlan)?.price.toLocaleString()} to Continue
+                                </>
+                            )}
+                        </button>
+
+                        <p className="text-center text-xs text-slate-400 mt-4">
+                            Secured by Paystack. Your payment information is encrypted.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50">

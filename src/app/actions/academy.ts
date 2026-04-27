@@ -768,6 +768,152 @@ export interface AcademyApplicationData {
 
 
 
+const ACADEMY_REGISTRATION_FEE = 5000; // ₦5,000
+
+/**
+ * Initiate academy onboarding payment (must pay before submitting application)
+ */
+export async function initiateAcademyPaymentAction(
+    plan?: "foundation" | "advanced" | "elite" | "registration"
+): Promise<{
+    success: boolean;
+    data?: { paymentUrl: string };
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: 'Unauthorized' };
+        const { session } = sessionResult;
+        if (!session?.user) {
+            return { error: "You must be logged in", success: false };
+        }
+
+        const userId = session.user.id;
+
+        // Check if already paid
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (userDoc.data()?.serviceRegistrations?.academy?.paymentStatus === "completed") {
+            return { error: "You have already paid. Please proceed to complete your application.", success: false };
+        }
+
+        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!paystackSecretKey) {
+            return { error: "Payment system not configured", success: false };
+        }
+
+        let amount = ACADEMY_REGISTRATION_FEE; // Default to 5000 (Registration)
+
+        if (plan && plan !== "registration") {
+            if (plan === "foundation") amount = 25000;
+            else if (plan === "advanced") amount = 50000;
+            else if (plan === "elite") amount = 100000;
+        } else {
+            plan = "registration";
+        }
+
+        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${paystackSecretKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                email: session.user.email,
+                amount: amount * 100, // Kobo
+                metadata: {
+                    userId,
+                    purpose: "academy_registration",
+                    plan,
+                },
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
+            }),
+        });
+
+        if (!paystackResponse.ok) {
+            return { error: "Failed to initialize payment", success: false };
+        }
+
+        const paystackData = await paystackResponse.json();
+
+        if (!paystackData.status || !paystackData.data?.authorization_url) {
+            return { error: "Failed to generate payment link", success: false };
+        }
+
+        return {
+            success: true,
+            data: { paymentUrl: paystackData.data.authorization_url },
+        };
+    } catch (error) {
+        logger.error("Academy payment init failed:", error);
+        return { error: "Failed to initiate payment", success: false };
+    }
+}
+
+/**
+ * Verify academy registration payment callback
+ */
+export async function verifyAcademyPaymentAction(reference: string): Promise<{
+    success: boolean;
+    data?: any;
+    error?: string;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: 'Unauthorized' };
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: false, error: "Authentication required" };
+
+        const verify = await verifyPaystackPayment(reference);
+        if (!verify.status || verify.data.status !== "success") {
+            return { success: false, error: "Payment verification failed" };
+        }
+
+        const metadata = verify.data.metadata;
+        if (metadata.purpose !== "academy_registration") {
+            return { success: false, error: "Invalid payment type" };
+        }
+
+        // Mark payment as completed for the user using dot notation to prevent overwriting
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            "serviceRegistrations.academy.paymentStatus": "completed",
+            "serviceRegistrations.academy.paymentReference": reference,
+            "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
+            "serviceRegistrations.academy.plan": metadata.plan || "registration",
+            "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
+            "updatedAt": FieldValue.serverTimestamp(),
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Academy payment verification error:", error);
+        return { success: false, error: "Failed to verify payment" };
+    }
+}
+
+/**
+ * Check if user has paid for academy registration
+ */
+export async function checkAcademyPaymentStatusAction(): Promise<{ success: boolean, data?: "paid" | "unpaid", error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: 'Unauthorized' };
+        const { session } = sessionResult;
+        if (!session?.user?.id) return { success: true, data: "unpaid" };
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+
+        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed") {
+            return { success: true, data: "paid" };
+        }
+
+        return { success: true, data: "unpaid" };
+    } catch (error) {
+        logger.error("Check academy payment status error:", error);
+        return { success: true, data: "unpaid" };
+    }
+}
+
 /**
  * Submit Academy learner application
  */
@@ -791,7 +937,8 @@ export async function submitAcademyApplicationAction(
         await db.runTransaction(async (t) => {
             // Check for existing application status on the user
             const userDoc = await t.get(userRef);
-            const existingStatus = userDoc.data()?.serviceRegistrations?.academy?.status;
+            const userData = userDoc.data();
+            const existingStatus = userData?.serviceRegistrations?.academy?.status;
 
             if (existingStatus === 'pending' || existingStatus === 'under_review') {
                 throw new Error("Your previous application is still being processed.");
@@ -799,6 +946,9 @@ export async function submitAcademyApplicationAction(
             if (existingStatus === 'approved') {
                 throw new Error("You are already enrolled in the Academy program.");
             }
+
+            const existingPaymentStatus = userData?.serviceRegistrations?.academy?.paymentStatus || "pending";
+            const existingPaymentAmount = userData?.serviceRegistrations?.academy?.paymentAmount || 0;
 
             // 🔒 DEDUP GUARD: Collection-level phone and email check within transaction
             const collectionsContext = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
@@ -829,8 +979,8 @@ export async function submitAcademyApplicationAction(
                 userId: session.user.id,
                 applicationId,
                 status: "pending",
-                paymentStatus: "pending", // Default to unpaid/pending
-                paymentAmount: 0,
+                paymentStatus: existingPaymentStatus,
+                paymentAmount: existingPaymentAmount,
                 plan: "registration",
                 submittedAt: FieldValue.serverTimestamp(),
                 reviewedAt: null,
@@ -843,7 +993,7 @@ export async function submitAcademyApplicationAction(
                 "serviceRegistrations.academy.status": "pending",
                 "serviceRegistrations.academy.applicationId": applicationId,
                 "serviceRegistrations.academy.submittedAt": FieldValue.serverTimestamp(),
-                "serviceRegistrations.academy.paymentStatus": "pending",
+                "serviceRegistrations.academy.paymentStatus": existingPaymentStatus,
                 firstName: applicationData.personalInfo.firstName,
                 lastName: applicationData.personalInfo.lastName,
                 otherName: applicationData.personalInfo.otherName || null,

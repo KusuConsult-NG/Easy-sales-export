@@ -30,6 +30,18 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
         if (!hasAccess) {
             redirect("/academy/setup");
         }
+
+        // Enforce Payment Integrity Gate
+        const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
+        const payStatus = await checkAcademyPaymentStatusAction();
+        if (payStatus.data === "unpaid") {
+            const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+            if (!isAdmin) {
+                logger.info(`Forcing unpaid active academy user ${session.user.id} to payment flow.`);
+                redirect("/academy/application");
+            }
+        }
+
     } catch (error) {
         logger.error("Session verification failed:", error);
         redirect("/auth/login?module=academy");

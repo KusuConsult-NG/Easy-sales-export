@@ -130,7 +130,7 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
         const registration = userData?.serviceRegistrations?.wave;
 
         if (registration?.status) {
-            return { success: true, data: registration.status };
+            return { success: true, data: { status: registration.status } };
         }
 
         // ── FALLBACK: Returning student whose data predates V2 schema ──────
@@ -149,7 +149,7 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
             );
 
             logger.info(`[checkWaveStatus] Backfilled legacy wave status '${legacyStatus}' for user ${session.user.id}`);
-            return { success: true, data: legacyStatus };
+            return { success: true, data: { status: legacyStatus } };
         }
 
         return { success: true, data: null };
@@ -1239,7 +1239,7 @@ export async function getWaveApplicationAction(): Promise<{ success: boolean; da
         if (!appDoc.exists) return { success: false, error: 'Application not found' };
 
         const data = appDoc.data();
-        return { success: true, data: { data, meta: { revisionNote: data?.revisionNote } } };
+        return { success: true, data: { ...data, revisionNote: data?.revisionNote }, meta: null };
     } catch (error) {
         logger.error('getWaveApplicationAction error:', error);
         return { success: false, error: 'Failed to fetch application' };

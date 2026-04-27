@@ -1152,7 +1152,7 @@ export async function getExportApplicationAction(): Promise<{
         if (snap.empty) return { success: false, error: 'No application found' };
 
         const data = snap.docs[0].data();
-        return { success: true, data: { data, revisionNote: data?.revisionNote } };
+        return { success: true, data: { ...data, revisionNote: data?.revisionNote } };
     } catch (error) {
         logger.error('getExportApplicationAction error:', error);
         return { success: false, error: 'Failed to fetch application' };
