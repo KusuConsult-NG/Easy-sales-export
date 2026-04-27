@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -299,6 +300,12 @@ export async function processCooperativeRegistration(reference: string, amount: 
         });
     });
 
+    try {
+        await invalidateUserCache(userId);
+    } catch (err) {
+        logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
+    }
+
     logger.info(`[Paystack Webhook] Processed Cooperative Registration for ${userId}`);
 
     // Send one-time WhatsApp group invite via email — non-blocking
@@ -421,6 +428,12 @@ export async function processAcademyRegistration(reference: string, amount: numb
         // Non-blocking: payment registration is already committed
     }
 
+    try {
+        await invalidateUserCache(userId);
+    } catch (err) {
+        logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
+    }
+
     logger.info(`[Paystack Webhook] Processed Academy Registration for ${userId}`);
 }
 
@@ -467,6 +480,12 @@ export async function processFarmNationRegistration(reference: string, amount: n
         });
     });
 
+    try {
+        await invalidateUserCache(userId);
+    } catch (err) {
+        logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
+    }
+
     logger.info(`[Paystack Webhook] Processed Farm Nation Registration for ${userId}`);
 }
 
@@ -512,6 +531,12 @@ export async function processWaveRegistration(reference: string, amount: number,
             description: "Wave application payment"
         });
     });
+
+    try {
+        await invalidateUserCache(userId);
+    } catch (err) {
+        logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
+    }
 
     logger.info(`[Paystack Webhook] Processed WAVE Registration for ${userId}`);
 }

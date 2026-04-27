@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { atomicUpdateUser } from '@/lib/services/userService';
+import { invalidateUserCache } from '@/lib/cache-invalidation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,8 @@ export async function verifyBVNAction(payload: {
         // Update overall KYC status if BVN now verified
         await updateOverallKYCStatus(userId);
 
+        await invalidateUserCache(userId);
+
         logger.info('BVN verified successfully', { userId });
         return { success: true, isMatch: true };
     } catch (error: any) {
@@ -161,6 +164,8 @@ export async function verifyNINAction(payload: {
         // Update overall KYC status if NIN now verified
         await updateOverallKYCStatus(userId);
 
+        await invalidateUserCache(userId);
+
         logger.info('NIN verified successfully', { userId });
         return { success: true, isMatch: true };
     } catch (error: any) {
@@ -215,6 +220,8 @@ export async function verifyVotersCardAction(payload: {
 
         // Update overall KYC status since we forced voter's card to verified
         await updateOverallKYCStatus(userId);
+
+        await invalidateUserCache(userId);
 
         logger.info("Voter's Card allowed and bypassed for manual review", { userId });
         
@@ -366,6 +373,8 @@ export async function saveKYCProfileAction(payload: {
             // Non-fatal — root KYC data was already saved. Log and continue.
             logger.warn('Cross-module PII sync partial failure', { userId, error: syncError?.message });
         }
+
+        await invalidateUserCache(userId);
 
         return { success: true };
     } catch (error: any) {
