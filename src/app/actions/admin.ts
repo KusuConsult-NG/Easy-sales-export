@@ -3258,7 +3258,8 @@ async function _getMarketplaceUsersAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
+        // Only fetch users who have explicitly onboarded to the marketplace
+        q = q.where("serviceRegistrations.marketplace.status", "in", ["active", "approved", "pending", "suspended", "rejected", "under_review"]);
 
         // We paginate by document ID to handle the custom array-contains checks later if needed.
         if (options.lastDocId) {
@@ -3279,12 +3280,16 @@ async function _getMarketplaceUsersAction(options: {
         // Marketplace filter
         let users = snapshot.docs.map(doc => {
             const data = doc.data();
+            const marketplaceData = data.serviceRegistrations?.marketplace;
+            let dbAccountType = marketplaceData?.accountType;
+            
+            // Legacy fallback
             const hasSellerRole = (data.roles || []).includes("seller");
             
-            // In ESE, all registered users are buyers. Only those with the seller role are sellers.
-            // If they have the seller role, they are inherently both a buyer and a seller.
             let buyerRole = "buyer_only";
-            if (hasSellerRole) buyerRole = "both";
+            if (dbAccountType === "seller") buyerRole = "seller_only";
+            else if (dbAccountType === "both") buyerRole = "both";
+            else if (hasSellerRole) buyerRole = "both";
 
             return {
                 id: doc.id,
