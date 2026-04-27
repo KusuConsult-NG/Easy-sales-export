@@ -43,17 +43,39 @@ export default async function SellerLayout({ children }: { children: React.React
             const adminDb = getAdminDb();
 
             try {
-                const sellerDoc = await adminDb.collection(COLLECTIONS.MARKETPLACE_SELLERS).doc(userId).get();
+                // ✅ CORRECT: Read from user document's serviceRegistrations (canonical source of truth).
+                // The old code read MARKETPLACE_SELLERS.doc(userId) which does NOT exist —
+                // seller verifications are stored in SELLER_VERIFICATIONS with verificationId as doc ID.
+                const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(userId).get();
+                const userData = userDoc.data();
+                const registration = userData?.serviceRegistrations?.marketplace;
 
-                if (sellerDoc.exists) {
-                    const sellerData = sellerDoc.data();
+                if (registration?.status) {
                     sellerStatus = {
-                        status: sellerData?.status || "pending",
-                        businessName: sellerData?.businessName,
+                        status: registration.status,
+                        businessName: userData?.businessName,
                     };
-                    await setCache(cacheKey, sellerStatus, CACHE_TTL.USER_PERMISSIONS);
                 } else {
-                    redirect("/marketplace/onboarding");
+                    // Fallback: query SELLER_VERIFICATIONS by userId field
+                    const verSnap = await adminDb
+                        .collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                        .where("userId", "==", userId)
+                        .limit(1)
+                        .get();
+
+                    if (!verSnap.empty) {
+                        const verData = verSnap.docs[0].data();
+                        sellerStatus = {
+                            status: verData?.status || "pending",
+                            businessName: verData?.businessName,
+                        };
+                    } else {
+                        redirect("/marketplace/onboarding");
+                    }
+                }
+
+                if (sellerStatus) {
+                    await setCache(cacheKey, sellerStatus, CACHE_TTL.USER_PERMISSIONS);
                 }
             } catch (dbError) {
                 logger.error("Failed to check seller status:", dbError);
