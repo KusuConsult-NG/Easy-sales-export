@@ -362,6 +362,7 @@ export default function AdminAcademyApplicationsPage() {
     const { showToast } = useToast();
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
     const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
     const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
@@ -392,7 +393,8 @@ export default function AdminAcademyApplicationsPage() {
                     limit: opts.limit || 50,
                     lastDocId: opts.lastDocId,
                     search: search.trim() ? search : undefined,
-                    status: statusFilter === "all" ? undefined : statusFilter
+                    status: statusFilter === "all" ? undefined : statusFilter,
+                    sortOrder: sortOrder
                 });
 
                 if (!result.success) {
@@ -447,7 +449,7 @@ export default function AdminAcademyApplicationsPage() {
             }
         },
         limit: 50,
-        dependencies: [statusFilter, search]
+        dependencies: [statusFilter, search, sortOrder]
     });
 
     async function handleApprove(id: string) {
@@ -700,6 +702,17 @@ export default function AdminAcademyApplicationsPage() {
                         <option value="all">Any Payment Status</option>
                         <option value="completed">Paid</option>
                         <option value="pending">Unpaid</option>
+                    </select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-slate-500" />
+                    <select
+                        value={sortOrder}
+                        onChange={e => setSortOrder(e.target.value as any)}
+                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm"
+                    >
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
                     </select>
                 </div>
                 <div className="relative flex-1 max-w-sm">

@@ -86,7 +86,7 @@ export default function AdminUsersPage() {
     });
 
     const hasActiveFilters = !!(filters.state || filters.lga || filters.fromDate || filters.toDate ||
-        (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all"));
+        (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") || (filters.sortOrder && filters.sortOrder !== "desc"));
 
     const clearFilters = () => {
         updateFilter("state", "all");
@@ -95,6 +95,7 @@ export default function AdminUsersPage() {
         updateFilter("toDate", "");
         updateFilter("role", "all");
         updateFilter("status", "all");
+        updateFilter("sortOrder", "desc");
     };
 
     async function handleToggleVerification(userId: string) {
@@ -437,6 +438,16 @@ export default function AdminUsersPage() {
                                 <option value="all">All Status</option>
                                 <option value="verified">Verified</option>
                                 <option value="unverified">Unverified</option>
+                            </select>
+
+                            {/* Quick: Sort Date */}
+                            <select
+                                value={filters.sortOrder || "desc"}
+                                onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="desc">Newest First</option>
+                                <option value="asc">Oldest First</option>
                             </select>
 
                             {hasActiveFilters && (

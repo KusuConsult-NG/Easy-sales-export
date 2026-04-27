@@ -241,6 +241,14 @@ export default function AdminWaveApplicationsPage() {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
+                <select
+                    value={filters.sortOrder || "desc"}
+                    onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                >
+                    <option value="desc">Newest First</option>
+                    <option value="asc">Oldest First</option>
+                </select>
                 {/* Refresh indicator */}
                 <button onClick={fetchData} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors">
                     <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />

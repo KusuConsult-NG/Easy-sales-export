@@ -35,6 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function AdminWaveWithdrawalsPage() {
     const { showToast } = useToast();
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected">("pending");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
     const {
         data: withdrawals,
@@ -50,7 +51,8 @@ export default function AdminWaveWithdrawalsPage() {
             const result = await getStandardWaveWithdrawalsAction({
                 status: statusFilter,
                 limit: opts.limit || 25,
-                lastDocId: opts.lastDocId
+                lastDocId: opts.lastDocId,
+                sortOrder: sortOrder
             });
             return {
                 success: result.success,
@@ -60,7 +62,7 @@ export default function AdminWaveWithdrawalsPage() {
             };
         },
         limit: 25,
-        dependencies: [statusFilter]
+        dependencies: [statusFilter, sortOrder]
     });
 
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -127,6 +129,14 @@ export default function AdminWaveWithdrawalsPage() {
                     <option value="completed">Completed</option>
                     <option value="rejected">Rejected</option>
                     <option value="all">All</option>
+                </select>
+                <select
+                    value={sortOrder}
+                    onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
+                >
+                    <option value="desc">Newest First</option>
+                    <option value="asc">Oldest First</option>
                 </select>
             </div>
 

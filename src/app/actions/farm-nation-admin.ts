@@ -160,6 +160,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
     search?: string;
     status?: "pending" | "approved" | "rejected" | "revision_required" | "all";
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -276,10 +277,11 @@ export async function getStandardFarmNationRegistrantsAction(options: {
 
         // We sort manually for this specific page, but note that across multiple pages, it sorts within the page buffer.
         // Array-contains restricts our compound ordering options generically.
+        const sortDirection = options.sortOrder || "desc";
         applications.sort((a: any, b: any) => {
             const tA = new Date(a.data.serviceRegistrations?.farmNation?.submittedAt || a.data.createdAt).getTime();
             const tB = new Date(b.data.serviceRegistrations?.farmNation?.submittedAt || b.data.createdAt).getTime();
-            return tB - tA;
+            return sortDirection === "asc" ? tA - tB : tB - tA;
         });
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
@@ -369,6 +371,7 @@ export async function getAdminLandVerificationsAction(options: {
     search?: string;
     status?: string;
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}) {
     try {
         const sessionResult = await requireSession();
@@ -381,12 +384,13 @@ export async function getAdminLandVerificationsAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let queryRef = db.collection("land_listings").orderBy("createdAt", "desc");
+        const orderDirection = options.sortOrder || "desc";
+        let queryRef = db.collection("land_listings").orderBy("createdAt", orderDirection);
 
         if (options.status && options.status !== "all") {
             queryRef = db.collection("land_listings")
                 .where("verificationStatus", "==", options.status)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", orderDirection);
         }
 
         if (options.lastDocId) {

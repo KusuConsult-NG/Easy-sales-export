@@ -1393,6 +1393,7 @@ interface GetUsersOptions {
     lga?: string;       // filter by address.lga
     fromDate?: string;  // ISO date string – createdAt >= fromDate
     toDate?: string;    // ISO date string – createdAt <= toDate
+    sortOrder?: "asc" | "desc"; // Sort direction
 }
 
 async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
@@ -1516,8 +1517,8 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
                 isVerified: data.isVerified ?? data.verified ?? false,
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0),
-                verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate() : undefined,
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : new Date(0).toISOString()),
+                verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate().toISOString() : (data.verifiedAt ? new Date(data.verifiedAt).toISOString() : undefined),
                 // Location
                 address: data.address,
                 state: data.address?.state || data.stateOfOrigin || "",
@@ -1574,11 +1575,11 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
             filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) <= to);
         }
 
-        // Sort in-memory by createdAt descending (avoids composite index requirement)
+        // Sort in-memory by createdAt
         filteredUsers.sort((a, b) => {
-            const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : 0;
-            const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : 0;
-            return bTime - aTime;
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return options.sortOrder === "asc" ? aTime - bTime : bTime - aTime;
         });
 
         // Page-offset slice: each page returns exactly pageSize items
@@ -3162,7 +3163,8 @@ async function _inviteLegacyMemberAction(
 async function _getStandardSellerVerificationsAction(
     statusFilter?: "pending" | "approved" | "rejected" | "suspended" | "all",
     cursorId?: string,
-    limitCount: number = 50
+    limitCount: number = 50,
+    sortOrder?: "asc" | "desc"
 ): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
@@ -3180,7 +3182,8 @@ async function _getStandardSellerVerificationsAction(
             cursorSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(cursorId).get();
         }
 
-        let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", "desc");
+        const direction = sortOrder || "desc";
+        let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", direction);
         
         if (statusFilter && statusFilter !== "all") {
             q = q.where("status", "==", statusFilter);
@@ -3242,6 +3245,7 @@ async function _getMarketplaceUsersAction(options: {
     search?: string;
     roleFilter?: "all" | "buyer_only" | "seller_only" | "both";
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}) {
     try {
         const sessionResult = await requireSession();
@@ -3290,7 +3294,7 @@ async function _getMarketplaceUsersAction(options: {
                 roles: data.roles || [],
                 buyerRole,
                 status: data.status || "active",
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : data.createdAt || null
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : null)
             };
         }).filter(Boolean) as any[];
 
@@ -3314,11 +3318,12 @@ async function _getMarketplaceUsersAction(options: {
             );
         }
 
-        // Sort latest (mocking it via UI, since we're walking cursors)
+        // Sort latest
+        const sortDirection = options.sortOrder || "desc";
         users.sort((a, b) => {
             const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
             const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
+            return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
         });
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;

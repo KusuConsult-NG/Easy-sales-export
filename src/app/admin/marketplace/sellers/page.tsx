@@ -66,7 +66,8 @@ export default function AdminSellersPage() {
             return getStandardSellerVerificationsAction(
                 (opts.status as FilterType) || "all",
                 opts.lastDocId,
-                opts.limit || 50
+                opts.limit || 50,
+                opts.sortOrder as "asc" | "desc"
             );
         },
         limit: 50
@@ -362,6 +363,14 @@ export default function AdminSellersPage() {
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </button>
                         ))}
+                        <select
+                            value={filters.sortOrder || "desc"}
+                            onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                            className="px-4 py-2 bg-slate-100 text-slate-900 border-none rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                        >
+                            <option value="desc">Newest First</option>
+                            <option value="asc">Oldest First</option>
+                        </select>
                     </div>
                 </div>
             </div>

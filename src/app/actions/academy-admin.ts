@@ -425,6 +425,7 @@ export async function getStandardAcademyApplicationsAction(options: {
     search?: string;
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -438,14 +439,15 @@ export async function getStandardAcademyApplicationsAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const orderDirection = options.sortOrder || "desc";
         // NOTE: academy_applications documents use 'submittedAt', not 'createdAt'.
         // orderBy('createdAt') would return 0 results because the field doesn't exist on most docs.
-        let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", "desc");
+        let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
         
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", options.status)
-                .orderBy("submittedAt", "desc");
+                .orderBy("submittedAt", orderDirection);
         }
 
         if (options.lastDocId) {

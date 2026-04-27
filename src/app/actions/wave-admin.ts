@@ -478,6 +478,7 @@ export async function getStandardWaveApplicationsAction(options: {
     search?: string;
     status?: "pending" | "under_review" | "approved" | "rejected" | "all";
     lastDocId?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -491,14 +492,15 @@ export async function getStandardWaveApplicationsAction(options: {
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", "desc");
+        const orderDirection = options.sortOrder || "desc";
+        let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
         
         let countQ: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
 
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("status", "==", options.status)
-                .orderBy("createdAt", "desc");
+                .orderBy("createdAt", orderDirection);
             countQ = countQ.where("status", "==", options.status);
         }
 
@@ -637,6 +639,7 @@ export async function getStandardWaveWithdrawalsAction(options: {
     limit?: number;
     lastDocId?: string;
     search?: string;
+    sortOrder?: "asc" | "desc";
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -650,12 +653,13 @@ export async function getStandardWaveWithdrawalsAction(options: {
         }
 
         const fetchLimit = options.limit || 25;
-        let q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).orderBy("requestedAt", "desc");
+        const orderDirection = options.sortOrder || "desc";
+        let q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).orderBy("requestedAt", orderDirection);
         
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
                 .where("status", "==", options.status)
-                .orderBy("requestedAt", "desc");
+                .orderBy("requestedAt", orderDirection);
         }
 
         if (options.lastDocId) {

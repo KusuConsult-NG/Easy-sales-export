@@ -179,6 +179,14 @@ export default function FarmNationListingsPage() {
                             <option value="pending">Pending</option>
                             <option value="rejected">Rejected</option>
                         </select>
+                        <select
+                            value={filters.sortOrder || "desc"}
+                            onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        >
+                            <option value="desc">Newest First</option>
+                            <option value="asc">Oldest First</option>
+                        </select>
                     </>
                 }
             />

@@ -74,7 +74,8 @@ export default function FarmNationApplicationsPage() {
                 status: (params.status as any) || "all",
                 search: params.search,
                 limit: params.limit || 20,
-                lastDocId: params.lastDocId
+                lastDocId: params.lastDocId,
+                sortOrder: params.sortOrder as "asc" | "desc"
             });
 
             return {
@@ -332,17 +333,27 @@ export default function FarmNationApplicationsPage() {
                     </button>
                 }
                 filters={
-                    <select
-                        value={filters.status || "all"}
-                        onChange={(e) => updateFilter("status", e.target.value)}
-                        className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="approved">Approved</option>
-                        <option value="rejected">Rejected</option>
-                        <option value="revision_required">Revision Required</option>
-                    </select>
+                    <>
+                        <select
+                            value={filters.status || "all"}
+                            onChange={(e) => updateFilter("status", e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        >
+                            <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="revision_required">Revision Required</option>
+                        </select>
+                        <select
+                            value={filters.sortOrder || "desc"}
+                            onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        >
+                            <option value="desc">Newest First</option>
+                            <option value="asc">Oldest First</option>
+                        </select>
+                    </>
                 }
             />
 
