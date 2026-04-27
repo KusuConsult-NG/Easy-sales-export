@@ -69,7 +69,7 @@ export async function initiateCooperativePaymentAction(
         }
 
         const userId = session.user.id;
-        const registrationFee = 5000; // Standard member registration fee
+        const registrationFee = 10000; // Standard member registration fee
 
         // Create or update partial membership record
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);

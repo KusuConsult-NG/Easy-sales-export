@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         const membershipId = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc().id;
 
         // Determine registration fee based on tier
-        const registrationFee = 5000;
+        const registrationFee = 10000;
 
         // ── STEP 1: Initialize Paystack FIRST ──────────────────────────────────
         // Bug fix: we previously created the Firestore doc before calling Paystack.

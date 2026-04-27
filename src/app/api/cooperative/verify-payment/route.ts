@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
         }
 
         const tier = membershipData.membershipTier || "Member";
-        const expectedAmount = 5000;
+        const expectedAmount = 10000;
         const paidAmount = verifyData.data.amount / 100; // Paystack amount is in kobo
 
         // 🔒 SECURITY FIX: Validate Amount
