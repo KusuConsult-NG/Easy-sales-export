@@ -12,11 +12,16 @@ import Image from "next/image";
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
 import { signOut } from "next-auth/react";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function ProfilePage() {
     const { data: session } = useSession();
 
     const { run: guardRun } = useSessionExpiry();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const notice = searchParams.get('notice');
+    
     const [activeTab, setActiveTab] = useState<'general' | 'security' | 'preferences'>('general');
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
@@ -101,7 +106,11 @@ export default function ProfilePage() {
                     setSaveMessage({ type: 'success', text: 'Email updated! You will be signed out to apply the change.' });
                     setTimeout(() => signOut({ callbackUrl: "/auth/login" }), 2500);
                 } else {
-                    setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
+                    setSaveMessage({ type: 'success', text: 'Profile updated successfully! Redirecting to dashboard…' });
+                    // Always redirect to dashboard after saving — especially when the hub guard
+                    // sent the user here to complete their profile (?notice=complete-your-hub-registration).
+                    // Even without the notice param, the user should be able to return to the dashboard.
+                    setTimeout(() => router.push("/dashboard"), 1500);
                 }
             } else {
                 setSaveMessage({ type: 'error', text: result.error || 'Failed to update profile' });
@@ -118,8 +127,8 @@ export default function ProfilePage() {
 
         setIsLoading(false);
 
-        // Clear message after 3 seconds
-        setTimeout(() => setSaveMessage(null), 3000);
+        // Clear message after 4 seconds
+        setTimeout(() => setSaveMessage(null), 4000);
     };
 
     const user = session?.user || {
@@ -147,6 +156,12 @@ export default function ProfilePage() {
                         <p className="text-slate-500">Manage your account settings and preferences</p>
                     </div>
                     <div className="flex gap-3">
+                        <button
+                            onClick={() => router.push("/dashboard")}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-all"
+                        >
+                            ← Dashboard
+                        </button>
                         <button
                             onClick={handleSave}
                             disabled={isLoading}

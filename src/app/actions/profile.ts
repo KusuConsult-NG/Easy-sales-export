@@ -12,6 +12,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { withSafeAction } from "@/lib/safe-action";
+import { invalidateUserCache } from "@/lib/cache-invalidation";
 
 // Validation schemas
 const profileUpdateSchema = z.object({
@@ -128,6 +129,9 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         updatePayload.fullName = [first, other, last].filter(Boolean).join(' ').trim();
     }
     await db.collection(COLLECTIONS.USERS).doc(userId).update(updatePayload);
+
+    // Invalidate Redis cache to prevent redirect loops from hub-guard & dashboard
+    await invalidateUserCache(userId);
 
     return { success: true };
 });
