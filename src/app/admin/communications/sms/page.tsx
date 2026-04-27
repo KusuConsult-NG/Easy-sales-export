@@ -26,6 +26,7 @@ const AUDIENCES: { value: SmsAudience; label: string; description: string }[] = 
     { value: "academy_users", label: "Academy Users", description: "All Academy applicants" },
     { value: "export_users", label: "Export Users", description: "All Export onboarding applicants" },
     { value: "farm_nation_users", label: "Farm Nation Users", description: "All Farm Nation inquiries" },
+    { value: "unpaid_applicants", label: "Unpaid Applicants", description: "Users who applied but have not completed their required payment" },
     { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", description: "Users with failed or aborted payments" },
     { value: "custom", label: "Custom Recipients", description: "Upload a CSV or manually enter numbers" },
 ];

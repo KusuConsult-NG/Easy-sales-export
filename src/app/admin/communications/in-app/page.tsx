@@ -26,6 +26,7 @@ const AUDIENCES: { value: InAppAudience; label: string; description: string }[] 
     { value: "export_users", label: "Export Users", description: "All Export onboarding applicants" },
     { value: "farm_nation_users", label: "Farm Nation Users", description: "All Farm Nation inquiries" },
     { value: "abandoned_failed_transactions", label: "Abandoned / Failed Transactions", description: "Users with failed or aborted payments" },
+    { value: "unpaid_applicants", label: "Unpaid Applicants", description: "Users who applied but have not completed their required payment" },
 ];
 
 const NIGERIAN_STATES = [

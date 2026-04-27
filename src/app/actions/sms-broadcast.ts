@@ -33,6 +33,7 @@ export type SmsAudience =
     | "academy_users"
     | "export_users"
     | "farm_nation_users"
+    | "unpaid_applicants"
     | "abandoned_failed_transactions"
     | "custom";
 
@@ -361,6 +362,49 @@ async function collectSmsRecipients(
                 if (u.phone || u.phoneNumber) {
                     add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
                 }
+            }
+            break;
+        }
+        case "unpaid_applicants": {
+            // Cross-module: everyone with paymentStatus "pending", "unpaid", or "failed".
+            const [coopSnap, acadSnap] = await Promise.all([
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("paymentStatus", "in", ["pending", "unpaid", "failed"])
+                    .select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "fullName")
+                    .get(),
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("paymentStatus", "in", ["pending", "unpaid", "failed"])
+                    .select("personalInfo", "phone", "phoneNumber", "userId")
+                    .get(),
+            ]);
+
+            // Cooperative unpaid members
+            const coopUserIds: string[] = [];
+            const coopMembers: any[] = [];
+            for (const d of coopSnap.docs) {
+                const m: any = d.data();
+                coopMembers.push(m);
+                if (m.userId) coopUserIds.push(m.userId);
+            }
+            const coopUserMap = await resolveUsers(db, coopUserIds);
+            for (const m of coopMembers) {
+                let userState = m.state || (m.address && m.address.state);
+                const uData = m.userId ? coopUserMap.get(m.userId) : null;
+                if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
+                if (filters.state && userState !== filters.state) continue;
+                const phone = m.phone || m.phoneNumber || uData?.phone || uData?.phoneNumber;
+                const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
+                if (phone) add(phone, name);
+            }
+
+            // Academy unpaid applicants
+            for (const d of acadSnap.docs) {
+                const a: any = d.data();
+                const pi = a.personalInfo || {};
+                const userState = pi.state || pi.stateOfOrigin || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                const phone = pi.phone || a.phone || a.phoneNumber;
+                if (phone) add(phone, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
             break;
         }

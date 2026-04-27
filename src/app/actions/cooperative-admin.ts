@@ -289,14 +289,21 @@ export async function getAllMembersAction(options?: {
             q = q.where("membershipStatus", "==", options.status);
         }
 
-        const fetchLimit = options?.search ? 2000 : (options?.limit || 50);
+        // 🐛 FIX: Only return paid members in the list by querying at DB level if possible, 
+        // or increasing the fetch limit before filtering. Since paymentStatus is not always indexed 
+        // cleanly with createdAt, we fetch more documents to ensure we get enough paid members.
+        const fetchLimit = options?.search ? 2000 : (options?.limit ? options.limit * 10 : 500);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
         const snapshot = await q.get();
         const allMembers = serializeDocs(snapshot.docs);
 
-        // 🐛 FIX: Only return paid members in the list
         let members = allMembers.filter((m: any) => m.paymentStatus === "completed");
+        
+        // If limit was specified without search, apply limit after filter
+        if (!options?.search && options?.limit) {
+            members = members.slice(0, options.limit);
+        }
 
         if (options?.search) {
             const s = options.search.toLowerCase().trim();

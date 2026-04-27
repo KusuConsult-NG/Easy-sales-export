@@ -31,6 +31,7 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     export_users: "Export Users",
     farm_nation_users: "Farm Nation Users",
     pending_applicants: "All Pending Applicants",
+    unpaid_applicants: "Unpaid Applicants",
     abandoned_failed_transactions: "Abandoned / Failed Transactions",
     csv_upload: "CSV Upload",
 };

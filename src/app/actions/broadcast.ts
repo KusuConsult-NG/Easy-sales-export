@@ -31,6 +31,7 @@ export type BroadcastAudience =
     | "export_users"
     | "farm_nation_users"
     | "pending_applicants"
+    | "unpaid_applicants"
     | "abandoned_failed_transactions"
     | "csv_upload";
 
@@ -411,6 +412,49 @@ export async function collectRecipients(
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && userState !== filters.state) continue;
                 add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "Applicant");
+            }
+            break;
+        }
+        case "unpaid_applicants": {
+            // Cross-module: everyone with paymentStatus "pending", "unpaid", or "failed".
+            const [coopSnap, acadSnap] = await Promise.all([
+                db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("paymentStatus", "in", ["pending", "unpaid", "failed"])
+                    .select("userId", "stateOfOrigin", "state", "address", "email", "firstName", "lastName", "fullName")
+                    .get(),
+                db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("paymentStatus", "in", ["pending", "unpaid", "failed"])
+                    .select("personalInfo", "email", "userEmail", "userId")
+                    .get(),
+            ]);
+
+            // Cooperative unpaid members
+            const coopUserIds: string[] = [];
+            const coopMembers: any[] = [];
+            for (const d of coopSnap.docs) {
+                const m: any = d.data();
+                coopMembers.push(m);
+                if (m.userId) coopUserIds.push(m.userId);
+            }
+            const coopUserMap = await resolveUsers(db, coopUserIds);
+            for (const m of coopMembers) {
+                let userState = m.stateOfOrigin || m.state || m.address?.state;
+                const uData = m.userId ? coopUserMap.get(m.userId) : null;
+                if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
+                if (filters.state && userState !== filters.state) continue;
+                const email = m.email || uData?.email || uData?.emailAddress;
+                const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
+                if (email) add(email, name);
+            }
+
+            // Academy unpaid applicants
+            for (const d of acadSnap.docs) {
+                const a: any = d.data();
+                const pi = a.personalInfo || {};
+                const userState = pi.state || pi.stateOfOrigin || a.state;
+                if (filters.state && userState !== filters.state) continue;
+                const email = pi.email || a.email || a.userEmail;
+                if (email) add(email, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
             break;
         }
