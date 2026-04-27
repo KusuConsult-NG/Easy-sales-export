@@ -104,7 +104,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.status : null);
             
         let status: 'unapplied' | 'pending' | 'approved' = 'unapplied';
-        if (registrationStatus === 'approved') status = 'approved';
+        if (registrationStatus === 'approved' || registrationStatus === 'active') status = 'approved';
         else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review') status = 'pending';
         
         // Override approved based on roles for safety (in case admin bypassed standard flow)

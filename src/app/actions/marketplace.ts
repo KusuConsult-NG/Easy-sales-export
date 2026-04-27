@@ -72,14 +72,49 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
             return { status: legacyStatus, accountType: legacyAccountType };
         }
 
-        // Also check legacy sellerVerificationStatus field on the user doc itself
+        // ── FALLBACK 2: Check legacy sellerVerificationStatus field on the user doc itself
         if (userData?.sellerVerificationStatus) {
             const legacyStatus = userData.sellerVerificationStatus;
+            
+            // In the legacy system, users with sellerVerificationStatus were sellers.
+            // If they are missing accountType, default them to "seller" so they don't get trapped in the buyer dashboard.
+            const derivedAccountType = "seller";
+            
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { marketplace: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
+                { serviceRegistrations: { marketplace: { status: legacyStatus, accountType: derivedAccountType, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
                 { merge: true }
             );
-            return { status: legacyStatus };
+            return { status: legacyStatus, accountType: derivedAccountType };
+        }
+
+        // ── FALLBACK 3: Check seller_verifications collection
+        // Sometimes the user document gets out of sync with the verification document
+        const verificationSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+            .where('userId', '==', session.user.id)
+            .limit(1)
+            .get();
+
+        if (!verificationSnap.empty) {
+            const vData = verificationSnap.docs[0].data();
+            const vStatus = vData?.status ?? 'pending';
+            const vAccountType = vData?.accountType ?? 'seller';
+
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+                {
+                    serviceRegistrations: {
+                        marketplace: {
+                            status: vStatus,
+                            accountType: vAccountType,
+                            syncedFromLegacy: true,
+                            syncedAt: new Date().toISOString()
+                        }
+                    }
+                },
+                { merge: true }
+            );
+
+            logger.info(`[checkMarketplaceStatus] Backfilled from seller_verifications status '${vStatus}' for user ${session.user.id}`);
+            return { status: vStatus, accountType: vAccountType };
         }
 
         return null;
