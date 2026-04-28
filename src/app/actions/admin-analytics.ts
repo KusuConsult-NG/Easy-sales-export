@@ -305,6 +305,7 @@ export interface FinancialOverview {
         description?: string | null;
         reference?: string | null;
         timestamp: string | null;
+        phone?: string | null;
     }>;
     failedTransactions: Array<{
         id: string;
@@ -313,6 +314,7 @@ export interface FinancialOverview {
         status: "failed" | "abandoned";
         gatewayResponse: string | null;
         timestamp: string | null;
+        phone?: string | null;
     }>;
     totalSuccessfulCount?: number;
     totalAbandonedCount?: number;
@@ -394,6 +396,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
                 description: d.description ?? d.purpose ?? d.note ?? null,
                 reference: d.reference ?? d.paymentReference ?? null,
                 timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
+                phone: d.phone ?? d.userPhone ?? d.customerPhone ?? d.metadata?.phone ?? d.customer?.phone ?? null,
             };
         };
 
@@ -436,6 +439,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
                 status: (d.status === "abandoned" ? "abandoned" : "failed") as "failed" | "abandoned",
                 gatewayResponse: d.gatewayResponse ?? null,
                 timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
+                phone: d.phone ?? d.userPhone ?? d.customerPhone ?? d.metadata?.phone ?? d.customer?.phone ?? null,
             });
         });
         failedTransactions.sort((a, b) => {

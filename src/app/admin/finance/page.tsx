@@ -31,6 +31,7 @@ interface Transaction {
     status: string;
     reference: string | null;
     timestamp: string | null;
+    phone?: string | null;
 }
 
 interface FailedTransaction {
@@ -40,6 +41,7 @@ interface FailedTransaction {
     status: "failed" | "abandoned";
     gatewayResponse: string | null;
     timestamp: string | null;
+    phone?: string | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -51,9 +53,9 @@ function toIso(ts: any): string | null {
     return new Date(ts).toISOString();
 }
 
-function fmtDate(iso: string | null) {
+function fmtDateTime(iso: string | null) {
     if (!iso) return "—";
-    return new Date(iso).toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" });
+    return new Date(iso).toLocaleString("en-NG", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 function typeLabel(raw: string | null | undefined): string {
@@ -195,11 +197,12 @@ export default function AdminFinancePage() {
             t.id,
             typeLabel(t.type),
             t.amount.toString(),
-            fmtDate(t.timestamp),
+            fmtDateTime(t.timestamp),
+            (t as any).phone ?? "",
             (t as any).status ?? activeTab,
             (t as any).gatewayResponse ?? "",
         ]);
-        const csv = [["ID", "Type", "Amount (NGN)", "Date", "Status", "Reason"], ...rows]
+        const csv = [["ID", "Type", "Amount (NGN)", "Date & Time", "Phone", "Status", "Reason"], ...rows]
             .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
             .join("\n");
         const a = Object.assign(document.createElement("a"), {
@@ -385,7 +388,7 @@ export default function AdminFinancePage() {
                                     )}
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Type</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Amount</th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">Date & Time</th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider">
                                         {activeTab === "successful" ? "Status" : "Reason"}
                                     </th>
@@ -451,7 +454,7 @@ export default function AdminFinancePage() {
                                                 </p>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <p className="text-sm text-slate-600">{fmtDate(tx.timestamp)}</p>
+                                                <p className="text-sm text-slate-600">{fmtDateTime(tx.timestamp)}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {isFailed ? (
