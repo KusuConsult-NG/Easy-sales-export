@@ -151,12 +151,14 @@ export default function WalletPage() {
                             {fmt(wallet?.balance || 0)}
                         </p>
                         <div className="flex gap-3">
+                            {/* Wallet Funding Disabled 
                             <button
                                 onClick={() => setShowFund(true)}
                                 className="flex items-center gap-2 px-5 py-2.5 bg-white text-green-700 font-bold rounded-xl hover:bg-green-50 transition shadow"
                             >
                                 <Plus className="w-4 h-4" /> Fund Wallet
                             </button>
+                            */}
                             <button
                                 onClick={() => setShowWithdraw(true)}
                                 className="flex items-center gap-2 px-5 py-2.5 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition border border-white/30"

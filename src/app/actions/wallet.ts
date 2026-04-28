@@ -80,6 +80,12 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
     reference?: string;
     error?: string;
 }> {
+    // Deposits are disabled per request
+    const isFundingEnabled = false;
+    if (!isFundingEnabled) {
+        return { success: false, error: "Wallet deposits are currently disabled." };
+    }
+
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
             return { success: false, error: "Minimum wallet funding amount is ₦100" };
