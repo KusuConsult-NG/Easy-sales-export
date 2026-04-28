@@ -60,11 +60,15 @@ export default async function SellerLayout({ children }: { children: React.React
                     const verSnap = await adminDb
                         .collection(COLLECTIONS.SELLER_VERIFICATIONS)
                         .where("userId", "==", userId)
-                        .limit(1)
                         .get();
 
                     if (!verSnap.empty) {
-                        const verData = verSnap.docs[0].data();
+                        const sortedDocs = verSnap.docs.map(d => d.data()).sort((a: any, b: any) => {
+                            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+                            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                            return bTime - aTime;
+                        });
+                        const verData = sortedDocs[0];
                         sellerStatus = {
                             status: verData?.status || "pending",
                             businessName: verData?.businessName,

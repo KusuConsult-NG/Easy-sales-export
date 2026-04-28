@@ -28,13 +28,20 @@ export default function ExportOnboardingPendingPage() {
         // Listen on the user doc for export status changes
         const q = query(
             collection(db, "export_applications"),
-            where("userId", "==", session.user.id),
-            limit(1)
+            where("userId", "==", session.user.id)
         );
 
         const unsub = onSnapshot(q, (snap) => {
             if (snap.empty) return;
-            const status = snap.docs[0].data().status;
+            
+            // Sort to find the latest application in case of resubmissions
+            const sortedDocs = snap.docs.sort((a, b) => {
+                const aTime = a.data().createdAt?.toMillis?.() || 0;
+                const bTime = b.data().createdAt?.toMillis?.() || 0;
+                return bTime - aTime;
+            });
+            
+            const status = sortedDocs[0].data().status;
             setApplicationStatus(status);
 
             if (status === "approved") {

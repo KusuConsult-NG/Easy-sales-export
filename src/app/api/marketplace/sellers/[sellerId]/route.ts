@@ -25,8 +25,15 @@ export async function GET(
             .collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where("userId", "==", sellerId)
             .where("status", "==", "approved")
-            .limit(1)
             .get();
+
+        if (!verSnap.empty) {
+            verSnap.docs.sort((a, b) => {
+                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+        }
 
         if (verSnap.empty) {
             return NextResponse.json(

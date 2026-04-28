@@ -30,8 +30,7 @@ export default function ReviewPendingPage() {
         // Real-time listener on this user's wave application
         const q = query(
             collection(db, "wave_applications"),
-            where("userId", "==", session.user.id),
-            limit(1)
+            where("userId", "==", session.user.id)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -40,7 +39,14 @@ export default function ReviewPendingPage() {
                 return;
             }
 
-            const doc = snapshot.docs[0];
+            // Sort to find the latest application in case of resubmissions
+            const sortedDocs = snapshot.docs.sort((a, b) => {
+                const aTime = a.data().createdAt?.toMillis?.() || 0;
+                const bTime = b.data().createdAt?.toMillis?.() || 0;
+                return bTime - aTime;
+            });
+
+            const doc = sortedDocs[0];
             const data = doc.data();
             const status = data.status || "pending";
             setApplicationStatus(status);
