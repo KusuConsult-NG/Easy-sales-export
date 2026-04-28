@@ -512,7 +512,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                         ) : (
                                             <>
                                                 <p className="font-semibold text-green-800">Payment Confirmed</p>
-                                                <p className="text-sm text-green-700">Your ₦5,000 membership fee has been received.</p>
+                                                <p className="text-sm text-green-700">Your ₦10,000 membership fee has been received.</p>
                                             </>
                                         )}
                                     </div>
@@ -550,7 +550,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             <div className="space-y-6">
                                 <div className="text-center py-6 border-2 border-dashed border-purple-200 rounded-2xl bg-purple-50">
                                     <p className="text-sm font-semibold text-purple-600 uppercase tracking-widest mb-2">One-Time Membership Fee</p>
-                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">₦5,000</div>
+                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">₦10,000</div>
                                     <p className="text-slate-500 text-sm">Pay once. Access forever.</p>
                                 </div>
 
@@ -588,7 +588,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                         ) : (
                                             <>
                                                 <CreditCard className="w-5 h-5" />
-                                                Pay ₦5,000 Now
+                                                Pay ₦10,000 Now
                                             </>
                                         )}
                                     </button>

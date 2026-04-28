@@ -164,7 +164,7 @@ export default function FixedSavingsPage() {
                             },
                             {
                                 title: "Pay Membership Fee",
-                                description: "Complete your one-time registration fee (₦5,000) via Paystack.",
+                                description: "Complete your one-time registration fee (₦10,000) via Paystack.",
                                 completed: membershipStatus === "pending",
                                 action: undefined
                             },

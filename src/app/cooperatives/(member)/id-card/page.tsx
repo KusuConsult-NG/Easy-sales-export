@@ -218,7 +218,7 @@ function PaymentRequiredGate() {
             </div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">Payment Required</h2>
             <p className="text-slate-500 text-sm mb-6">
-                Your membership ID card is generated after your ₦5,000 membership fee is verified on Paystack.
+                Your membership ID card is generated after your ₦10,000 membership fee is verified on Paystack.
             </p>
             <Link
                 href="/cooperatives/onboarding"
