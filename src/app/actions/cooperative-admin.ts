@@ -495,21 +495,22 @@ export async function getAllTransactionsAction(options?: {
         const userNameMap = new Map<string, string>();
         
         // Firestore getAll supports up to 100 refs at a time
+        const userPromises = [];
         for (let i = 0; i < userIds.length; i += 100) {
             const batch = userIds.slice(i, i + 100);
             const refs = batch.map(uid => db.collection(COLLECTIONS.USERS).doc(uid));
-            try {
-                const userDocs = await db.getAll(...refs);
-                userDocs.forEach(doc => {
-                    if (doc.exists) {
-                        const data = doc.data();
-                        userNameMap.set(doc.id, data?.fullName || data?.displayName || data?.email || doc.id);
-                    }
-                });
-            } catch {
-                // Non-fatal — names will fall back to userId
-            }
+            userPromises.push(
+                db.getAll(...refs).then(userDocs => {
+                    userDocs.forEach(doc => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            userNameMap.set(doc.id, data?.fullName || data?.displayName || data?.email || doc.id);
+                        }
+                    });
+                }).catch(() => {})
+            );
         }
+        await Promise.all(userPromises);
 
         // Serialize: convert Firestore Timestamps to ISO strings
         const transactions = rawDocs.map((raw: any) => {
@@ -1135,13 +1136,15 @@ export async function getStandardCooperativeMembersAction(
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         
+        const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
-                const userSnaps = await db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get();
-                userSnaps.docs.forEach(d => userMap.set(d.id, d.data()));
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
             }
         }
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
         let standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;

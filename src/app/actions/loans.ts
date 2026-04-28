@@ -300,20 +300,21 @@ export async function getAdminLoanApplicationsExportAction(options: {
         const userIds = [...new Set(loans.map(loan => loan.userId))];
         const userMap = new Map<string, any>();
 
+        const userPromises = [];
         for (let i = 0; i < userIds.length; i += 100) {
             const batch = userIds.slice(i, i + 100);
             const refs = batch.map(id => db.collection(COLLECTIONS.USERS).doc(id));
-            try {
-                const userDocs = await db.getAll(...refs);
-                userDocs.forEach(doc => {
-                    if (doc.exists) {
-                        userMap.set(doc.id, doc.data());
-                    }
-                });
-            } catch (err) {
-                logger.error("Failed to fetch batch users for loan export", err);
-            }
+            userPromises.push(
+                db.getAll(...refs).then(userDocs => {
+                    userDocs.forEach(doc => {
+                        if (doc.exists) {
+                            userMap.set(doc.id, doc.data());
+                        }
+                    });
+                }).catch(err => logger.error("Failed to fetch batch users for loan export", err))
+            );
         }
+        await Promise.all(userPromises);
 
         const enrichedLoans = loans.map(loan => {
             const user = userMap.get(loan.userId) || {};
