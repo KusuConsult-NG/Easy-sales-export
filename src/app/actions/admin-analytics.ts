@@ -142,34 +142,25 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
     const activeLandListings = activeLandCount.status === "fulfilled" ? activeLandCount.value : 0;
     const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
 
-    let monthlyRevenue = 0;
-
     // ── Revenue by month (last 6 months — all payment sources) ─────────────
-    let recentPayments: any[] = [];
-    try {
-        const pSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("status", "==", "completed")
-            .limit(5000)
-            .get();
-        recentPayments = pSnap.docs.map(d => d.data());
-    } catch (_e) {}
-
-    const monthRevDocs = recentPayments.filter(d => {
-        const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt ?? 0);
-        return pAt >= thisMonthStart;
+    const revenuePromises = months.map(async ({ label, start, end }) => {
+        try {
+            const snap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("status", "==", "completed")
+                .where("processedAt", ">=", start)
+                .where("processedAt", "<=", end)
+                .aggregate({ total: AggregateField.sum("amount") })
+                .get();
+            return { month: label, revenue: snap.data().total || 0 };
+        } catch (e) {
+            return { month: label, revenue: 0 };
+        }
     });
-    monthlyRevenue = monthRevDocs.reduce((sum: number, d: any) => sum + (Number(d.amount) || 0), 0);
 
-    const revenueByMonth = months.map(({ label, start, end }) => {
-        let rev = 0;
-        recentPayments.forEach(d => {
-            const pAt = d.processedAt?.toDate ? d.processedAt.toDate() : new Date(d.processedAt);
-            if (pAt >= start && pAt <= end) {
-                rev += (Number(d.amount) || 0);
-            }
-        });
-        return { month: label, revenue: rev };
-    });
+    const revenueByMonth = await Promise.all(revenuePromises);
+    
+    // Monthly revenue (current month)
+    const monthlyRevenue = revenueByMonth.length > 0 ? revenueByMonth[revenueByMonth.length - 1].revenue : 0;
 
     // ── User growth by month (last 6 months) ────────────────────────────────
     const userGrowthByMonth = await Promise.all(

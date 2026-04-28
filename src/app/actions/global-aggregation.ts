@@ -17,8 +17,14 @@ export async function getPlatformMetricsAction() {
         if ('error' in sessionResult) return { success: false, error: sessionResult.error };
 
         // 1. Transactions - Aggregate from actual historical collections 
-        const [paystackSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").limit(10000).get(),
+        const [revenueSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("status", "==", "completed")
+                .aggregate({ 
+                    totalRevenue: AggregateField.sum("amount"),
+                    totalCount: AggregateField.count()
+                })
+                .get(),
             db.collection(COLLECTIONS.USERS).count().get(),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS).count().get()
         ]);
@@ -26,11 +32,9 @@ export async function getPlatformMetricsAction() {
         let totalRevenue = 0;
         let totalTransactions = 0;
         
-        if (paystackSnap.status === 'fulfilled') {
-            paystackSnap.value.docs.forEach(d => {
-                totalRevenue += (Number(d.data().amount) || 0);
-            });
-            totalTransactions += paystackSnap.value.docs.length;
+        if (revenueSnap.status === 'fulfilled') {
+            totalRevenue = revenueSnap.value.data().totalRevenue || 0;
+            totalTransactions = revenueSnap.value.data().totalCount || 0;
         }
 
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
