@@ -91,11 +91,15 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
         // Sometimes the user document gets out of sync with the verification document
         const verificationSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (!verificationSnap.empty) {
-            const vData = verificationSnap.docs[0].data();
+            const sortedDocs = verificationSnap.docs.map(d => d.data()).sort((a: any, b: any) => {
+                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            const vData = sortedDocs[0];
             const vStatus = vData?.status ?? 'pending';
             const vAccountType = vData?.accountType ?? 'seller';
 
@@ -174,8 +178,11 @@ export async function submitSellerVerificationAction(
             .get();
 
         if (!existingDocs.empty) {
-            const existing = existingDocs.docs[0].data() as SellerVerification;
-            if (existing.status === "pending" || existing.status === "approved") {
+            const hasActive = existingDocs.docs.some(doc => {
+                const existing = doc.data() as SellerVerification;
+                return existing.status === "pending" || existing.status === "approved";
+            });
+            if (hasActive) {
                 return {
                     success: false,
                     error: "You already have a verification application. Please check your status."
@@ -261,7 +268,12 @@ export async function getSellerVerificationAction() {
             return { success: true, data: { verification: null } };
         }
 
-        const verification = snapshot.docs[0].data() as SellerVerification;
+        const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const verification = sortedDocs[0] as SellerVerification;
 
         return { success: true, data: { verification } };
     } catch (error: any) {
@@ -1369,18 +1381,24 @@ export async function resubmitSellerVerificationAction(
 
         const snap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where('userId', '==', userId)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, error: 'No existing verification found' };
 
-        const existing = snap.docs[0].data();
+        const sortedDocs = snap.docs.sort((a, b) => {
+            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+
+        const latestDocRef = sortedDocs[0];
+        const existing = latestDocRef.data();
         const allowedStatuses = ['pending', 'rejected', 'suspended'];
         if (!allowedStatuses.includes(existing.status)) {
             return { success: false, error: 'Your verification cannot be resubmitted at this time.' };
         }
 
-        await snap.docs[0].ref.update({
+        await latestDocRef.ref.update({
             ...fields,
             status: 'pending',
             rejectionReason: null,
@@ -1433,11 +1451,15 @@ async function _updateSellerBadge(
         // Update seller_verifications doc
         const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where("userId", "==", sellerId)
-            .limit(1)
             .get();
 
         if (!verSnap.empty) {
-            await verSnap.docs[0].ref.update({
+            const sortedDocs = verSnap.docs.sort((a, b) => {
+                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            await sortedDocs[0].ref.update({
                 isVerifiedBadge: grant,
                 verifiedBadgeGrantedAt: grant ? now : null,
                 verifiedBadgeGrantedBy: grant ? adminUserId : null,

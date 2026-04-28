@@ -27,13 +27,18 @@ export default function MarketplacePendingPage() {
         // Listen on the user doc for seller status changes
         const q = query(
             collection(db, "seller_verifications"),
-            where("userId", "==", session.user.id),
-            limit(1)
+            where("userId", "==", session.user.id)
         );
 
         const unsub = onSnapshot(q, (snap) => {
             if (snap.empty) return;
-            const status = snap.docs[0].data().status;
+            const docs = snap.docs.map(d => d.data());
+            docs.sort((a: any, b: any) => {
+                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            const status = docs[0].status;
             setApplicationStatus(status);
 
             if (status === "approved") {
