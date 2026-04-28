@@ -32,7 +32,6 @@ export async function getDashboardDataAction() {
             // Fetch membership data
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where('userId', '==', userId)
-                .limit(1)
                 .get(),
 
             // Fetch recent 10 transactions only
@@ -50,7 +49,12 @@ export async function getDashboardDataAction() {
             };
         }
 
-        const membershipDoc = membershipSnapshot.docs[0];
+        const sortedDocs = membershipSnapshot.docs.sort((a, b) => {
+            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const membershipDoc = sortedDocs[0];
         const membership = serializeDoc<CooperativeMembership>(membershipDoc.id, membershipDoc.data());
 
         const transactions = serializeDocs<CooperativeTransaction>(transactionsSnapshot.docs);

@@ -136,11 +136,15 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
         // ── FALLBACK: Returning student whose data predates V2 schema ──────
         const legacySnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (!legacySnap.empty) {
-            const legacyData = legacySnap.docs[0].data();
+            const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
+                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            const legacyData = sortedDocs[0];
             const legacyStatus = legacyData?.status ?? 'pending';
 
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
@@ -1191,8 +1195,6 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
         // Look in wave_applications collection
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
             .where("userId", "==", targetId)
-            .orderBy("createdAt", "desc")
-            .limit(1)
             .get();
 
         if (snapshot.empty) {
@@ -1202,7 +1204,12 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
             return { success: true, data: { status: reg?.status || null } };
         }
 
-        const data = snapshot.docs[0].data();
+        const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const data = sortedDocs[0];
         return {
             success: true,
             data: {

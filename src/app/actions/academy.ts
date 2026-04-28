@@ -36,11 +36,15 @@ export async function checkAcademyStatusAction(): Promise<{ success: boolean; da
         // Query the raw academy_applications collection directly.
         const legacySnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (!legacySnap.empty) {
-            const legacyData = legacySnap.docs[0].data();
+            const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
+                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            const legacyData = sortedDocs[0];
             const legacyStatus = legacyData?.status ?? 'pending';
 
             // Auto-backfill serviceRegistrations so future logins resolve instantly
@@ -1444,12 +1448,16 @@ export async function getAcademyApplicationAction(): Promise<{ success: boolean;
 
         const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, error: 'No application found' };
 
-        const data = snap.docs[0].data();
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const data = sortedDocs[0];
         return { success: true, data: { ...data, revisionNote: data?.revisionNote } };
     } catch (error) {
         logger.error('getAcademyApplicationAction error:', error);
@@ -1610,12 +1618,17 @@ export async function resubmitAcademyApplicationAction(data: {
 
         const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, error: 'No existing application found' };
 
-        await snap.docs[0].ref.update({
+        const sortedDocs = snap.docs.sort((a, b) => {
+            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+
+        await sortedDocs[0].ref.update({
             ...data,
             status: 'pending',
             revisionNote: null,

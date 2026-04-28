@@ -849,11 +849,15 @@ export async function checkExportStatusAction(): Promise<string | null> {
         // ── FALLBACK: Returning student whose data predates V2 schema ──────
         const legacySnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (!legacySnap.empty) {
-            const legacyData = legacySnap.docs[0].data();
+            const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
+                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            const legacyData = sortedDocs[0];
             const legacyStatus = legacyData?.status ?? 'pending';
 
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
@@ -1146,12 +1150,16 @@ export async function getExportApplicationAction(): Promise<{
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, error: 'No application found' };
 
-        const data = snap.docs[0].data();
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const data = sortedDocs[0];
         return { success: true, data: { ...data, revisionNote: data?.revisionNote } };
     } catch (error) {
         logger.error('getExportApplicationAction error:', error);
@@ -1336,12 +1344,16 @@ export async function resubmitExportApplicationAction(
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
             .where('userId', '==', userId)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, data: null, error: 'No existing application found', meta: null };
 
-        const appRef = snap.docs[0].ref;
+        const sortedDocs = snap.docs.sort((a, b) => {
+            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const appRef = sortedDocs[0].ref;
 
         const batch = db.batch();
         batch.update(appRef, {

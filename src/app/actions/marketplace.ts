@@ -1550,10 +1550,14 @@ export async function updateSellerCategoryAction(
 
         const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where("userId", "==", sellerId)
-            .limit(1)
             .get();
         if (!verSnap.empty) {
-            await verSnap.docs[0].ref.update({ sellerCategory: category, updatedAt: now });
+            const sortedDocs = verSnap.docs.sort((a, b) => {
+                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            await sortedDocs[0].ref.update({ sellerCategory: category, updatedAt: now });
         }
 
         // Denormalize onto all products

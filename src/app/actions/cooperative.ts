@@ -1116,12 +1116,16 @@ export async function getCooperativeApplicationAction(): Promise<{
         // Find the member doc by userId
         const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, error: 'No application found' };
 
-        const data = snap.docs[0].data();
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => {
+            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const data = sortedDocs[0];
         return { success: true, data: { application: data, revisionNote: data?.revisionNote }, meta: null };
     } catch (error) {
         logger.error('getCooperativeApplicationAction error:', error);
@@ -1152,12 +1156,16 @@ export async function resubmitCooperativeApplicationAction(
         // Find the existing member doc
         const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', session.user.id)
-            .limit(1)
             .get();
 
         if (snap.empty) return { success: false, error: 'No existing application found' };
 
-        const memberRef = snap.docs[0].ref;
+        const sortedDocs = snap.docs.sort((a, b) => {
+            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+        });
+        const memberRef = sortedDocs[0].ref;
 
         const first = (formData.get('firstName') as string || '').trim();
         const other = (formData.get('otherName') as string || '').trim();
