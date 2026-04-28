@@ -112,7 +112,7 @@ import { logger } from "./logger";
 export function serializeDocs<T = Record<string, unknown>>(
     docs: Array<{ id: string; data: () => DocumentData }>
 ): T[] {
-    if (docs.length > 50) {
+    if (docs.length > 5000) {
         logger.warn(`[DB Scale Warning] serializeDocs processing an unpaginated array of length ${docs.length}. Consider adding pagination limits.`);
     }
     return docs.map((doc) => serializeDoc<T>(doc.id, doc.data()));
