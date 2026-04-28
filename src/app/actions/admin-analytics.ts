@@ -149,9 +149,11 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
                 .where("status", "==", "completed")
                 .where("processedAt", ">=", start)
                 .where("processedAt", "<=", end)
-                .aggregate({ total: AggregateField.sum("amount") })
+                .select("amount")
                 .get();
-            return { month: label, revenue: snap.data().total || 0 };
+            let total = 0;
+            snap.docs.forEach(doc => total += (Number(doc.data().amount) || 0));
+            return { month: label, revenue: total };
         } catch (e) {
             return { month: label, revenue: 0 };
         }

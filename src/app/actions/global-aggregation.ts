@@ -20,10 +20,7 @@ export async function getPlatformMetricsAction() {
         const [revenueSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("status", "==", "completed")
-                .aggregate({ 
-                    totalRevenue: AggregateField.sum("amount"),
-                    totalCount: AggregateField.count()
-                })
+                .select("amount")
                 .get(),
             db.collection(COLLECTIONS.USERS).count().get(),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS).count().get()
@@ -33,8 +30,10 @@ export async function getPlatformMetricsAction() {
         let totalTransactions = 0;
         
         if (revenueSnap.status === 'fulfilled') {
-            totalRevenue = revenueSnap.value.data().totalRevenue || 0;
-            totalTransactions = revenueSnap.value.data().totalCount || 0;
+            revenueSnap.value.docs.forEach(d => {
+                totalRevenue += (Number(d.data().amount) || 0);
+            });
+            totalTransactions = revenueSnap.value.docs.length;
         }
 
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
