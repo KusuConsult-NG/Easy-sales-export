@@ -18,6 +18,12 @@ import { sendSMS } from "@/lib/termii";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 
+function isStateMatch(dbState: any, filterState: string | undefined): boolean {
+    if (!filterState) return true;
+    if (!dbState || typeof dbState !== 'string') return false;
+    return dbState.toLowerCase().includes(filterState.toLowerCase());
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type SmsAudience =
@@ -111,7 +117,7 @@ async function collectSmsRecipients(
                 const u: any = d.data();
                 seenUserIds.add(u.id || d.id);
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "User");
             }
 
@@ -120,7 +126,7 @@ async function collectSmsRecipients(
             for (const d of (await cmStream).docs) {
                 const m: any = d.data();
                 const userState = m.state || (m.address && m.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = m.phone || m.phoneNumber;
                 const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || "Member";
                 add(phone, name);
@@ -130,7 +136,7 @@ async function collectSmsRecipients(
             const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName").get();
             for (const d of (await waveStream).docs) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 const phone = a.phone || a.alternativePhone || a.phoneNumber;
                 const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
                 add(phone, name);
@@ -141,7 +147,7 @@ async function collectSmsRecipients(
             for (const d of (await academyStream).docs) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = (a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber;
                 const name = (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User";
                 add(phone, name);
@@ -151,7 +157,7 @@ async function collectSmsRecipients(
             const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("state", "phone", "phoneNumber", "name", "firstName", "surname").get();
             for (const d of (await briefStream).docs) {
                 const r: any = d.data();
-                if (filters.state && r.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
             }
 
@@ -159,7 +165,7 @@ async function collectSmsRecipients(
             const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").get();
             for (const d of (await fnStream).docs) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
                 add(a.phone || a.phoneNumber, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
             }
 
@@ -168,7 +174,7 @@ async function collectSmsRecipients(
             for (const d of (await exportStream).docs) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
             }
 
@@ -183,7 +189,7 @@ async function collectSmsRecipients(
             for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
             }
             break;
@@ -201,7 +207,7 @@ async function collectSmsRecipients(
             const userIds: string[] = [];
             for (const d of (await sellerStream).docs) {
                 const v: any = d.data();
-                if (filters.state && v.address && v.address.state !== filters.state) continue;
+                if (filters.state && (!(v.address) || !isStateMatch(v.address.state, filters.state))) continue;
                 if (v.userId) userIds.push(v.userId);
             }
             
@@ -221,7 +227,7 @@ async function collectSmsRecipients(
             for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
             }
             break;
@@ -243,7 +249,7 @@ async function collectSmsRecipients(
                 
                 if (!userState && uData) userState = uData.state;
 
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
 
                 // Prefer phone from the member doc, fall back to user profile
                 const phone = m.phone || m.phoneNumber || (uData ? uData.phone || uData.phoneNumber : null);
@@ -257,7 +263,7 @@ async function collectSmsRecipients(
             const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || a.name || "Applicant");
             }
             break;
@@ -268,7 +274,7 @@ async function collectSmsRecipients(
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add((a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber, (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User");
             }
 
@@ -280,7 +286,7 @@ async function collectSmsRecipients(
             for (const d of (await usersStream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Academy User");
             }
 
@@ -300,7 +306,7 @@ async function collectSmsRecipients(
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
             }
 
@@ -312,7 +318,7 @@ async function collectSmsRecipients(
             for (const d of (await usersStream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Export User");
             }
             break;
@@ -321,7 +327,7 @@ async function collectSmsRecipients(
             const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
                 add(a.phone || a.phoneNumber, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
             }
 
@@ -358,7 +364,7 @@ async function collectSmsRecipients(
                 const u = uMap.get(f.userId);
                 if (!u) continue;
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (u.phone || u.phoneNumber) {
                     add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
                 }
@@ -391,7 +397,7 @@ async function collectSmsRecipients(
                 let userState = m.state || (m.address && m.address.state);
                 const uData = m.userId ? coopUserMap.get(m.userId) : null;
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = m.phone || m.phoneNumber || uData?.phone || uData?.phoneNumber;
                 const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
                 if (phone) add(phone, name);
@@ -402,7 +408,7 @@ async function collectSmsRecipients(
                 const a: any = d.data();
                 const pi = a.personalInfo || {};
                 const userState = pi.state || pi.stateOfOrigin || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = pi.phone || a.phone || a.phoneNumber;
                 if (phone) add(phone, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
@@ -416,7 +422,7 @@ async function collectSmsRecipients(
                 .get();
             for (const d of (await stream).docs) {
                 const r: any = d.data();
-                if (filters.state && r.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 add(r.phone || r.phoneNumber, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             }
             break;

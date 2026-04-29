@@ -20,6 +20,12 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 
+function isStateMatch(dbState: any, filterState: string | undefined): boolean {
+    if (!filterState) return true;
+    if (!dbState || typeof dbState !== 'string') return false;
+    return dbState.toLowerCase().includes(filterState.toLowerCase());
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type InAppAudience =
@@ -92,15 +98,68 @@ export async function collectRecipientUserIds(
 
     switch (filters.audience) {
         case "all": {
+            // 1. Primary: root users collection
             const stream = db.collection(COLLECTIONS.USERS)
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .get();
             for (const d of (await stream).docs) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(d.id, u.fullName || u.name || "User");
             }
+
+            // 2. Supplement: cooperative_members
+            const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "firstName", "lastName").get();
+            for (const d of (await cmStream).docs) {
+                const m = d.data();
+                const userState = m.state || (m.address && m.address.state);
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                if (m.userId) add(m.userId, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
+            }
+
+            // 3. Supplement: wave_applications
+            const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("userId", "state", "residentialState", "firstName", "surname").get();
+            for (const d of (await waveStream).docs) {
+                const a = d.data();
+                if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
+                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
+            }
+
+            // 4. Supplement: academy_applications
+            const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state").get();
+            for (const d of (await academyStream).docs) {
+                const a = d.data();
+                const userState = a.personalInfo?.state || a.state;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
+            }
+
+            // 5. Supplement: wave_briefing_registrations
+            const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).where("status", "==", "registered").select("userId", "name", "firstName", "surname", "state").get();
+            for (const d of (await briefStream).docs) {
+                const r = d.data();
+                if (filters.state && !isStateMatch(r.state, filters.state)) continue;
+                if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+            }
+
+            // 6. Supplement: farm_nation_inquiries
+            const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("userId", "firstName", "lastName", "state").get();
+            for (const d of (await fnStream).docs) {
+                const a = d.data();
+                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
+                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+            }
+
+            // 7. Supplement: export_applications
+            const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("userId", "profile", "companyInfo", "state").get();
+            for (const d of (await exportStream).docs) {
+                const a = d.data();
+                const userState = a.profile?.state || a.companyInfo?.state || a.state;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
+            }
+
             break;
         }
         case "buyers": {
@@ -112,7 +171,7 @@ export async function collectRecipientUserIds(
             for (const d of (await stream).docs) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(d.id, u.fullName || u.name || "User");
             }
             break;
@@ -129,7 +188,7 @@ export async function collectRecipientUserIds(
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const v = d.data();
-                if (filters.state && v.address?.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(v.address?.state, filters.state)) continue;
                 const u = uMap.get(v.userId);
                 if (u) add(v.userId, u.fullName || u.name || "Seller");
             }
@@ -144,7 +203,7 @@ export async function collectRecipientUserIds(
             for (const d of (await stream).docs) {
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(d.id, u.fullName || u.name || "User");
             }
             break;
@@ -165,7 +224,7 @@ export async function collectRecipientUserIds(
                     userState = uData.state;
                 }
 
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
 
                 add(uid, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
             }
@@ -177,7 +236,7 @@ export async function collectRecipientUserIds(
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
-                if (filters.state && a.state !== filters.state && a.residentialState !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
             }
             break;
@@ -189,7 +248,7 @@ export async function collectRecipientUserIds(
             for (const d of (await stream).docs) {
                 const a = d.data();
                 const userState = a.personalInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
             }
             break;
@@ -201,7 +260,7 @@ export async function collectRecipientUserIds(
             for (const d of (await stream).docs) {
                 const a = d.data();
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
             }
             break;
@@ -212,7 +271,7 @@ export async function collectRecipientUserIds(
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
-                if (filters.state && a.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
             }
             break;
@@ -225,7 +284,7 @@ export async function collectRecipientUserIds(
                 .get();
             for (const d of (await stream).docs) {
                 const r = d.data();
-                if (filters.state && r.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             }
             break;
@@ -256,7 +315,7 @@ export async function collectRecipientUserIds(
                 let userState = m.state || (m.address && m.address.state);
                 const uData = coopUserMap.get(m.userId);
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
                 add(m.userId, name);
             }
@@ -267,7 +326,7 @@ export async function collectRecipientUserIds(
                 if (!a.userId) continue;
                 const pi = a.personalInfo || {};
                 const userState = pi.state || pi.stateOfOrigin || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(a.userId, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
             break;
@@ -282,7 +341,7 @@ export async function collectRecipientUserIds(
                 if (filters.state) {
                     const u = uMap.get(f.userId);
                     const userState = u?.stateOfOrigin || u?.state || u?.address?.state;
-                    if (!u || userState !== filters.state) continue;
+                    if (!u || !isStateMatch(userState, filters.state)) continue;
                 }
 
                 add(f.userId, f.customerName || "User");

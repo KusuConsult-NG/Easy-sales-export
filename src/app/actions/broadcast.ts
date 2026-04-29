@@ -15,6 +15,12 @@ import { sendEmailNotification, sendBatchEmailNotifications } from "@/lib/email-
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 
+function isStateMatch(dbState: any, filterState: string | undefined): boolean {
+    if (!filterState) return true;
+    if (!dbState || typeof dbState !== 'string') return false;
+    return dbState.toLowerCase().includes(filterState.toLowerCase());
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type BroadcastAudience =
@@ -142,16 +148,75 @@ export async function collectRecipients(
             break;
         }
         case "all": {
+            // 1. Primary: root users collection
             const stream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "email", "emailAddress", "fullName", "name", "displayName").get();
             for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const resolvedEmail = u.email || u.emailAddress;
                 const resolvedName = u.fullName || u.name || u.displayName || "User";
                 if (!resolvedEmail) continue;
                 add(resolvedEmail, resolvedName);
             }
+
+            // 2. Supplement: cooperative_members
+            const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("state", "address", "email", "firstName", "lastName").get();
+            for (const d of (await cmStream).docs) {
+                const m: any = d.data();
+                const userState = m.state || (m.address && m.address.state);
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                const email = m.email;
+                const name = [m.firstName, m.lastName].filter(Boolean).join(" ") || "Member";
+                add(email, name);
+            }
+
+            // 3. Supplement: wave_applications
+            const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "email", "userEmail", "firstName", "surname", "lastName").get();
+            for (const d of (await waveStream).docs) {
+                const a: any = d.data();
+                if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
+                const email = a.email || a.userEmail;
+                const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
+                add(email, name);
+            }
+
+            // 4. Supplement: academy_applications
+            const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "email", "userEmail").get();
+            for (const d of (await academyStream).docs) {
+                const a: any = d.data();
+                const userState = (a.personalInfo && a.personalInfo.state) || a.state;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                const email = (a.personalInfo && a.personalInfo.email) || a.email || a.userEmail;
+                const name = (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User";
+                add(email, name);
+            }
+
+            // 5. Supplement: wave_briefing_registrations
+            const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("state", "email", "userEmail", "name", "firstName", "surname").get();
+            for (const d of (await briefStream).docs) {
+                const r: any = d.data();
+                if (filters.state && !isStateMatch(r.state, filters.state)) continue;
+                add(r.email || r.userEmail, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
+            }
+
+            // 6. Supplement: farm_nation_inquiries
+            const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "email", "firstName", "lastName").get();
+            for (const d of (await fnStream).docs) {
+                const a: any = d.data();
+                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
+                add(a.email, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
+            }
+
+            // 7. Supplement: export_onboarding_applications
+            const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "email").get();
+            for (const d of (await exportStream).docs) {
+                const a: any = d.data();
+                const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
+                add((a.profile && a.profile.email) || a.email, (a.profile && a.profile.fullName) || "Export User");
+            }
+
             break;
         }
         case "buyers": {
@@ -169,7 +234,7 @@ export async function collectRecipients(
                 if (!isMktBuyer && !isFnBuyer) return;
                 
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) return;
+                if (filters.state && !isStateMatch(userState, filters.state)) return;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
             };
             
@@ -191,7 +256,7 @@ export async function collectRecipients(
             const sellerDataMap = new Map<string, any>();
             for (const d of (await sellerStream).docs) {
                 const v: any = d.data();
-                if (filters.state && v.address && v.address.state !== filters.state) continue;
+                if (filters.state && (!(v.address) || !isStateMatch(v.address.state, filters.state))) continue;
                 if (v.userId) {
                     userIds.push(v.userId);
                     sellerDataMap.set(v.userId, v);
@@ -214,7 +279,7 @@ export async function collectRecipients(
             for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
             }
             break;
@@ -254,7 +319,7 @@ export async function collectRecipients(
                 let userState = m.stateOfOrigin || m.state || (m.address && m.address.state);
                 const uData = m.userId ? uMap.get(m.userId) : null;
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
 
                 const memberEmail = m.email || (uData && (uData.email || uData.emailAddress));
                 const memberName = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || (uData && (uData.fullName || uData.name)) || "Member";
@@ -270,7 +335,7 @@ export async function collectRecipients(
             const stream = (waveQ as any).select("status", "state", "stateOfResidence", "residentialState", "email", "userEmail", "name", "firstName", "surname").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
-                if (filters.state && a.state !== filters.state && a.stateOfResidence !== filters.state && a.residentialState !== filters.state) continue;
+                if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.stateOfResidence, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 const applicantEmail = a.email || a.userEmail;
                 if (applicantEmail) add(applicantEmail, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "Applicant");
             }
@@ -284,7 +349,7 @@ export async function collectRecipients(
                 .get();
             for (const d of (await stream).docs) {
                 const r: any = d.data();
-                if (filters.state && r.state !== filters.state) continue;
+                if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 const regEmail = r.email || r.userEmail;
                 if (regEmail) add(regEmail, r.name || `${r.firstName || ''} ${r.surname || ''}`.trim() || "Registrant");
             }
@@ -300,7 +365,7 @@ export async function collectRecipients(
                 const a: any = d.data();
                 const pi = a.personalInfo || {};
                 const userState = pi.state || pi.stateOfOrigin || a.state || a.stateOfOrigin;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const email = pi.email || a.email || a.userEmail;
                 if (email) add(email, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
@@ -314,7 +379,7 @@ export async function collectRecipients(
             for (const d of (await stream).docs) {
                 const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.email || u.emailAddress, u.name || u.displayName || "User");
             }
             break;
@@ -337,7 +402,7 @@ export async function collectRecipients(
                     if (role !== filters.farmNationRole && !(filters.farmNationRole === "both" && role === "both")) continue;
                 }
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "User");
             }
             break;
@@ -374,7 +439,7 @@ export async function collectRecipients(
                 let userState = m.stateOfOrigin || m.state || m.address?.state;
                 const uData = m.userId ? coopUserMap.get(m.userId) : null;
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const email = m.email || uData?.email || uData?.emailAddress;
                 const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative Applicant";
                 if (email) add(email, name);
@@ -384,7 +449,7 @@ export async function collectRecipients(
             for (const d of waveSnap.docs) {
                 const a: any = d.data();
                 const userState = a.state || a.stateOfResidence;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const email = a.email || a.userEmail;
                 if (email) add(email, a.name || `${a.firstName || ''} ${a.surname || ''}`.trim() || "WAVE Applicant");
             }
@@ -394,7 +459,7 @@ export async function collectRecipients(
                 const a: any = d.data();
                 const pi = a.personalInfo || {};
                 const userState = pi.state || pi.stateOfOrigin || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const email = pi.email || a.email || a.userEmail;
                 if (email) add(email, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy Applicant");
             }
@@ -410,7 +475,7 @@ export async function collectRecipients(
                 const isPendingEx = srv.export?.status === "pending";
                 if (!isPendingFN && !isPendingEx) continue;
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.email || u.emailAddress, u.fullName || u.name || u.displayName || "Applicant");
             }
             break;
@@ -441,7 +506,7 @@ export async function collectRecipients(
                 let userState = m.stateOfOrigin || m.state || m.address?.state;
                 const uData = m.userId ? coopUserMap.get(m.userId) : null;
                 if (!userState && uData) userState = uData.stateOfOrigin || uData.state || uData.address?.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const email = m.email || uData?.email || uData?.emailAddress;
                 const name = m.fullName || `${m.firstName || ''} ${m.lastName || ''}`.trim() || uData?.fullName || uData?.name || "Cooperative User";
                 if (email) add(email, name);
@@ -452,7 +517,7 @@ export async function collectRecipients(
                 const a: any = d.data();
                 const pi = a.personalInfo || {};
                 const userState = pi.state || pi.stateOfOrigin || a.state;
-                if (filters.state && userState !== filters.state) continue;
+                if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const email = pi.email || a.email || a.userEmail;
                 if (email) add(email, pi.fullName || `${pi.firstName || ''} ${pi.lastName || ''}`.trim() || "Academy User");
             }
@@ -474,7 +539,7 @@ export async function collectRecipients(
                 
                 if (filters.state) {
                     const userState = u ? (u.stateOfOrigin || u.state || (u.address && u.address.state)) : null;
-                    if (!f.userId || !u || userState !== filters.state) continue;
+                    if (!f.userId || !u || !isStateMatch(userState, filters.state)) continue;
                 }
                 
                 const email = f.customerEmail;
