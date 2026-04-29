@@ -44,7 +44,7 @@ export async function requireAdmin(): Promise<
         }
 
         // 4. Verify the live role
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"))) {
             return { error: "Unauthorized: Admin access required" };
         }
 

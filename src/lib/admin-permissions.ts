@@ -10,7 +10,7 @@
  * SECURITY: Use these helpers for all admin operations
  */
 
-export type AdminRole = "super_admin" | "admin" | "moderator" | "support";
+export type AdminRole = "super_admin" | "admin" | "moderator" | "support" | "wave_admin" | "cooperative_admin" | "marketplace_admin" | "export_admin" | "farmnation_admin" | "academy_admin";
 
 export type AdminPermission =
     // User Management
@@ -125,6 +125,33 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "finance:read",
         "config:read",
         "audit:read"
+    ],
+
+    wave_admin: [
+        "wave:approve_applications",
+        "wave:manage_training"
+    ],
+    cooperative_admin: [
+        "cooperatives:approve_loans",
+        "cooperatives:approve_members",
+        "cooperatives:manage_products"
+    ],
+    marketplace_admin: [
+        "marketplace:approve_sellers",
+        "marketplace:suspend_sellers",
+        "marketplace:moderate_reviews"
+    ],
+    export_admin: [
+        // Basic read for export apps
+    ],
+    farmnation_admin: [
+        "land:verify_listings"
+    ],
+    academy_admin: [
+        "academy:approve_applications",
+        "academy:manage_courses",
+        "academy:manage_quizzes",
+        "academy:issue_certificates"
     ]
 };
 
@@ -159,7 +186,8 @@ export function isAdmin(userRoles: string[] | undefined): boolean {
         role === "super_admin" ||
         role === "admin" ||
         role === "moderator" ||
-        role === "support"
+        role === "support" ||
+        role.endsWith("_admin")
     );
 }
 
@@ -180,6 +208,10 @@ export function getHighestAdminRole(userRoles: string[] | undefined): AdminRole 
     if (userRoles.includes("admin")) return "admin";
     if (userRoles.includes("moderator")) return "moderator";
     if (userRoles.includes("support")) return "support";
+    
+    // Module admins
+    const moduleAdmin = userRoles.find(r => r.endsWith("_admin") && r !== "super_admin");
+    if (moduleAdmin) return moduleAdmin as AdminRole;
 
     return null;
 }
@@ -198,7 +230,7 @@ export function getUserAdminPermissions(userRoles: string[] | undefined): AdminP
  * Type guard for admin roles
  */
 function isAdminRole(role: string): role is AdminRole {
-    return ["super_admin", "admin", "moderator", "support"].includes(role);
+    return ["super_admin", "admin", "moderator", "support", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"].includes(role);
 }
 
 /**
@@ -253,6 +285,30 @@ export function canAccessAdminRoute(
 
     if (supportRoutes.some(r => route.startsWith(r))) {
         return isAdmin(userRoles); // Any admin role
+    }
+
+    // ── Module Admin Route Isolation ──
+    const isWaveAdmin = userRoles?.includes("wave_admin");
+    const isCoopAdmin = userRoles?.includes("cooperative_admin");
+    const isMktAdmin = userRoles?.includes("marketplace_admin");
+    const isExportAdmin = userRoles?.includes("export_admin");
+    const isFarmAdmin = userRoles?.includes("farmnation_admin");
+    const isAcadAdmin = userRoles?.includes("academy_admin");
+
+    const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
+
+    if (isModuleAdmin && !isSuperAdmin(userRoles) && !userRoles?.includes("admin")) {
+        // Module admins can only access their specific module and basic dashboard (which we'll restrict later in UI)
+        if (route === "/admin") return true;
+
+        if (isWaveAdmin && route.startsWith("/admin/wave")) return true;
+        if (isCoopAdmin && route.startsWith("/admin/cooperatives")) return true;
+        if (isMktAdmin && route.startsWith("/admin/marketplace")) return true;
+        if (isExportAdmin && route.startsWith("/admin/export")) return true;
+        if (isFarmAdmin && route.startsWith("/admin/farm-nation")) return true;
+        if (isAcadAdmin && route.startsWith("/admin/academy")) return true;
+        
+        return false; // Lock them out of everything else!
     }
 
     // Default: require admin or super_admin for all other /admin routes

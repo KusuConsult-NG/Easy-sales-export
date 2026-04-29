@@ -29,7 +29,7 @@ import {
     Headphones,
 } from "lucide-react";
 import { useState } from "react";
-import { signOut } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 
 
@@ -64,6 +64,21 @@ export default function AdminSidebar() {
     const pathname = usePathname();
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const toggles = useFeatureToggles(["wave_program", "cooperative_loans", "escrow_messaging", "farm_nation_purchases", "academy_courses", "digital_id_system"]);
+    const { data: session } = useSession();
+    
+    // Role-based UI filtering
+    const roles: string[] = (session?.user as any)?.roles || [];
+    const isSuperAdmin = roles.includes("super_admin");
+    const isFullAdmin = isSuperAdmin || roles.includes("admin");
+    
+    const isWaveAdmin = roles.includes("wave_admin");
+    const isCoopAdmin = roles.includes("cooperative_admin");
+    const isMktAdmin = roles.includes("marketplace_admin");
+    const isExportAdmin = roles.includes("export_admin");
+    const isFarmAdmin = roles.includes("farmnation_admin");
+    const isAcadAdmin = roles.includes("academy_admin");
+
+    const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
 
     return (
         <>
@@ -111,6 +126,19 @@ export default function AdminSidebar() {
                                             if (item.featureToggle && toggles[item.featureToggle] === false) {
                                                 return null;
                                             }
+
+                                            // Module-admin UI restriction
+                                            if (!isFullAdmin && isModuleAdmin) {
+                                                if (item.href !== "/admin") {
+                                                    if (isWaveAdmin && !item.href.startsWith("/admin/wave")) return null;
+                                                    if (isCoopAdmin && !item.href.startsWith("/admin/cooperatives")) return null;
+                                                    if (isMktAdmin && !item.href.startsWith("/admin/marketplace")) return null;
+                                                    if (isExportAdmin && !item.href.startsWith("/admin/export")) return null;
+                                                    if (isFarmAdmin && !item.href.startsWith("/admin/farm-nation")) return null;
+                                                    if (isAcadAdmin && !item.href.startsWith("/admin/academy")) return null;
+                                                }
+                                            }
+
                                             const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
                                             const Icon = item.icon;
                                             return (
@@ -141,7 +169,9 @@ export default function AdminSidebar() {
                     <div className="p-4 border-t border-slate-800">
                         <div className="bg-slate-800/50 rounded-xl p-4 mb-4">
                             <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Signed in as</p>
-                            <p className="text-sm font-medium text-white truncate">Administrator</p>
+                            <p className="text-sm font-medium text-white truncate">
+                                {isSuperAdmin ? "Super Admin" : isFullAdmin ? "Administrator" : isWaveAdmin ? "WAVE Admin" : isCoopAdmin ? "Coop Admin" : isMktAdmin ? "Marketplace Admin" : isExportAdmin ? "Export Admin" : isFarmAdmin ? "Farm Admin" : isAcadAdmin ? "Academy Admin" : "Moderator"}
+                            </p>
                         </div>
                         <button
                             onClick={async () => {

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/session-guard";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { canAccessAdminRoute } from "@/lib/admin-permissions";
+import { headers } from "next/headers";
 
 async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const sessionResult = await requireSession();
@@ -12,10 +14,14 @@ async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
 
-    // Strict Role Check - Allow 'admin' and 'super_admin' using synchronized live roles
-    const isAdmin = sessionResult.session.user.roles?.includes("admin") || sessionResult.session.user.roles?.includes("super_admin");
+    const headerList = await headers();
+    const pathname = headerList.get("x-invoke-path") || "/admin";
+    
+    // Strict Role Check - Allow 'admin', 'super_admin' and module admins using synchronized live roles
+    const roles = sessionResult.session.user.roles || [];
+    const hasAdminAccess = canAccessAdminRoute(roles, pathname);
 
-    if (!isAdmin) {
+    if (!hasAdminAccess) {
         redirect("/dashboard");
     }
 

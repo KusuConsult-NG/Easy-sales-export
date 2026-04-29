@@ -192,7 +192,7 @@ const authMiddleware = auth((req: any) => {
     // Auth check is handled by authConfig.callbacks.authorized()
     if (pathname.startsWith("/admin") && req.auth?.user) {
         const roles = (req.auth.user as any)?.roles || [];
-        const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+        const isAdmin = roles.some((r: string) => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
         if (!isAdmin) {
             return NextResponse.redirect(new URL("/dashboard", req.url));
         }
