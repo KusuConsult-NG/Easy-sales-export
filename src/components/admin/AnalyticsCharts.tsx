@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/utils";
 interface AnalyticsChartsProps {
     revenueByMonth: any[];
     userGrowthByMonth: any[];
+    moduleUsage?: any[];
 }
 
 const tooltipStyle = {
