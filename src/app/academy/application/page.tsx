@@ -149,12 +149,16 @@ export default function AcademyApplicationPage() {
                         // Stay on page — do NOT auto-redirect pending users
                         const payStatus = await checkAcademyPaymentStatusAction();
                         setPaymentStatus(payStatus.data || "unpaid");
+                        if (payStatus.data === "unpaid") {
+                            setCurrentStep(5);
+                        }
                         setIsLoading(false);
                     }
                 } else if (status.data === "approved" || status.data === "active") {
                     const payStatus = await checkAcademyPaymentStatusAction();
                     if (payStatus.data === "unpaid") {
                         setPaymentStatus("unpaid");
+                        setCurrentStep(5);
                         setIsLoading(false);
                     } else {
                         router.replace("/academy/dashboard");
@@ -582,7 +586,7 @@ export default function AcademyApplicationPage() {
                             <button
                                 type="button"
                                 onClick={handleSubmit}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || paymentStatus !== "paid"}
                                 className="inline-flex items-center gap-2 px-8 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition shadow-lg hover:shadow-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isSubmitting ? (

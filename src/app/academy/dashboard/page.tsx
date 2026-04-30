@@ -6,6 +6,7 @@ import { Award, BookOpen, Clock, TrendingUp, Calendar, Download, Loader2 } from 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { checkAcademyPaymentStatusAction } from "@/app/actions/academy";
 
 type CourseProgress = {
     courseId: string;
@@ -41,6 +42,7 @@ export default function AcademyDashboardPage() {
         totalHours: 0,
         learningStreak: 0,
     });
+    const [isUnpaid, setIsUnpaid] = useState(false);
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -48,13 +50,28 @@ export default function AcademyDashboardPage() {
             return;
         }
         if (status === "authenticated") {
-            fetchDashboardData();
+            verifyAccessAndFetchData();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status, router]);
 
-    async function fetchDashboardData() {
+    async function verifyAccessAndFetchData() {
         setIsLoading(true);
+        try {
+            const payStatus = await checkAcademyPaymentStatusAction();
+            if (payStatus.data === "unpaid") {
+                setIsUnpaid(true);
+                setIsLoading(false);
+                return;
+            }
+            await fetchDashboardData();
+        } catch (error) {
+            logger.error("Failed to verify access:", error);
+            setIsLoading(false);
+        }
+    }
+
+    async function fetchDashboardData() {
         try {
             const response = await fetch("/api/academy/dashboard");
             const data = await response.json();
@@ -85,6 +102,30 @@ export default function AcademyDashboardPage() {
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-slate-600">Loading dashboard...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (isUnpaid) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center border border-slate-100">
+                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Award className="w-10 h-10 text-red-600" />
+                    </div>
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">
+                        Payment Required
+                    </h1>
+                    <p className="text-slate-600 mb-8">
+                        You have not completed the payment for your Academy package. You must pay your enrollment fee to access your learning dashboard.
+                    </p>
+                    <Link
+                        href="/academy/application"
+                        className="inline-flex w-full items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-semibold"
+                    >
+                        Complete Payment
+                    </Link>
                 </div>
             </div>
         );
