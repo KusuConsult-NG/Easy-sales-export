@@ -43,7 +43,8 @@ const STEPS = [
     { id: 1, title: "Personal Info", description: "Basic information" },
     { id: 2, title: "Education", description: "Academic background" },
     { id: 3, title: "Interests", description: "Learning goals" },
-    { id: 4, title: "Review", description: "Confirm details" }
+    { id: 4, title: "Review", description: "Confirm details" },
+    { id: 5, title: "Payment", description: "Select Plan" }
 ];
 
 export default function AcademyApplicationPage() {
@@ -61,6 +62,60 @@ export default function AcademyApplicationPage() {
     const [isEditMode, setIsEditMode] = useState(false);
     const { data: session } = useSession();
     const { showToast } = useToast();
+
+    const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
+        firstName: "",
+        lastName: "",
+        otherName: "",
+        email: "",
+        phone: "",
+        dateOfBirth: "",
+        gender: "",
+        state: "",
+        lga: "",
+        occupation: ""
+    });
+
+    const [education, setEducation] = useState<EducationData>({
+        educationLevel: "",
+        fieldOfStudy: "",
+        yearsExperience: 0,
+        currentRole: ""
+    });
+
+    const [interests, setInterests] = useState<InterestsData>({
+        learningPaths: [],
+        topics: "",
+        goals: ""
+    });
+
+    // Restore draft from localStorage
+    const [restored, setRestored] = useState(false);
+    useEffect(() => {
+        if (!session?.user?.id) return;
+        try {
+            const draft = localStorage.getItem(`academy_draft_${session.user.id}`);
+            if (draft) {
+                const parsed = JSON.parse(draft);
+                if (parsed.personalInfo) setPersonalInfo(parsed.personalInfo);
+                if (parsed.education) setEducation(parsed.education);
+                if (parsed.interests) setInterests(parsed.interests);
+                // Don't auto-set currentStep to avoid skipping the flow entirely, or maybe do set it?
+                // if (parsed.currentStep) setCurrentStep(parsed.currentStep);
+            }
+        } catch (e) {}
+        setRestored(true);
+    }, [session?.user?.id]);
+
+    // Save draft whenever form data changes
+    useEffect(() => {
+        if (!session?.user?.id || !restored) return;
+        try {
+            localStorage.setItem(`academy_draft_${session.user.id}`, JSON.stringify({
+                personalInfo, education, interests, currentStep
+            }));
+        } catch (e) {}
+    }, [personalInfo, education, interests, currentStep, session?.user?.id, restored]);
 
     useEffect(() => {
         const checkStatus = async () => {
@@ -146,32 +201,6 @@ export default function AcademyApplicationPage() {
 
 
 
-    const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
-        firstName: "",
-        lastName: "",
-        otherName: "",
-        email: "",
-        phone: "",
-        dateOfBirth: "",
-        gender: "",
-        state: "",
-        lga: "",
-        occupation: ""
-    });
-
-    const [education, setEducation] = useState<EducationData>({
-        educationLevel: "",
-        fieldOfStudy: "",
-        yearsExperience: 0,
-        currentRole: ""
-    });
-
-    const [interests, setInterests] = useState<InterestsData>({
-        learningPaths: [],
-        topics: "",
-        goals: ""
-    });
-
     // Clear field-specific errors when data changes
     const clearFieldError = (field: string) => {
         setErrors(prev => {
@@ -256,7 +285,7 @@ export default function AcademyApplicationPage() {
             if (!interests.goals.trim()) newErrors.goals = "Learning goals are required";
         }
 
-        if (step === 4) {
+        if (step >= 4) {
             if (!acceptTerms) {
                 newErrors.acceptTerms = "You must accept the terms and conditions to continue";
             }
@@ -268,7 +297,7 @@ export default function AcademyApplicationPage() {
 
     function handleNext() {
         if (validateStep(currentStep)) {
-            setCurrentStep((prev) => Math.min(prev + 1, 4));
+            setCurrentStep((prev) => Math.min(prev + 1, 5));
         }
     };
 
@@ -309,6 +338,8 @@ export default function AcademyApplicationPage() {
                 : await submitAcademyApplicationAction({ personalInfo: enrichedPersonalInfo, education, interests });
 
             if (response.success) {
+                // Clear draft
+                try { localStorage.removeItem(`academy_draft_${session?.user?.id}`); } catch (e) {}
                 router.push("/academy/application/pending");
             } else {
                 setErrors({ submit: response.error || "Failed to submit application" });
@@ -321,109 +352,11 @@ export default function AcademyApplicationPage() {
         }
     };
 
-    // Payment gate: show payment screen if not yet paid
-    if (paymentStatus === "unpaid") {
         const PLANS = [
-            { id: "foundation", name: "Foundation Plan", price: 25000 },
-            { id: "advanced", name: "Advanced Plan", price: 50000 },
-            { id: "elite", name: "Elite Plan", price: 100000 },
-        ] as const;
-
-        return (
-            <div className="min-h-screen bg-slate-50">
-                {/* Header */}
-                <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white py-12">
-                    <div className="max-w-4xl mx-auto px-6 text-center">
-                        <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>
-                        <p className="text-blue-100 mb-2">
-                            Join thousands of successful agripreneurs who transformed their careers
-                        </p>
-                        <p className="text-xs text-blue-200/80 uppercase tracking-widest font-semibold">
-                            Powered by Easy Sales Export
-                        </p>
-                    </div>
-                </div>
-
-                {/* Payment Card */}
-                <div className="max-w-lg mx-auto px-6 -mt-8">
-                    <div className="bg-white rounded-3xl shadow-xl p-8">
-                        <div className="text-center mb-8">
-                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CreditCard className="w-8 h-8 text-blue-600" />
-                            </div>
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">Select Academy Plan</h2>
-                            <p className="text-slate-600">
-                                Choose a learning plan that fits your career goals to proceed with your application.
-                            </p>
-                        </div>
-
-                        <div className="space-y-4 mb-6">
-                            {PLANS.map(plan => (
-                                <button
-                                    key={plan.id}
-                                    onClick={() => setSelectedPlan(plan.id)}
-                                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                                        selectedPlan === plan.id ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-blue-200"
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                            selectedPlan === plan.id ? "border-blue-600" : "border-slate-300"
-                                        }`}>
-                                            {selectedPlan === plan.id && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
-                                        </div>
-                                        <span className={`font-semibold ${selectedPlan === plan.id ? "text-blue-900" : "text-slate-700"}`}>
-                                            {plan.name}
-                                        </span>
-                                    </div>
-                                    <span className="text-xl font-bold text-slate-900">
-                                        ₦{plan.price.toLocaleString()}
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
-
-                        <ul className="space-y-2 text-sm text-slate-600 mb-6 px-2">
-                            <li className="flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                                Full access to learner application portal
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                                Access to relevant courses upon approval
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4 text-blue-500 shrink-0" />
-                                Certificate eligibility for completed courses
-                            </li>
-                        </ul>
-
-                        <button
-                            onClick={handlePayment}
-                            disabled={isPaying}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-blue-300 disabled:opacity-50 flex items-center justify-center gap-2"
-                        >
-                            {isPaying ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <Shield className="w-5 h-5" />
-                                    Pay ₦{PLANS.find(p => p.id === selectedPlan)?.price.toLocaleString()} to Continue
-                                </>
-                            )}
-                        </button>
-
-                        <p className="text-center text-xs text-slate-400 mt-4">
-                            Secured by Paystack. Your payment information is encrypted.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+        { id: "foundation", name: "Foundation Plan", price: 25000 },
+        { id: "advanced", name: "Advanced Plan", price: 50000 },
+        { id: "elite", name: "Elite Plan", price: 100000 },
+    ] as const;
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -553,6 +486,77 @@ export default function AcademyApplicationPage() {
                         />
                     )}
 
+
+                    {currentStep === 5 && paymentStatus === "unpaid" && (
+                        <div className="max-w-lg mx-auto">
+                            <div className="text-center mb-8">
+                                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <CreditCard className="w-8 h-8 text-blue-600" />
+                                </div>
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">Select Academy Plan</h2>
+                                <p className="text-slate-600">
+                                    Choose a learning plan that fits your career goals to proceed with your application.
+                                </p>
+                            </div>
+
+                            <div className="space-y-4 mb-6">
+                                {PLANS.map(plan => (
+                                    <button
+                                        key={plan.id}
+                                        onClick={() => setSelectedPlan(plan.id)}
+                                        className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                                            selectedPlan === plan.id ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-blue-200"
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                                selectedPlan === plan.id ? "border-blue-600" : "border-slate-300"
+                                            }`}>
+                                                {selectedPlan === plan.id && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
+                                            </div>
+                                            <span className={`font-semibold ${selectedPlan === plan.id ? "text-blue-900" : "text-slate-700"}`}>
+                                                {plan.name}
+                                            </span>
+                                        </div>
+                                        <span className="text-xl font-bold text-slate-900">
+                                            ₦{plan.price.toLocaleString()}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={handlePayment}
+                                disabled={isPaying}
+                                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-blue-300 disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                {isPaying ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Shield className="w-5 h-5" />
+                                        Pay ₦{PLANS.find(p => p.id === selectedPlan)?.price.toLocaleString()} to Continue
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                    
+                    {currentStep === 5 && paymentStatus === "paid" && (
+                        <div className="max-w-lg mx-auto text-center py-8">
+                            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <CheckCircle className="w-10 h-10 text-green-600" />
+                            </div>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-4">Payment Confirmed</h2>
+                            <p className="text-slate-600 mb-8">
+                                Your payment has been successfully processed. Click the button below to submit your application.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Navigation Buttons */}
                     <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
                         <button
@@ -565,7 +569,7 @@ export default function AcademyApplicationPage() {
                             Previous
                         </button>
 
-                        {currentStep < 4 ? (
+                        {currentStep < 5 ? (
                             <button
                                 type="button"
                                 onClick={handleNext}
