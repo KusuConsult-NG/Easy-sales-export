@@ -21,7 +21,7 @@ import {
     ExternalLink,
     Sparkles,
 } from "lucide-react";
-import { signOut as nextAuthSignOut } from "next-auth/react";
+import { logoutAction } from "@/app/actions/auth";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -268,7 +268,7 @@ export default function DashboardNav() {
                         } catch (e) {
                             console.error("Firebase signout failed", e);
                         }
-                        await nextAuthSignOut({ callbackUrl: "/auth/login" });
+                        await logoutAction();
                     }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all"
                 >

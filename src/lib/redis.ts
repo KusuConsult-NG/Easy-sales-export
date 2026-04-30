@@ -43,7 +43,7 @@ export async function getCached<T>(key: string): Promise<T | null> {
  */
 export async function setCache(key: string, value: any, ttlSeconds: number): Promise<boolean> {
     try {
-        await redis.setex(key, ttlSeconds, JSON.stringify(value));
+        await redis.setex(key, ttlSeconds, value);
         return true;
     } catch (error) {
         console.error('[Redis] Set error:', error);
