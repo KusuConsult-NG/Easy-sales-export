@@ -104,7 +104,12 @@ export default function CheckoutPage() {
                 property.name,
                 property.price,
                 property.ownerId,
-                buyerInfo
+                {
+                    fullName: buyerInfo.name,
+                    email: buyerInfo.email,
+                    phone: buyerInfo.phone,
+                    purpose: buyerInfo.purpose
+                }
             );
 
             if (result.success ) {

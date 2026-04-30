@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { FieldValue } from "firebase-admin/firestore";
 
 /**
  * Get Farm Nation global stats (Admin)
