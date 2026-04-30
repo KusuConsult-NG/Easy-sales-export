@@ -32,6 +32,11 @@ export const strictEmailSchema = z.string()
     }, { message: "Email contains too many periods (possible abuse pattern)" });
 
 export const strictPhoneSchema = z.string()
+    .min(7, "Phone number is too short")
+    .max(20, "Phone number is too long")
+    .regex(/^\+?[0-9\s\-()]+$/, "Invalid phone number format. Please include your country code (e.g., +1234567890)");
+
+export const strictNigerianPhoneSchema = z.string()
     .regex(/^(\+234|0)[789]\d{9}$/, "Invalid Nigerian phone number (e.g., +2348012345678 or 08012345678)");
 
 /**
@@ -79,7 +84,7 @@ export type RegisterFormData = z.infer<typeof registerSchema>;
 export const waveApplicationSchema = z.object({
     fullName: strictNameSchema,
     email: strictEmailSchema,
-    phone: strictPhoneSchema,
+    phone: strictNigerianPhoneSchema,
     gender: z.literal("female"),
     businessName: z.string().min(3, "Business name is required"),
     businessType: z.enum(["farming", "trading", "processing", "other"], {

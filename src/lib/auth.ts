@@ -150,14 +150,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     await setCache(
                         CacheKeys.userProfile(uid),
                         {
+                            ...userData,
                             id: uid,
-                            email: userData.email,
-                            displayName: userData.fullName,
+                            displayName: userData.fullName, // Keep for backward compatibility
                             photoURL: null,
                             roles: userData.roles || [],
                             serviceRegistrations: (userData as any).serviceRegistrations || {},
-                            createdAt: userData.createdAt,
-                            updatedAt: userData.updatedAt,
                             lastLoginAt: new Date().toISOString()
                         },
                         CACHE_TTL.USER_PROFILE

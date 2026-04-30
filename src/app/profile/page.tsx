@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
     User, Mail, Phone, MapPin, Shield, Bell,
-    LogOut, Camera, Save, Lock, CheckCircle
+    LogOut, Camera, Save, Lock, CheckCircle, Upload, FileText
 } from "lucide-react";
 import Image from "next/image";
 
@@ -36,12 +36,17 @@ export default function ProfilePage() {
         phone: "",
         location: "",
         bio: "",
+        identityDocument: "",
         notifications: {
             email: true,
             push: false,
             sms: true
         }
     });
+
+    const [countryCode, setCountryCode] = useState("+234");
+    const [rawPhone, setRawPhone] = useState("");
+    const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
     // Load user profile on mount
     useEffect(() => {
@@ -61,8 +66,24 @@ export default function ProfilePage() {
                     phone: p.phone || "",
                     location: p.location || "",
                     bio: p.bio || "",
+                    identityDocument: p.identityDocument || "",
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
+
+                // Parse phone
+                const savedPhone = p.phone || "";
+                if (savedPhone.startsWith('+')) {
+                    const match = savedPhone.match(/^(\+\d{1,4})/);
+                    if (match) {
+                        setCountryCode(match[1]);
+                        setRawPhone(savedPhone.slice(match[1].length));
+                    }
+                } else if (savedPhone.startsWith('0')) {
+                    setCountryCode('+234');
+                    setRawPhone(savedPhone.slice(1));
+                } else {
+                    setRawPhone(savedPhone);
+                }
             } else if (session?.user) {
                 const splitName = (n: string) => { const parts = (n || "").trim().split(/\s+/).filter(Boolean); return { first: parts[0] || "", last: parts.slice(1).join(" ") }; };
                 const { first, last } = splitName(session.user.name || "");
@@ -88,16 +109,30 @@ export default function ProfilePage() {
 
         // Determine what to save based on active tab
         if (activeTab === 'general') {
+            const isWaveParticipant = session?.user?.roles?.includes('wave_participant');
+            const isNonNigerian = (!isWaveParticipant && countryCode !== "+234");
+            
+            if (isNonNigerian && !userData.identityDocument) {
+                setSaveMessage({ type: 'error', text: "Government Issued ID is required for non-Nigerians." });
+                setIsLoading(false);
+                return;
+            }
+
             const sessionEmail = session?.user?.email || "";
             const emailChanged = sessionEmail !== "" && userData.email !== "" && userData.email !== sessionEmail;
+            
+            // Format phone number
+            const fullPhone = `${countryCode}${rawPhone.startsWith('0') && countryCode === '+234' ? rawPhone.slice(1) : rawPhone}`.trim();
+
             const result = await guardRun(updateUserProfileAction({
                 firstName: userData.firstName,
                 lastName: userData.lastName,
                 otherName: userData.otherName,
                 email: userData.email,
-                phone: userData.phone,
+                phone: fullPhone,
                 location: userData.location,
                 bio: userData.bio,
+                identityDocument: userData.identityDocument,
             }));
 
             if (result.success) {
@@ -135,7 +170,7 @@ export default function ProfilePage() {
         name: "User Name",
         email: "user@example.com",
         image: null,
-        roles: []
+        roles: [] as string[]
     };
 
     if (isFetching) {
@@ -327,14 +362,35 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Phone Number</label>
-                                            <input
-                                                type="tel"
-                                                value={userData.phone}
-                                                onChange={(e) => setUserData({ ...userData, phone: e.target.value })}
-                                                placeholder="+234 000 000 0000"
-                                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                                required
-                                            />
+                                            <div className="flex gap-2">
+                                                <select
+                                                    value={user.roles?.includes('wave_participant') ? "+234" : countryCode}
+                                                    onChange={(e) => setCountryCode(e.target.value)}
+                                                    disabled={user.roles?.includes('wave_participant')}
+                                                    className="w-1/3 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+                                                >
+                                                    <option value="+234">🇳🇬 (+234)</option>
+                                                    {!user.roles?.includes('wave_participant') && (
+                                                        <>
+                                                            <option value="+1">🇺🇸/🇨🇦 (+1)</option>
+                                                            <option value="+44">🇬🇧 (+44)</option>
+                                                            <option value="+233">🇬🇭 (+233)</option>
+                                                            <option value="+254">🇰🇪 (+254)</option>
+                                                            <option value="+27">🇿🇦 (+27)</option>
+                                                            <option value="+91">🇮🇳 (+91)</option>
+                                                            <option value="+971">🇦🇪 (+971)</option>
+                                                        </>
+                                                    )}
+                                                </select>
+                                                <input
+                                                    type="tel"
+                                                    value={rawPhone}
+                                                    onChange={(e) => setRawPhone(e.target.value)}
+                                                    placeholder="801 234 5678"
+                                                    className="w-2/3 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                                                    required
+                                                />
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Location</label>
@@ -356,6 +412,58 @@ export default function ProfilePage() {
                                                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
                                             />
                                         </div>
+                                        
+                                        {!user.roles?.includes('wave_participant') && countryCode !== "+234" && (
+                                            <div className="md:col-span-2 space-y-2 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                                                <label className="text-sm font-medium text-slate-900 flex items-center justify-between">
+                                                    <span>Government Issued ID (Required for Non-Nigerians)</span>
+                                                    {userData.identityDocument && <span className="text-green-600 flex items-center gap-1 text-xs"><CheckCircle className="w-3 h-3" /> Uploaded</span>}
+                                                </label>
+                                                <p className="text-xs text-slate-500 mb-2">Please upload a valid passport, driver's license, or national ID.</p>
+                                                <div className="relative">
+                                                    <input 
+                                                        type="file" 
+                                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                                        onChange={async (e) => {
+                                                            const file = e.target.files?.[0];
+                                                            if (!file) return;
+                                                            
+                                                            setIsUploadingDoc(true);
+                                                            try {
+                                                                const formData = new FormData();
+                                                                formData.append("file", file);
+                                                                formData.append("folder", "kyc");
+                                                                
+                                                                const res = await fetch("/api/upload", { method: "POST", body: formData });
+                                                                const data = await res.json();
+                                                                
+                                                                if (data.success) {
+                                                                    setUserData({ ...userData, identityDocument: data.url });
+                                                                } else {
+                                                                    alert(data.error || "Failed to upload document");
+                                                                }
+                                                            } catch (err) {
+                                                                alert("An error occurred during upload");
+                                                            } finally {
+                                                                setIsUploadingDoc(false);
+                                                            }
+                                                        }}
+                                                        disabled={isUploadingDoc}
+                                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                                    />
+                                                    {isUploadingDoc && (
+                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                            <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {userData.identityDocument && (
+                                                    <a href={userData.identityDocument} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline mt-2">
+                                                        <FileText className="w-4 h-4" /> View Current Document
+                                                    </a>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
