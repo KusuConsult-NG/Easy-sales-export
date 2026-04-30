@@ -8,6 +8,10 @@ import { auth } from '@/lib/auth';
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment } from '@/lib/paystack-server';
+import { rateLimit } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number {
@@ -85,6 +89,14 @@ export async function verifyContributionPaymentAction(
 
         if (!session?.user) {
             return { error: 'Authentication required', success: false };
+        }
+
+        const rateLimitResult = await paymentLimiter.check(session.user.id);
+        if (!rateLimitResult.success) {
+            return {
+                success: false,
+                error: "Too many payment verification attempts. Please try again later."
+            };
         }
 
         // Import here to avoid circular dependency

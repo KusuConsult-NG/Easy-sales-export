@@ -70,6 +70,26 @@ export function getClientIp(request: Request): string {
 }
 
 /**
+ * Get client IP address from Server Action
+ */
+export async function getActionClientIp(): Promise<string> {
+    const { headers } = await import('next/headers');
+    const headersList = await headers();
+    const forwarded = headersList.get('x-forwarded-for');
+    const realIp = headersList.get('x-real-ip');
+
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
+    }
+
+    if (realIp) {
+        return realIp;
+    }
+
+    return 'unknown';
+}
+
+/**
  * Add rate limit headers to response
  */
 export function addRateLimitHeaders(

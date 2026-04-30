@@ -171,8 +171,8 @@ export default function SellerProductsPage() {
                     </div>
                 </div>
 
-                {/* Products Table */}
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                {/* Desktop Products Table */}
+                <div className="hidden md:block bg-white rounded-xl border border-slate-200 overflow-hidden">
                     <table className="w-full">
                         <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
@@ -291,6 +291,78 @@ export default function SellerProductsPage() {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile Products Cards */}
+                <div className="md:hidden space-y-4">
+                    {loading && products.length === 0 ? (
+                        <div className="flex justify-center p-12 bg-white rounded-xl border border-slate-200">
+                            <Loader2 className="w-8 h-8 animate-spin text-green-600 mx-auto" />
+                        </div>
+                    ) : products.length === 0 ? (
+                        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+                            No products found. <Link href="/marketplace/sell/create" className="text-green-600 hover:underline font-semibold">Add your first product</Link>
+                        </div>
+                    ) : (
+                        products.map((product) => {
+                            let displayStatus: string = product.status;
+                            if (product.status === "active" && product.availableQuantity < 50 && product.availableQuantity > 0) {
+                                displayStatus = "low_stock";
+                            }
+
+                            const statusConfig = getStatusConfig(displayStatus);
+                            const retailPrice = product.pricingTiers?.find(t => t.type === "retail")?.price || product.pricingTiers?.[0]?.price || 0;
+
+                            return (
+                                <div key={product.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="pr-2">
+                                            <h3 className="font-bold text-slate-900 line-clamp-2">{product.title}</h3>
+                                            <p className="text-xs text-slate-500 capitalize mt-1">{product.category}</p>
+                                        </div>
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusConfig.bg} ${statusConfig.text}`}>
+                                            {statusConfig.label}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 text-sm mb-5">
+                                        <div className="bg-slate-50 p-3 rounded-lg">
+                                            <span className="text-slate-500 block text-xs mb-1">Price</span>
+                                            <span className="font-bold text-slate-900">{formatCurrency(retailPrice)}<span className="text-slate-500 font-normal">/{product.unit}</span></span>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-lg">
+                                            <span className="text-slate-500 block text-xs mb-1">Stock</span>
+                                            <span className={`font-bold ${product.availableQuantity === 0 ? 'text-red-600' : product.availableQuantity < 50 ? 'text-orange-600' : 'text-green-600'}`}>
+                                                {product.availableQuantity} {product.unit}
+                                            </span>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-lg">
+                                            <span className="text-slate-500 block text-xs mb-1">Sold</span>
+                                            <span className="font-semibold text-slate-900">{product.orders || 0} units</span>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-lg">
+                                            <span className="text-slate-500 block text-xs mb-1">Performance</span>
+                                            <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                                                <Eye className="w-3.5 h-3.5 text-slate-400" /> {product.views || 0} 
+                                                <span className="text-slate-300 mx-0.5">|</span>
+                                                <span className="text-yellow-500">★</span> {product.rating || 0}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                                        <Link href={`/marketplace/products/${product.id}`} className="flex-1 flex items-center justify-center gap-2 py-2.5 text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg font-semibold transition-colors">
+                                            <Eye className="w-4 h-4" /> View
+                                        </Link>
+                                        <Link href={`/marketplace/seller/products/${product.id}/edit`} className="flex-1 flex items-center justify-center gap-2 py-2.5 text-green-700 bg-green-50 hover:bg-green-100 rounded-lg font-semibold transition-colors">
+                                            <Edit className="w-4 h-4" /> Edit
+                                        </Link>
+                                        <button onClick={() => handleDeleteProduct(product.id, product.title)} className="p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                                            <Trash2 className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
 
                 {/* Load More */}

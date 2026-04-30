@@ -12,6 +12,10 @@ import { logger } from '@/lib/logger';
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { ZodError } from "zod";
+import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+const loginLimiter = rateLimit(rateLimitConfig.login);
 
 /**
  * Server Actions for Authentication
@@ -198,6 +202,16 @@ export async function registerAction(prevState: any, formData: FormData) {
     const confirmPassword = formData.get("confirmPassword") as string;
 
     try {
+        const ip = await getActionClientIp();
+        const rateLimitResult = await loginLimiter.check(ip);
+        if (!rateLimitResult.success) {
+            return {
+                success: false,
+                error: "Too many registration attempts. Please try again later.",
+                redirectUrl: "",
+            };
+        }
+
         // Validate with Zod
         const validatedData = registerSchema.parse({
             fullName,

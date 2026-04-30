@@ -13,7 +13,7 @@ const BATCH_LIMIT = 400;
 
 /**
  * Serverless Cron Job: GDPR Right-to-be-Forgotten Enforcer
- * Triggered daily via Vercel Cron.
+ * Triggered daily via Railway Cron.
  * 
  * Rules:
  * 1. Locates all users marked with \`deletedAt\` exactly 30+ days ago.
@@ -22,7 +22,7 @@ const BATCH_LIMIT = 400;
  */
 export async function GET(request: NextRequest) {
     try {
-        // Enforce Authorization: Only Vercel cron or explicit admin keys can trigger this
+        // Enforce Authorization: Only Railway cron or explicit admin keys can trigger this
         const authHeader = request.headers.get("Authorization");
         const cronSecret = process.env.CRON_SECRET;
 

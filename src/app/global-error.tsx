@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { logger } from "@/lib/logger";
 import { AlertTriangle, Home, RefreshCcw } from "lucide-react";
 import Link from "next/link";
-
+import * as Sentry from "@sentry/nextjs";
 import { logTelemetryAction } from "@/app/actions/telemetry";
 
 /** Returns true if the error is caused by a stale JS bundle after a new deployment */
@@ -33,7 +33,7 @@ export default function GlobalError({
     useEffect(() => {
         // ── Stale-deployment auto-recovery ──────────────────────────────────
         // ChunkLoadError / UnrecognizedActionError mean the browser has a stale
-        // JS bundle from before the last Vercel deploy. A hard reload fetches
+        // JS bundle from before the last Railway deploy. A hard reload fetches
         // the new bundle and the user lands on the same page without any error.
         if (isStaleDeploymentError(error)) {
             console.warn("[GlobalError] Stale deployment detected — auto-reloading.", error.name, error.message);
@@ -41,7 +41,10 @@ export default function GlobalError({
             return;
         }
 
-        // Log genuine errors to telemetry on the server
+        // Log genuine errors to Sentry
+        Sentry.captureException(error);
+
+        // Also log to internal telemetry
         logTelemetryAction('error', "Next.js Global UI Boundary Caught Exception", {
             digest: error.digest,
             message: error.message,

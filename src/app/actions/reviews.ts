@@ -13,6 +13,13 @@ import type { ProductReview, Order } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { z } from "zod";
+import { escapeHtml } from "@/lib/utils";
+
+const reviewSchema = z.object({
+    rating: z.number().min(1, "Rating must be at least 1").max(5, "Rating cannot exceed 5"),
+    comment: z.string().trim().min(20, "Review must be at least 20 characters").max(500, "Review must not exceed 500 characters"),
+});
 
 /**
  * Create a product review
@@ -32,18 +39,10 @@ export async function createReviewAction(params: {
 
         const { productId, orderId, rating, comment, images = [] } = params;
 
-        // Validate rating
-        if (rating < 1 || rating > 5) {
-            return { success: false, error: "Rating must be between 1 and 5" };
-        }
-
-        // Validate comment length
-        if (comment.trim().length < 20) {
-            return { success: false, error: "Review must be at least 20 characters" };
-        }
-
-        if (comment.length > 500) {
-            return { success: false, error: "Review must not exceed 500 characters" };
+        // Validate with Zod
+        const validation = reviewSchema.safeParse({ rating, comment });
+        if (!validation.success) {
+            return { success: false, error: validation.error.errors[0].message };
         }
 
         // Get order and verify
@@ -95,8 +94,8 @@ export async function createReviewAction(params: {
             sellerId: productActualSellerId, // Fetched explicitly from the product DB
             userId,
             orderId,
-            rating,
-            comment: comment.trim(),
+            rating: validation.data.rating,
+            comment: escapeHtml(validation.data.comment),
             images,
             verified: true, // Purchased from platform
             status: "pending",
@@ -186,17 +185,10 @@ export async function updateReviewAction(
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        // Validate
-        if (rating < 1 || rating > 5) {
-            return { success: false, error: "Rating must be between 1 and 5" };
-        }
-
-        if (comment.trim().length < 20) {
-            return { success: false, error: "Review must be at least 20 characters" };
-        }
-
-        if (comment.length > 500) {
-            return { success: false, error: "Review must not exceed 500 characters" };
+        // Validate with Zod
+        const validation = reviewSchema.safeParse({ rating, comment });
+        if (!validation.success) {
+            return { success: false, error: validation.error.errors[0].message };
         }
 
         // Get review
@@ -226,8 +218,8 @@ export async function updateReviewAction(
 
         // Update review
         await reviewRef.update({
-            rating,
-            comment: comment.trim(),
+            rating: validation.data.rating,
+            comment: escapeHtml(validation.data.comment),
             status: "pending", // Re-trigger moderation
             updatedAt: FieldValue.serverTimestamp(),
         });

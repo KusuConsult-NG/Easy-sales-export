@@ -7,6 +7,10 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { rateLimit } from '@/lib/rate-limiter';
+import { rateLimitConfig } from '@/lib/rate-limits.config';
+
+const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number {
@@ -141,6 +145,14 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 
         if (!session?.user) {
             return { error: "Authentication required", success: false };
+        }
+
+        const rateLimitResult = await paymentLimiter.check(session.user.id);
+        if (!rateLimitResult.success) {
+            return {
+                success: false,
+                error: "Too many payment verification attempts. Please try again later."
+            };
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection

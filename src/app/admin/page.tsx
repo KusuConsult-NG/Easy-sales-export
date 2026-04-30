@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
+import AnalyticsCharts from "@/components/admin/AnalyticsCharts";
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<AnalyticsData | null>(null);
@@ -300,6 +301,18 @@ export default function AdminDashboardPage() {
                             <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
                         </Link>
                     </div>
+                </motion.div>
+
+                {/* Revenue & User Growth Analytics Charts */}
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.25 }}
+                >
+                    <AnalyticsCharts 
+                        revenueByMonth={stats.revenueByMonth} 
+                        userGrowthByMonth={stats.userGrowthByMonth} 
+                    />
                 </motion.div>
 
                 {/* Recent Transactions + Module Registration */}
