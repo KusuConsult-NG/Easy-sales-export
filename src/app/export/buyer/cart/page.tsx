@@ -84,24 +84,19 @@ export default function ExportCartPage() {
 
         try {
             // Import the payment action
-            const { initializeOrderPaymentAction } = await import("@/app/actions/marketplace-payment");
+            const { initializeExportOrderPaymentAction } = await import("@/app/actions/export-payment");
 
-            // Prepare cart items for payment — map export items to marketplace CartItem format
-            const cartItems = cart.map(item => ({
-                id: item.product.id,
-                title: `${item.product.name} (${item.grade}) - ${item.quantityMT}MT`,
-                sellerId: "export-operations", // Export orders go to the company
-                price: item.product.pricePerMT * item.quantityMT * USD_TO_NGN_RATE, // Convert to Naira
-                quantity: 1, // Already factored into price
-                unit: "order",
+            // Prepare cart items for payment
+            const cartItemsInput = cart.map(item => ({
+                productId: item.product.id,
+                quantityMT: item.quantityMT,
+                grade: item.grade,
             }));
 
             // Initialize Paystack payment
-            const result = await initializeOrderPaymentAction(
-                cartItems,
-                buyerDetails.email,
-                buyerDetails.phone || "",
-                shippingFee
+            const result = await initializeExportOrderPaymentAction(
+                cartItemsInput,
+                buyerDetails
             );
 
             if (result.success ) {

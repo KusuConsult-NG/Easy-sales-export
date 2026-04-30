@@ -23,6 +23,7 @@ const profileUpdateSchema = z.object({
     phone: strictPhoneSchema,
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
+    identityDocument: z.string().optional(),
 });
 
 const notificationPreferencesSchema = z.object({
@@ -68,6 +69,7 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
             lga: userData.lga || "",
             location: userData.location || "",
             bio: userData.bio || "",
+            identityDocument: userData.identityDocument || "",
             notifications: userData.notifications || {
                 email: true,
                 push: false,
@@ -92,6 +94,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     phone?: string;
     location?: string;
     bio?: string;
+    identityDocument?: string;
 }) => {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

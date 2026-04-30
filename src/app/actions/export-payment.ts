@@ -23,6 +23,243 @@ export interface PaymentInitState {
     };
 }
 
+export interface ExportCartItemInput {
+    productId: string;
+    quantityMT: number;
+    grade: string;
+}
+
+export interface ExportBuyerDetails {
+    companyName: string;
+    contactPerson: string;
+    email: string;
+    phone: string;
+    country: string;
+    portOfDestination: string;
+    shippingTerm: string;
+    additionalNotes: string;
+}
+
+const USD_TO_NGN_RATE = 1650; // TODO: Fetch dynamically in a real app
+
+export async function initializeExportOrderPaymentAction(
+    cartItems: ExportCartItemInput[],
+    buyerDetails: ExportBuyerDetails
+): Promise<PaymentInitState> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        if (!session?.user) {
+            return { error: "Authentication required", success: false, data: undefined, meta: null };
+        }
+
+        if (!cartItems.length) {
+            return { error: "Cart is empty", success: false, data: undefined, meta: null };
+        }
+
+        let totalUSD = 0;
+        const validatedItems = [];
+
+        // Validate items against DB
+        for (const item of cartItems) {
+            const productDoc = await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(item.productId).get();
+            if (!productDoc.exists) {
+                return { error: `Product not found: ${item.productId}`, success: false, data: undefined, meta: null };
+            }
+            const productData = productDoc.data()!;
+            
+            // Allow only active products
+            if (!productData.isActive) {
+                return { error: `Product ${productData.name} is not available for purchase`, success: false, data: undefined, meta: null };
+            }
+
+            const pricePerMT = productData.pricePerMT || 0;
+            const itemTotalUSD = pricePerMT * item.quantityMT;
+            totalUSD += itemTotalUSD;
+
+            validatedItems.push({
+                productId: item.productId,
+                name: productData.name,
+                grade: item.grade,
+                quantityMT: item.quantityMT,
+                pricePerMT: pricePerMT,
+                totalUSD: itemTotalUSD,
+                sellerId: productData.userId || "export-operations"
+            });
+        }
+
+        const totalNGN = totalUSD * USD_TO_NGN_RATE;
+
+        // Initialize payment with Paystack
+        const { authorizationUrl, reference } = await initializePaystackPayment(
+            buyerDetails.email,
+            nairaToKobo(totalNGN),
+            {
+                userId: session.user.id,
+                type: "export_buyer_order",
+                totalUSD,
+                totalNGN,
+                itemCount: cartItems.length,
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/buyer/cart/payment-callback`,
+            }
+        );
+
+        // Pre-create the order as "pending_payment"
+        const orderId = `EXP-ORD-${Date.now()}-${session.user.id.substring(0, 5)}`;
+        await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderId).set({
+            orderId,
+            buyerId: session.user.id,
+            buyerDetails,
+            items: validatedItems,
+            totalUSD,
+            totalNGN,
+            exchangeRate: USD_TO_NGN_RATE,
+            paymentReference: reference,
+            paymentStatus: "pending",
+            status: "pending_payment",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        return {
+            success: true,
+            data: {
+                authorizationUrl,
+                reference,
+            },
+            meta: null
+        };
+    } catch (error: any) {
+        logger.error("Export Order payment initialization error:", error);
+        return {
+            success: false,
+            error: error.message || "Failed to initialize payment.",
+            data: undefined,
+            meta: null
+        };
+    }
+}
+
+export async function verifyExportOrderPaymentAction(reference: string) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        if (!session?.user) {
+            return { error: "Authentication required", success: false, data: null, meta: null };
+        }
+
+        // Double-payment protection
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
+        const existingPayment = await processedRef.get();
+
+        if (existingPayment.exists) {
+            return {
+                error: "Payment has already been processed",
+                success: false, data: null, meta: null
+            };
+        }
+
+        // Verify payment with Paystack
+        const paymentData = await verifyPaystackPayment(reference);
+
+        if (!paymentData.status || paymentData.data.status !== "success") {
+            return {
+                error: `Payment ${paymentData.data.status || 'failed'}. Please contact support if amount was debited.`,
+                success: false, data: null, meta: null
+            };
+        }
+
+        // Get metadata
+        const metadata = paymentData.data.metadata as Record<string, any>;
+        const userId = metadata.userId;
+        const amountInNaira = paymentData.data.amount / 100;
+
+        // Verify user match
+        if (userId !== session.user.id) {
+            return { error: "Payment verification failed: User mismatch", success: false, data: null, meta: null };
+        }
+
+        // Find the pending order
+        const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders")
+            .where("paymentReference", "==", reference)
+            .limit(1)
+            .get();
+
+        if (orderQuery.empty) {
+            return { error: "Export Order record not found", success: false, data: null, meta: null };
+        }
+
+        const orderDoc = orderQuery.docs[0];
+        const orderData = orderDoc.data();
+
+        await db.runTransaction(async (transaction) => {
+            // Update order status
+            const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderDoc.id);
+            transaction.update(orderRef, {
+                status: "processing",
+                paymentStatus: "paid",
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Mark payment as processed
+            transaction.set(processedRef, {
+                processedAt: FieldValue.serverTimestamp(),
+                userId: session.user.id,
+                amount: amountInNaira,
+                type: "export_buyer_order",
+                reference,
+            });
+            
+            // TODO: In a production setting, we would decrement the global catalog stock here
+            // using `transaction.update(productRef, { availableQuantity: FieldValue.increment(-quantity) })`
+        });
+
+        // Notify Admins
+        try {
+            const { sendEmailNotification } = await import("@/lib/email-notifications");
+            const sysConfig = await db.collection(COLLECTIONS.SYSTEM_SETTINGS).doc("general").get();
+            const adminEmail = sysConfig.data()?.adminEmail || "admin@easysales.com";
+            
+            await sendEmailNotification({
+                to: adminEmail,
+                subject: "New Export Order Received",
+                message: `<p>A new international export order (${orderData.orderId}) has been fully paid and is awaiting processing. Shipping Term: ${orderData.buyerDetails.shippingTerm}. Port: ${orderData.buyerDetails.portOfDestination}.</p>`,
+                metadata: { type: "export_admin_notification" }
+            });
+        } catch (e: any) {
+            logger.warn("Failed to send export order admin notification", { error: e?.message || String(e) });
+        }
+
+        return {
+            success: true,
+            data: {
+                message: "Export order payment verified successfully.",
+                orderId: orderData.orderId,
+            },
+            meta: null
+        };
+    } catch (error: any) {
+        logger.error('[Export Order Payment Verification Error]', {
+            timestamp: new Date().toISOString(),
+            action: 'verifyExportOrder',
+            reference,
+            error: error.message
+        });
+
+        return {
+            success: false,
+            data: null,
+            meta: null,
+            error: "Failed to verify export order payment. Please contact support.",
+        };
+    }
+}
+
 /**
  * Initialize Paystack Payment for Export Investment
  * Creates a payment session and returns authorization URL

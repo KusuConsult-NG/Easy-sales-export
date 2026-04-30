@@ -1001,6 +1001,9 @@ export const COLLECTIONS = {
     // Export Catalog (products listed for export buyers)
     EXPORT_CATALOG: "export_catalog",
 
+    // Export Orders (orders placed by international buyers)
+    EXPORT_ORDERS: "export_orders",
+
     // WAVE Training Sessions (scheduled sessions — distinct from WAVE_TRAINING_EVENTS)
     WAVE_TRAINING_SESSIONS: "wave_training_sessions",
 

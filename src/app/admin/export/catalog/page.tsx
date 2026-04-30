@@ -5,11 +5,18 @@ import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import {
     Package, Plus, Pencil, Trash2, Save, X, Loader2,
-    ChevronDown, ChevronUp, Tag, Globe, Award
+    Globe, Award, Clock, CheckCircle, XCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminExportCatalogAction, createExportCatalogAction, deleteExportCatalogAction, getExportCatalogStatsAction } from "@/app/actions/export-admin";
+import { 
+    getAdminExportCatalogAction, 
+    createExportCatalogAction, 
+    deleteExportCatalogAction, 
+    getExportCatalogStatsAction,
+    getAdminPendingExportProductsAction,
+    reviewExportProductAction
+} from "@/app/actions/export-admin";
 
 interface CatalogProduct {
     id?: string;
@@ -23,6 +30,7 @@ interface CatalogProduct {
     pricePerMT: number;
     minOrderMT: number;
     isActive?: boolean;
+    status?: string;
 }
 
 const EMPTY: CatalogProduct = {
@@ -157,6 +165,7 @@ export default function AdminExportCatalogPage() {
     const { showToast } = useToast();
     const [showForm, setShowForm] = useState(false);
     const [editingProduct, setEditingProduct] = useState<CatalogProduct | null>(null);
+    const [activeTab, setActiveTab] = useState<"live" | "pending">("live");
 
     const isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
 
@@ -165,7 +174,7 @@ export default function AdminExportCatalogPage() {
         getExportCatalogStatsAction().then(r => {
             if (r.success && r.data) setServerTotal(r.data.totalProducts);
         });
-    }, []);
+    }, [activeTab]);
 
     const {
         data: products,
@@ -177,22 +186,36 @@ export default function AdminExportCatalogPage() {
         pageIndex
     } = useAdminData<CatalogProduct>({
         fetchAction: async (opts) => {
-            const result = await getAdminExportCatalogAction({
-                limit: opts.limit || 50,
-                lastDocId: opts.lastDocId
-            });
-            if (!result.success) {
-                showToast(result.error || "Failed to load catalog", "error");
-                return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+            if (activeTab === "live") {
+                const result = await getAdminExportCatalogAction({
+                    limit: opts.limit || 50,
+                    lastDocId: opts.lastDocId
+                });
+                if (!result.success) {
+                    showToast(result.error || "Failed to load catalog", "error");
+                    return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+                }
+                return {
+                    ...result,
+                    lastDocId: result.lastDocId ?? undefined,
+                    data: result.data || [],
+                };
+            } else {
+                const result = await getAdminPendingExportProductsAction();
+                if (!result.success) {
+                    showToast(result.error || "Failed to load pending products", "error");
+                    return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+                }
+                return {
+                    success: true,
+                    data: result.data || [],
+                    meta: { hasMore: false },
+                    lastDocId: undefined
+                };
             }
-            return {
-                ...result,
-                lastDocId: result.lastDocId ?? undefined,
-                data: result.data || [],
-            };
         },
         limit: 50,
-        dependencies: []
+        dependencies: [activeTab]
     });
 
     const saveProduct = async (p: CatalogProduct) => {
@@ -220,6 +243,17 @@ export default function AdminExportCatalogPage() {
         }
     };
 
+    const handleReview = async (id: string, action: 'approve' | 'reject') => {
+        if (!confirm(`Are you sure you want to ${action} this product?`)) return;
+        const result = await reviewExportProductAction(id, action);
+        if (result.success) {
+            showToast(`Product ${action}d successfully`, "success");
+            loadProducts();
+        } else {
+            showToast(result.error || `Failed to ${action} product`, "error");
+        }
+    };
+
     return (
         <div className="p-6 md:p-8 max-w-6xl">
             {/* Header */}
@@ -231,7 +265,7 @@ export default function AdminExportCatalogPage() {
                         Manage the products shown to international buyers. Changes go live immediately.
                     </p>
                 </div>
-                {isAdmin && !showForm && !editingProduct && (
+                {isAdmin && !showForm && !editingProduct && activeTab === "live" && (
                     <button
                         onClick={() => setShowForm(true)}
                         className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition"
@@ -242,42 +276,68 @@ export default function AdminExportCatalogPage() {
                 )}
             </div>
 
-            {/* Stats — server-side count for total; category/certification counts are derived locally from current page */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
-                <div className="bg-white rounded-xl p-4 border border-slate-200">
-                    <div className="flex items-center gap-3">
-                        <Package className="w-8 h-8 text-blue-500" />
-                        <div>
-                            {serverTotal === null
-                                ? <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
-                                : <p className="text-2xl font-bold text-slate-900">{serverTotal.toLocaleString()}</p>
-                            }
-                            <p className="text-sm text-slate-500">Total Products</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-4 border border-slate-200">
-                    <div className="flex items-center gap-3">
-                        <Globe className="w-8 h-8 text-emerald-500" />
-                        <div>
-                            <p className="text-2xl font-bold text-slate-900">{[...new Set(products.map(p => p.category))].length}</p>
-                            <p className="text-sm text-slate-500">Categories (this page)</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-4 border border-slate-200">
-                    <div className="flex items-center gap-3">
-                        <Award className="w-8 h-8 text-amber-500" />
-                        <div>
-                            <p className="text-2xl font-bold text-slate-900">{[...new Set(products.flatMap(p => p.certifications))].length}</p>
-                            <p className="text-sm text-slate-500">Certifications (this page)</p>
-                        </div>
-                    </div>
-                </div>
+            {/* Tabs */}
+            <div className="flex items-center gap-4 border-b border-slate-200 mb-8">
+                <button
+                    onClick={() => setActiveTab("live")}
+                    className={`pb-4 px-2 text-sm font-semibold transition-colors border-b-2 ${
+                        activeTab === "live" 
+                            ? "border-blue-600 text-blue-600" 
+                            : "border-transparent text-slate-500 hover:text-slate-900"
+                    }`}
+                >
+                    Live Products
+                </button>
+                <button
+                    onClick={() => setActiveTab("pending")}
+                    className={`pb-4 px-2 text-sm font-semibold transition-colors border-b-2 flex items-center gap-2 ${
+                        activeTab === "pending" 
+                            ? "border-orange-600 text-orange-600" 
+                            : "border-transparent text-slate-500 hover:text-slate-900"
+                    }`}
+                >
+                    Pending Approvals
+                </button>
             </div>
 
+            {/* Stats */}
+            {activeTab === "live" && (
+                <div className="grid grid-cols-3 gap-4 mb-8">
+                    <div className="bg-white rounded-xl p-4 border border-slate-200">
+                        <div className="flex items-center gap-3">
+                            <Package className="w-8 h-8 text-blue-500" />
+                            <div>
+                                {serverTotal === null
+                                    ? <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+                                    : <p className="text-2xl font-bold text-slate-900">{serverTotal.toLocaleString()}</p>
+                                }
+                                <p className="text-sm text-slate-500">Total Products</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-slate-200">
+                        <div className="flex items-center gap-3">
+                            <Globe className="w-8 h-8 text-emerald-500" />
+                            <div>
+                                <p className="text-2xl font-bold text-slate-900">{[...new Set(products.map(p => p.category))].length}</p>
+                                <p className="text-sm text-slate-500">Categories (this page)</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl p-4 border border-slate-200">
+                        <div className="flex items-center gap-3">
+                            <Award className="w-8 h-8 text-amber-500" />
+                            <div>
+                                <p className="text-2xl font-bold text-slate-900">{[...new Set(products.flatMap(p => p.certifications))].length}</p>
+                                <p className="text-sm text-slate-500">Certifications (this page)</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Add form */}
-            {showForm && (
+            {showForm && activeTab === "live" && (
                 <div className="mb-6">
                     <h2 className="text-lg font-bold text-slate-900 mb-3">New Product</h2>
                     <ProductForm
@@ -292,6 +352,22 @@ export default function AdminExportCatalogPage() {
             {isLoading ? (
                 <div className="flex items-center justify-center py-24">
                     <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+                </div>
+            ) : products.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+                    {activeTab === "live" ? (
+                        <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    ) : (
+                        <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    )}
+                    <h3 className="text-lg font-bold text-slate-900 mb-2">
+                        {activeTab === "live" ? "No Live Products" : "No Pending Approvals"}
+                    </h3>
+                    <p className="text-slate-500">
+                        {activeTab === "live" 
+                            ? "There are currently no active products in the export catalog." 
+                            : "All user-submitted products have been reviewed."}
+                    </p>
                 </div>
             ) : (
                 <div className="space-y-4">
@@ -310,14 +386,22 @@ export default function AdminExportCatalogPage() {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-start justify-between gap-4">
                                                 <div>
-                                                    <h3 className="font-bold text-slate-900 text-lg">{product.name}</h3>
+                                                    <h3 className="font-bold text-slate-900 text-lg flex items-center gap-2">
+                                                        {product.name}
+                                                        {activeTab === "pending" && (
+                                                            <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full flex items-center gap-1">
+                                                                <Clock className="w-3 h-3" /> Pending Review
+                                                            </span>
+                                                        )}
+                                                    </h3>
                                                     <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
                                                         <Globe className="w-3 h-3" />{product.origin} · {product.season}
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
-                                                    <span className="text-lg font-bold text-slate-900">${product.pricePerMT.toLocaleString()}/MT</span>
-                                                    {isAdmin && (
+                                                    <span className="text-lg font-bold text-slate-900">${product.pricePerMT?.toLocaleString()}/MT</span>
+                                                    
+                                                    {isAdmin && activeTab === "live" && (
                                                         <>
                                                             <button
                                                                 onClick={() => setEditingProduct(product)}
@@ -335,17 +419,36 @@ export default function AdminExportCatalogPage() {
                                                             </button>
                                                         </>
                                                     )}
+
+                                                    {isAdmin && activeTab === "pending" && (
+                                                        <div className="flex items-center gap-2 ml-4 border-l pl-4">
+                                                            <button
+                                                                onClick={() => product.id && handleReview(product.id, 'approve')}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition font-medium text-sm"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4" />
+                                                                Approve
+                                                            </button>
+                                                            <button
+                                                                onClick={() => product.id && handleReview(product.id, 'reject')}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg transition font-medium text-sm"
+                                                            >
+                                                                <XCircle className="w-4 h-4" />
+                                                                Reject
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             <div className="flex flex-wrap gap-1.5 mt-3">
                                                 <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium capitalize">{product.category}</span>
                                                 <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">Min: {product.minOrderMT} MT</span>
-                                                {product.grades.slice(0, 2).map(g => (
+                                                {product.grades?.slice(0, 2).map(g => (
                                                     <span key={g} className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full flex items-center gap-1">
-                                                        <Tag className="w-2.5 h-2.5" />{g}
+                                                        <Package className="w-2.5 h-2.5" />{g}
                                                     </span>
                                                 ))}
-                                                {product.certifications.slice(0, 2).map(c => (
+                                                {product.certifications?.slice(0, 2).map(c => (
                                                     <span key={c} className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
                                                         <Award className="w-2.5 h-2.5" />{c}
                                                     </span>
@@ -361,7 +464,7 @@ export default function AdminExportCatalogPage() {
             )}
             
             {/* Pagination Controls */}
-            {!isLoading && products.length > 0 && (
+            {!isLoading && products.length > 0 && activeTab === "live" && (
                 <div className="flex items-center justify-between mt-6 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                     <span className="text-sm font-medium text-slate-500">Page {pageIndex + 1}</span>
                     <div className="flex gap-2">
