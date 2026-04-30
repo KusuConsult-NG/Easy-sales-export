@@ -151,8 +151,11 @@ export default function AcademyApplicationPage() {
                         setPaymentStatus(payStatus.data || "unpaid");
                         if (payStatus.data === "unpaid") {
                             setCurrentStep(5);
+                            setIsLoading(false);
+                        } else {
+                            // If they are pending AND paid, they shouldn't be here. Send them to the waiting screen.
+                            router.replace("/academy/application/pending");
                         }
-                        setIsLoading(false);
                     }
                 } else if (status.data === "approved" || status.data === "active") {
                     const payStatus = await checkAcademyPaymentStatusAction();
