@@ -717,3 +717,59 @@ export async function sendAcademyEnrollmentEmail(
         metadata: { type: "academy_enrollment", tier },
     });
 }
+
+export async function sendExportProductApprovalEmail(
+    userEmail: string,
+    userName: string,
+    productName: string
+) {
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #0f172a;">Export Product Approved</h2>
+            <p>Dear ${userName},</p>
+            <p>Great news! Your export product <strong>${productName}</strong> has been reviewed and approved by our administrative team.</p>
+            <p>It is now live in the Export Catalog and visible to international buyers.</p>
+            <p>Log in to your dashboard to monitor its status and any associated buyer inquiries.</p>
+            <br />
+            <a href="${process.env.NEXT_PUBLIC_APP_URL}/export/products" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">View My Products</a>
+            <p style="margin-top: 30px; font-size: 14px; color: #64748b;">
+                Best regards,<br/>
+                The Easy Sales Export Team
+            </p>
+        </div>
+    `;
+
+    return sendEmailNotification({
+        to: userEmail,
+        subject: "Your Export Product has been Approved",
+        message: html,
+        metadata: { type: 'export_product_approval', productName }
+    });
+}
+
+export async function sendExportProductRejectionEmail(
+    userEmail: string,
+    userName: string,
+    productName: string
+) {
+    const html = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #0f172a;">Export Product Update</h2>
+            <p>Dear ${userName},</p>
+            <p>Thank you for submitting your product <strong>${productName}</strong> for the Export Catalog.</p>
+            <p>After careful review, we are unable to approve this product for the global catalog at this time. This may be due to missing certifications, incorrect grade formatting, or failure to meet minimum international standards.</p>
+            <p>Please review your product details and ensure all requirements are met before submitting a new application.</p>
+            <p style="margin-top: 30px; font-size: 14px; color: #64748b;">
+                Best regards,<br/>
+                The Easy Sales Export Team
+            </p>
+        </div>
+    `;
+
+    return sendEmailNotification({
+        to: userEmail,
+        subject: "Update on your Export Product Submission",
+        message: html,
+        metadata: { type: 'export_product_rejection', productName }
+    });
+}

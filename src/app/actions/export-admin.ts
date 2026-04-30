@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
 
 const DEFAULT_CATALOG = [
@@ -221,5 +221,161 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ su
     } catch (error: any) {
         logger.error("Delete export catalog error:", error);
         return { success: false, error: "Failed to delete item" };
+    }
+}
+
+export async function getAdminPendingExportProductsAction(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        const { session } = sessionResult;
+        
+        if (!session?.user || !session.user.roles?.some(r => r === "admin" || r === "super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const db = getAdminDb();
+        const snapshot = await db.collection(COLLECTIONS.EXPORT_CATALOG)
+            .where("status", "==", "pending")
+            .orderBy("createdAt", "desc")
+            .get();
+
+        const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        return { success: true, data: products };
+    } catch (error: any) {
+        logger.error("Get pending export products error:", error);
+        return { success: false, error: "Failed to fetch pending products" };
+    }
+}
+
+export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        const { session } = sessionResult;
+        
+        if (!session?.user || !session.user.roles?.some(r => r === "admin" || r === "super_admin")) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const db = getAdminDb();
+        
+        const updates = action === 'approve' 
+            ? { status: 'live', isActive: true } 
+            : { status: 'rejected', isActive: false };
+
+        const productRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(productId);
+        const productDoc = await productRef.get();
+        const productData = productDoc.data();
+
+        await productRef.update({ 
+            ...updates,
+            updatedAt: new Date(),
+            reviewedBy: session.user.id,
+            reviewedAt: new Date()
+        });
+
+        // Send Email Notification if userId exists
+        if (productData?.userId) {
+            try {
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(productData.userId).get();
+                const userData = userDoc.data();
+                if (userData?.email) {
+                    const { sendExportProductApprovalEmail, sendExportProductRejectionEmail } = await import("@/lib/email-notifications");
+                    const userName = userData.name || userData.firstName || "Export Participant";
+                    const productName = productData.name || "Export Product";
+                    
+                    if (action === 'approve') {
+                        await sendExportProductApprovalEmail(userData.email, userName, productName);
+                    } else {
+                        await sendExportProductRejectionEmail(userData.email, userName, productName);
+                    }
+                }
+            } catch (emailErr) {
+                logger.error("Failed to send export product review email:", emailErr);
+            }
+        }
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Review export product error:", error);
+        return { success: false, error: "Failed to review product" };
+    }
+}
+
+/**
+ * Fetch all export orders for admin dashboard
+ */
+export async function getAdminExportOrdersAction(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized access" };
+        }
+
+        const db = getAdminDb();
+        const ordersSnapshot = await db.collection(COLLECTIONS.EXPORT_ORDERS)
+            .orderBy("createdAt", "desc")
+            .get();
+
+        const orders = ordersSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+                updatedAt: data.updatedAt?.toDate?.()?.toISOString() || null,
+            };
+        });
+
+        return { success: true, data: orders };
+    } catch (error: any) {
+        logger.error("Failed to fetch admin export orders:", error);
+        return { success: false, error: "Failed to fetch export orders" };
+    }
+}
+
+/**
+ * Update the status of an export order
+ */
+export async function updateAdminExportOrderStatusAction(
+    orderId: string, 
+    status: string,
+    documentData?: { name: string; url: string; type: string }
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized access" };
+        }
+
+        const db = getAdminDb();
+        const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderId);
+        
+        // Import FieldValue from firebase-admin for arrayUnion
+        const { FieldValue } = await import('firebase-admin/firestore');
+
+        const updateData: any = {
+            status,
+            updatedAt: FieldValue.serverTimestamp(),
+        };
+
+        if (documentData) {
+            updateData.documents = FieldValue.arrayUnion(documentData);
+        }
+
+        await orderRef.update(updateData);
+
+        return { success: true };
+    } catch (error: any) {
+        logger.error("Failed to update export order status:", error);
+        return { success: false, error: "Failed to update export order status" };
     }
 }
