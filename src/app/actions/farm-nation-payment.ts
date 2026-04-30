@@ -30,7 +30,8 @@ export async function initializePropertyPaymentAction(
     propertyId: string,
     propertyTitle: string,
     amount: number,
-    sellerId: string
+    sellerId: string,
+    buyerInfo: { fullName: string; email: string; phone: string; purpose: string; }
 ): Promise<PaymentInitState> {
     try {
         const sessionResult = await requireSession();
@@ -79,19 +80,31 @@ export async function initializePropertyPaymentAction(
             }
         );
 
-        // Create pending purchase record
+        // Create pending purchase record in FARM_NATION_TRANSACTIONS
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await db.collection(COLLECTIONS.PROPERTY_PURCHASES).doc(purchaseId).set({
-            purchaseId,
+        await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({
+            id: purchaseId,
             propertyId,
-            propertyTitle,
+            propertyName: propertyTitle,
+            propertyPrice: amount,
+            propertyType: propertyData.type,
             buyerId: session.user.id,
-            buyerEmail: session.user.email,
+            buyerName: buyerInfo.fullName,
+            buyerEmail: buyerInfo.email,
+            buyerPhone: buyerInfo.phone,
+            purpose: buyerInfo.purpose,
             sellerId,
-            amount,
-            paymentReference: reference,
+            sellerName: propertyData.ownerName,
             status: "pending_payment",
+            escrowAmount: amount,
+            escrowStatus: "pending",
+            paymentReference: reference,
             createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+        
+        await propertyRef.update({
+            status: "pending",
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -161,15 +174,10 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
             return { error: "Payment verification failed: User mismatch", success: false };
         }
 
-        // RACE CONDITION FIX: Wrap ownership transfer in a Firestore transaction.
-        // Without this, two simultaneous buyers could both pass the processedPayments
-        // check (both arrive before either writes it), and both call propertyRef.update()
-        // with status="sold". Last write wins, causing a double-sale.
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         let amountInNaira = 0;
 
         await db.runTransaction(async (tx) => {
-            // Re-read property *inside* the transaction for strong consistency
             const freshPropertyDoc = await tx.get(propertyRef);
             if (!freshPropertyDoc.exists) {
                 throw new Error("Property not found");
@@ -178,20 +186,14 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
             const freshData = freshPropertyDoc.data()!;
             amountInNaira = paymentData.data.amount / 100;
 
-            // Re-check status inside the transaction — this is the critical gate.
-            // Firestore transactions are serialised: only one will see status="available".
-            if (freshData.status !== "available") {
-                throw new Error(`Property is no longer available (status: ${freshData.status}). It may have just been purchased.`);
+            if (freshData.status !== "pending") {
+                throw new Error(`Property is not in pending state (status: ${freshData.status}).`);
             }
 
-            // Transfer ownership atomically
+            // Transfer ownership later, just lock it in escrow
             const updatedData = {
-                ownerId: session.user.id,
-                ownerEmail: session.user.email,
-                previousOwnerId: freshData.ownerId,
-                status: "sold",
-                soldAt: FieldValue.serverTimestamp(),
-                salePrice: amountInNaira,
+                status: "pending_escrow", // Wait for admin to release C of O
+                escrowHeldAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             };
             tx.update(propertyRef, updatedData);
@@ -202,20 +204,21 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
                 processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
-                type: "property_purchase",
+                type: "farm_nation_escrow",
                 reference,
             });
 
-            // Update purchase record if it exists
-            const purchaseQuery = await db.collection(COLLECTIONS.PROPERTY_PURCHASES)
+            // Update purchase record
+            const purchaseQuery = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
                 .where("paymentReference", "==", reference)
                 .limit(1)
                 .get();
 
             if (!purchaseQuery.empty) {
-                const purchaseRef = db.collection(COLLECTIONS.PROPERTY_PURCHASES).doc(purchaseQuery.docs[0].id);
+                const purchaseRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseQuery.docs[0].id);
                 tx.update(purchaseRef, {
-                    status: "completed",
+                    status: "payment_confirmed",
+                    escrowStatus: "held",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
@@ -226,11 +229,10 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 
         return {
             success: true,
-            message: `Property purchase successful! ${metadata.propertyTitle} is now yours.`,
+            message: \`Payment successful! Your funds are held securely in escrow for \${metadata.propertyTitle}.\`,
             propertyId,
         };
     } catch (error: any) {
-        // 🔒 SECURITY FIX #2: Sanitized error logging
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyProperty',

@@ -120,6 +120,11 @@ export default function ProfilePage() {
 
             const sessionEmail = session?.user?.email || "";
             const emailChanged = sessionEmail !== "" && userData.email !== "" && userData.email !== sessionEmail;
+            if (!rawPhone || rawPhone.trim() === "") {
+                setSaveMessage({ type: 'error', text: "Phone number is required." });
+                setIsLoading(false);
+                return;
+            }
             
             // Format phone number
             const fullPhone = `${countryCode}${rawPhone.startsWith('0') && countryCode === '+234' ? rawPhone.slice(1) : rawPhone}`.trim();

@@ -336,11 +336,10 @@ export async function getFarmNationVerificationStatsAction(): Promise<{
             if (cached) return cached;
         } catch (e) {}
 
-        const [totalSnap, pendingSnap, verifiedSnap, rejectedSnap] = await Promise.all([
-            db.collection("land_listings").count().get(),
-            db.collection("land_listings").where("verificationStatus", "==", "pending").count().get(),
-            db.collection("land_listings").where("verificationStatus", "==", "verified").count().get(),
-            db.collection("land_listings").where("verificationStatus", "==", "rejected").count().get(),
+        const [totalSnap, pendingSnap, verifiedSnap] = await Promise.all([
+            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).count().get(),
+            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where("verified", "==", false).count().get(),
+            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where("verified", "==", true).count().get(),
         ]);
 
         const payload = {
@@ -348,9 +347,9 @@ export async function getFarmNationVerificationStatsAction(): Promise<{
             data: {
                 stats: {
                     total:    totalSnap.data().count,
-                    pending:  pendingSnap.data().count,
-                    verified: verifiedSnap.data().count,
-                    rejected: rejectedSnap.data().count,
+                    pending:  pendingSnap.data().count, // false
+                    verified: verifiedSnap.data().count, // true
+                    rejected: 0, // Not supported in boolean schema
                 },
             },
         };
@@ -385,16 +384,17 @@ export async function getAdminLandVerificationsAction(options: {
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
-        let queryRef = db.collection("land_listings").orderBy("createdAt", orderDirection);
+        let queryRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).orderBy("createdAt", orderDirection);
 
         if (options.status && options.status !== "all") {
-            queryRef = db.collection("land_listings")
-                .where("verificationStatus", "==", options.status)
+            const isVerified = options.status === "verified";
+            queryRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                .where("verified", "==", isVerified)
                 .orderBy("createdAt", orderDirection);
         }
 
         if (options.lastDocId) {
-            const lastDoc = await db.collection("land_listings").doc(options.lastDocId).get();
+            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 queryRef = queryRef.startAfter(lastDoc);
             }
@@ -406,6 +406,8 @@ export async function getAdminLandVerificationsAction(options: {
             return {
                 id: doc.id,
                 ...data,
+                // Map verified boolean to verificationStatus for UI compatibility
+                verificationStatus: data.verified ? "verified" : "pending",
                 createdAt: data.createdAt?.toDate() || new Date(),
                 verifiedAt: data.verifiedAt?.toDate() || undefined,
             };
@@ -415,7 +417,7 @@ export async function getAdminLandVerificationsAction(options: {
             const q = options.search.toLowerCase();
             verifications = verifications.filter(v => 
                 v.ownerName?.toLowerCase().includes(q) ||
-                v.title?.toLowerCase().includes(q) ||
+                v.name?.toLowerCase().includes(q) ||
                 v.state?.toLowerCase().includes(q)
             );
         }
@@ -434,3 +436,124 @@ export async function getAdminLandVerificationsAction(options: {
     }
 }
 
+export async function getFarmNationTransactionsAction(options: {
+    limit?: number;
+    status?: string;
+    lastDocId?: string;
+} = {}) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const fetchLimit = options.limit || 50;
+        let queryRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");
+
+        if (options.status && options.status !== "all") {
+            queryRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where("status", "==", options.status)
+                .orderBy("createdAt", "desc");
+        }
+
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                queryRef = queryRef.startAfter(lastDoc);
+            }
+        }
+
+        const snapshot = await queryRef.limit(fetchLimit).get();
+        let transactions = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt?.toDate() || new Date(),
+                updatedAt: data.updatedAt?.toDate() || new Date(),
+                paymentVerifiedAt: data.paymentVerifiedAt?.toDate() || undefined,
+            };
+        }) as any[];
+
+        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+
+        return { 
+            success: true, 
+            data: transactions,
+            lastDocId: nextCursor,
+            hasMore: !!nextCursor
+        };
+    } catch (error: any) {
+        logger.error("Get admin farm nation transactions error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function releaseFarmNationEscrowAction(transactionId: string) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const txRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(transactionId);
+        
+        await db.runTransaction(async (tx) => {
+            const txDoc = await tx.get(txRef);
+            if (!txDoc.exists) throw new Error("Transaction not found");
+            const txData = txDoc.data()!;
+
+            if (txData.escrowStatus !== "held" || txData.status !== "payment_confirmed") {
+                throw new Error("Transaction is not in a valid state for escrow release");
+            }
+
+            const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(txData.propertyId);
+            const propertyDoc = await tx.get(propertyRef);
+            if (!propertyDoc.exists) throw new Error("Property not found");
+
+            // Finalize transfer of ownership
+            tx.update(propertyRef, {
+                status: "sold",
+                ownerId: txData.buyerId,
+                ownerEmail: txData.buyerEmail,
+                previousOwnerId: txData.sellerId,
+                soldAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Mark Escrow as Released
+            tx.update(txRef, {
+                status: "completed",
+                escrowStatus: "released",
+                escrowReleasedAt: FieldValue.serverTimestamp(),
+                escrowReleasedBy: session.user.id,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            
+            // Record the seller payout in ledger
+            const payoutRef = db.collection("farm_nation_payouts").doc(transactionId);
+            tx.set(payoutRef, {
+                transactionId,
+                propertyId: txData.propertyId,
+                sellerId: txData.sellerId,
+                amount: txData.escrowAmount,
+                status: "pending_transfer", // Awaiting actual bank transfer
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
+
+        return { success: true, message: "Escrow released and property ownership transferred successfully." };
+    } catch (error: any) {
+        logger.error("Release Farm Nation Escrow error:", error);
+        return { success: false, error: error.message };
+    }
+}

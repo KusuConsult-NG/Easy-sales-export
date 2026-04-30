@@ -103,7 +103,8 @@ export default function CheckoutPage() {
                 propertyId,
                 property.name,
                 property.price,
-                property.ownerId
+                property.ownerId,
+                buyerInfo
             );
 
             if (result.success ) {

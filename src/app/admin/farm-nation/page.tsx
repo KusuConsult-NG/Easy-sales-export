@@ -1,6 +1,6 @@
 "use client";
 
-import { Tractor, MapPin, Search } from "lucide-react";
+import { Tractor, MapPin, Search, Shield } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminFarmNationPage() {
@@ -28,6 +28,14 @@ export default function AdminFarmNationPage() {
             href: "/admin/farm-nation/applications",
             color: "text-blue-600",
             bg: "bg-blue-100"
+        },
+        {
+            title: "Escrow Management",
+            description: "Manage real estate payments and title transfers",
+            icon: Shield,
+            href: "/admin/farm-nation/escrow",
+            color: "text-indigo-600",
+            bg: "bg-indigo-100"
         }
     ];
 
