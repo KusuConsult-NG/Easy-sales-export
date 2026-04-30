@@ -21,8 +21,10 @@ const firebaseConfig = {
     apiKey: self.__FIREBASE_API_KEY__ || '',
     authDomain: self.__FIREBASE_AUTH_DOMAIN__ || '',
     projectId: self.__FIREBASE_PROJECT_ID__ || '',
+    storageBucket: self.__FIREBASE_STORAGE_BUCKET__ || '',
     messagingSenderId: self.__FIREBASE_MESSAGING_SENDER_ID__ || '',
     appId: self.__FIREBASE_APP_ID__ || '',
+    measurementId: self.__FIREBASE_MEASUREMENT_ID__ || '',
 };
 
 if (firebaseConfig.projectId && !firebase.apps.length) {
