@@ -229,7 +229,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 
         return {
             success: true,
-            message: \`Payment successful! Your funds are held securely in escrow for \${metadata.propertyTitle}.\`,
+            message: `Payment successful! Your funds are held securely in escrow for ${metadata.propertyTitle}.`,
             propertyId,
         };
     } catch (error: any) {
