@@ -13,6 +13,7 @@ import { useToast } from "@/contexts/ToastContext";
 interface InvestmentProfileStepProps {
     onNext: (data: any) => void;
     initialData?: any;
+    onChange?: (data: any) => void;
 }
 
 export function InvestmentProfileStep({

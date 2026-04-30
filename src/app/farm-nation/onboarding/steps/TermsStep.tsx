@@ -8,9 +8,10 @@ interface TermsStepProps {
     onNext: (data: any) => void;
     onBack: () => void;
     initialData?: any;
+    onChange?: (data: any) => void;
 }
 
-export default function TermsStep({ onNext, onBack, initialData }: TermsStepProps) {
+export default function TermsStep({ onNext, onBack, onChange, initialData }: TermsStepProps) {
     const [formData, setFormData] = useState({
         termsAccepted: initialData?.termsAccepted || false,
         privacyAccepted: initialData?.privacyAccepted || false,

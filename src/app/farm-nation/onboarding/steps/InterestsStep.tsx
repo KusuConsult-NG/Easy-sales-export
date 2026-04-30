@@ -8,6 +8,7 @@ interface InterestsStepProps {
     onBack: () => void;
     initialData?: any;
     role: "buyer" | "seller" | "both";
+    onChange?: (data: any) => void;
 }
 
 const PROPERTY_TYPES = [

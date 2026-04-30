@@ -17,9 +17,10 @@ interface ProfileStepProps {
     onNext: (data: any) => void;
     onBack: () => void;
     initialData?: any;
+    onChange?: (data: any) => void;
 }
 
-export default function ProfileStep({ onNext, onBack, initialData }: ProfileStepProps) {
+export default function ProfileStep({ onNext, onBack, onChange, initialData }: ProfileStepProps) {
     const [formData, setFormData] = useState({
         firstName: initialData?.firstName || (initialData?.fullName ? initialData.fullName.split(' ')[0] : '') || "",
         lastName: initialData?.lastName || (initialData?.fullName ? initialData.fullName.split(' ').slice(1).join(' ') : '') || "",
@@ -34,7 +35,11 @@ export default function ProfileStep({ onNext, onBack, initialData }: ProfileStep
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const set = (field: string, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value, ...(field === 'state' ? { lga: '' } : {}) }));
+        setFormData(prev => {
+            const next = { ...prev, [field]: value, ...(field === 'state' ? { lga: '' } : {}) };
+            onChange?.({ profile: next });
+            return next;
+        });
         if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
     };
 

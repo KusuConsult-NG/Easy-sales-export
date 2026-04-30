@@ -6,9 +6,10 @@ import { ShoppingBag, Home as HomeIcon, User, CheckCircle } from "lucide-react";
 interface RoleSelectionStepProps {
     onNext: (data: { role: "buyer" | "seller" | "both" }) => void;
     initialData?: "buyer" | "seller" | "both";
+    onChange?: (data: any) => void;
 }
 
-export default function RoleSelectionStep({ onNext, initialData }: RoleSelectionStepProps) {
+export default function RoleSelectionStep({ onNext, onChange, initialData }: RoleSelectionStepProps) {
     const [selectedRole, setSelectedRole] = useState<"buyer" | "seller" | "both" | null>(
         initialData || null
     );
@@ -77,7 +78,10 @@ export default function RoleSelectionStep({ onNext, initialData }: RoleSelection
                     return (
                         <button
                             key={role.id}
-                            onClick={() => setSelectedRole(role.id)}
+                            onClick={() => {
+                                setSelectedRole(role.id);
+                                onChange?.({ role: role.id });
+                            }}
                             className={`relative p-6 rounded-2xl border-2 transition-all text-left ${isSelected
                                     ? "border-teal-600 bg-teal-50 shadow-lg scale-105"
                                     : "border-slate-200 hover:border-teal-300 hover:shadow-md"

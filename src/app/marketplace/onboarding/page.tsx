@@ -192,7 +192,13 @@ export default function MarketplaceOnboarding() {
     ];
 
     const updateFormData = (data: Partial<OnboardingData>) => {
-        setFormData(prev => ({ ...prev, ...data }));
+        setFormData(prev => {
+            const next = { ...prev, ...data };
+            if (!isRevisionMode && DRAFT_KEY) {
+                try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ step: currentStep, data: next })); } catch { /* non-blocking */ }
+            }
+            return next;
+        });
     };
 
     function handleNext() {

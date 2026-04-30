@@ -14,6 +14,7 @@ interface TermsAcceptanceStepProps {
     onNext: (data: any) => void;
     onBack: () => void;
     initialData?: any;
+    onChange?: (data: any) => void;
 }
 
 export function TermsAcceptanceStep({

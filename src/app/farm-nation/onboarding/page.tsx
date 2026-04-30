@@ -139,6 +139,20 @@ export default function FarmNationOnboardingPage() {
         );
     };
 
+    
+    function handleStepChange(stepData: any) {
+        setFormData((prev: any) => {
+            const next = { ...prev, ...stepData };
+            if (!isRevisionMode) {
+                const userId = session?.user?.id;
+                if (userId) {
+                    try { localStorage.setItem(`farmnation_draft_${userId}`, JSON.stringify({ step: currentStepId, data: next })); } catch { /* non-blocking */ }
+                }
+            }
+            return next;
+        });
+    };
+
     function handleNext(stepData: any) {
         const next = { ...formData, ...stepData };
         setFormData(next);
@@ -204,6 +218,7 @@ export default function FarmNationOnboardingPage() {
                 return (
                     <RoleSelectionStep
                         onNext={handleNext}
+                        onChange={handleStepChange}
                         initialData={formData.role}
                     />
                 );
@@ -212,6 +227,7 @@ export default function FarmNationOnboardingPage() {
                     <ProfileStep
                         onNext={handleNext}
                         onBack={handleBack}
+                        onChange={handleStepChange}
                         initialData={formData.profile}
                     />
                 );
@@ -220,6 +236,7 @@ export default function FarmNationOnboardingPage() {
                     <InterestsStep
                         onNext={handleNext}
                         onBack={handleBack}
+                        onChange={handleStepChange}
                         initialData={formData.interests}
                         role={formData.role}
                     />
@@ -229,6 +246,7 @@ export default function FarmNationOnboardingPage() {
                     <TermsStep
                         onNext={handleNext}
                         onBack={handleBack}
+                        onChange={handleStepChange}
                         initialData={formData.terms}
                     />
                 );

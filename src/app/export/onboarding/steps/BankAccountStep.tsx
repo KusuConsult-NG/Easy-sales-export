@@ -17,11 +17,13 @@ interface BankAccountStepProps {
     onNext: (data: any) => void;
     onBack: () => void;
     initialData?: BankAccountData;
+    onChange?: (data: any) => void;
 }
 
 export function BankAccountStep({
     onNext,
     onBack,
+    onChange,
     initialData,
 }: BankAccountStepProps) {
     const [bankData, setBankData] = useState<BankAccountData | null>(
@@ -31,6 +33,7 @@ export function BankAccountStep({
 
     function handleVerified(data: BankAccountData) {
         setBankData(data);
+        onChange?.({ bank: data });
     };
 
     function handleSubmit() {

@@ -144,6 +144,20 @@ export default function ExportOnboardingPage() {
         );
     };
 
+    
+    function handleStepChange(stepData: any) {
+        setFormData((prev: any) => {
+            const next = { ...prev, ...stepData };
+            if (!isRevisionMode) {
+                const userId = session?.user?.id;
+                if (userId) {
+                    try { localStorage.setItem(`export_draft_${userId}`, JSON.stringify({ step: currentStepId, data: next })); } catch { /* non-blocking */ }
+                }
+            }
+            return next;
+        });
+    };
+
     function handleNext(stepData: any) {
         const next = { ...formData, ...stepData };
         setFormData(next);
@@ -223,6 +237,7 @@ export default function ExportOnboardingPage() {
                 return (
                     <InvestmentProfileStep
                         onNext={handleNext}
+                        onChange={handleStepChange}
                         initialData={formData.profile}
                     />
                 );
@@ -231,6 +246,7 @@ export default function ExportOnboardingPage() {
                     <KYCVerificationStep
                         onNext={handleNext}
                         onBack={handleBack}
+                        onChange={handleStepChange}
                         initialData={formData.kyc}
                     />
                 );
@@ -239,6 +255,7 @@ export default function ExportOnboardingPage() {
                     <BankAccountStep
                         onNext={handleNext}
                         onBack={handleBack}
+                        onChange={handleStepChange}
                         initialData={formData.bank}
                     />
                 );
@@ -247,6 +264,7 @@ export default function ExportOnboardingPage() {
                     <TermsAcceptanceStep
                         onNext={handleNext}
                         onBack={handleBack}
+                        onChange={handleStepChange}
                         initialData={formData.terms}
                     />
                 );
