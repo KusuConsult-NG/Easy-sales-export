@@ -358,3 +358,44 @@ export async function registerAction(prevState: any, formData: FormData) {
 export async function logoutAction() {
     await signOut({ redirectTo: "/auth/login" });
 }
+
+/**
+ * Change the user's password using the Firebase Auth REST API (to verify current)
+ * and Firebase Admin (to set the new one).
+ */
+export async function changePasswordAction(
+    currentPassword: string,
+    newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        const session = await auth();
+        if (!session?.user?.id || !session.user.email) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        // Verify current password via REST API
+        const verifyRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`, {
+            method: 'POST',
+            body: JSON.stringify({
+                email: session.user.email,
+                password: currentPassword,
+                returnSecureToken: true
+            }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!verifyRes.ok) {
+            return { success: false, error: "Incorrect current password." };
+        }
+
+        // Update to new password via Admin SDK
+        await adminAuth.updateUser(session.user.id, {
+            password: newPassword
+        });
+
+        return { success: true };
+    } catch (error) {
+        logger.error("Error changing password:", error);
+        return { success: false, error: "An unexpected error occurred. Please try again." };
+    }
+}

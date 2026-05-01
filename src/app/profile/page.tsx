@@ -10,6 +10,7 @@ import {
 import Image from "next/image";
 
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
+import { changePasswordAction } from "@/app/actions/auth";
 import { signOut } from "next-auth/react";
 import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -47,6 +48,13 @@ export default function ProfilePage() {
     const [countryCode, setCountryCode] = useState("+234");
     const [rawPhone, setRawPhone] = useState("");
     const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+
+    // Password change state
+    const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [passwordData, setPasswordData] = useState({ current: "", new: "", confirm: "" });
+    const [passwordError, setPasswordError] = useState("");
+    const [passwordSuccess, setPasswordSuccess] = useState("");
 
     // Load user profile on mount
     useEffect(() => {
@@ -169,6 +177,42 @@ export default function ProfilePage() {
 
         // Clear message after 4 seconds
         setTimeout(() => setSaveMessage(null), 4000);
+    };
+
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setPasswordError("");
+        setPasswordSuccess("");
+
+        if (!passwordData.current || !passwordData.new || !passwordData.confirm) {
+            setPasswordError("All fields are required");
+            return;
+        }
+
+        if (passwordData.new !== passwordData.confirm) {
+            setPasswordError("New passwords do not match");
+            return;
+        }
+
+        if (passwordData.new.length < 8) {
+            setPasswordError("Password must be at least 8 characters");
+            return;
+        }
+
+        setIsChangingPassword(true);
+        const res = await changePasswordAction(passwordData.current, passwordData.new);
+        setIsChangingPassword(false);
+
+        if (res.success) {
+            setPasswordSuccess("Password updated successfully!");
+            setTimeout(() => {
+                setIsChangePasswordModalOpen(false);
+                setPasswordData({ current: "", new: "", confirm: "" });
+                setPasswordSuccess("");
+            }, 2000);
+        } else {
+            setPasswordError(res.error || "Failed to change password");
+        }
     };
 
     const user = session?.user || {
@@ -481,9 +525,12 @@ export default function ProfilePage() {
                                         <div className="flex items-center justify-between mb-4">
                                             <div>
                                                 <h4 className="font-medium text-slate-900">Password</h4>
-                                                <p className="text-sm text-slate-500">Last changed 3 months ago</p>
+                                                <p className="text-sm text-slate-500">Secure your account</p>
                                             </div>
-                                            <button className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+                                            <button 
+                                                onClick={() => setIsChangePasswordModalOpen(true)}
+                                                className="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors"
+                                            >
                                                 Change Password
                                             </button>
                                         </div>
@@ -564,6 +611,93 @@ export default function ProfilePage() {
                     </div>
                 </div>
             </div>
+
+            {/* Change Password Modal */}
+            {isChangePasswordModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-900">Change Password</h3>
+                            <button 
+                                onClick={() => setIsChangePasswordModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600 transition"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleChangePassword} className="p-6 space-y-4">
+                            {passwordError && (
+                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+                                    {passwordError}
+                                </div>
+                            )}
+                            {passwordSuccess && (
+                                <div className="p-3 bg-green-50 text-green-600 text-sm rounded-lg border border-green-100 flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4" />
+                                    {passwordSuccess}
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Current Password</label>
+                                <input
+                                    type="password"
+                                    required
+                                    value={passwordData.current}
+                                    onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                                    className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-hidden"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+                                <input
+                                    type="password"
+                                    required
+                                    value={passwordData.new}
+                                    onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
+                                    className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-hidden"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Confirm New Password</label>
+                                <input
+                                    type="password"
+                                    required
+                                    value={passwordData.confirm}
+                                    onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
+                                    className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-hidden"
+                                />
+                            </div>
+
+                            <div className="pt-4 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsChangePasswordModalOpen(false)}
+                                    className="flex-1 py-3 px-4 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isChangingPassword}
+                                    className="flex-1 py-3 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isChangingPassword ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Updating...
+                                        </>
+                                    ) : (
+                                        "Update Password"
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
