@@ -78,13 +78,23 @@ export default function ProfilePage() {
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
 
-                // Parse phone
+                // Parse phone — use a known country-code list to avoid greedy over-matching.
+                // e.g. +2348036546039 should parse as code=+234, not code=+2348.
                 const savedPhone = p.phone || "";
                 if (savedPhone.startsWith('+')) {
-                    const match = savedPhone.match(/^(\+\d{1,4})/);
-                    if (match) {
-                        setCountryCode(match[1]);
-                        setRawPhone(savedPhone.slice(match[1].length));
+                    // Known multi-digit country codes to check (longest first to avoid false matches)
+                    const KNOWN_CODES = ["+234", "+1", "+44", "+27", "+233", "+254", "+256", "+255", "+260", "+263"];
+                    const matched = KNOWN_CODES.find(c => savedPhone.startsWith(c));
+                    if (matched) {
+                        setCountryCode(matched);
+                        setRawPhone(savedPhone.slice(matched.length));
+                    } else {
+                        // Fallback: take the first 1–4 digits
+                        const fallback = savedPhone.match(/^(\+\d{1,4})/);
+                        if (fallback) {
+                            setCountryCode(fallback[1]);
+                            setRawPhone(savedPhone.slice(fallback[1].length));
+                        }
                     }
                 } else if (savedPhone.startsWith('0')) {
                     setCountryCode('+234');
@@ -118,7 +128,9 @@ export default function ProfilePage() {
         // Determine what to save based on active tab
         if (activeTab === 'general') {
             const isWaveParticipant = session?.user?.roles?.includes('wave_participant');
-            const isNonNigerian = (!isWaveParticipant && countryCode !== "+234");
+            // Nigerian users: country code is +234 OR starts with +234 (e.g. +2348...)
+            const isNigerian = countryCode === '+234' || countryCode.startsWith('+234');
+            const isNonNigerian = !isWaveParticipant && !isNigerian;
             
             if (isNonNigerian && !userData.identityDocument) {
                 setSaveMessage({ type: 'error', text: "Government Issued ID is required for non-Nigerians." });
@@ -470,7 +482,9 @@ export default function ProfilePage() {
                                             />
                                         </div>
                                         
-                                        {!user.roles?.includes('wave_participant') && countryCode !== "+234" && (
+                                        {/* Government ID — only visible to non-Nigerian users */}
+                                        {!user.roles?.includes('wave_participant') &&
+                                         !countryCode.startsWith('+234') && (
                                             <div className="md:col-span-2 space-y-2 p-4 bg-blue-50 border border-blue-100 rounded-xl">
                                                 <label className="text-sm font-medium text-slate-900 flex items-center justify-between">
                                                     <span>Government Issued ID (Required for Non-Nigerians)</span>
@@ -521,6 +535,7 @@ export default function ProfilePage() {
                                                 )}
                                             </div>
                                         )}
+
                                     </div>
                                 </div>
                             )}
