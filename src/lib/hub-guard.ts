@@ -24,6 +24,17 @@ export async function requireHubRegistration() {
         redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
     
+    // ── ADMIN BYPASS ──────────────────────────────────────────────────────────
+    // Admin/super_admin accounts are provisioned directly and are NEVER subject
+    // to the hub registration completeness check. They should always pass through.
+    const sessionRoles: string[] = (sessionResult.session.user as any)?.roles || [];
+    const isAdminAccount = sessionRoles.some((r: string) =>
+        r === 'admin' || r === 'super_admin' || r.endsWith('_admin')
+    );
+    if (isAdminAccount) {
+        return sessionResult;
+    }
+    
     let shouldRedirect = false;
     
     // 2. Extrapolate db record for registration verification
