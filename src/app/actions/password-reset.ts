@@ -6,6 +6,9 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface SendResetEmailState {
     success: boolean;
@@ -33,38 +36,90 @@ export async function sendResetEmailAction(
     formData: FormData
 ): Promise<SendResetEmailState> {
     try {
-        const email = formData.get('email') as string;
+        const rawEmail = formData.get('email') as string;
 
-        if (!email) {
+        if (!rawEmail) {
             return { success: false, error: 'Email is required' };
         }
+        
+        const email = rawEmail.trim().toLowerCase();
 
+        // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
             return { success: false, error: 'Invalid email format' };
         }
 
-        // Use Firebase Auth REST API to send the built-in password reset email
-        // This completely bypasses Resend domain verification issues and custom token management
-        const response = await fetch(
-            `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    requestType: 'PASSWORD_RESET',
-                    email: email,
-                }),
-            }
-        );
+        const auth = getAuth();
+        try {
+            await auth.getUserByEmail(email);
+        } catch (error) {
+            // For security, don't reveal if email exists or not
+            return {
+                success: true,
+                error: undefined
+            };
+        }
 
-        if (!response.ok) {
-            const data = await response.json();
-            if (data.error && data.error.message === 'EMAIL_NOT_FOUND') {
-                // For security, do not reveal that the email does not exist.
-                return { success: true, error: undefined };
-            }
-            logger.error('Firebase Auth Password Reset Error:', data.error);
+        // Generate reset token
+        const token = generateResetToken();
+        const expiry = Date.now() + 3600000; // 1 hour from now
+
+        // Store reset token in Firestore
+        await db.collection(COLLECTIONS.PASSWORD_RESETS).add({
+            email,
+            token,
+            expiry,
+            used: false,
+            createdAt: FieldValue.serverTimestamp()
+        });
+
+        // Determine the base URL — in production use the canonical domain
+        const baseUrl = process.env.NEXT_PUBLIC_URL
+            || process.env.NEXTAUTH_URL
+            || 'https://easysalesexport.com';
+        const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+
+        // Send email via Resend (using platform's verified domain)
+
+        const { error } = await resend.emails.send({
+            from: 'Easy Sales Export <noreply@easysalesexport.com>',
+            to: email,
+            subject: 'Reset Your Password - Easy Sales Export',
+            html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Password Reset</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f8fafc;">
+  <div style="background: white; border-radius: 16px; padding: 40px; border: 1px solid #e2e8f0;">
+    <div style="text-align: center; margin-bottom: 32px;">
+      <h1 style="color: #0f172a; font-size: 24px; margin: 0;">Password Reset Request</h1>
+      <p style="color: #64748b; margin-top: 8px;">Easy Sales Export</p>
+    </div>
+    <p style="color: #334155;">You requested a password reset for your Easy Sales Export account.
+      Click the button below to set a new password:</p>
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${resetUrl}"
+         style="background: #3b5bdb; color: white; padding: 14px 28px; border-radius: 10px;
+                text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+        Reset My Password
+      </a>
+    </div>
+    <p style="color: #64748b; font-size: 14px;">
+      This link expires in <strong>1 hour</strong>. If you did not request this, you can safely ignore this email.
+    </p>
+    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;">
+    <p style="color: #94a3b8; font-size: 12px; text-align: center;">
+      If the button doesn't work, copy this link: ${resetUrl}
+    </p>
+  </div>
+</body>
+</html>
+            `
+        });
+
+        if (error) {
+            logger.error('Resend API Error (password reset):', error);
             return {
                 success: false,
                 error: 'Failed to send reset email. Please try again later.'

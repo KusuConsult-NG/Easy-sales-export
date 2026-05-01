@@ -14,7 +14,7 @@ const initialState: SendResetEmailState = {
 };
 
 export default function ForgotPasswordPage() {
-    const [state, formAction] = useActionState(sendResetEmailAction, initialState);
+    const [state, formAction, isPending] = useActionState(sendResetEmailAction, initialState);
     const [email, setEmail] = useState("");
 
     return (
@@ -98,10 +98,20 @@ export default function ForgotPasswordPage() {
                             {/* Submit Button */}
                             <button
                                 type="submit"
-                                className="w-full px-6 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                disabled={isPending}
+                                className="w-full px-6 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                <Mail className="w-5 h-5" />
-                                Send Reset Link
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Sending Link...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Mail className="w-5 h-5" />
+                                        Send Reset Link
+                                    </>
+                                )}
                             </button>
 
                             {/* Back Link */}

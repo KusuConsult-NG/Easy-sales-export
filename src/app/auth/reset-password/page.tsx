@@ -18,8 +18,7 @@ function ResetPasswordContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const token = searchParams.get('token');
-
-    const [state, formAction] = useActionState(resetPasswordAction, initialState);
+    const [state, formAction, isPending] = useActionState(resetPasswordAction, initialState);
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
@@ -166,10 +165,20 @@ function ResetPasswordContent() {
                             {/* Submit Button */}
                             <button
                                 type="submit"
-                                className="w-full px-6 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                disabled={isPending}
+                                className="w-full px-6 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                <Lock className="w-5 h-5" />
-                                Reset Password
+                                {isPending ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Resetting Password...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Lock className="w-5 h-5" />
+                                        Reset Password
+                                    </>
+                                )}
                             </button>
 
                             {/* Back Link */}
