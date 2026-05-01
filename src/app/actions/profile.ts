@@ -121,6 +121,10 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     // Update Firestore — also compute fullName from parts
     const updatePayload: Record<string, any> = {
         ...validated,
+        // Mark profile as explicitly completed. The hub-guard checks this flag
+        // as a fast-exit on every page load. Once set, the user NEVER sees the
+        // profile completion screen again on future logins.
+        profileComplete: true,
         updatedAt: new Date(),
     };
     if (validated.firstName || validated.lastName || validated.otherName) {
@@ -133,7 +137,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     }
     await db.collection(COLLECTIONS.USERS).doc(userId).update(updatePayload);
 
-    // Invalidate Redis cache to prevent redirect loops from hub-guard & dashboard
+    // Invalidate Redis cache so hub-guard reads the fresh profileComplete flag
     await invalidateUserCache(userId);
 
     return { success: true };

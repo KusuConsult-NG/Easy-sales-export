@@ -59,13 +59,22 @@ export async function requireHubRegistration() {
             shouldRedirect = true;
         } else {
             // 3. Define "Fully Registered" Status
-            // NOTE: phone is intentionally NOT required here — social/Google login users
-            // never provide a phone during signup. Requiring it caused an infinite loop
-            // where users were trapped on /profile forever. Phone can be added voluntarily.
+            // FAST EXIT: Once a user has saved their profile at least once, the
+            // `profileComplete` flag is written to Firestore. This is the primary
+            // guard check — if it's true, skip all field-level validation.
+            if (userData.profileComplete === true) {
+                // User has explicitly completed their profile. Never block them again.
+                return sessionResult;
+            }
+
+            // Legacy check for users who registered before the profileComplete flag existed.
+            // NOTE: phone is intentionally NOT required — social/Google login users
+            // never provide a phone during signup.
             const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
             const hasEmail = Boolean(userData?.email);
-            
-            const isFullyRegistered = hasName && hasEmail;
+            const hasPhone = Boolean(userData?.phone);
+
+            const isFullyRegistered = hasName && hasEmail && hasPhone;
             
             if (!isFullyRegistered) {
                 shouldRedirect = true;

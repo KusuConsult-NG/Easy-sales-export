@@ -155,7 +155,15 @@ export default function ProfilePage() {
                     setTimeout(() => signOut({ callbackUrl: "/auth/login" }), 2500);
                 } else {
                     setSaveMessage({ type: 'success', text: 'Profile updated successfully!' });
-                    // Only auto-redirect when the hub guard sent the user here to complete registration
+
+                    // Always clear the ?notice= param from the URL so the browser history
+                    // doesn't re-trigger the hub-guard redirect on back navigation.
+                    if (notice) {
+                        window.history.replaceState({}, '', '/profile');
+                    }
+
+                    // If the hub guard sent the user here to complete registration,
+                    // redirect them to the dashboard now that profileComplete is written.
                     if (notice === 'complete-your-hub-registration') {
                         setTimeout(() => router.push("/dashboard"), 1500);
                     }
