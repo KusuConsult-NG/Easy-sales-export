@@ -17,6 +17,7 @@ export type AuditAction =
     | 'user_suspend'
     | 'user_activate'
     | 'user_role_change'
+    | 'user_gender_update'
     | 'user_impersonate'
     | 'user_kyc_verify_bvn'
     | 'user_kyc_verify_nin'
