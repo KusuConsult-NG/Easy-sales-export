@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
 import { isSharedDomainPath, isGatedSegment } from "@/lib/route-manifest";
+import { canAccessAdminRoute } from "@/lib/admin-permissions";
 
 // Basic known malicious bot signatures (edge-safe, no state required)
 const BLOCKED_USER_AGENTS = ["curl", "python-requests", "wget", "postman"];
@@ -192,8 +193,7 @@ const authMiddleware = auth((req: any) => {
     // Auth check is handled by authConfig.callbacks.authorized()
     if (pathname.startsWith("/admin") && req.auth?.user) {
         const roles = (req.auth.user as any)?.roles || [];
-        const isAdmin = roles.some((r: string) => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
-        if (!isAdmin) {
+        if (!canAccessAdminRoute(roles, pathname)) {
             return NextResponse.redirect(new URL("/dashboard", req.url));
         }
     }

@@ -31,6 +31,7 @@ import {
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
+import { canAccessAdminRoute } from "@/lib/admin-permissions";
 
 
 const NAV_ITEMS = [
@@ -132,26 +133,9 @@ export default function AdminSidebar() {
                                                 return null;
                                             }
 
-                                            // Module-admin UI restriction
-                                            if (!isFullAdmin && isModuleAdmin) {
-                                                // Always allow Dashboard and Support
-                                                const ALWAYS_ALLOW = ["/admin", "/admin/messages"];
-                                                if (ALWAYS_ALLOW.includes(item.href)) {
-                                                    // Continue to render
-                                                } else {
-                                                    // Check conditional visibility
-                                                    if (item.href === "/admin/analytics" && !canSeeAnalytics) return null;
-                                                    if (item.href === "/admin/users" && !canSeeUsers) return null;
-                                                    if (item.href === "/admin/finance" && !canSeeFinance) return null;
-                                                    
-                                                    // Module specific gates
-                                                    if (isWaveAdmin && !item.href.startsWith("/admin/wave") && item.href !== "/admin/users" && item.href !== "/admin/analytics") return null;
-                                                    if (isCoopAdmin && !item.href.startsWith("/admin/cooperatives") && item.href !== "/admin/users" && item.href !== "/admin/analytics") return null;
-                                                    if (isMktAdmin && !item.href.startsWith("/admin/marketplace") && item.href !== "/admin/finance" && item.href !== "/admin/analytics") return null;
-                                                    if (isExportAdmin && !item.href.startsWith("/admin/export") && item.href !== "/admin/analytics") return null;
-                                                    if (isFarmAdmin && !item.href.startsWith("/admin/farm-nation") && item.href !== "/admin/analytics") return null;
-                                                    if (isAcadAdmin && !item.href.startsWith("/admin/academy") && item.href !== "/admin/analytics") return null;
-                                                }
+                                            // Granular role-based UI filtering
+                                            if (!canAccessAdminRoute(roles, item.href)) {
+                                                return null;
                                             }
 
                                             const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
