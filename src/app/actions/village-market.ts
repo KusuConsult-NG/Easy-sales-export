@@ -44,7 +44,7 @@ export async function createVillageMarketEventAction(data: {
         const userId = sessionResult.session.user.id;
 
         // Admins only
-        if (!isAdmin(roles)) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized: admin role required" };
         }
 
@@ -251,9 +251,7 @@ export async function addExternalMerchantAction(
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const roles: string[] = userDoc.data()?.roles || [];
-        if (!isAdmin(roles)) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized: admin role required" };
         }
 
@@ -285,9 +283,7 @@ export async function updateVillageMarketEventStatusAction(
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const roles: string[] = userDoc.data()?.roles || [];
-        if (!isAdmin(roles)) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -348,9 +344,7 @@ export async function getAdminVillageMarketEventsAction(options: {
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const roles: string[] = userDoc.data()?.roles || [];
-        if (!isAdmin(roles)) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
