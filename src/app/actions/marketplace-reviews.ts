@@ -17,8 +17,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import type { ProductReview, SellerReview } from "@/lib/types/marketplace";
 import { isAdmin } from "@/lib/admin-permissions";
+import type { ProductReview, SellerReview } from "@/lib/types/marketplace";
 
 // ---------------------------------------------------------------------------
 // SUBMIT: Product Review (buyer, post-delivery)

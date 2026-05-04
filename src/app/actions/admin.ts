@@ -23,7 +23,7 @@ import {
     ExportOnboardingReviewSchema,
     UserKycVerificationSchema
 } from "@/lib/schemas";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { atomicUpdateUser } from "@/lib/services/userService";
 
@@ -2066,11 +2066,7 @@ async function _getExportApplicationsStatsAction(): Promise<{
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const roles = userDoc.data()?.roles || [];
-        const hasExportAccess = roles.some((r: string) =>
-            r === "admin" || r === "super_admin" || r === "export_admin"
-        );
-        if (!userDoc.exists || !hasExportAccess) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -2138,11 +2134,7 @@ async function _getStandardExportApplicationsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const roles = userDoc.data()?.roles || [];
-        const hasExportAccess = roles.some((r: string) =>
-            r === "admin" || r === "super_admin" || r === "export_admin"
-        );
-        if (!userDoc.exists || !hasExportAccess) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -3202,11 +3194,7 @@ async function _getStandardSellerVerificationsAction(
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const roles = userDoc.data()?.roles || [];
-        const hasMarketplaceAccess = roles.some((r: string) =>
-            r === "admin" || r === "super_admin" || r === "marketplace_admin"
-        );
-        if (!userDoc.exists || !hasMarketplaceAccess) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -3298,11 +3286,7 @@ async function _getMarketplaceUsersAction(options: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         
-        const roles = userDoc.data()?.roles || [];
-        const hasFarmAccess = roles.some((r: string) =>
-            r === "admin" || r === "super_admin" || r === "farmnation_admin"
-        );
-        if (!userDoc.exists || !hasFarmAccess) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -3449,7 +3433,7 @@ export async function getAdminSellerStatsAction(): Promise<{
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        if (!session?.user?.id || !isAdmin(roles)) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
