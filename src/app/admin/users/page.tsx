@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download } from "lucide-react";
-import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction } from "@/app/actions/admin";
+import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
 import AdminDataTable from "@/components/admin/AdminDataTable";
@@ -34,6 +34,7 @@ interface User {
     lga?: string;
     address?: any;
     accountType?: string;
+    gender?: string;
 }
 
 const ROLES_LIST = [
@@ -606,6 +607,45 @@ export default function AdminUsersPage() {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Gender Settings</h4>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-3">
+                                <p className="text-xs text-slate-500 mb-2 italic">Correct this if the user is blocked from gender-specific programs (e.g., WAVE).</p>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex-1 grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                const res = await updateUserGenderAction(selectedUserForModal.id, "male");
+                                                if (res.success) {
+                                                    showToast("Gender updated to Male", "success");
+                                                    setSelectedUserForModal({ ...selectedUserForModal, gender: "male" });
+                                                    setData(prev => prev.map(u => u.id === selectedUserForModal.id ? { ...u, gender: "male" } : u));
+                                                }
+                                            }}
+                                            className={`px-3 py-2 rounded-lg border text-sm font-semibold transition ${selectedUserForModal.gender === "male" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                                        >
+                                            Male
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                const res = await updateUserGenderAction(selectedUserForModal.id, "female");
+                                                if (res.success) {
+                                                    showToast("Gender updated to Female", "success");
+                                                    setSelectedUserForModal({ ...selectedUserForModal, gender: "female" });
+                                                    setData(prev => prev.map(u => u.id === selectedUserForModal.id ? { ...u, gender: "female" } : u));
+                                                }
+                                            }}
+                                            className={`px-3 py-2 rounded-lg border text-sm font-semibold transition ${selectedUserForModal.gender === "female" ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                                        >
+                                            Female
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

@@ -575,6 +575,61 @@ async function _toggleUserKycVerificationAction(
         return { error: `Failed to update ${field.toUpperCase()} verification status`, success: false };
     }
 }
+ 
+ // ============================================
+ // Update User Gender (Admin Only)
+ // ============================================
+ 
+ async function _updateUserGenderAction(
+     userId: string,
+     gender: "male" | "female"
+ ): Promise<ActionState> {
+     try {
+         const sessionResult = await requireSession();
+         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+         const { session } = sessionResult;
+ 
+         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+             return { error: "Unauthorized: Permission required - users:update", success: false };
+         }
+ 
+         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+         const userDoc = await userRef.get();
+ 
+         if (!userDoc.exists) {
+             return { error: "User not found", success: false };
+         }
+ 
+         await userRef.update({
+             gender,
+             updatedAt: FieldValue.serverTimestamp(),
+         });
+ 
+         // CLEAR CACHE
+         try {
+             const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+             await invalidateUserCache(userId);
+             logger.info(`[User Gender Update] Cache cleared for user: ${userId}`);
+         } catch (cacheError) {
+             logger.error('[User Gender Update] Cache clear error:', cacheError);
+         }
+ 
+         // Log audit
+         await logAuditAction("user_gender_update", userId, "user", {
+             adminId: session.user.id,
+             newGender: gender,
+         });
+ 
+         return {
+             error: null,
+             success: true,
+             message: `User gender updated to ${gender} successfully`,
+         };
+     } catch (error: any) {
+         logger.error("Update user gender error:", error);
+         return { error: "Failed to update gender", success: false };
+     }
+ }
 
 // ============================================
 // Get WAVE Applications (Admin)
@@ -3418,6 +3473,7 @@ export const manualAcademyEnrollmentAction = withFlexibleSafeAction("manualAcade
 export const inviteLegacyMemberAction = withFlexibleSafeAction("inviteLegacyMemberAction", _inviteLegacyMemberAction);
 export const getStandardSellerVerificationsAction = withFlexibleSafeAction("getStandardSellerVerificationsAction", _getStandardSellerVerificationsAction);
 export const getMarketplaceUsersAction = withFlexibleSafeAction("getMarketplaceUsersAction", _getMarketplaceUsersAction);
+export const updateUserGenderAction = withFlexibleSafeAction("updateUserGenderAction", _updateUserGenderAction);
 
 /**
  * Admin: Server-side COUNT aggregations for the seller verifications dashboard.

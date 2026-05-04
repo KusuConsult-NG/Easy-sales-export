@@ -36,6 +36,14 @@ export default function AdminWavePage() {
             href: "/admin/wave/compliance",
             color: "text-green-600",
             bg: "bg-green-100"
+        },
+        {
+            title: "Training Resources",
+            description: "Upload and manage program materials",
+            icon: FileText,
+            href: "/admin/wave/resources",
+            color: "text-indigo-600",
+            bg: "bg-indigo-100"
         }
     ];
 
