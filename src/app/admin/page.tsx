@@ -331,6 +331,24 @@ export default function AdminDashboardPage() {
                             </div>
                             <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
                         </Link>
+
+                        <Link
+                            href="/admin/wave/resources"
+                            className="group bg-white rounded-2xl p-5 hover:shadow-lg hover:-translate-y-0.5 ring-1 ring-slate-200/50 transition-all duration-300 flex items-start gap-4 border-2 border-dashed border-indigo-100"
+                        >
+                            <div className="p-2.5 bg-indigo-50 rounded-lg shrink-0">
+                                <FileText className="w-5 h-5 text-indigo-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-indigo-600 transition">
+                                    Add WAVE Resource
+                                </h3>
+                                <p className="text-sm text-slate-500">
+                                    Upload training materials
+                                </p>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 ml-auto mt-1 transition" />
+                        </Link>
                     </div>
                 </motion.div>
 
