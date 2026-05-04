@@ -8,9 +8,9 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
-import { serializeDocs } from "@/lib/firestore-serialize";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { serializeDoc } from "@/lib/firestore-serialize";
 
 /**
  * Check if current user is enrolled in WAVE
@@ -34,15 +34,14 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
                     success: true,
                     data: {
                         enrolled: true,
-                        memberData: {
-                            id: session.user.id,
+                        memberData: serializeDoc(session.user.id, {
                             name: session.user.name || "Administrator",
                             email: session.user.email,
                             roles: session.user.roles,
                             active: true,
                             status: "approved",
                             enrolledAt: new Date(),
-                        }
+                        })
                     }
                 };
             }
@@ -74,10 +73,7 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
                     success: true,
                     data: {
                         enrolled: true,
-                        memberData: {
-                            id: session.user.id,
-                            ...memberData
-                        }
+                        memberData: serializeDoc(session.user.id, memberData)
                     }
                 };
             }
@@ -89,10 +85,7 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
             success: true,
             data: {
                 enrolled: true,
-                memberData: {
-                    id: memberDoc.id,
-                    ...memberDoc.data(),
-                },
+                memberData: serializeDoc(memberDoc.id, memberDoc.data()),
             }
         };
     } catch (error) {

@@ -46,16 +46,6 @@ if (missingRequired.length > 0) {
     );
 }
 
-const missingOptional = Object.entries(OPTIONAL_ENV_VARS)
-    .filter(([, v]) => !v || v.startsWith("mock-"))
-    .map(([k]) => k);
-
-if (missingOptional.length > 0) {
-    console.warn(
-        `[Firebase] Startup Warning — missing optional env vars: ${missingOptional.join(", ")}. ` +
-        "Analytics features may be disabled."
-    );
-}
 // ─────────────────────────────────────────────────────────────────────────────
 
 const firebaseConfig = {

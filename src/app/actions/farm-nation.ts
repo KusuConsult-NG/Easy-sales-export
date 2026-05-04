@@ -8,6 +8,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Farm Nation Property Management Actions
@@ -96,15 +97,7 @@ export async function getPropertiesAction(filters?: {
 
         const snapshot = await query.get();
 
-        let properties = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as Property[];
+        const properties = serializeDocs<Property>(snapshot.docs);
 
         // Apply filters (Client-side for now as Firestore is limited)
         if (filters) {
@@ -215,12 +208,7 @@ export async function getPropertyByIdAction(propertyId: string) {
             viewCount: (data.viewCount || 0) + 1,
         });
 
-        const property = {
-            id: propertyDoc.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-        } as Property;
+        const property = serializeDoc<Property>(propertyDoc.id, data);
 
         return { success: true, data: { property }, meta: null };
     } catch (error: any) {
@@ -341,15 +329,7 @@ export async function getMyPropertiesAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        const properties = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as Property[];
+        const properties = serializeDocs<Property>(snapshot.docs);
 
         return { success: true, data: { properties }, meta: null };
     } catch (error: any) {
@@ -465,15 +445,7 @@ export async function getMyPurchaseRequestsAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        const requests = snapshot.docs.map((doc) => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            };
-        });
+        const requests = serializeDocs(snapshot.docs);
 
         return { success: true, data: { requests }, meta: null };
     } catch (error: any) {
@@ -1161,33 +1133,27 @@ export async function getFarmNationDashboardStatsAction() {
             db.collection(COLLECTIONS.USERS).doc(userId).get(),
         ]);
 
-        const properties = listingsSnap.docs.map(doc => {
-            const d = doc.data();
-            return {
-                id: doc.id,
-                size: d.size || 0,
-                price: d.price || 0,
-                status: d.status || 'available',
-                verified: d.verified || false,
-                name: d.name || 'Unnamed Property',
-                location: d.location || '',
-                state: d.state || '',
-                type: d.type || 'sale',
-                createdAt: (d.createdAt as Timestamp)?.toDate() || new Date(),
-            };
-        });
+        const properties = serializeDocs<any>(listingsSnap.docs).map(d => ({
+            id: d.id,
+            size: Number(d.size) || 0,
+            price: Number(d.price) || 0,
+            status: d.status || 'available',
+            verified: d.verified || false,
+            name: d.name || 'Unnamed Property',
+            location: d.location || '',
+            state: d.state || '',
+            type: d.type || 'sale',
+            createdAt: d.createdAt,
+        }));
 
-        const transactions = transactionsSnap.docs.map(doc => {
-            const d = doc.data();
-            return {
-                id: doc.id,
-                propertyName: d.propertyName || 'Unknown Property',
-                propertyType: d.propertyType || 'sale',
-                amount: d.propertyPrice || d.escrowAmount || 0,
-                status: d.status || 'pending',
-                createdAt: (d.createdAt as Timestamp)?.toDate() || new Date(),
-            };
-        });
+        const transactions = serializeDocs<any>(transactionsSnap.docs).map(d => ({
+            id: d.id,
+            propertyName: d.propertyName || 'Unknown Property',
+            propertyType: d.propertyType || 'sale',
+            amount: Number(d.propertyPrice || d.escrowAmount || 0),
+            status: d.status || 'pending',
+            createdAt: d.createdAt,
+        }));
 
         // Derive stats from listings
         const activeListings = properties.filter(p => p.status === 'available').length;
