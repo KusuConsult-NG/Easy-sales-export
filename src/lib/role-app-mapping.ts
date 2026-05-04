@@ -68,6 +68,7 @@ export const ROLE_APP_ACCESS: Record<UserRole, AppIdentifier[]> = {
     wave_admin: ["wave"],
     marketplace_admin: ["marketplace", "escrow"],
     farm_nation_admin: ["farm-nation", "escrow"],
+    export_admin: ["export", "escrow"],
 
     // Admin roles - full access
     admin: ["export", "marketplace", "cooperatives", "wave", "farm-nation", "academy", "escrow"],
@@ -182,6 +183,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         wave_admin: "/admin/wave",
         marketplace_admin: "/admin/marketplace",
         farm_nation_admin: "/admin/farm-nation",
+        export_admin: "/admin/export",
         admin: "/admin",
         super_admin: "/admin",
     };
@@ -208,7 +210,7 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
     const adminPriorityOrder: UserRole[] = [
         "super_admin", "admin",
         "cooperative_admin", "academy_admin", "wave_admin",
-        "marketplace_admin", "farm_nation_admin",
+        "marketplace_admin", "farm_nation_admin", "export_admin",
         "field_officer",
     ];
 
