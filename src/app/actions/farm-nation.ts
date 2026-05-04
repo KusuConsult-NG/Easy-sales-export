@@ -97,7 +97,7 @@ export async function getPropertiesAction(filters?: {
 
         const snapshot = await query.get();
 
-        const properties = serializeDocs<Property>(snapshot.docs);
+        let properties = serializeDocs<Property>(snapshot.docs);
 
         // Apply filters (Client-side for now as Firestore is limited)
         if (filters) {
