@@ -116,7 +116,7 @@ function buildEmailHtml(name: string | null, type: string, amount: number, statu
           <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 24px;" />
           <p style="margin:0;color:#9ca3af;font-size:13px;line-height:1.6;">
             If you have questions or need help, reply to this email or contact us at
-            <a href="mailto:support@easysalesexport.com" style="color:#2563eb;">support@easysalesexport.com</a>
+            <a href="mailto:info@easysalesexport.com" style="color:#2563eb;">info@easysalesexport.com</a>
           </p>
         </td></tr>
 

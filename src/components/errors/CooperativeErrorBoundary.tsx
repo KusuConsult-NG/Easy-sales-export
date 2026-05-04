@@ -97,7 +97,7 @@ export class CooperativeErrorBoundary extends React.Component<
                             <p className="text-xs text-slate-500 mt-6">
                                 Need help?{' '}
                                 <a
-                                    href="mailto:info@easysalescooperative.com"
+                                    href="mailto:info@easysalesexport.com"
                                     className="text-purple-600 hover:underline"
                                 >
                                     Contact Support

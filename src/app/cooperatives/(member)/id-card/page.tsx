@@ -418,7 +418,7 @@ export default function CooperativeIdCardPage() {
                                 <div className="h-8 bg-black rounded" />
                                 <p className="text-slate-400 text-center leading-relaxed mt-2">
                                     This card is the property of Easy Sales Export Ltd. If found, please return to{" "}
-                                    <span className="text-purple-300">support@easysalesexport.com</span>
+                                    <span className="text-purple-300">info@easysalesexport.com</span>
                                 </p>
                                 <div className="flex justify-between pt-1 border-t border-white/10 text-slate-500">
                                     <span>Issued: {fmtShort(result.data.joinedAt)}</span>

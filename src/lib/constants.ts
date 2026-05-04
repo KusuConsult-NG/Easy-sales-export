@@ -37,7 +37,7 @@ export const COMPANY_INFO = {
     rc: "RC: 763845",
     contact: {
         cooperative: {
-            email: "info@easysalescooperative.com",
+            email: "info@easysalesexport.com",
             address: "68 Murtala Muhammed Way, opposite UTC junction, beside the VIO office, in Jos, Plateau State, Nigeria",
         },
         general: {

@@ -178,8 +178,8 @@ export default function CooperativePendingPage() {
                 {/* Footer note */}
                 <p className="text-center text-xs text-purple-700/60 mt-4">
                     Questions? Contact us at{" "}
-                    <a href="mailto:support@easysalesexport.com" className="underline">
-                        support@easysalesexport.com
+                    <a href="mailto:info@easysalesexport.com" className="underline">
+                        info@easysalesexport.com
                     </a>
                 </p>
             </div>

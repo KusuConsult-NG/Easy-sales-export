@@ -11,7 +11,7 @@ export default function GeneralSettingsPage() {
     const [loading, setLoading] = useState(true);
     const [settings, setSettings] = useState({
         platformName: "Easy Sales Export",
-        supportEmail: "support@easysalesexport.com",
+        supportEmail: "info@easysalesexport.com",
         contactPhone: "+234 000 000 0000",
         defaultCurrency: "NGN",
         maintenanceMode: false,

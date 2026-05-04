@@ -139,7 +139,7 @@ ESCALATION: When payment unresolved, user distressed, refund requested, legal is
 ☎️ Phone: 02013309593
 Include your full name, phone number, and a brief description of your issue and our team will respond promptly."
 
-Cooperative-specific support: info@easysalescooperative.com
+Cooperative-specific support: info@easysalesexport.com
 
 Keep responses under 200 words. End with a helpful next step or question.`;
 }

@@ -103,8 +103,8 @@ export default function WaveAccessDeniedPage() {
                     <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6">
                         <p className="text-sm text-blue-100">
                             <strong>Have questions?</strong> Contact our support team at{" "}
-                            <a href="mailto:support@easysales.ng" className="text-blue-300 hover:underline">
-                                support@easysales.ng
+                            <a href="mailto:info@easysalesexport.com" className="text-blue-300 hover:underline">
+                                info@easysalesexport.com
                             </a>
                         </p>
                     </div>

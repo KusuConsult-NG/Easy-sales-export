@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         if (!resend) {
             logger.error("RESEND_API_KEY is not set — contact form emails will not be delivered.");
             return NextResponse.json(
-                { success: false, error: "Email service is currently unavailable. Please contact us directly at support@easysalesexport.com." },
+                { success: false, error: "Email service is currently unavailable. Please contact us directly at info@easysalesexport.com." },
                 { status: 503 }
             );
         }

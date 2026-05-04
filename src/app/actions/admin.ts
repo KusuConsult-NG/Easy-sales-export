@@ -2765,7 +2765,7 @@ async function _getPlatformSettingsAction(): Promise<{
         if (!doc.exists) {
             return {
                 platformName: "Easy Sales Export",
-                supportEmail: "support@easysalesexport.com",
+                supportEmail: "info@easysalesexport.com",
                 contactPhone: "+234 000 000 0000",
                 defaultCurrency: "NGN",
                 maintenanceMode: false,
@@ -2776,7 +2776,7 @@ async function _getPlatformSettingsAction(): Promise<{
         logger.error("Get platform settings error:", error);
         return {
             platformName: "Easy Sales Export",
-            supportEmail: "support@easysalesexport.com",
+            supportEmail: "info@easysalesexport.com",
             contactPhone: "+234 000 000 0000",
             defaultCurrency: "NGN",
             maintenanceMode: false,

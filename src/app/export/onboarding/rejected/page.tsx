@@ -90,10 +90,10 @@ export default function ExportRejectedPage() {
                         <p className="text-sm text-slate-600">
                             Need help? Contact support at{" "}
                             <a
-                                href="mailto:support@easysalesexport.com"
+                                href="mailto:info@easysalesexport.com"
                                 className="text-orange-600 hover:text-orange-700 font-medium"
                             >
-                                support@easysalesexport.com
+                                info@easysalesexport.com
                             </a>
                         </p>
                     </div>
