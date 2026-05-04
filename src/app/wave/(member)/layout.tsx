@@ -22,16 +22,21 @@ async function WaveLayoutContent({ children }: { children: React.ReactNode }) {
 
     const { session } = sessionResult;
 
+    let redirectPath: string | null = null;
     // Verify session and check access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
     try {
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "wave");
 
         if (!hasAccess) {
-            redirect("/wave/application");
+            redirectPath = "/wave/application";
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/auth/login?module=wave");
+        redirectPath = "/auth/login?module=wave";
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     return (

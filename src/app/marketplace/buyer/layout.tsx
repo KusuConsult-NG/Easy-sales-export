@@ -34,17 +34,22 @@ export default async function BuyerLayout({ children }: { children: React.ReactN
 
     const { session } = sessionResult;
 
+    let redirectPath: string | null = null;
     try {
         // Check service access (Layer 1: JWT roles; Layer 2: Firestore fallback for stale JWT)
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "marketplace");
 
         if (!hasAccess) {
-            redirect("/marketplace/onboarding");
+            redirectPath = "/marketplace/onboarding";
         }
 
     } catch (error) {
         logger.error("Buyer access check error:", error);
-        redirect("/auth/login?module=marketplace");
+        redirectPath = "/auth/login?module=marketplace";
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     // User has access, render the layout outside try/catch to satisfy React error-boundaries

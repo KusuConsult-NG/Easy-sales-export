@@ -24,12 +24,19 @@ export default async function ExportAppLayout({ children }: { children: React.Re
 
     const { session } = sessionResult;
 
+    let redirectPath: string | null = null;
     try {
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "export");
-        if (!hasAccess) redirect("/export/onboarding");
+        if (!hasAccess) {
+            redirectPath = "/export/onboarding";
+        }
     } catch (error) {
         logger.error("Export access check error:", error);
-        redirect("/auth/login?module=export");
+        redirectPath = "/auth/login?module=export";
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     // No padding offset — global ModuleSidebar in ClientLayout handles the flex layout

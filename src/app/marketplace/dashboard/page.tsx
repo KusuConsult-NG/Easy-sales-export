@@ -13,26 +13,36 @@ export default async function MarketplaceDashboardRedirect() {
     }
 
     const roles = session.user.roles || [];
+    let redirectPath: string | null = null;
 
     // Check Firestore for authoritative accountType (JWT may be stale)
     try {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const registration = userDoc.data()?.serviceRegistrations?.marketplace;
-        const accountType = registration?.accountType;
+        if (userDoc.exists) {
+            const registration = userDoc.data()?.serviceRegistrations?.marketplace;
+            const accountType = registration?.accountType;
 
-        // Sellers and "both" always go to seller dashboard
-        if (accountType === "seller" || accountType === "both" || roles.includes("seller")) {
-            redirect("/marketplace/seller/dashboard");
+            // Sellers and "both" always go to seller dashboard
+            if (accountType === "seller" || accountType === "both" || roles.includes("seller")) {
+                redirectPath = "/marketplace/seller/dashboard";
+            }
+            // Buyers (including marketplace_buyer role) go to buyer dashboard
+            else if (accountType === "buyer" || roles.includes("marketplace_buyer") || roles.includes("buyer")) {
+                redirectPath = "/marketplace/buyer/dashboard";
+            }
         }
-        // Buyers (including marketplace_buyer role) go to buyer dashboard
-        if (accountType === "buyer" || roles.includes("marketplace_buyer") || roles.includes("buyer")) {
-            redirect("/marketplace/buyer/dashboard");
-        }
-    } catch {
+    } catch (err) {
+        console.error("[MarketplaceDashboard] Firestore check failed:", err);
         // Fallback to JWT roles if Firestore read fails
         if (roles.includes("seller")) {
-            redirect("/marketplace/seller/dashboard");
+            redirectPath = "/marketplace/seller/dashboard";
+        } else if (roles.includes("marketplace_buyer") || roles.includes("buyer")) {
+            redirectPath = "/marketplace/buyer/dashboard";
         }
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     // Default: not yet onboarded — send to onboarding

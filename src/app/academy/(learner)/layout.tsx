@@ -24,27 +24,32 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
 
     const { session } = sessionResult;
 
+    let redirectPath: string | null = null;
     try {
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "academy");
 
         if (!hasAccess) {
-            redirect("/academy/setup");
-        }
-
-        // Enforce Payment Integrity Gate
-        const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
-        const payStatus = await checkAcademyPaymentStatusAction();
-        if (payStatus.data === "unpaid") {
-            const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
-            if (!isAdmin) {
-                logger.info(`Forcing unpaid active academy user ${session.user.id} to payment flow.`);
-                redirect("/academy/application");
+            redirectPath = "/academy/setup";
+        } else {
+            // Enforce Payment Integrity Gate
+            const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
+            const payStatus = await checkAcademyPaymentStatusAction();
+            if (payStatus.data === "unpaid") {
+                const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+                if (!isAdmin) {
+                    logger.info(`Forcing unpaid active academy user ${session.user.id} to payment flow.`);
+                    redirectPath = "/academy/application";
+                }
             }
         }
 
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/auth/login?module=academy");
+        redirectPath = "/auth/login?module=academy";
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     return (

@@ -31,6 +31,7 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
         tier: ""
     };
 
+    let redirectPath: string | null = null;
     // Verify session and check access
     try {
         const userId = session.user.id;
@@ -38,36 +39,40 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
         const hasAccess = await checkModuleAccess(userId, session.user.roles || [], "cooperatives");
 
         if (!hasAccess) {
-            redirect("/cooperatives/onboarding");
-        }
+            redirectPath = "/cooperatives/onboarding";
+        } else {
+            // Fetch membership details for Sidebar - CHECK CACHE FIRST
+            const { getCached, setCache, CACHE_TTL } = await import("@/lib/redis");
+            const cacheKey = `cooperative:member:${userId}`;
 
-        // Fetch membership details for Sidebar - CHECK CACHE FIRST
-        const { getCached, setCache, CACHE_TTL } = await import("@/lib/redis");
-        const cacheKey = `cooperative:member:${userId}`;
+            let memberData = await getCached<any>(cacheKey);
 
-        let memberData = await getCached<any>(cacheKey);
-
-        if (!memberData) {
-            // Cache miss - fetch from Firestore
-            const db = getAdminDb();
-            const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-            if (memberSnapshot.exists) {
-                memberData = memberSnapshot.data();
-                // Cache for 5 minutes
-                await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
+            if (!memberData) {
+                // Cache miss - fetch from Firestore
+                const db = getAdminDb();
+                const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+                if (memberSnapshot.exists) {
+                    memberData = memberSnapshot.data();
+                    // Cache for 5 minutes
+                    await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
+                }
             }
-        }
 
-        if (memberData) {
-            userProfile = {
-                firstName: memberData?.firstName || "",
-                lastName: memberData?.lastName || "",
-                tier: memberData?.membershipTier || ""
-            };
+            if (memberData) {
+                userProfile = {
+                    firstName: memberData?.firstName || "",
+                    lastName: memberData?.lastName || "",
+                    tier: memberData?.membershipTier || ""
+                };
+            }
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/auth/login?module=cooperatives&redirect=/cooperatives");
+        redirectPath = "/auth/login?module=cooperatives&redirect=/cooperatives";
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     return (

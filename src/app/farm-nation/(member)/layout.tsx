@@ -24,12 +24,19 @@ async function FarmNationLayoutContent({ children }: { children: React.ReactNode
 
     const { session } = sessionResult;
 
+    let redirectPath: string | null = null;
     try {
         const hasAccess = await checkModuleAccess(session.user.id, session.user.roles || [], "farm-nation");
-        if (!hasAccess) redirect("/farm-nation/onboarding");
+        if (!hasAccess) {
+            redirectPath = "/farm-nation/onboarding";
+        }
     } catch (error) {
         logger.error("Session verification failed:", error);
-        redirect("/auth/login?module=farm-nation");
+        redirectPath = "/auth/login?module=farm-nation";
+    }
+
+    if (redirectPath) {
+        redirect(redirectPath);
     }
 
     // No padding offset — global ModuleSidebar in ClientLayout handles the flex layout

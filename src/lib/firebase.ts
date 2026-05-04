@@ -29,18 +29,31 @@ const REQUIRED_ENV_VARS = {
     NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+const OPTIONAL_ENV_VARS = {
     NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const missingVars = Object.entries(REQUIRED_ENV_VARS)
+const missingRequired = Object.entries(REQUIRED_ENV_VARS)
     .filter(([, v]) => !v || v.startsWith("mock-"))
     .map(([k]) => k);
 
-if (missingVars.length > 0) {
-    // This appears in Vercel → Functions → Logs in real-time
+if (missingRequired.length > 0) {
     console.error(
-        `[Firebase] STARTUP ERROR — missing or mock env vars: ${missingVars.join(", ")}. ` +
-        "All Firebase operations will fail. Add these to Vercel → Settings → Environment Variables."
+        `[Firebase] CRITICAL STARTUP ERROR — missing required env vars: ${missingRequired.join(", ")}. ` +
+        "Firestore and Auth will fail. Add these to Vercel → Settings → Environment Variables."
+    );
+}
+
+const missingOptional = Object.entries(OPTIONAL_ENV_VARS)
+    .filter(([, v]) => !v || v.startsWith("mock-"))
+    .map(([k]) => k);
+
+if (missingOptional.length > 0) {
+    console.warn(
+        `[Firebase] Startup Warning — missing optional env vars: ${missingOptional.join(", ")}. ` +
+        "Analytics features may be disabled."
     );
 }
 // ─────────────────────────────────────────────────────────────────────────────
