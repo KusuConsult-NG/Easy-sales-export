@@ -42,8 +42,8 @@ export interface Property {
         surveyPlan?: string;
         taxClearance?: string;
     };
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: any;
+    updatedAt: any;
     leaseDuration?: number; // months, if type is lease
     viewCount: number;
     favoriteCount: number;

@@ -131,14 +131,14 @@ export interface LiveSession {
     courseId: string;
     title: string;
     instructor: string;
-    scheduledAt: Date;
+    scheduledAt: any;
     duration: string;
     meetingLink: string;
     maxParticipants: number;
     currentParticipants: number;
     status: "scheduled" | "live" | "ended";
     recordingUrl?: string;
-    createdAt: Timestamp;
+    createdAt: any;
 }
 
 /**

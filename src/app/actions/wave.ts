@@ -40,13 +40,13 @@ export interface WaveTrainingEvent {
     title: string;
     description: string;
     instructor: string;
-    date: Date;
+    date: any;
     duration: string;
     maxParticipants: number;
     currentParticipants: number;
     meetingLink?: string;
     status: "upcoming" | "ongoing" | "completed" | "cancelled";
-    createdAt: Timestamp;
+    createdAt: any;
 }
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
