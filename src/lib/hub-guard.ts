@@ -69,12 +69,12 @@ export async function requireHubRegistration() {
 
             // Legacy check for users who registered before the profileComplete flag existed.
             // NOTE: phone is intentionally NOT required — social/Google login users
-            // never provide a phone during signup.
+            // often never provide a phone during signup. We only require Name and Email
+            // for the base Hub identity.
             const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
             const hasEmail = Boolean(userData?.email);
-            const hasPhone = Boolean(userData?.phone);
 
-            const isFullyRegistered = hasName && hasEmail && hasPhone;
+            const isFullyRegistered = hasName && hasEmail;
             
             if (!isFullyRegistered) {
                 shouldRedirect = true;

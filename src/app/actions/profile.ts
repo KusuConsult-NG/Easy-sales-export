@@ -20,7 +20,7 @@ const profileUpdateSchema = z.object({
     lastName: z.string().max(50).optional(),
     otherName: z.string().max(50).optional(),
     email: strictEmailSchema.optional(),
-    phone: strictPhoneSchema,
+    phone: strictPhoneSchema.optional(),
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
     identityDocument: z.string().optional(),
