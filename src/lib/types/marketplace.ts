@@ -23,7 +23,7 @@ export interface SellerVerification {
 
     // Verified Badge (NEW)
     isVerifiedBadge?: boolean;
-    verifiedBadgeGrantedAt?: Date;
+    verifiedBadgeGrantedAt?: any;
     verifiedBadgeGrantedBy?: string;
 
     // Payment on Delivery (NEW)
@@ -32,7 +32,7 @@ export interface SellerVerification {
     // Phone Verification
     phoneNumber: string;
     phoneVerified: boolean;
-    phoneVerifiedAt?: Date;
+    phoneVerifiedAt?: any;
 
     // Identity Documents
     nin?: string;
@@ -65,11 +65,11 @@ export interface SellerVerification {
 
     // Admin Review
     reviewedBy?: string;
-    reviewedAt?: Date;
+    reviewedAt?: any;
     rejectionReason?: string;
 
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: any;
+    updatedAt: any;
 }
 
 // ============================================================================
@@ -137,8 +137,8 @@ export interface Product {
 
     // Certifications
     certifications?: string[];
-    harvestDate?: Date;
-    productionDate?: Date;
+    harvestDate?: any;
+    productionDate?: any;
 
     // Status
     status: "draft" | "active" | "suspended" | "out_of_stock" | "deleted";
@@ -156,8 +156,8 @@ export interface Product {
     sellerVerified?: boolean;       // Denormalized from seller_verifications.isVerifiedBadge
     sellerCategory?: SellerCategory; // Denormalized from seller_verifications.sellerCategory
 
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: any;
+    updatedAt: any;
 }
 
 // ============================================================================
@@ -170,7 +170,7 @@ export interface CartItem {
     quantity: number;
     selectedTier: "retail" | "bulk" | "export";
     price: number;
-    addedAt: Date;
+    addedAt: any;
 }
 
 export interface ShoppingCart {
@@ -242,8 +242,8 @@ export interface Order {
 
     // Tracking
     trackingNumber?: string;
-    estimatedDeliveryDate?: Date;
-    deliveredAt?: Date;
+    estimatedDeliveryDate?: any;
+    deliveredAt?: any;
 
     // Review tracking (NEW)
     reviewSubmitted?: boolean;
@@ -251,19 +251,19 @@ export interface Order {
 
     // Buyer Confirmation
     buyerConfirmed: boolean;
-    buyerConfirmedAt?: Date;
+    buyerConfirmedAt?: any;
 
     // Escrow Release Tracking (set by confirmDeliveryAction)
     escrowReleased?: boolean;
-    escrowReleasedAt?: Date;
+    escrowReleasedAt?: any;
     paystackTransferCode?: string;   // Paystack transfer code after release
     sellerAmountPaid?: number;       // Actual amount sent to seller (after commission)
     escrowPendingManualRelease?: boolean; // Set if Paystack payout failed
     escrowReleaseError?: string;
     escrowReleaseNote?: string;
 
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: any;
+    updatedAt: any;
 }
 
 // ============================================================================
@@ -302,18 +302,18 @@ export interface EscrowTransaction {
 
     // Payments
     paymentReference?: string;
-    paidAt?: Date | FieldValue | Timestamp;
-    releasedAt?: Date | FieldValue | Timestamp;
-    refundedAt?: Date | FieldValue | Timestamp;
-    releaseRequestedAt?: Date | FieldValue | Timestamp;
+    paidAt?: any;
+    releasedAt?: any;
+    refundedAt?: any;
+    releaseRequestedAt?: any;
     releaseRequestedBy?: string;
     releasedBy?: string;
 
     // Dispute
     disputeId?: string;
 
-    createdAt: Date | FieldValue | Timestamp;
-    updatedAt?: Date | FieldValue | Timestamp;
+    createdAt: any;
+    updatedAt?: any;
 }
 
 // ... existing code ...
@@ -346,11 +346,11 @@ export interface Dispute {
     adminNotes?: string;
     resolution?: DisputeResolution | string;
     refundAmount?: number; // For partial refunds
-    resolvedAt?: Date | FieldValue | Timestamp;
+    resolvedAt?: any;
     resolvedBy?: string;
 
-    createdAt: Date | FieldValue | Timestamp;
-    updatedAt?: Date | FieldValue | Timestamp;
+    createdAt: any;
+    updatedAt?: any;
 }
 
 // ============================================================================
@@ -368,7 +368,7 @@ export interface Message {
     attachments?: string[];
 
     read: boolean;
-    readAt?: Date;
+    readAt?: any;
 
     createdAt: Date;
 }
@@ -382,13 +382,13 @@ export interface Conversation {
     productId?: string;
 
     lastMessage: string;
-    lastMessageAt: Date;
+    lastMessageAt: any;
 
     // Unread counts
     unreadCount: Record<string, number>; // userId -> count
 
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt: any;
+    updatedAt: any;
 }
 
 // ============================================================================
@@ -432,7 +432,7 @@ export interface ProductReview {
     // Admin moderation
     status: "pending" | "approved" | "rejected";
     moderatedBy?: string;
-    moderatedAt?: FieldValue | Timestamp | Date;
+    moderatedAt?: any;
     rejectionReason?: string;
 
     updatedAt?: FieldValue | Timestamp | Date;
@@ -453,8 +453,8 @@ export interface VillageMarketEvent {
     lga?: string;
 
     // Timing
-    startTime: Date | FieldValue | Timestamp;
-    endTime: Date | FieldValue | Timestamp;
+    startTime: any;
+    endTime: any;
     isRecurring?: boolean;
     recurringDay?: string;       // e.g. "Saturday"
 
@@ -466,8 +466,8 @@ export interface VillageMarketEvent {
     status: "upcoming" | "active" | "ended" | "cancelled";
 
     createdBy: string; // admin UID
-    createdAt: Date | FieldValue | Timestamp;
-    updatedAt?: Date | FieldValue | Timestamp;
+    createdAt: any;
+    updatedAt?: any;
 }
 
 export interface ExternalMerchant {
@@ -496,11 +496,11 @@ export interface FlashSaleProduct {
 
     // Flash sale specific
     flashPrice?: number;      // Special discounted price
-    validUntil?: Date | FieldValue | Timestamp;
+    validUntil?: any;
 
     status: "active" | "sold_out" | "removed";
-    createdAt: Date | FieldValue | Timestamp;
-    updatedAt?: Date | FieldValue | Timestamp;
+    createdAt: any;
+    updatedAt?: any;
 }
 
 // ============================================================================
@@ -535,8 +535,8 @@ export interface WalletTransaction {
     orderId?: string;        // Related order (for purchases)
     description: string;
     status: "pending" | "completed" | "failed";
-    createdAt: Date | FieldValue | Timestamp;
-    updatedAt?: Date | FieldValue | Timestamp;
+    createdAt: any;
+    updatedAt?: any;
 }
 
 // ============================================================================
@@ -557,7 +557,7 @@ export interface SellerReview {
     // Admin moderation
     status: "pending" | "approved" | "rejected";
     moderatedBy?: string;
-    moderatedAt?: FieldValue | Timestamp | Date;
+    moderatedAt?: any;
 
     createdAt: FieldValue | Timestamp | Date;
     updatedAt?: FieldValue | Timestamp | Date;

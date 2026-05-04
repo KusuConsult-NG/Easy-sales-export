@@ -15,7 +15,7 @@ import { uploadFileToStorage } from "@/lib/storage-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification, Product, CartItem, Order, ProductCategory, DeliveryMethod } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { unstable_cache } from "next/cache";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 
