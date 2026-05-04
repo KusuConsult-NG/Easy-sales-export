@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
-import { serializeDoc } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Check if current user is enrolled in WAVE
