@@ -19,6 +19,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/termii";
 import { pushWithdrawalDecision } from "@/lib/fcm";
+import { isAdmin } from "@/lib/admin-permissions";
 
 const MIN_WITHDRAWAL = 5000;   // ₦5,000 minimum withdrawal (NGN)
 const WALLET_COLLECTION = COLLECTIONS.WALLETS;
@@ -460,9 +461,7 @@ export async function processWalletWithdrawalAction(
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const adminId = sessionResult.session.user.id;
 
-        const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminId).get();
-        const roles: string[] = adminDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -573,9 +572,7 @@ export async function getAdminWalletWithdrawalsAction(options: {
         const userId = sessionResult.session.user.id;
 
         // Verify admin
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const roles: string[] = userDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 

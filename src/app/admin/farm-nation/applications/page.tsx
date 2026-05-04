@@ -9,6 +9,7 @@ import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
 import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 interface SellerProfile {
     id: string;
@@ -38,6 +39,7 @@ export default function FarmNationApplicationsPage() {
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportConfig, setExportConfig] = useState({
@@ -75,7 +77,9 @@ export default function FarmNationApplicationsPage() {
                 search: params.search,
                 limit: params.limit || 20,
                 lastDocId: params.lastDocId,
-                sortOrder: params.sortOrder as "asc" | "desc"
+                sortOrder: params.sortOrder as "asc" | "desc",
+                dateFrom: dateRange.from || undefined,
+                dateTo: dateRange.to || undefined,
             });
 
             return {
@@ -86,7 +90,8 @@ export default function FarmNationApplicationsPage() {
                 lastDocId: result.lastDocId,
             };
         },
-        limit: 20
+        limit: 20,
+        dependencies: [dateRange]
     });
 
     async function handleExportCSV(config: typeof exportConfig) {
@@ -97,7 +102,9 @@ export default function FarmNationApplicationsPage() {
             const result = await getStandardFarmNationRegistrantsAction({
                 status: config.status as any,
                 search: search,
-                limit: config.limit
+                limit: config.limit,
+                dateFrom: dateRange.from || undefined,
+                dateTo: dateRange.to || undefined,
             });
 
             if (!result.success || !result.data) {
@@ -353,6 +360,11 @@ export default function FarmNationApplicationsPage() {
                             <option value="desc">Newest First</option>
                             <option value="asc">Oldest First</option>
                         </select>
+                        <DateRangeFilter
+                            value={dateRange}
+                            onChange={setDateRange}
+                            label="Filter by Date"
+                        />
                     </>
                 }
             />

@@ -78,7 +78,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
-        if (!session?.user || !session.user.roles?.some(r => r === "admin" || r === "super_admin")) {
+        if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -134,7 +134,7 @@ export async function getExportRequestStatsAction(): Promise<{
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.some((r: string) => r === "admin" || r === "super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -180,7 +180,7 @@ export async function getExportCatalogStatsAction(): Promise<{
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.some((r: string) => r === "admin" || r === "super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -206,7 +206,7 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ su
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
-        if (!session?.user || !session.user.roles?.some(r => r === "admin" || r === "super_admin")) {
+        if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -230,7 +230,7 @@ export async function getAdminPendingExportProductsAction(): Promise<{ success: 
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
-        if (!session?.user || !session.user.roles?.some(r => r === "admin" || r === "super_admin")) {
+        if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -255,7 +255,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
-        if (!session?.user || !session.user.roles?.some(r => r === "admin" || r === "super_admin")) {
+        if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 

@@ -15,6 +15,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction, getAdminSellerStatsAction } from "@/app/actions/admin";
 
 import { StandardPendingForm } from "@/lib/types/admin";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type SellerVerification = {
     id: string;
@@ -46,6 +47,7 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminSellersPage() {
     const { showToast } = useToast();
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     
     const {
         data: verifications,
@@ -67,10 +69,13 @@ export default function AdminSellersPage() {
                 (opts.status as FilterType) || "all",
                 opts.lastDocId,
                 opts.limit || 50,
-                opts.sortOrder as "asc" | "desc"
+                opts.sortOrder as "asc" | "desc",
+                dateRange.from || undefined,
+                dateRange.to || undefined
             );
         },
-        limit: 50
+        limit: 50,
+        dependencies: [dateRange]
     });
 
     const filterStatus = (filters.status as FilterType) || "all";
@@ -114,7 +119,14 @@ export default function AdminSellersPage() {
         setIsExporting(true);
         showToast("Preparing export...", "info");
         try {
-            const result = await getStandardSellerVerificationsAction(config.status as FilterType, undefined, config.limit);
+            const result = await getStandardSellerVerificationsAction(
+                config.status as FilterType, 
+                undefined, 
+                config.limit,
+                undefined,
+                dateRange.from || undefined,
+                dateRange.to || undefined
+            );
             if (!result || !result.success || !result.data || result.data.length === 0) {
                 showToast("No data available to export", "error");
                 return;
@@ -371,6 +383,11 @@ export default function AdminSellersPage() {
                             <option value="desc">Newest First</option>
                             <option value="asc">Oldest First</option>
                         </select>
+                        <DateRangeFilter
+                            value={dateRange}
+                            onChange={setDateRange}
+                            label="Filter Date"
+                        />
                     </div>
                 </div>
             </div>
@@ -671,7 +688,7 @@ export default function AdminSellersPage() {
             )}
 
             {isExportModalOpen && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
                             <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">

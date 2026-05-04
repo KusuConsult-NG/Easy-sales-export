@@ -10,6 +10,7 @@ import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -49,6 +50,7 @@ function getDisplayName(app: WaveApplication): string {
 
 export default function AdminWaveApplicationsPage() {
     const { showToast } = useToast();
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const {
         data: applications,
         loading: isLoading,
@@ -65,8 +67,15 @@ export default function AdminWaveApplicationsPage() {
         refresh: fetchData,
         meta
     } = useAdminData<StandardPendingForm<WaveApplication>>({
-        fetchAction: getStandardWaveApplicationsAction,
-        limit: 50
+        fetchAction: async (opts) => getStandardWaveApplicationsAction({
+            ...opts,
+            status: opts.status as any,
+            sortOrder: opts.sortOrder as any,
+            dateFrom: dateRange.from || undefined,
+            dateTo: dateRange.to || undefined,
+        }),
+        limit: 50,
+        dependencies: [dateRange]
     });
 
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -228,7 +237,7 @@ export default function AdminWaveApplicationsPage() {
             </div>
 
             {/* Filter */}
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex flex-wrap items-center gap-4 mb-6">
                 <Filter className="w-5 h-5 text-slate-500" />
                 <select
                     value={statusFilter}
@@ -249,6 +258,11 @@ export default function AdminWaveApplicationsPage() {
                     <option value="desc">Newest First</option>
                     <option value="asc">Oldest First</option>
                 </select>
+                <DateRangeFilter
+                    value={dateRange}
+                    onChange={setDateRange}
+                    label="Filter by date"
+                />
                 {/* Refresh indicator */}
                 <button onClick={fetchData} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors">
                     <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />

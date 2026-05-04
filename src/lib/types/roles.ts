@@ -18,6 +18,12 @@ export type UserRole =
     | "wave_participant"   // WAVE program (female only)
     | "academy_participant" // Academy learning platform
     | "field_officer"      // Verifies applications/data
+    | "cooperative_admin" // Manages the cooperative module
+    | "academy_admin"     // Manages the academy module
+    | "wave_admin"        // Manages the WAVE module
+    | "marketplace_admin" // Manages the marketplace module
+    | "farm_nation_admin" // Manages the farm nation module
+    | "export_admin"      // Manages the export module
     | "admin"              // System administration
     | "super_admin";       // Full system control
 
@@ -55,6 +61,12 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
     wave_participant: 3,
     academy_participant: 3,
     field_officer: 4,
+    cooperative_admin: 5,
+    academy_admin: 5,
+    wave_admin: 5,
+    marketplace_admin: 5,
+    farm_nation_admin: 5,
+    export_admin: 5,
     admin: 5,
     super_admin: 6,
 };
@@ -75,6 +87,12 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     wave_participant: "WAVE Participant",
     academy_participant: "Academy Participant",
     field_officer: "Field Officer / Verifier",
+    cooperative_admin: "Cooperative Administrator",
+    academy_admin: "Academy Administrator",
+    wave_admin: "WAVE Administrator",
+    marketplace_admin: "Marketplace Administrator",
+    farm_nation_admin: "Farm Nation Administrator",
+    export_admin: "Export Administrator",
     admin: "Administrator",
     super_admin: "Super Administrator",
 };

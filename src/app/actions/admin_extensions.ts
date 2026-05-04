@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
 type ActionState =
     | { error: string; success: false }
@@ -20,12 +20,13 @@ type ActionState =
 export async function softDeleteUserAction(targetUserId: string): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        
         // Strict: Only Super Admin or Admin can delete users
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
             // Fallback if specific permission doesn't exist
-            if (!session?.user?.roles.includes("admin") && !session?.user?.roles.includes("super_admin")) {
+            if (!isAdmin(session.user.roles)) {
                 return { error: "Unauthorized: Admin access required", success: false };
             }
         }

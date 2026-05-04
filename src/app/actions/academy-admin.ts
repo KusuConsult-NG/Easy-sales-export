@@ -28,7 +28,8 @@ export async function approveAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
+            !session.user.roles?.includes("academy_admin")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
@@ -155,7 +156,8 @@ export async function rejectAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
+            !session.user.roles?.includes("academy_admin")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
@@ -267,7 +269,8 @@ export async function updateAcademyApplicationPaymentAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
+            !session.user.roles?.includes("academy_admin")) {
             return { error: "Unauthorized: Permission required", success: false };
         }
 
@@ -327,7 +330,8 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
+            !session.user.roles?.includes("academy_admin")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
@@ -382,7 +386,8 @@ export async function getAcademyStatsAction(): Promise<{
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
+            !session.user.roles?.includes("academy_admin")) {
             return { error: "Unauthorized: Permission required", success: false };
         }
 
@@ -426,6 +431,8 @@ export async function getStandardAcademyApplicationsAction(options: {
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    dateFrom?: string; // YYYY-MM-DD
+    dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -434,20 +441,30 @@ export async function getStandardAcademyApplicationsAction(options: {
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         // NOTE: academy_applications documents use 'submittedAt', not 'createdAt'.
-        // orderBy('createdAt') would return 0 results because the field doesn't exist on most docs.
+        // orderBy('submittedAt') is the authoritative sort for academy apps.
         let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
         
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", options.status)
                 .orderBy("submittedAt", orderDirection);
+        }
+
+        // Apply server-side date range filtering
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("submittedAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("submittedAt", "<=", toTs);
         }
 
         if (options.lastDocId) {

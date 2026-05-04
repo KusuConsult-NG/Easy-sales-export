@@ -9,6 +9,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json({ error: "Admin access required" }, { status: 403 });
         }
 

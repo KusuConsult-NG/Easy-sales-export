@@ -12,6 +12,7 @@ import { editApplicationAction } from "@/app/actions/admin";
 import { getCooperativeStatsAction, getStandardCooperativeMembersAction } from "@/app/actions/cooperative-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { StandardPendingForm } from "@/lib/types/admin";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type MembershipApplication = {
     id: string;
@@ -45,11 +46,10 @@ type MembershipApplication = {
 export default function CooperativeMembersPage() {
     const { showToast } = useToast();
     
-    // Advanced filters purely on UI
+    // Advanced filters
     const [stateFilter, setStateFilter] = useState("");
     const [lgaFilter, setLgaFilter] = useState("");
-    const [fromDate, setFromDate] = useState("");
-    const [toDate, setToDate] = useState("");
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
     const {
         data: applications,
@@ -72,10 +72,13 @@ export default function CooperativeMembersPage() {
                 paymentStatus: (opts.payment as any) || "all",
                 cursorId: opts.lastDocId,
                 limit: opts.limit || 50,
-                search: opts.search ? opts.search.trim() : undefined
+                search: opts.search ? opts.search.trim() : undefined,
+                dateFrom: dateRange.from || undefined,
+                dateTo: dateRange.to || undefined,
             });
         },
-        limit: 50
+        limit: 50,
+        dependencies: [dateRange]
     });
 
     const statusFilter = (filters.status as any) || "all";
@@ -118,14 +121,7 @@ export default function CooperativeMembersPage() {
     if (lgaFilter) {
         filteredApplications = filteredApplications.filter(a => a.data.lga?.toLowerCase().includes(lgaFilter.toLowerCase()));
     }
-    if (fromDate) {
-        filteredApplications = filteredApplications.filter(a => new Date(a.data.createdAt) >= new Date(fromDate));
-    }
-    if (toDate) {
-        const end = new Date(toDate);
-        end.setHours(23, 59, 59, 999);
-        filteredApplications = filteredApplications.filter(a => new Date(a.data.createdAt) <= end);
-    }
+    // Date filtering is now handled server-side via dateRange state
 
     // Load Global Stats
     useEffect(() => {
@@ -203,8 +199,8 @@ export default function CooperativeMembersPage() {
             const params = new URLSearchParams();
             if (stateFilter) params.append('state', stateFilter);
             if (lgaFilter) params.append('lga', lgaFilter);
-            if (fromDate) params.append('fromDate', fromDate);
-            if (toDate) params.append('toDate', toDate);
+            if (dateRange.from) params.append('fromDate', dateRange.from);
+            if (dateRange.to) params.append('toDate', dateRange.to);
             if (searchQuery) params.append('search', searchQuery);
             window.location.href = `/api/admin/export/cooperative-members?${params.toString()}`;
         } catch (error) {
@@ -373,20 +369,20 @@ export default function CooperativeMembersPage() {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowAdvancedFilters(v => !v)}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition ${showAdvancedFilters || stateFilter || lgaFilter || fromDate || toDate
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition ${showAdvancedFilters || stateFilter || lgaFilter || dateRange.from || dateRange.to
                             ? "bg-blue-600 text-white border-blue-600"
                             : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                             }`}
                     >
                         <SlidersHorizontal className="w-4 h-4" />
                         Advanced Filters
-                        {(stateFilter || lgaFilter || fromDate || toDate) && (
+                        {(stateFilter || lgaFilter || dateRange.from || dateRange.to) && (
                             <span className="bg-white text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">ON</span>
                         )}
                     </button>
-                    {(stateFilter || lgaFilter || fromDate || toDate) && (
+                    {(stateFilter || lgaFilter || dateRange.from || dateRange.to) && (
                         <button
-                            onClick={() => { setStateFilter(""); setLgaFilter(""); setFromDate(""); setToDate(""); }}
+                            onClick={() => { setStateFilter(""); setLgaFilter(""); setDateRange({ from: "", to: "" }); }}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition"
                         >
                             <X className="w-3.5 h-3.5" /> Clear
@@ -395,7 +391,7 @@ export default function CooperativeMembersPage() {
                 </div>
 
                 {showAdvancedFilters && (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
                         <div>
                             <label className="block text-xs font-semibold text-slate-500 mb-1">State</label>
                             <select
@@ -420,25 +416,16 @@ export default function CooperativeMembersPage() {
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">From Date</label>
-                            <input
-                                type="date"
-                                value={fromDate}
-                                onChange={(e) => setFromDate(e.target.value)}
-                                className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">To Date</label>
-                            <input
-                                type="date"
-                                value={toDate}
-                                onChange={(e) => setToDate(e.target.value)}
-                                className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Date Range</label>
+                            <DateRangeFilter
+                                value={dateRange}
+                                onChange={setDateRange}
+                                label="All dates"
                             />
                         </div>
                     </div>
                 )}
+
             </div>
 
             {/* Stats Cards */}

@@ -6,6 +6,7 @@ import { Users, Search, Eye, ShoppingCart, Download, Filter, Loader2 } from "luc
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getMarketplaceUsersAction } from "@/app/actions/admin";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -28,6 +29,7 @@ type FilterTab = "all" | "buyer_only" | "seller_only" | "both";
 
 export default function MarketplaceBuyersPage() {
     const { showToast } = useToast();
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     
     const {
         data: users,
@@ -44,8 +46,14 @@ export default function MarketplaceBuyersPage() {
         pageIndex,
         refresh: loadUsers
     } = useAdminData<MarketplaceUser>({
-        fetchAction: getMarketplaceUsersAction,
-        limit: 50
+        fetchAction: async (opts) => getMarketplaceUsersAction({
+            ...opts,
+            roleFilter: opts.roleFilter as any,
+            dateFrom: dateRange.from || undefined,
+            dateTo: dateRange.to || undefined,
+        }),
+        limit: 50,
+        dependencies: [dateRange]
     });
 
     const roleFilter = (filters.roleFilter as FilterTab) || "all";
@@ -157,6 +165,11 @@ export default function MarketplaceBuyersPage() {
                             <option value="desc">Newest First</option>
                             <option value="asc">Oldest First</option>
                         </select>
+                        <DateRangeFilter
+                            value={dateRange}
+                            onChange={setDateRange}
+                            label="Filter Date"
+                        />
                     </div>
                 </div>
             </div>
@@ -189,7 +202,7 @@ export default function MarketplaceBuyersPage() {
                                     <tr key={user.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                                                <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                                                     {(user.name || "?")[0].toUpperCase()}
                                                 </div>
                                                 <span className="font-semibold text-slate-900 text-sm">{user.name || "Unknown"}</span>
@@ -258,7 +271,7 @@ export default function MarketplaceBuyersPage() {
                         </div>
                         <div className="p-6 space-y-4">
                             <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
+                                <div className="w-14 h-14 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
                                     {(selectedUser.name || "?")[0].toUpperCase()}
                                 </div>
                                 <div>

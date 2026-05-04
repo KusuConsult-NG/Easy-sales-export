@@ -3,7 +3,7 @@
 import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
 export interface HealthIssue {
     id: string; // userId
@@ -26,7 +26,7 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
         if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user || (!hasAdminPermission(session.user.roles, "users:read") && !session.user.roles.includes("admin") && !session.user.roles.includes("super_admin"))) {
+        if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized access" };
         }
 

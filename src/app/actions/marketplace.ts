@@ -1442,7 +1442,8 @@ async function _updateSellerBadge(
         // Role check
         const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
         const adminRoles: string[] = adminDoc.data()?.roles || [];
-        if (!adminRoles.includes("admin") && !adminRoles.includes("super_admin")) {
+        const hasMarketplaceAdminAccess = adminRoles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
+        if (!hasMarketplaceAdminAccess) {
             return { success: false, error: "Unauthorized: admin role required" };
         }
 
@@ -1536,7 +1537,8 @@ export async function updateSellerCategoryAction(
         if (actorId !== sellerId) {
             const actorDoc = await db.collection(COLLECTIONS.USERS).doc(actorId).get();
             const roles: string[] = actorDoc.data()?.roles || [];
-            if (!roles.includes("admin") && !roles.includes("super_admin")) {
+            const hasMarketplaceAdminAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
+            if (!hasMarketplaceAdminAccess) {
                 return { success: false, error: "Unauthorized" };
             }
         }

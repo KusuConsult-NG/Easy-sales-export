@@ -75,10 +75,15 @@ export default function AdminSidebar() {
     const isCoopAdmin = roles.includes("cooperative_admin");
     const isMktAdmin = roles.includes("marketplace_admin");
     const isExportAdmin = roles.includes("export_admin");
-    const isFarmAdmin = roles.includes("farmnation_admin");
+    const isFarmAdmin = roles.includes("farm_nation_admin");
     const isAcadAdmin = roles.includes("academy_admin");
 
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
+
+    // Permissions check for specific sections
+    const canSeeFinance = isFullAdmin || isMktAdmin || isWaveAdmin || isCoopAdmin;
+    const canSeeAnalytics = isFullAdmin || isModuleAdmin;
+    const canSeeUsers = isFullAdmin || isCoopAdmin || isWaveAdmin; // Needed for membership review
 
     return (
         <>
@@ -129,13 +134,23 @@ export default function AdminSidebar() {
 
                                             // Module-admin UI restriction
                                             if (!isFullAdmin && isModuleAdmin) {
-                                                if (item.href !== "/admin") {
-                                                    if (isWaveAdmin && !item.href.startsWith("/admin/wave")) return null;
-                                                    if (isCoopAdmin && !item.href.startsWith("/admin/cooperatives")) return null;
-                                                    if (isMktAdmin && !item.href.startsWith("/admin/marketplace")) return null;
-                                                    if (isExportAdmin && !item.href.startsWith("/admin/export")) return null;
-                                                    if (isFarmAdmin && !item.href.startsWith("/admin/farm-nation")) return null;
-                                                    if (isAcadAdmin && !item.href.startsWith("/admin/academy")) return null;
+                                                // Always allow Dashboard and Support
+                                                const ALWAYS_ALLOW = ["/admin", "/admin/messages"];
+                                                if (ALWAYS_ALLOW.includes(item.href)) {
+                                                    // Continue to render
+                                                } else {
+                                                    // Check conditional visibility
+                                                    if (item.href === "/admin/analytics" && !canSeeAnalytics) return null;
+                                                    if (item.href === "/admin/users" && !canSeeUsers) return null;
+                                                    if (item.href === "/admin/finance" && !canSeeFinance) return null;
+                                                    
+                                                    // Module specific gates
+                                                    if (isWaveAdmin && !item.href.startsWith("/admin/wave") && item.href !== "/admin/users" && item.href !== "/admin/analytics") return null;
+                                                    if (isCoopAdmin && !item.href.startsWith("/admin/cooperatives") && item.href !== "/admin/users" && item.href !== "/admin/analytics") return null;
+                                                    if (isMktAdmin && !item.href.startsWith("/admin/marketplace") && item.href !== "/admin/finance" && item.href !== "/admin/analytics") return null;
+                                                    if (isExportAdmin && !item.href.startsWith("/admin/export") && item.href !== "/admin/analytics") return null;
+                                                    if (isFarmAdmin && !item.href.startsWith("/admin/farm-nation") && item.href !== "/admin/analytics") return null;
+                                                    if (isAcadAdmin && !item.href.startsWith("/admin/academy") && item.href !== "/admin/analytics") return null;
                                                 }
                                             }
 

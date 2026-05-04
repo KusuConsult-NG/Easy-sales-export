@@ -59,7 +59,8 @@ export async function getAllConversationsAdminAction() {
         // Verify caller is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const roles: string[] = userDoc.data()?.roles ?? [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+        if (!isAdmin) {
             return { error: "Access denied", conversations: [] };
         }
 
@@ -102,7 +103,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
             // Check if admin
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const roles: string[] = userDoc.data()?.roles ?? [];
-            const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+            const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
             if (!isAdmin) {
                 return { error: "Access denied", messages: [] };
             }
@@ -156,7 +157,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
             // Allow admins to reply to any conversation (support inbox)
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const roles: string[] = userDoc.data()?.roles ?? [];
-            const isAdmin = roles.includes("admin") || roles.includes("super_admin");
+            const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
             if (!isAdmin) {
                 return { error: "Access denied", success: false };
             }
@@ -310,10 +311,12 @@ export async function searchUsersAction(query: string) {
 
         const trimmedQuery = query.trim().toLowerCase();
 
+        const ADMIN_ROLES = ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"];
+
         // If no query, return ALL available administrators so the user can easily select one
         if (!trimmedQuery) {
             const adminsSnapshot = await db.collection(COLLECTIONS.USERS)
-                .where("roles", "array-contains-any", ["admin", "super_admin"])
+                .where("roles", "array-contains-any", ADMIN_ROLES)
                 .get();
 
             const admins = adminsSnapshot.docs
@@ -337,14 +340,14 @@ export async function searchUsersAction(query: string) {
 
         try {
             [adminsSnapshot, generalSnapshot] = await Promise.all([
-                db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ["admin", "super_admin"]).get(),
+                db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
                 // Use lastLoginAt so admins can always find recently active platform users easily
                 db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get()
             ]);
         } catch (e) {
             // Fallback if the composite index is missing
             [adminsSnapshot, generalSnapshot] = await Promise.all([
-                db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ["admin", "super_admin"]).get(),
+                db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
                 db.collection(COLLECTIONS.USERS).limit(500).get()
             ]);
         }

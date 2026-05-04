@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 /**
  * GET /api/admin/wave/withdrawals
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
                 { status: 401 }
             );
         }
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json(
                 { success: false, data: null, error: "Admin access required", meta: { cursor: null, hasMore: false } },
                 { status: 403 }
@@ -108,7 +109,7 @@ export async function PATCH(request: NextRequest) {
                 { status: 401 }
             );
         }
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json(
                 { success: false, data: null, error: "Admin access required", meta: { cursor: null, hasMore: false } },
                 { status: 403 }

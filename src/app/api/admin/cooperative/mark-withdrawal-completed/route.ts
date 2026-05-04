@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { FieldValue } from "firebase-admin/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 /**
  * PATCH /api/admin/cooperative/mark-withdrawal-completed
@@ -20,8 +21,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const roles = session.user.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json({ success: false, error: "Admin access required" }, { status: 403 });
         }
 

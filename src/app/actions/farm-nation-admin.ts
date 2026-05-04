@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { hasAdminPermission } from "@/lib/admin-permissions";
+import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -24,7 +24,7 @@ export async function getFarmNationStatsAction(): Promise<{
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
+        if (!session?.user || !isAdmin(session.user.roles)) {
             return { error: "Unauthorized: Permission required", success: false };
         }
 
@@ -77,8 +77,8 @@ export async function getFarmNationRegistrantsAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
-            return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
+        if (!session?.user || !isAdmin(session.user.roles)) {
+            return { error: "Unauthorized: Permission required", success: false };
         }
 
         const pageSize = options.search ? 2000 : (options.limit || 20);
@@ -162,6 +162,8 @@ export async function getStandardFarmNationRegistrantsAction(options: {
     status?: "pending" | "approved" | "rejected" | "revision_required" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    dateFrom?: string;
+    dateTo?: string;
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -170,7 +172,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -181,15 +183,26 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         let q: any = db.collection(COLLECTIONS.USERS)
             .where('serviceRegistrations.farmNation.status', '!=', null);
 
+        // Determine sorting direction based on input
+        const sortDirection = options.sortOrder || "desc";
+
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("createdAt", "<=", toTs);
+        }
+
+        // We use createdAt for sorting to support date inequality
+        q = q.orderBy("createdAt", sortDirection);
+
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
-                q = q.orderBy('serviceRegistrations.farmNation.status').startAfter(lastDoc);
-            } else {
-                q = q.orderBy('serviceRegistrations.farmNation.status');
+                q = q.startAfter(lastDoc);
             }
-        } else {
-            q = q.orderBy('serviceRegistrations.farmNation.status');
         }
         
         q = q.limit(fetchLimit);
@@ -276,14 +289,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             });
         }
 
-        // We sort manually for this specific page, but note that across multiple pages, it sorts within the page buffer.
-        // Array-contains restricts our compound ordering options generically.
-        const sortDirection = options.sortOrder || "desc";
-        applications.sort((a: any, b: any) => {
-            const tA = new Date(a.data.serviceRegistrations?.farmNation?.submittedAt || a.data.createdAt).getTime();
-            const tB = new Date(b.data.serviceRegistrations?.farmNation?.submittedAt || b.data.createdAt).getTime();
-            return sortDirection === "asc" ? tA - tB : tB - tA;
-        });
+        // Sorting is now handled entirely by the Firestore query.
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
@@ -325,7 +331,7 @@ export async function getFarmNationVerificationStatsAction(): Promise<{
         const { session } = sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -379,7 +385,7 @@ export async function getAdminLandVerificationsAction(options: {
         const { session } = sessionResult;
         
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -448,7 +454,7 @@ export async function getFarmNationTransactionsAction(options: {
         const { session } = sessionResult;
         
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -501,7 +507,7 @@ export async function releaseFarmNationEscrowAction(transactionId: string) {
         const { session } = sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 

@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/session-guard";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { Resend } from "resend";
 import { logger } from "@/lib/logger";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -133,10 +134,9 @@ function buildEmailHtml(name: string | null, type: string, amount: number, statu
 
 export async function POST(req: NextRequest) {
     try {
-        // ── Auth guard: super_admin only ─────────────────────────────────────
+        // ── Auth guard ──
         const session = (await requireSession()).session;
-        const roles: string[] = (session?.user as any)?.roles ?? [];
-        if (!roles.includes("super_admin") && !roles.includes("admin")) {
+        if (!isAdmin(session?.user?.roles)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 

@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { sendSellerRejectionEmail } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 /**
  * API Route: Reject Seller Verification (Admin Only)
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

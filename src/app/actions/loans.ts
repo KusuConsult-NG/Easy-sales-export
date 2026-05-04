@@ -214,6 +214,8 @@ export async function getAdminLoanApplicationsAction(options: {
     statusFilter?: "all" | "pending" | "approved" | "rejected" | "disbursed" | "active" | "completed";
     limit?: number;
     lastDocId?: string;
+    dateFrom?: string; // YYYY-MM-DD
+    dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<{
     success: boolean;
     data?: LoanApplication[];
@@ -226,7 +228,9 @@ export async function getAdminLoanApplicationsAction(options: {
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const { session } = sessionResult;
         
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !session.user.roles?.some((r: string) =>
+            r === "admin" || r === "super_admin" || r === "cooperative_admin"
+        )) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -239,6 +243,16 @@ export async function getAdminLoanApplicationsAction(options: {
             query = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
                 .where("status", "==", options.statusFilter)
                 .orderBy("appliedAt", "desc");
+        }
+
+        // Server-side date range filter
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            query = query.where("appliedAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            query = query.where("appliedAt", "<=", toTs);
         }
 
         if (options.lastDocId) {

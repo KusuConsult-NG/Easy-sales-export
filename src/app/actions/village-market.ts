@@ -21,6 +21,7 @@ import type {
     ExternalMerchant,
 } from "@/lib/types/marketplace";
 import { notifyVillageMarketCreated } from "@/lib/marketplace-notifications";
+import { isAdmin } from "@/lib/admin-permissions";
 
 // ---------------------------------------------------------------------------
 // Admin: Create a Village Market Event
@@ -43,9 +44,7 @@ export async function createVillageMarketEventAction(data: {
         const userId = sessionResult.session.user.id;
 
         // Admins only
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const roles: string[] = userDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(roles)) {
             return { success: false, error: "Unauthorized: admin role required" };
         }
 
@@ -254,7 +253,7 @@ export async function addExternalMerchantAction(
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const roles: string[] = userDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(roles)) {
             return { success: false, error: "Unauthorized: admin role required" };
         }
 
@@ -288,7 +287,7 @@ export async function updateVillageMarketEventStatusAction(
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const roles: string[] = userDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -351,7 +350,7 @@ export async function getAdminVillageMarketEventsAction(options: {
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const roles: string[] = userDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(roles)) {
             return { success: false, error: "Unauthorized" };
         }
 

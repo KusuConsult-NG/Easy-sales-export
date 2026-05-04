@@ -6,6 +6,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getStandardWaveWithdrawalsAction } from "@/app/actions/wave-admin";
 import { formatDateTime } from "@/lib/utils";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 interface WaveWithdrawal {
     withdrawalId: string;
@@ -36,6 +37,7 @@ export default function AdminWaveWithdrawalsPage() {
     const { showToast } = useToast();
     const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected">("pending");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
     const {
         data: withdrawals,
@@ -52,7 +54,9 @@ export default function AdminWaveWithdrawalsPage() {
                 status: statusFilter,
                 limit: opts.limit || 25,
                 lastDocId: opts.lastDocId,
-                sortOrder: sortOrder
+                sortOrder: sortOrder,
+                dateFrom: dateRange.from || undefined,
+                dateTo: dateRange.to || undefined,
             });
             return {
                 success: result.success,
@@ -62,7 +66,7 @@ export default function AdminWaveWithdrawalsPage() {
             };
         },
         limit: 25,
-        dependencies: [statusFilter, sortOrder]
+        dependencies: [statusFilter, sortOrder, dateRange]
     });
 
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -138,6 +142,13 @@ export default function AdminWaveWithdrawalsPage() {
                     <option value="desc">Newest First</option>
                     <option value="asc">Oldest First</option>
                 </select>
+                <div className="ml-auto">
+                    <DateRangeFilter
+                        value={dateRange}
+                        onChange={setDateRange}
+                        label="Filter Date"
+                    />
+                </div>
             </div>
 
             {isLoading && (

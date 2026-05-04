@@ -385,6 +385,8 @@ export async function changePasswordAction(
         });
 
         if (!verifyRes.ok) {
+            const errorData = await verifyRes.json();
+            logger.error("Failed to verify current password", errorData);
             return { success: false, error: "Incorrect current password." };
         }
 
@@ -394,8 +396,8 @@ export async function changePasswordAction(
         });
 
         return { success: true };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Error changing password:", error);
-        return { success: false, error: "An unexpected error occurred. Please try again." };
+        return { success: false, error: error.message || "An unexpected error occurred. Please try again." };
     }
 }

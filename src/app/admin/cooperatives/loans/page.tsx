@@ -11,6 +11,7 @@ import { formatCurrency } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getAdminLoanApplicationsAction, getAdminLoanStatsAction, getAdminLoanApplicationsExportAction } from "@/app/actions/loans";
 import { Loader2 } from "lucide-react";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type LoanApplication = {
     id: string;
@@ -37,6 +38,7 @@ export default function AdminLoansPage() {
     const { showToast } = useToast();
     const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<FilterType>("all");
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
     const {
         data: applications,
@@ -51,7 +53,9 @@ export default function AdminLoansPage() {
             const result = await getAdminLoanApplicationsAction({
                 statusFilter: filterStatus,
                 limit: opts.limit || 20,
-                lastDocId: opts.lastDocId
+                lastDocId: opts.lastDocId,
+                dateFrom: dateRange.from || undefined,
+                dateTo: dateRange.to || undefined,
             });
             return {
                 success: result.success,
@@ -61,7 +65,7 @@ export default function AdminLoansPage() {
             };
         },
         limit: 20,
-        dependencies: [filterStatus]
+        dependencies: [filterStatus, dateRange]
     });
 
     const [selectedApplication, setSelectedApplication] = useState<LoanApplication | null>(null);
@@ -259,7 +263,7 @@ export default function AdminLoansPage() {
 
             {/* Filters */}
             <div className="bg-white rounded-xl p-6 shadow-lg mb-6">
-                <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex flex-col md:flex-row gap-4 flex-wrap">
                     <div className="flex-1">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -272,7 +276,7 @@ export default function AdminLoansPage() {
                             />
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                         {(["all", "pending", "approved", "rejected"] as FilterType[]).map((status) => (
                             <button
                                 key={status}
@@ -282,6 +286,11 @@ export default function AdminLoansPage() {
                                 {status.charAt(0).toUpperCase() + status.slice(1)}
                             </button>
                         ))}
+                        <DateRangeFilter
+                            value={dateRange}
+                            onChange={setDateRange}
+                            label="Filter by date"
+                        />
                     </div>
                 </div>
             </div>

@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit";
 import { serializeDocs } from "@/lib/firestore-serialize";
@@ -86,7 +87,8 @@ export async function getCooperativeStatsAction(): Promise<{
         }
 
         // Check admin role directly from session (Performance Optimization)
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        // Allow cooperative_admin role in addition to platform-level admin roles
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -272,7 +274,7 @@ export async function getAllMembersAction(options?: {
         }
 
         // Check admin role directly from session (Performance Optimization)
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -346,7 +348,7 @@ export async function updateMemberStatusAction(
         }
 
         // Check admin role directly from session (Performance Optimization)
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -446,7 +448,7 @@ export async function getAllTransactionsAction(options?: {
         }
 
         // Check admin role directly from session (Performance Optimization)
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -583,7 +585,7 @@ export async function getContributionReportsAction(options?: {
         }
 
         // Check admin role directly from session (Performance Optimization)
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -724,7 +726,7 @@ export async function getRecentActivityAction(): Promise<{
         }
 
         // Check admin role directly from session (Performance Optimization)
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -776,7 +778,7 @@ export async function approveWithdrawalAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         // Check admin role directly from session (Performance Optimization)
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -892,7 +894,7 @@ export async function rejectWithdrawalAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -1013,7 +1015,7 @@ export async function requestCooperativeRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
+        if (!isAdmin(session?.user?.roles)) {
             return { success: false, error: 'Admin access required' };
         }
 
@@ -1089,6 +1091,8 @@ export async function getStandardCooperativeMembersAction(
         cursorId?: string;
         limit?: number;
         search?: string;
+        dateFrom?: string; // YYYY-MM-DD
+        dateTo?: string;   // YYYY-MM-DD
     } = {}
 ): Promise<{ success: boolean; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
     const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
@@ -1099,7 +1103,7 @@ export async function getStandardCooperativeMembersAction(
         if (!session?.user?.id) return paginatedErr('Not authenticated');
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!isAdmin(userDoc.data()?.roles)) {
             return paginatedErr('Unauthorized');
         }
 
@@ -1110,8 +1114,13 @@ export async function getStandardCooperativeMembersAction(
 
         const fetchLimit = search ? 2000 : limitCount;
 
-        let q = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
+        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
         
+        if (adminScope) {
+            q = q.where("cooperativeId", "==", adminScope);
+        }
+
         if (statusFilter && statusFilter !== "all") {
             q = q.where("membershipStatus", "==", statusFilter);
         }
@@ -1120,6 +1129,16 @@ export async function getStandardCooperativeMembersAction(
         // causing mismatch between stat counts and table rows.
         if (paymentFilter && paymentFilter !== "all") {
             q = q.where("paymentStatus", "==", paymentFilter);
+        }
+
+        // Server-side date range filter
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("createdAt", "<=", toTs);
         }
 
         if (cursorSnap && cursorSnap.exists) {

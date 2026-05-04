@@ -1275,7 +1275,7 @@ export async function approveExportApplicationAction(
         if (userId) {
             batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
                 'serviceRegistrations.export.status': 'approved',
-                roles: FieldValue.arrayUnion('export_investor'),
+                roles: FieldValue.arrayUnion('export_participant'),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }

@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export async function GET(request: NextRequest) {
     try {
@@ -13,8 +14,7 @@ export async function GET(request: NextRequest) {
             return new NextResponse("Unauthorized", { status: 401 });
         }
 
-        const roles = session.user.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return new NextResponse("Admin access required", { status: 403 });
         }
 

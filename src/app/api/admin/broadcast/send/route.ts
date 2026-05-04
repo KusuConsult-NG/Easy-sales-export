@@ -13,6 +13,7 @@ import { sendBatchEmailNotifications } from "@/lib/email-notifications";
 import { FieldValue } from "firebase-admin/firestore";
 import { collectRecipients } from "@/app/actions/broadcast";
 import { logger } from "@/lib/logger";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export const maxDuration = 300; // 5 min timeout for Pro plan
 
@@ -56,12 +57,13 @@ export async function POST(req: NextRequest) {
         const db = getAdminDb();
 
         // Verify admin role
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
-        const roles = userData?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
         }
+        
+        // Still need userData for logging the name later
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
 
         const { filters, subject, body } = await req.json();
 

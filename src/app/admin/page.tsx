@@ -19,21 +19,27 @@ import {
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
 import AnalyticsCharts from "@/components/admin/AnalyticsCharts";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 export default function AdminDashboardPage() {
     const [stats, setStats] = useState<AnalyticsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
     const [moduleStats, setModuleStats] = useState<ModuleRegistrationStats | null>(null);
     const [moduleStatsLoading, setModuleStatsLoading] = useState(true);
 
     useEffect(() => {
         async function fetchStats() {
+            setLoading(true);
+            setError(null);
             try {
-                // Dynamically import to ensure server action is handled correctly
                 const { getDashboardStatsAction } = await import("@/app/actions/admin-analytics");
-                const data = await getDashboardStatsAction();
+                const data = await getDashboardStatsAction({
+                    dateFrom: dateRange.from || undefined,
+                    dateTo: dateRange.to || undefined,
+                });
                 setStats(data);
             } catch (err) {
                 logger.error("Failed to load dashboard stats", err);
@@ -58,7 +64,8 @@ export default function AdminDashboardPage() {
 
         fetchStats();
         fetchModuleStats();
-    }, []);
+    }, [dateRange]);
+
 
     if (loading) {
         return (
@@ -167,13 +174,37 @@ export default function AdminDashboardPage() {
         <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 p-8">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-slate-900 mb-2">
-                        Admin Dashboard
-                    </h1>
-                    <p className="text-slate-600">
-                        Platform overview and key metrics
-                    </p>
+                <div className="mb-8 flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                        <h1 className="text-4xl font-bold text-slate-900 mb-2">
+                            Admin Dashboard
+                        </h1>
+                        <p className="text-slate-600">
+                            Platform overview and key metrics
+                            {(dateRange.from || dateRange.to) && (
+                                <span className="ml-2 text-blue-600 font-semibold text-sm">
+                                    {dateRange.from && dateRange.to
+                                        ? `· ${dateRange.from} → ${dateRange.to}`
+                                        : dateRange.from
+                                        ? `· From ${dateRange.from}`
+                                        : `· To ${dateRange.to}`}
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {loading && (
+                            <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                Updating…
+                            </span>
+                        )}
+                        <DateRangeFilter
+                            value={dateRange}
+                            onChange={setDateRange}
+                            label="Filter by date"
+                        />
+                    </div>
                 </div>
 
                 {/* Stats Grid */}

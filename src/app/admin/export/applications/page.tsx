@@ -43,6 +43,7 @@ import {
 import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -108,6 +109,7 @@ function formatDate(ts: any): string {
 
 export default function AdminExportApplicationsPage() {
     const { showToast } = useToast();
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const {
         data: applications,
         loading: isLoading,
@@ -123,8 +125,14 @@ export default function AdminExportApplicationsPage() {
         pageIndex,
         refresh: fetchData
     } = useAdminData<StandardPendingForm<ExportApplication>>({
-        fetchAction: getStandardExportApplicationsAction,
-        limit: 50
+        fetchAction: async (opts) => getStandardExportApplicationsAction({
+            ...opts,
+            status: opts.status as any,
+            dateFrom: dateRange.from || undefined,
+            dateTo: dateRange.to || undefined,
+        }),
+        limit: 50,
+        dependencies: [dateRange]
     });
 
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -297,7 +305,7 @@ export default function AdminExportApplicationsPage() {
             </div>
 
             {/* Filter Row */}
-            <div className="flex items-center gap-3 mb-6 bg-white p-3 rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center gap-3 mb-6 bg-white p-3 rounded-xl border border-slate-200">
                 <Filter className="w-4 h-4 text-slate-400 shrink-0" />
                 {(["pending_review", "approved", "rejected", "revision_required", "all"] as const).map((f) => (
                     <button
@@ -311,6 +319,13 @@ export default function AdminExportApplicationsPage() {
                         {f === "pending_review" ? "Pending" : f.replace("_", " ")}
                     </button>
                 ))}
+                <div className="ml-auto">
+                    <DateRangeFilter
+                        value={dateRange}
+                        onChange={setDateRange}
+                        label="Filter by date"
+                    />
+                </div>
             </div>
 
             {/* Table */}

@@ -6,6 +6,7 @@ import { AggregateField } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
+import { isAdmin } from "@/lib/admin-permissions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -72,31 +73,41 @@ function lastNMonths(n: number): Array<{ label: string; start: Date; end: Date }
 // Main dashboard stats action
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
+export async function getDashboardStatsAction(options?: {
+    dateFrom?: string; // ISO date string e.g. "2026-01-01"
+    dateTo?: string;   // ISO date string e.g. "2026-03-31"
+}): Promise<AnalyticsData | null> {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return null;
     const { session } = sessionResult;
-    if (
-        !session?.user?.roles?.includes("admin") &&
-        !session?.user?.roles?.includes("super_admin")
-    ) {
+    if (!isAdmin(session.user.roles)) {
         return null;
     }
 
     const { getCached, setCache } = await import("@/lib/redis");
-    const cacheKey = "admin:dashboard-stats:global";
+    // Include date range in cache key so filtered results don't pollute global cache
+    const cacheKey = options?.dateFrom || options?.dateTo
+        ? `admin:dashboard-stats:${options.dateFrom ?? "all"}_${options.dateTo ?? "all"}`
+        : "admin:dashboard-stats:global";
 
-    try {
-        const cached = await getCached(cacheKey);
-        if (cached) return cached as AnalyticsData;
-    } catch(e) {
-        // quiet fail on cache read
+    // Only use cache for the global (no date filter) view
+    if (!options?.dateFrom && !options?.dateTo) {
+        try {
+            const cached = await getCached(cacheKey);
+            if (cached) return cached as AnalyticsData;
+        } catch(e) {
+            // quiet fail on cache read
+        }
     }
 
     const months = lastNMonths(6);
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Respect date filter or default to last 30 days
+    const filterFrom = options?.dateFrom ? new Date(options.dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const filterTo   = options?.dateTo   ? new Date(options.dateTo + "T23:59:59") : now;
+    const thirtyDaysAgo = filterFrom;
 
     // ── Parallel Firestore queries ───────────────────────────────────────────
     const [
@@ -112,7 +123,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         recentLogsSnap,
     ] = await Promise.allSettled([
         db.collection(COLLECTIONS.USERS).count().get(),
-        db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+        db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", filterFrom).count().get(),
         safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
         safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
         safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),
@@ -122,6 +133,7 @@ export async function getDashboardStatsAction(): Promise<AnalyticsData | null> {
         safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)),
         db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc").limit(10).get(),
     ]);
+
 
     const { getPlatformMetricsAction, getGlobalPendingApprovalsAction } = await import("./global-aggregation");
 
@@ -322,18 +334,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     }
     const { session } = sessionResult;
 
-    // Verify admin role from Firestore directly (avoids stale JWT claims causing false "no access" errors)
-    let isAdmin = session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
-    if (!isAdmin) {
-        try {
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-            const roles: string[] = userDoc.data()?.roles ?? [];
-            isAdmin = roles.includes("admin") || roles.includes("super_admin");
-        } catch {
-            // fall through — isAdmin stays false
-        }
-    }
-    if (!isAdmin) {
+    if (!isAdmin(session.user.roles)) {
         return { success: false, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
 
@@ -505,7 +506,7 @@ export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistra
     const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
-    if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+    if (!isAdmin(session.user.roles)) {
         throw new Error("Unauthorized");
     }
     return fetchModuleRegistrationStats();

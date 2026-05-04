@@ -164,7 +164,7 @@ export async function approveFarmNationSellerAction(userId: string) {
             "serviceRegistrations.farmNation.status": "approved",
             "serviceRegistrations.farmNation.approvedAt": FieldValue.serverTimestamp(),
             "serviceRegistrations.farmNation.approvedBy": session.user.id,
-            roles: FieldValue.arrayUnion("farm-nation-seller")
+            roles: FieldValue.arrayUnion("farmer")
         });
 
         return { success: true, data: { message: "Seller approved successfully" }, meta: null };
@@ -186,7 +186,7 @@ export async function rejectFarmNationSellerAction(userId: string, reason: strin
             "serviceRegistrations.farmNation.rejectionReason": reason,
             "serviceRegistrations.farmNation.rejectedAt": FieldValue.serverTimestamp(),
             "serviceRegistrations.farmNation.rejectedBy": session.user.id,
-            roles: FieldValue.arrayRemove("farm-nation-seller"),
+            roles: FieldValue.arrayRemove("farmer"),
         });
 
         return { success: true, data: { message: "Seller application rejected" }, meta: null };
@@ -765,10 +765,10 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         // Prepare user roles
         const roles: string[] = [];
         if (data.role === "buyer" || data.role === "both") {
-            roles.push("farm-nation-buyer");
+            roles.push("investor");
         }
         if (data.role === "seller" || data.role === "both") {
-            roles.push("farm-nation-seller");
+            roles.push("farmer");
         }
 
         // Update user document in Firestore - separate top-level and nested updates

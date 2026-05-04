@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
+import { isAdmin } from "@/lib/admin-permissions";
 
 export async function GET() {
     try {
@@ -13,8 +14,7 @@ export async function GET() {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
         // Strict admin check to prevent information disclosure
-        const roles = session?.user?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             logger.warn(`Unauthorized integrity check attempt by user: ${session?.user?.id}`);
             return NextResponse.json({ success: false, error: "Forbidden: Admin access required" }, { status: 403 });
         }

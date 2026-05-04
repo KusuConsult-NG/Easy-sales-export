@@ -17,6 +17,7 @@ import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
 import { getStandardAcademyApplicationsAction, getAcademyStatsAction, logAcademyExportAction, updateAcademyApplicationPaymentAction } from "@/app/actions/academy-admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useEffect } from "react";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -369,6 +370,7 @@ export default function AdminAcademyApplicationsPage() {
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
     useEffect(() => {
         getAcademyStatsAction().then(res => {
@@ -394,7 +396,9 @@ export default function AdminAcademyApplicationsPage() {
                     lastDocId: opts.lastDocId,
                     search: search.trim() ? search : undefined,
                     status: statusFilter === "all" ? undefined : statusFilter,
-                    sortOrder: sortOrder
+                    sortOrder: sortOrder,
+                    dateFrom: dateRange.from || undefined,
+                    dateTo: dateRange.to || undefined,
                 });
 
                 if (!result.success) {
@@ -449,7 +453,7 @@ export default function AdminAcademyApplicationsPage() {
             }
         },
         limit: 50,
-        dependencies: [statusFilter, search, sortOrder]
+        dependencies: [statusFilter, search, sortOrder, dateRange]
     });
 
     async function handleApprove(id: string) {
@@ -715,6 +719,11 @@ export default function AdminAcademyApplicationsPage() {
                         <option value="asc">Oldest First</option>
                     </select>
                 </div>
+                <DateRangeFilter
+                    value={dateRange}
+                    onChange={setDateRange}
+                    label="Filter by date"
+                />
                 <div className="relative flex-1 max-w-sm">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
@@ -727,6 +736,7 @@ export default function AdminAcademyApplicationsPage() {
                 </div>
                 <span className="text-sm text-slate-500">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
             </div>
+
 
             {/* Loading */}
             {isLoading && applications.length === 0 && (

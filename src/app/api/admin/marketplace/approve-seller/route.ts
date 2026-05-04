@@ -9,6 +9,7 @@ import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limi
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { sendSellerApprovalEmail } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 // Rate limiter for admin actions (moderate - legitimate admin workload)
 const adminLimiter = rateLimit(rateLimitConfig.admin);
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if user is admin
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

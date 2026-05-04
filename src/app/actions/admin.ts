@@ -95,6 +95,8 @@ async function _approveWaveApplicationAction(
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("wave_participant"),
+            "serviceRegistrations.wave.status": "approved",
+            "serviceRegistrations.wave.approvedAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -1632,7 +1634,7 @@ async function _updateUserRolesAction(
         }
 
         // Prevent admin from removing their own admin role
-        if (userId === session.user.id && !roles.includes("admin")) {
+        if (userId === session.user.id && !isAdmin(roles)) {
             return { error: "Cannot remove your own admin privileges", success: false };
         }
 
@@ -1836,9 +1838,9 @@ async function _approveExportOnboardingAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
+        if (!session?.user || (!hasAdminPermission(session.user.roles, "users:update") && !hasAdminPermission(session.user.roles, "export:approve_applications"))) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required - users:update", success: false };
+                return { error: "Unauthorized: Permission required", success: false };
             }
         }
 
@@ -2064,8 +2066,11 @@ async function _getExportApplicationsStatsAction(): Promise<{
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        const roles = userDoc.data()?.roles || [];
+        const hasExportAccess = roles.some((r: string) =>
+            r === "admin" || r === "super_admin" || r === "export_admin"
+        );
+        if (!userDoc.exists || !hasExportAccess) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -2124,6 +2129,8 @@ async function _getStandardExportApplicationsAction(options: {
     search?: string;
     status?: "pending_review" | "approved" | "rejected" | "revision_required" | "pending" | "all";
     lastDocId?: string;
+    dateFrom?: string; // YYYY-MM-DD
+    dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -2131,8 +2138,11 @@ async function _getStandardExportApplicationsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        const roles = userDoc.data()?.roles || [];
+        const hasExportAccess = roles.some((r: string) =>
+            r === "admin" || r === "super_admin" || r === "export_admin"
+        );
+        if (!userDoc.exists || !hasExportAccess) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -2147,6 +2157,16 @@ async function _getStandardExportApplicationsAction(options: {
             }
         }
         
+        // Server-side date range filter
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("createdAt", "<=", toTs);
+        }
+
         q = q.orderBy("createdAt", "desc").limit(fetchLimit + 1);
 
         if (options.lastDocId) {
@@ -2383,8 +2403,10 @@ async function _getAcademyApplicationsAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
             // Fallback for now/testing or add permission
-            if ((!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) {
-                return { error: "Unauthorized: Permission required - academy:approve_applications", success: false };
+            const roles = session.user.roles || [];
+            const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
+            if (!hasAcademyAccess) {
+                return { error: "Unauthorized: Permission required", success: false };
             }
         }
 
@@ -2451,7 +2473,9 @@ async function _approveAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        const roles = session.user.roles || [];
+        const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
+        if (!session?.user || !hasAcademyAccess) {
             return { error: "Unauthorized", success: false };
         }
 
@@ -2561,7 +2585,9 @@ async function _rejectAcademyApplicationAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        const roles = session.user.roles || [];
+        const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
+        if (!session?.user || !hasAcademyAccess) {
             return { error: "Unauthorized", success: false };
         }
 
@@ -3166,7 +3192,9 @@ async function _getStandardSellerVerificationsAction(
     statusFilter?: "pending" | "approved" | "rejected" | "suspended" | "all",
     cursorId?: string,
     limitCount: number = 50,
-    sortOrder?: "asc" | "desc"
+    sortOrder?: "asc" | "desc",
+    dateFrom?: string,
+    dateTo?: string
 ): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
@@ -3174,8 +3202,11 @@ async function _getStandardSellerVerificationsAction(
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        const roles = userDoc.data()?.roles || [];
+        const hasMarketplaceAccess = roles.some((r: string) =>
+            r === "admin" || r === "super_admin" || r === "marketplace_admin"
+        );
+        if (!userDoc.exists || !hasMarketplaceAccess) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -3189,6 +3220,15 @@ async function _getStandardSellerVerificationsAction(
         
         if (statusFilter && statusFilter !== "all") {
             q = q.where("status", "==", statusFilter);
+        }
+
+        if (dateFrom) {
+            const fromTs = new Date(dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (dateTo) {
+            const toTs = new Date(dateTo + "T23:59:59");
+            q = q.where("createdAt", "<=", toTs);
         }
 
         if (cursorSnap && cursorSnap.exists) {
@@ -3250,14 +3290,19 @@ async function _getMarketplaceUsersAction(options: {
     roleFilter?: "all" | "buyer_only" | "seller_only" | "both";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    dateFrom?: string;
+    dateTo?: string;
 } = {}) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        const roles = userDoc.data()?.roles || [];
+        const hasFarmAccess = roles.some((r: string) =>
+            r === "admin" || r === "super_admin" || r === "farmnation_admin"
+        );
+        if (!userDoc.exists || !hasFarmAccess) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -3266,16 +3311,24 @@ async function _getMarketplaceUsersAction(options: {
         // Only fetch users who have explicitly onboarded to the marketplace
         q = q.where("serviceRegistrations.marketplace.status", "in", ["active", "approved", "pending", "suspended", "rejected", "under_review"]);
 
-        // We paginate by document ID to handle the custom array-contains checks later if needed.
+        const sortDirection = options.sortOrder || "desc";
+        
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("createdAt", "<=", toTs);
+        }
+
+        q = q.orderBy("createdAt", sortDirection);
+
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
-                q = q.orderBy("__name__").startAfter(lastDoc);
-            } else {
-                q = q.orderBy("__name__");
+                q = q.startAfter(lastDoc);
             }
-        } else {
-            q = q.orderBy("__name__");
         }
 
         q = q.limit(fetchLimit);
@@ -3329,14 +3382,6 @@ async function _getMarketplaceUsersAction(options: {
                 u.email?.toLowerCase().includes(s)
             );
         }
-
-        // Sort latest
-        const sortDirection = options.sortOrder || "desc";
-        users.sort((a, b) => {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return sortDirection === "asc" ? dateA - dateB : dateB - dateA;
-        });
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
@@ -3404,7 +3449,7 @@ export async function getAdminSellerStatsAction(): Promise<{
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(roles)) {
             return { success: false, error: "Unauthorized" };
         }
 

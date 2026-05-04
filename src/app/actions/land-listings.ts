@@ -10,6 +10,7 @@ import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { unstable_cache } from "next/cache";
+import { isAdmin } from "@/lib/admin-permissions";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -131,8 +132,7 @@ export async function verifyLandListingAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
-        const roles = session?.user?.roles || [];
-        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+        if (!isAdmin(session?.user?.roles)) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
@@ -178,8 +178,7 @@ export async function rejectLandListingAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
-        const roles = session?.user?.roles || [];
-        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+        if (!isAdmin(session?.user?.roles)) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
@@ -527,8 +526,7 @@ export async function deleteLandListingAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        const roles = session?.user?.roles || [];
-        if (!session?.user?.id || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+        if (!isAdmin(session?.user?.roles)) {
             return { success: false, error: "Unauthorized: Admin access required" };
         }
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);

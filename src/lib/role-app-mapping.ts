@@ -62,6 +62,13 @@ export const ROLE_APP_ACCESS: Record<UserRole, AppIdentifier[]> = {
     // Verifiers/Staff
     field_officer: ["export", "marketplace", "cooperatives", "wave", "farm-nation"],
 
+    // Module-specific admin roles
+    cooperative_admin: ["cooperatives"],
+    academy_admin: ["academy"],
+    wave_admin: ["wave"],
+    marketplace_admin: ["marketplace", "escrow"],
+    farm_nation_admin: ["farm-nation", "escrow"],
+
     // Admin roles - full access
     admin: ["export", "marketplace", "cooperatives", "wave", "farm-nation", "academy", "escrow"],
     super_admin: ["export", "marketplace", "cooperatives", "wave", "farm-nation", "academy", "escrow"],
@@ -170,6 +177,11 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         academy_participant: "/academy/dashboard",
         general_user: "/", // General users start at the Hub
         field_officer: "/admin",
+        cooperative_admin: "/admin/cooperatives",
+        academy_admin: "/admin/academy",
+        wave_admin: "/admin/wave",
+        marketplace_admin: "/admin/marketplace",
+        farm_nation_admin: "/admin/farm-nation",
         admin: "/admin",
         super_admin: "/admin",
     };
@@ -194,7 +206,10 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
 
     // ADMIN FALLBACK — Only reached when user has no module-specific role.
     const adminPriorityOrder: UserRole[] = [
-        "super_admin", "admin", "field_officer",
+        "super_admin", "admin",
+        "cooperative_admin", "academy_admin", "wave_admin",
+        "marketplace_admin", "farm_nation_admin",
+        "field_officer",
     ];
 
     for (const role of adminPriorityOrder) {

@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 
 /**
  * API Route: Get All Loan Products (Admin Only)
@@ -19,9 +20,8 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Check if user is admin or super_admin
-        const roles = session.user.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        // Check if user is admin
+        if (!isAdmin(session.user.roles)) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
                 { status: 403 }

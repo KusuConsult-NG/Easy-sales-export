@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { getCached, setCache } from "@/lib/redis";
@@ -34,9 +35,8 @@ export async function createResourceAction(data: {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -81,9 +81,8 @@ export async function updateResourceAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -117,9 +116,8 @@ export async function deleteResourceAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -164,9 +162,8 @@ export async function createTrainingEventAction(data: {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -213,9 +210,8 @@ export async function updateTrainingEventAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -273,9 +269,8 @@ export async function getWaveApplicationsAction(): Promise<{ success: boolean; d
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -300,9 +295,8 @@ export async function approveWaveApplicationAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -342,6 +336,7 @@ export async function approveWaveApplicationAction(
             batch.update(db.collection(COLLECTIONS.USERS).doc(appData.userId), {
                 "serviceRegistrations.wave.status": "approved",
                 "serviceRegistrations.wave.approvedAt": FieldValue.serverTimestamp(),
+                roles: FieldValue.arrayUnion("wave_participant"),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         }
@@ -400,9 +395,8 @@ export async function rejectWaveApplicationAction(
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -479,6 +473,8 @@ export async function getStandardWaveApplicationsAction(options: {
     status?: "pending" | "under_review" | "approved" | "rejected" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
+    dateFrom?: string; // YYYY-MM-DD
+    dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -487,7 +483,7 @@ export async function getStandardWaveApplicationsAction(options: {
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -502,6 +498,16 @@ export async function getStandardWaveApplicationsAction(options: {
                 .where("status", "==", options.status)
                 .orderBy("createdAt", orderDirection);
             countQ = countQ.where("status", "==", options.status);
+        }
+
+        // Apply server-side date range filtering
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("createdAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("createdAt", "<=", toTs);
         }
 
         if (options.lastDocId) {
@@ -642,6 +648,8 @@ export async function getStandardWaveWithdrawalsAction(options: {
     lastDocId?: string;
     search?: string;
     sortOrder?: "asc" | "desc";
+    dateFrom?: string;
+    dateTo?: string;
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
@@ -650,19 +658,28 @@ export async function getStandardWaveWithdrawalsAction(options: {
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || (!userDoc.data()?.roles?.includes("admin") && !userDoc.data()?.roles?.includes("super_admin"))) {
+        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 25;
         const orderDirection = options.sortOrder || "desc";
-        let q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).orderBy("requestedAt", orderDirection);
+        let q: any = db.collection(COLLECTIONS.WAVE_WITHDRAWALS);
         
         if (options.status && options.status !== "all") {
-            q = db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
-                .where("status", "==", options.status)
-                .orderBy("requestedAt", orderDirection);
+            q = q.where("status", "==", options.status);
         }
+
+        if (options.dateFrom) {
+            const fromTs = new Date(options.dateFrom);
+            q = q.where("requestedAt", ">=", fromTs);
+        }
+        if (options.dateTo) {
+            const toTs = new Date(options.dateTo + "T23:59:59");
+            q = q.where("requestedAt", "<=", toTs);
+        }
+
+        q = q.orderBy("requestedAt", orderDirection);
 
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(options.lastDocId).get();

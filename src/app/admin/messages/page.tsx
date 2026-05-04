@@ -21,6 +21,7 @@ import {
     orderBy,
     limit,
     onSnapshot,
+    where
 } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendMessageAction, getAllConversationsAdminAction } from "@/app/actions/messages";
@@ -43,14 +44,32 @@ export default function AdminMessagesPage() {
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Real-time listener for ALL conversations
+    // Real-time listener for conversations
     useEffect(() => {
+        if (!adminId) return;
+        
+        const roles: string[] = (session?.user as any)?.roles || [];
+        const isFullAdmin = roles.includes("admin") || roles.includes("super_admin");
+
         setLoading(true);
-        const q = query(
-            collection(db, COLLECTIONS.CONVERSATIONS),
-            orderBy("updatedAt", "desc"),
-            limit(50)
-        );
+        let q;
+        if (isFullAdmin) {
+            // Full admins see all global conversations
+            q = query(
+                collection(db, COLLECTIONS.CONVERSATIONS),
+                orderBy("updatedAt", "desc"),
+                limit(50)
+            );
+        } else {
+            // Module admins only see conversations explicitly mapped/assigned to them
+            q = query(
+                collection(db, COLLECTIONS.CONVERSATIONS),
+                where("participants", "array-contains", adminId),
+                orderBy("updatedAt", "desc"),
+                limit(50)
+            );
+        }
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const convs = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -60,7 +79,7 @@ export default function AdminMessagesPage() {
             setLoading(false);
         });
         return () => unsubscribe();
-    }, []);
+    }, [adminId, session]);
 
     // Initial load for messages using server action to guarantee delivery
     useEffect(() => {

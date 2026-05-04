@@ -18,6 +18,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { ProductReview, SellerReview } from "@/lib/types/marketplace";
+import { isAdmin } from "@/lib/admin-permissions";
 
 // ---------------------------------------------------------------------------
 // SUBMIT: Product Review (buyer, post-delivery)
@@ -239,9 +240,7 @@ export async function moderateReviewAction(
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const adminId = sessionResult.session.user.id;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(adminId).get();
-        const roles: string[] = userDoc.data()?.roles || [];
-        if (!roles.includes("admin") && !roles.includes("super_admin")) {
+        if (!isAdmin(sessionResult.session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 

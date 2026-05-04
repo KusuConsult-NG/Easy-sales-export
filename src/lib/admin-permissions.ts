@@ -10,7 +10,7 @@
  * SECURITY: Use these helpers for all admin operations
  */
 
-export type AdminRole = "super_admin" | "admin" | "moderator" | "support" | "wave_admin" | "cooperative_admin" | "marketplace_admin" | "export_admin" | "farmnation_admin" | "academy_admin";
+export type AdminRole = "super_admin" | "admin" | "moderator" | "support" | "wave_admin" | "cooperative_admin" | "marketplace_admin" | "export_admin" | "farm_nation_admin" | "academy_admin";
 
 export type AdminPermission =
     // User Management
@@ -53,15 +53,19 @@ export type AdminPermission =
 
     // WAVE
     | "wave:approve_applications"
-    | "academy:approve_applications"
     | "wave:manage_training"
 
     // Academy
+    | "academy:approve_applications"
     | "academy:manage_courses"
     | "academy:manage_quizzes"
     | "academy:issue_certificates"
 
+    // Export
+    | "export:approve_applications"
+
     // Farm Nation
+    | "farm_nation:verify_applications"
     | "land:verify_listings"
 
     // Audit & Security
@@ -89,7 +93,9 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "cooperatives:approve_loans", "cooperatives:approve_members",
         "cooperatives:manage_products",
         "wave:approve_applications", "wave:manage_training",
-        "academy:manage_courses", "academy:manage_quizzes", "academy:issue_certificates",
+        "academy:approve_applications", "academy:manage_courses", "academy:manage_quizzes", "academy:issue_certificates",
+        "export:approve_applications",
+        "farm_nation:verify_applications",
         "land:verify_listings",
         "audit:read", "audit:export", "security:view_logs", "security:manage_mfa"
     ],
@@ -105,7 +111,9 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
         "marketplace:moderate_reviews",
         "cooperatives:approve_loans", "cooperatives:approve_members",
         "wave:approve_applications", "wave:manage_training",
-        "academy:manage_courses", "academy:manage_quizzes", "academy:issue_certificates",
+        "academy:approve_applications", "academy:manage_courses", "academy:manage_quizzes", "academy:issue_certificates",
+        "export:approve_applications",
+        "farm_nation:verify_applications",
         "land:verify_listings",
         "audit:read", "security:view_logs"
     ],
@@ -128,26 +136,34 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
     ],
 
     wave_admin: [
+        "users:read",
         "wave:approve_applications",
         "wave:manage_training"
     ],
     cooperative_admin: [
+        "users:read",
         "cooperatives:approve_loans",
         "cooperatives:approve_members",
         "cooperatives:manage_products"
     ],
     marketplace_admin: [
+        "users:read",
+        "finance:read",
         "marketplace:approve_sellers",
         "marketplace:suspend_sellers",
         "marketplace:moderate_reviews"
     ],
     export_admin: [
-        // Basic read for export apps
+        "users:read",
+        "export:approve_applications"
     ],
-    farmnation_admin: [
+    farm_nation_admin: [
+        "users:read",
+        "farm_nation:verify_applications",
         "land:verify_listings"
     ],
     academy_admin: [
+        "users:read",
         "academy:approve_applications",
         "academy:manage_courses",
         "academy:manage_quizzes",
@@ -230,7 +246,7 @@ export function getUserAdminPermissions(userRoles: string[] | undefined): AdminP
  * Type guard for admin roles
  */
 function isAdminRole(role: string): role is AdminRole {
-    return ["super_admin", "admin", "moderator", "support", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"].includes(role);
+    return ["super_admin", "admin", "moderator", "support", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farm_nation_admin", "academy_admin"].includes(role);
 }
 
 /**
@@ -292,7 +308,7 @@ export function canAccessAdminRoute(
     const isCoopAdmin = userRoles?.includes("cooperative_admin");
     const isMktAdmin = userRoles?.includes("marketplace_admin");
     const isExportAdmin = userRoles?.includes("export_admin");
-    const isFarmAdmin = userRoles?.includes("farmnation_admin");
+    const isFarmAdmin = userRoles?.includes("farm_nation_admin");
     const isAcadAdmin = userRoles?.includes("academy_admin");
 
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;

@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue } from "firebase-admin/firestore";
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses";
@@ -66,7 +67,7 @@ export async function getPendingContentAction(): Promise<{
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const roles = userData?.roles || [];
-        if (!userDoc.exists || !userData || (!roles.includes("admin") && !roles.includes("super_admin"))) {
+        if (!userDoc.exists || !userData || !isAdmin(roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -131,7 +132,7 @@ export async function approveContentAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -174,7 +175,7 @@ export async function rejectContentAction(
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
-        if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
