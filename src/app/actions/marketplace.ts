@@ -273,7 +273,7 @@ export async function getSellerVerificationAction() {
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
-        const verification = sortedDocs[0] as SellerVerification;
+        const verification = serializeDoc<SellerVerification>(sortedDocs[0].id, sortedDocs[0]);
 
         return { success: true, data: { verification } };
     } catch (error: any) {
@@ -718,7 +718,7 @@ export async function getSellerProductsAction(options: {
         query = query.limit(limit);
 
         const snapshot = await query.get();
-        let products = snapshot.docs.map(doc => doc.data() as Product);
+        let products = serializeDocs<Product>(snapshot.docs);
 
         // Client-side Text Search (Temporary Fallback)
         // Ideally use a dedicated search service for full-text search

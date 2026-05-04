@@ -26,6 +26,7 @@ import type {
     GetMembershipState,
     GetTransactionsState
 } from "@/lib/types/cooperative";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -626,18 +627,7 @@ export async function getMembershipAction(): Promise<GetMembershipState> {
         const membershipData = membershipSnapshot.docs[0].data();
         const cooperativeDoc = await db.collection(COLLECTIONS.COOPERATIVES).doc(membershipData.cooperativeId).get();
 
-        const membership: CooperativeMembership = {
-            id: membershipSnapshot.docs[0].id,
-            cooperativeId: membershipData.cooperativeId || "default", // Handle missing cooperativeId?
-            cooperativeName: cooperativeDoc.data()?.name || "KusuConsult Cooperative", // Fallback
-            savingsBalance: membershipData.savingsBalance || 0,
-            loanBalance: membershipData.loanBalance || 0,
-            memberSince: membershipData.memberSince?.toDate?.() || membershipData.createdAt?.toDate?.() || new Date(),
-            monthlyTarget: membershipData.monthlyTarget || 50000,
-            membershipTier: membershipData.membershipTier || "Member",
-            membershipStatus: membershipData.membershipStatus || "pending",
-            paymentStatus: membershipData.paymentStatus || "pending",
-        };
+        const membership = serializeDoc<CooperativeMembership>(membershipSnapshot.docs[0].id, membershipData);
 
         return {
             error: null,
@@ -667,14 +657,7 @@ export async function getTransactionsAction(): Promise<GetTransactionsState> {
         const transactionsRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         const transactionsSnapshot = await transactionsRef.where("userId", "==", userId).get();
 
-        const transactions: CooperativeTransaction[] = transactionsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            type: doc.data().type,
-            amount: doc.data().amount,
-            date: doc.data().date?.toDate() || new Date(),
-            status: doc.data().status,
-            description: doc.data().description,
-        }));
+        const transactions = serializeDocs<CooperativeTransaction>(transactionsSnapshot.docs);
 
         return {
             error: null,

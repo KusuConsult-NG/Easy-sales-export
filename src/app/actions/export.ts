@@ -9,6 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { revalidatePath } from "next/cache";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Server Actions for Export Window Management
@@ -385,32 +386,7 @@ export async function getExportWindowsAction(
 
         const snapshot = await exportsQuery.get();
 
-        let exports: ExportWindow[] = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                orderId: data.orderId,
-                commodity: data.commodity,
-                quantity: data.quantity,
-                amount: data.amount,
-                roi: data.roi || "N/A",
-                duration: data.duration || "N/A",
-                status: data.status,
-                userId: data.userId,
-                // Deep data
-                description: data.description,
-                specifications: data.specifications || [],
-                benefits: data.benefits || [],
-                documents: data.documents || [],
-                timeline: data.timeline || [],
-
-                startDate: data.startDate?.toDate(),
-                endDate: data.endDate?.toDate(),
-                deliveryDate: data.deliveryDate?.toDate(),
-                createdAt: data.createdAt?.toDate() || new Date(),
-                updatedAt: data.updatedAt?.toDate() || new Date(),
-            };
-        });
+        let exports = serializeDocs<ExportWindow>(snapshot.docs);
 
         // Apply client-side date filtering (Note: This breaks pagination if used with limit. 
         // For now we keep it but warn that date filtering + pagination is complex in NoSQL without composite indexes)
@@ -481,29 +457,7 @@ export async function getExportWindowDetailsAction(
             return { error: "Unauthorized to view this export", success: false };
         }
 
-        const exportWindow: ExportWindow = {
-            id: exportDoc.id,
-            orderId: data.orderId,
-            commodity: data.commodity,
-            quantity: data.quantity,
-            amount: data.amount,
-            roi: data.roi || "N/A",
-            duration: data.duration || "N/A",
-            status: data.status,
-            userId: data.userId,
-            // Deep data
-            description: data.description,
-            specifications: data.specifications || [],
-            benefits: data.benefits || [],
-            documents: data.documents || [],
-            timeline: data.timeline || [],
-
-            startDate: data.startDate?.toDate(),
-            endDate: data.endDate?.toDate(),
-            deliveryDate: data.deliveryDate?.toDate(),
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-        };
+        const exportWindow = serializeDoc<ExportWindow>(exportDoc.id, data);
 
         return {
             error: null,
@@ -723,8 +677,8 @@ export async function getUserExportInvestmentsAction(
             // Soft-join to get the actual Export Window details dynamically
             let commodity = data.commodity || "Export Opportunity";
             let status = data.status || "pending";
-            let startDate = new Date();
-            let endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+            let startDate = new Date().toISOString();
+            let endDate = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
             let daysRemaining = 0;
 
             if (data.windowId) {
@@ -734,8 +688,8 @@ export async function getUserExportInvestmentsAction(
                      const wData = windowDoc.data()!;
                      commodity = wData.title || wData.commodity || commodity;
                      status = wData.status || status; // Reflect parent window status
-                     startDate = wData.startDate?.toDate() || startDate;
-                     endDate = wData.endDate?.toDate() || endDate;
+                     startDate = wData.startDate?.toDate()?.toISOString() || startDate;
+                     endDate = wData.endDate?.toDate()?.toISOString() || endDate;
                      
                      if (wData.endDate) {
                          const delivery = wData.endDate.toDate();
@@ -758,6 +712,7 @@ export async function getUserExportInvestmentsAction(
                 daysRemaining,
                 startDate,
                 endDate,
+                createdAt: data.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
             };
         }));
 

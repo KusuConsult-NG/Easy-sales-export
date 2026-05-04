@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Check Academy application status for current user
@@ -162,17 +163,7 @@ export async function getCoursesAction(
 
         const snapshot = await q.get();
 
-        const courses = snapshot.docs.map((doc) => {
-            const d = doc.data();
-            return {
-                id: doc.id,
-                ...d,
-                // Serialize Timestamps → ISO strings so Next.js can
-                // safely pass them from Server Actions to Client Components
-                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
-                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
-            };
-        }) as Course[];
+        const courses = serializeDocs<Course>(snapshot.docs);
 
         const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
@@ -200,14 +191,7 @@ export async function getCourseByIdAction(courseId: string): Promise<{ success: 
         }
 
         const d = courseDoc.data()!;
-        const formattedCourse = {
-            id: courseDoc.id,
-            ...d,
-            // Serialize Timestamps → ISO strings so Next.js can safely
-            // pass them from Server Actions to Client Components
-            createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
-            updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
-        } as Course;
+        const formattedCourse = serializeDoc<Course>(courseDoc.id, d);
         
         return { success: true, data: formattedCourse };
     } catch (error: any) {
