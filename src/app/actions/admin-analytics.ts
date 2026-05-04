@@ -164,7 +164,7 @@ export async function getDashboardStatsAction(options?: {
                 .select("amount")
                 .get();
             let total = 0;
-            snap.docs.forEach(doc => total += (Number(doc.data().amount) || 0));
+            snap.docs.forEach((doc: any) => total += (Number(doc.data().amount) || 0));
             return { month: label, revenue: total };
         } catch (e) {
             return { month: label, revenue: 0 };
@@ -423,7 +423,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     const failedTransactions: FinancialOverview["failedTransactions"] = [];
     try {
         const failedSnap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).orderBy("failedAt", "desc").limit(1000).get();
-        failedSnap.docs.forEach(doc => {
+        failedSnap.docs.forEach((doc: any) => {
             const d = doc.data();
             const ts = d.failedAt ?? d.abandonedAt ?? null;
             failedTransactions.push({

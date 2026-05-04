@@ -694,7 +694,7 @@ export async function getStandardWaveWithdrawalsAction(options: {
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
-        const withdrawals = docs.map(doc => ({
+        const withdrawals = docs.map((doc: any) => ({
             withdrawalId: doc.id,
             ...doc.data(),
             requestedAt: doc.data().requestedAt?.toDate?.()?.toISOString() ?? null,

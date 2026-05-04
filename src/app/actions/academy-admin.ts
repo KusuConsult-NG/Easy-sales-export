@@ -339,7 +339,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
             .where("status", "==", "pending")
             .get();
 
-        const applications = snapshot.docs.map(doc => {
+        const applications = snapshot.docs.map((doc: any) => {
             const d = doc.data();
             const submittedAtDate: Date = d.submittedAt?.toDate?.() || new Date();
             return {
