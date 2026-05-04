@@ -635,8 +635,8 @@ export async function getUserExportInvestmentsAction(
         expectedReturn: number;
         status: string;
         daysRemaining: number;
-        startDate: Date;
-        endDate: Date;
+        startDate: string;
+        endDate: string;
     }>;
     lastId?: string | null;
 }> {
