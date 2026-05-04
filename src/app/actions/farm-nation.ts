@@ -941,7 +941,8 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         // Check admin role
-        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        if (!isAdmin(session?.user?.roles)) {
             return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 

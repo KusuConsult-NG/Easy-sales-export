@@ -31,8 +31,14 @@ export default async function SellerLayout({ children }: { children: React.React
 
         // Layer 1 + 2: JWT roles + Firestore fallback
         const hasAccess = await checkModuleAccess(userId, session.user.roles || [], "marketplace");
-        if (!hasAccess) {
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        const isUserAdmin = isAdmin(session.user.roles);
+
+        if (!hasAccess && !isUserAdmin) {
             redirectPath = "/marketplace/onboarding";
+        } else if (isUserAdmin) {
+            // Admins bypass seller status checks
+            redirectPath = null;
         } else {
             // Additional: verify seller approval status (cache-first)
             const { getCached, setCache, CACHE_TTL } = await import("@/lib/redis");

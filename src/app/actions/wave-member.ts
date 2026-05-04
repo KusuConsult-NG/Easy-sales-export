@@ -27,6 +27,26 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
 
         if (!memberDoc.exists || !memberDoc.data()?.active) {
+            // Check for admin bypass first
+            const { isAdmin } = await import("@/lib/admin-permissions");
+            if (isAdmin(session.user.roles)) {
+                return {
+                    success: true,
+                    data: {
+                        enrolled: true,
+                        memberData: {
+                            id: session.user.id,
+                            name: session.user.name || "Administrator",
+                            email: session.user.email,
+                            roles: session.user.roles,
+                            active: true,
+                            status: "approved",
+                            enrolledAt: new Date(),
+                        }
+                    }
+                };
+            }
+
             // Auto-Healing: If user has role but no doc, create/reactivate it
             // This handles cases where registration succeeded (role assigned) but doc creation failed
             // or environment mismatch caused data loss

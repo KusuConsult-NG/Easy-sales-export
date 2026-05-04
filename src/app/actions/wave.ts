@@ -184,14 +184,13 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
         }
 
         const userData = userDoc.data();
+        const roles = userData?.roles || [];
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        const isUserAdmin = isAdmin(roles);
 
-        // 🔒 SECURITY FIX: Strict Gender Enforcement
-        // Verify gender is female AND ensure the user role is consistent if set.
-        if (userData?.gender !== "female") {
-            // Edge case: If they SOMEHOW have the role but are not female, this is a data integrity violation.
-            if (userData?.roles?.includes("wave_participant")) {
-                logger.error(`WAVE Eligibility Violation: User ${userId} has 'wave_participant' role but gender is '${userData?.gender}'`);
-            }
+        // 🔒 SECURITY: Strict Gender Enforcement for standard users
+        // Admins (including module-specific admins) are always eligible to view resources.
+        if (userData?.gender !== "female" && !isUserAdmin) {
             return {
                 success: true,
                 data: {
@@ -519,8 +518,9 @@ export async function getWaveResourcesAction(
 
         // STRICT ENROLLMENT CHECK
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
+        const { isAdmin } = await import("@/lib/admin-permissions");
         if (!memberDoc.exists || !memberDoc.data()?.active) {
-            if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+            if (!isAdmin(session.user.roles)) {
                 logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
                 return { success: false, error: "Access denied: Not enrolled in WAVE", meta: { cursor: null, hasMore: false } };
             }
@@ -676,7 +676,8 @@ export async function updateShipmentStatusAction(
         const { session } = sessionResult;
 
         // Check admin role
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
+        const { isAdmin } = await import("@/lib/admin-permissions");
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Admin access required" };
         }
 

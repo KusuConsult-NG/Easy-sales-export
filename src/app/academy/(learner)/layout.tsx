@@ -35,8 +35,9 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
             const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
             const payStatus = await checkAcademyPaymentStatusAction();
             if (payStatus.data === "unpaid") {
-                const isAdmin = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
-                if (!isAdmin) {
+                const { isAdmin } = await import("@/lib/admin-permissions");
+                const isUserAdmin = isAdmin(session.user.roles);
+                if (!isUserAdmin) {
                     logger.info(`Forcing unpaid active academy user ${session.user.id} to payment flow.`);
                     redirectPath = "/academy/application";
                 }
