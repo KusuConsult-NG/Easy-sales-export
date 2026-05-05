@@ -3525,7 +3525,7 @@ export async function getAdminSellerStatsAction(): Promise<{
  */
 export async function onboardLegacyMemberAction(
     formData: any
-): Promise<{ success: boolean; error?: string; message?: string }> {
+): Promise<ActionState> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { error: adminCheck.error, success: false };
