@@ -371,16 +371,20 @@ export async function searchUsersAction(query: string) {
         // Generic search: pull admins first and apply filtering
         let adminsSnapshot: any;
         let generalSnapshot: any;
+        let exactEmailSnapshot: any;
 
         try {
-            [adminsSnapshot, generalSnapshot] = await Promise.all([
+            [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
-                db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get()
+                db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get(),
+                // Add exact email lookup for the query string
+                db.collection(COLLECTIONS.USERS).where("email", "==", trimmedQuery.toLowerCase()).get()
             ]);
         } catch (e) {
-            [adminsSnapshot, generalSnapshot] = await Promise.all([
+            [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
-                db.collection(COLLECTIONS.USERS).limit(500).get()
+                db.collection(COLLECTIONS.USERS).limit(500).get(),
+                db.collection(COLLECTIONS.USERS).where("email", "==", trimmedQuery.toLowerCase()).get()
             ]);
         }
 
@@ -402,16 +406,22 @@ export async function searchUsersAction(query: string) {
                 if (!isGlobal && !matchesModule) return;
             }
 
-            if (fullName.includes(trimmedQuery) || email.includes(trimmedQuery)) {
-                seenIds.add(doc.id);
+            const matches = fullName.includes(trimmedQuery.toLowerCase()) || email.includes(trimmedQuery.toLowerCase());
+            if (matches) {
                 users.push({
                     uid: doc.id,
-                    fullName: userData.fullName || "User",
+                    fullName: userData.fullName || userData.email || "User",
                     email: userData.email || "",
                     roles: roles
                 });
+                seenIds.add(doc.id);
             }
         };
+
+        // Priority 1: Exact email match
+        if (exactEmailSnapshot) {
+            exactEmailSnapshot.docs.forEach(processDoc);
+        }
 
         adminsSnapshot.docs.forEach(processDoc);
         generalSnapshot.docs.forEach(processDoc);
