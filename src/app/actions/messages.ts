@@ -436,7 +436,7 @@ export async function searchUsersAction(query: string) {
 /**
  * Start a Support conversation with an Administrator
  */
-export async function startSupportConversationAction() {
+export async function startSupportConversationAction(module?: string) {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -465,6 +465,11 @@ export async function startSupportConversationAction() {
         const userModuleKeywords = userRoles
             .map(role => ROLE_MODULE_KEYWORDS[role])
             .filter(Boolean) as string[];
+        
+        // If a specific module was requested, prioritize it
+        if (module && !userModuleKeywords.includes(module)) {
+            userModuleKeywords.unshift(module);
+        }
 
         // Find admins
         const adminSnapshot = await db.collection(COLLECTIONS.USERS)
@@ -478,6 +483,7 @@ export async function startSupportConversationAction() {
         // Pick the best admin for the user
         let targetAdmin = adminSnapshot.docs.find(doc => {
             const email = (doc.data().email || "").toLowerCase();
+
             return userModuleKeywords.some(keyword => email.includes(keyword));
         });
 
