@@ -859,6 +859,7 @@ export const COLLECTIONS = {
     SELLER_REVIEWS: "seller_reviews",
 
     // Farm Nation
+    FARM_NATION_APPLICATIONS: "farm_nation_applications",
     FARM_NATION_PROPERTIES: "farmNationProperties",
     FARM_NATION_TRANSACTIONS: "farm_nation_transactions",
 

@@ -160,6 +160,22 @@ export async function approveFarmNationSellerAction(userId: string) {
             roles: FieldValue.arrayUnion("farmer")
         });
 
+        // ── SYNC AUTHORITATIVE RECORD ──────
+        const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+            .where("userId", "==", userId)
+            .orderBy("submittedAt", "desc")
+                .limit(1)
+                .get();
+
+        if (!appSnap.empty) {
+            await appSnap.docs[0].ref.update({
+                status: "approved",
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        }
+
         return { success: true, data: { message: "Seller approved successfully" }, meta: null };
     } catch (error: any) {
         logger.error("Approve seller error:", error);
@@ -181,6 +197,23 @@ export async function rejectFarmNationSellerAction(userId: string, reason: strin
             "serviceRegistrations.farmNation.rejectedBy": session.user.id,
             roles: FieldValue.arrayRemove("farmer"),
         });
+
+        // ── SYNC AUTHORITATIVE RECORD ──────
+        const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+            .where("userId", "==", userId)
+            .orderBy("submittedAt", "desc")
+                .limit(1)
+                .get();
+
+        if (!appSnap.empty) {
+            await appSnap.docs[0].ref.update({
+                status: "rejected",
+                rejectionReason: reason,
+                rejectedAt: FieldValue.serverTimestamp(),
+                rejectedBy: session.user.id,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        }
 
         return { success: true, data: { message: "Seller application rejected" }, meta: null };
     } catch (error: any) {
@@ -829,6 +862,20 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
             stateOfOrigin: data.profile.state,
             lga: data.profile.lga,
             residentialAddress: data.profile.address,
+        });
+
+        // ── AUTHORITATIVE RECORD: Create dedicated application document ──────
+        // This ensures the status guard has a source of truth independent of profile sync.
+        await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).add({
+            userId,
+            userEmail: session.user.email,
+            role: data.role,
+            profile: data.profile,
+            interests: data.interests,
+            status: "pending",
+            submittedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         try {

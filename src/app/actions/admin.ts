@@ -2551,16 +2551,12 @@ async function _approveAcademyApplicationAction(
         });
 
         // 2. Update User Service Registration & Role
-        await db.collection(COLLECTIONS.USERS).doc(userId).set({
-            serviceRegistrations: {
-                academy: {
-                    status: "approved",
-                    approvedAt: FieldValue.serverTimestamp(),
-                }
-            },
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            "serviceRegistrations.academy.status": "approved",
+            "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("academy_participant"),
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
 
         // 3. Clear Cache
         try {
