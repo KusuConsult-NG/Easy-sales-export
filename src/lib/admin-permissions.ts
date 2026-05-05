@@ -136,34 +136,35 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
     ],
 
     wave_admin: [
-        "users:read",
+        "users:read", "users:update", "users:suspend",
         "wave:approve_applications",
         "wave:manage_training"
     ],
     cooperative_admin: [
-        "users:read",
+        "users:read", "users:update", "users:suspend",
+        "finance:read",
         "cooperatives:approve_loans",
         "cooperatives:approve_members",
         "cooperatives:manage_products"
     ],
     marketplace_admin: [
-        "users:read",
+        "users:read", "users:update", "users:suspend",
         "finance:read",
         "marketplace:approve_sellers",
         "marketplace:suspend_sellers",
         "marketplace:moderate_reviews"
     ],
     export_admin: [
-        "users:read",
+        "users:read", "users:update", "users:suspend",
         "export:approve_applications"
     ],
     farm_nation_admin: [
-        "users:read",
+        "users:read", "users:update", "users:suspend",
         "farm_nation:verify_applications",
         "land:verify_listings"
     ],
     academy_admin: [
-        "users:read",
+        "users:read", "users:update", "users:suspend",
         "academy:approve_applications",
         "academy:manage_courses",
         "academy:manage_quizzes",
@@ -290,7 +291,11 @@ export function canAccessAdminRoute(
     ];
 
     if (moderatorRoutes.some(r => route.startsWith(r))) {
-        return isAdmin(userRoles); // Any admin role
+        // Special case: marketplace_admin can see reviews
+        if (route.startsWith("/admin/marketplace/reviews") && userRoles?.includes("marketplace_admin")) return true;
+        
+        // Otherwise require core admin/moderator roles
+        return userRoles?.some(r => r === "super_admin" || r === "admin" || r === "moderator") ?? false;
     }
 
     // Support-accessible routes (read-only admin pages)
@@ -300,7 +305,8 @@ export function canAccessAdminRoute(
     ];
 
     if (supportRoutes.some(r => route.startsWith(r))) {
-        return isAdmin(userRoles); // Any admin role
+        // Strictly block module admins from these global pages
+        return userRoles?.some(r => r === "super_admin" || r === "admin" || r === "support") ?? false;
     }
 
     // ── Module Admin Route Isolation ──
@@ -314,9 +320,13 @@ export function canAccessAdminRoute(
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
 
     if (isModuleAdmin && !isSuperAdmin(userRoles) && !userRoles?.includes("admin")) {
-        // Module admins can only access their specific module and basic dashboard
-        if (route === "/admin" || route === "/admin/dashboard") return true;
+        // Module admins have access to their own silos, user management, support, and settings
+        if (route === "/admin") return true;
+        if (route.startsWith("/admin/users")) return true;
+        if (route.startsWith("/admin/support")) return true;
+        if (route.startsWith("/admin/settings")) return true;
         
+        // Silo isolation
         if (isWaveAdmin && route.startsWith("/admin/wave")) return true;
         if (isCoopAdmin && route.startsWith("/admin/cooperatives")) return true;
         if (isMktAdmin && route.startsWith("/admin/marketplace")) return true;
@@ -324,7 +334,7 @@ export function canAccessAdminRoute(
         if (isFarmAdmin && route.startsWith("/admin/farm-nation")) return true;
         if (isAcadAdmin && route.startsWith("/admin/academy")) return true;
         
-        return false; // Lock them out of everything else!
+        return false; // Strictly block from Dashboard, Analytics, Audit Logs, and Content Approval
     }
 
     // Default: require admin or super_admin for all other /admin routes
