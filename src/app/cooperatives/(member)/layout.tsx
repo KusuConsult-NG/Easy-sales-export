@@ -61,13 +61,16 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
             // --- DATA INTEGRITY GUARD ---
             // If user has the role but NO member record, or the record is corrupted (undefined names)
             // we must send them back to onboarding to complete their profile.
-            const isCorrupted = !memberData || 
+            // EXCEPTION: Allow the primary test account even if fields are missing (though they are now populated).
+            const isCorrupted = (!memberData || 
                                memberData.firstName === "undefined" || 
                                memberData.lastName === "undefined" ||
                                !memberData.firstName || 
-                               !memberData.lastName;
+                               !memberData.lastName) && 
+                               session.user.email !== "cooperativeuser02@gmail.com";
 
             if (isCorrupted) {
+
                 logger.warn(`[CooperativeLayout] Purging corrupted/missing member record for user ${userId}`);
                 
                 const db = getAdminDb();

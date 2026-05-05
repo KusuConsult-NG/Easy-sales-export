@@ -8,13 +8,20 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Users, Search, MapPin, Filter, Mail, Phone } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Users, Search, MapPin, Filter, Mail, Phone, Loader2 } from "lucide-react";
 import { getDirectoryMembersAction } from "@/app/actions/cooperative";
+import { startConversationAction, startSupportConversationAction } from "@/app/actions/messages";
+import { useToast } from "@/contexts/ToastContext";
+
 
 export default function CooperativeDirectoryPage() {
+    const router = useRouter();
+    const { showToast } = useToast();
     const [searchTerm, setSearchTerm] = useState("");
     const [members, setMembers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [processingId, setProcessingId] = useState<string | null>(null);
 
     useEffect(() => {
         async function fetchMembers() {
@@ -27,6 +34,47 @@ export default function CooperativeDirectoryPage() {
         fetchMembers();
     }, []);
 
+    const handleMessage = async (memberId: string) => {
+        setProcessingId(memberId);
+        try {
+            const result = await startConversationAction(memberId);
+            if (result.conversationId) {
+                router.push(`/messages?conversation=${result.conversationId}`);
+            } else {
+                showToast(result.error || "Failed to start conversation", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
+    const handleCall = (phone?: string) => {
+        if (!phone) {
+            showToast("Phone number not available", "error");
+            return;
+        }
+        window.location.href = `tel:${phone}`;
+    };
+
+    const handleMessageAdmin = async () => {
+        setLoading(true);
+        try {
+            // Start a support conversation (special action in messages.ts)
+            const result = await startSupportConversationAction("cooperative");
+            if (result.conversationId) {
+                router.push(`/messages?conversation=${result.conversationId}`);
+            } else {
+                showToast(result.error || "Failed to contact admin", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const filteredMembers = members.filter(member =>
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.occupation.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -36,14 +84,23 @@ export default function CooperativeDirectoryPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                    <Users className="w-8 h-8 text-purple-600" />
-                    Member Directory
-                </h1>
-                <p className="text-slate-600 mt-1">
-                    Connect with other cooperative members
-                </p>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        <Users className="w-8 h-8 text-purple-600" />
+                        Member Directory
+                    </h1>
+                    <p className="text-slate-600 mt-1">
+                        Connect with other cooperative members
+                    </p>
+                </div>
+                <button 
+                    onClick={handleMessageAdmin}
+                    className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all shadow-md"
+                >
+                    <Mail className="w-5 h-5" />
+                    <span>Contact Admin</span>
+                </button>
             </div>
 
             {/* Search and Filter */}
@@ -116,11 +173,22 @@ export default function CooperativeDirectoryPage() {
                         </div>
 
                         <div className="flex gap-2 border-t border-slate-200 pt-4">
-                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-purple-50 hover:text-purple-600 transition text-sm font-medium">
-                                <Mail className="w-4 h-4" />
+                            <button 
+                                onClick={() => handleMessage(member.id)}
+                                disabled={processingId === member.id}
+                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-purple-50 hover:text-purple-600 transition text-sm font-medium disabled:opacity-50"
+                            >
+                                {processingId === member.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Mail className="w-4 h-4" />
+                                )}
                                 Message
                             </button>
-                            <button className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-green-50 hover:text-green-600 transition text-sm font-medium">
+                            <button 
+                                onClick={() => handleCall(member.phone)}
+                                className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 rounded-lg text-slate-600 hover:bg-green-50 hover:text-green-600 transition text-sm font-medium"
+                            >
                                 <Phone className="w-4 h-4" />
                                 Call
                             </button>
@@ -131,3 +199,4 @@ export default function CooperativeDirectoryPage() {
         </div>
     );
 }
+
