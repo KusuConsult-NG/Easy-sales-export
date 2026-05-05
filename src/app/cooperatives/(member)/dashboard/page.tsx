@@ -97,11 +97,7 @@ export default function CooperativeDashboardPage() {
                 
                 {!loading && (
                     <div className="flex flex-col items-center gap-4">
-                        <div className="p-3 bg-slate-100 rounded-lg text-[10px] font-mono text-slate-500 break-all max-w-xs text-center">
-                            Diagnostic Log: {error || "NO_MEMBER_RECORD"}
-                        </div>
                         <Link
-
                             href="/cooperatives/onboarding"
                             className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
                         >
@@ -115,6 +111,7 @@ export default function CooperativeDashboardPage() {
                         </button>
                     </div>
                 )}
+
 
             </div>
         );

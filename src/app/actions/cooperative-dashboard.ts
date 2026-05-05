@@ -48,10 +48,10 @@ export async function getDashboardDataAction() {
         }
 
         // Fetch recent 10 transactions
+        // Note: Removed .orderBy('date') to bypass missing index error while index is provisioning
         const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
             .where('userId', '==', userId)
-            .orderBy('date', 'desc')
-            .limit(10)
+            .limit(50) // Fetch a few more to allow for meaningful sorting
             .get();
 
         if (membershipSnapshot.empty) {
@@ -62,10 +62,7 @@ export async function getDashboardDataAction() {
             };
         }
 
-
         logger.info(`[getDashboardData] Found ${membershipSnapshot.size} membership docs for user: ${userId}`);
-
-
 
         const sortedDocs = membershipSnapshot.docs.sort((a, b) => {
             const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
@@ -75,7 +72,13 @@ export async function getDashboardDataAction() {
         const membershipDoc = sortedDocs[0];
         const membership = serializeDoc<CooperativeMembership>(membershipDoc.id, membershipDoc.data());
 
-        const transactions = serializeDocs<CooperativeTransaction>(transactionsSnapshot.docs);
+        // Memory sort transactions since DB index is missing
+        const rawTransactions = serializeDocs<CooperativeTransaction>(transactionsSnapshot.docs);
+        const transactions = rawTransactions.sort((a, b) => {
+            const aTime = new Date(a.date).getTime();
+            const bTime = new Date(b.date).getTime();
+            return bTime - aTime;
+        }).slice(0, 10); // Keep only recent 10
 
         return {
             success: true,
@@ -83,6 +86,7 @@ export async function getDashboardDataAction() {
             meta: null,
             error: null
         };
+
 
     } catch (error) {
         logger.error("Dashboard data fetch error:", error);
