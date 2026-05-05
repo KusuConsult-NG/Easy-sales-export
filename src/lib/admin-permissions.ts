@@ -321,9 +321,10 @@ export function canAccessAdminRoute(
 
     if (isModuleAdmin && !isSuperAdmin(userRoles) && !userRoles?.includes("admin")) {
         // Module admins have access to their own silos, user management, support, and settings
-        if (route === "/admin") return true;
+        // NOTE: They are explicitly BLOCKED from the base /admin and /admin/dashboard to remove them from sidebar
         if (route.startsWith("/admin/users")) return true;
-        if (route.startsWith("/admin/support")) return true;
+        if (route.startsWith("/admin/messages")) return true; // Support Inbox
+        if (route.startsWith("/admin/support")) return true;  // Legacy support path
         if (route.startsWith("/admin/settings")) return true;
         
         // Silo isolation
