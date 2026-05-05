@@ -96,13 +96,22 @@ export default function SellerDashboard() {
         <div className="min-h-screen bg-slate-50">
             {/* Header */}
             <div className="bg-white border-b border-slate-200">
-                <div className="max-w-7xl mx-auto px-8 py-6">
-                    <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                        Seller Dashboard
-                    </h1>
-                    <p className="text-slate-600">
-                        Manage your products, orders, and track your sales performance
-                    </p>
+                <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                            Seller Dashboard
+                        </h1>
+                        <p className="text-slate-600">
+                            Manage your products, orders, and track your sales performance
+                        </p>
+                    </div>
+                    <Link
+                        href="/marketplace/buyer/dashboard"
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition"
+                    >
+                        <ShoppingCart className="w-4 h-4" />
+                        Switch to Buyer View
+                    </Link>
                 </div>
             </div>
 

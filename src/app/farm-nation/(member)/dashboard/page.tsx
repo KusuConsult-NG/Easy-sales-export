@@ -121,72 +121,88 @@ export default function FarmNationDashboard() {
                         </span>
                     </p>
                 </div>
-                {isSeller && (
+                <div className="flex items-center gap-3">
                     <Link
-                        href="/farm-nation/list-land"
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition"
+                        href="/farm-nation/properties"
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-200 transition"
                     >
-                        <Plus className="w-4 h-4" />
-                        List Property
+                        <Search className="w-4 h-4" />
+                        Browse Land
                     </Link>
-                )}
+                    {isSeller && (
+                        <Link
+                            href="/farm-nation/list-land"
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition"
+                        >
+                            <Plus className="w-4 h-4" />
+                            List Property
+                        </Link>
+                    )}
+                </div>
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Total Hectares */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                            <Sprout className="w-6 h-6 text-emerald-600" />
+            <div className="space-y-6">
+                {/* Seller Section */}
+                {(stats.role === "seller" || stats.role === "both") && (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                            <h2 className="text-lg font-bold text-slate-800">Seller Overview</h2>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Total Land Listed</p>
+                                <h3 className="text-2xl font-bold text-slate-900">
+                                    {stats.totalHectares > 0 ? `${stats.totalHectares.toLocaleString()} Ha` : "0 Ha"}
+                                </h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Active Listings</p>
+                                <h3 className="text-2xl font-bold text-slate-900">{stats.activeListings} Sites</h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Portfolio Value</p>
+                                <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(stats.portfolioValue)}</h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Completed Deals</p>
+                                <h3 className="text-2xl font-bold text-slate-900">{stats.completedDeals}</h3>
+                            </div>
                         </div>
                     </div>
-                    <p className="text-sm text-slate-500 font-medium">Total Land Listed</p>
-                    <h3 className="text-2xl font-bold text-slate-900">
-                        {stats.totalHectares > 0
-                            ? `${stats.totalHectares.toLocaleString()} Ha`
-                            : "0 Hectares"}
-                    </h3>
-                </div>
+                )}
 
-                {/* Active Listings */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                            <MapPin className="w-6 h-6 text-blue-600" />
+                {/* Investor Section */}
+                {(stats.role === "buyer" || stats.role === "both") && (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="w-5 h-5 text-blue-600" />
+                            <h2 className="text-lg font-bold text-slate-800">Investor Overview</h2>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Properties Acquired</p>
+                                <h3 className="text-2xl font-bold text-slate-900">{stats.propertiesAcquired} Units</h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Total Investment</p>
+                                <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(stats.totalInvestmentValue)}</h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                                <p className="text-sm text-slate-500 font-medium mb-1">Pending Inquiries</p>
+                                <h3 className="text-2xl font-bold text-slate-900">{stats.pendingTransactions}</h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 border-dashed border-blue-200 bg-blue-50/30">
+                                <Link href="/farm-nation/properties" className="flex flex-col h-full justify-center">
+                                    <p className="text-sm text-blue-600 font-bold flex items-center gap-1">
+                                        Explore More Land <ArrowRight className="w-4 h-4" />
+                                    </p>
+                                </Link>
+                            </div>
                         </div>
                     </div>
-                    <p className="text-sm text-slate-500 font-medium">Active Listings</p>
-                    <h3 className="text-2xl font-bold text-slate-900">
-                        {stats.activeListings} {stats.activeListings === 1 ? "Site" : "Sites"}
-                    </h3>
-                </div>
-
-                {/* Portfolio Value */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                            <TrendingUp className="w-6 h-6 text-purple-600" />
-                        </div>
-                    </div>
-                    <p className="text-sm text-slate-500 font-medium">Portfolio Value</p>
-                    <h3 className="text-2xl font-bold text-slate-900">
-                        {stats.portfolioValue > 0 ? formatCurrency(stats.portfolioValue) : "₦0"}
-                    </h3>
-                </div>
-
-                {/* Completed Deals */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                    <div className="flex items-center gap-4 mb-4">
-                        <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                            <CheckCircle className="w-6 h-6 text-orange-500" />
-                        </div>
-                    </div>
-                    <p className="text-sm text-slate-500 font-medium">Completed Deals</p>
-                    <h3 className="text-2xl font-bold text-slate-900">
-                        {stats.completedDeals}
-                    </h3>
-                </div>
+                )}
             </div>
 
             {/* Main Content Grid */}

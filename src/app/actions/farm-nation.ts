@@ -1134,6 +1134,10 @@ export interface FarmNationDashboardStats {
     portfolioValue: number;
     /** Count of pending purchase/lease transactions (as buyer) */
     pendingTransactions: number;
+    /** Count of properties acquired (status completed/confirmed) */
+    propertiesAcquired: number;
+    /** Total value of investments made */
+    totalInvestmentValue: number;
     /** Recent transactions (last 5 as buyer) */
     recentTransactions: Array<{
         id: string;
@@ -1226,11 +1230,17 @@ export async function getFarmNationDashboardStatsAction() {
             createdAt: d.createdAt,
         }));
 
-        // Derive stats from listings
+        // Derive stats from listings (Seller)
         const activeListings = properties.filter(p => p.status === 'available').length;
         const completedDeals = properties.filter(p => p.status === 'sold' || p.status === 'leased').length;
         const totalHectares = properties.reduce((sum, p) => sum + p.size, 0);
         const portfolioValue = properties.reduce((sum, p) => sum + p.price, 0);
+
+        // Derive stats from transactions (Buyer/Investor)
+        const completedPurchases = transactions.filter(t => t.status === 'completed' || t.status === 'payment_confirmed');
+        const propertiesAcquired = completedPurchases.length;
+        const totalInvestmentValue = completedPurchases.reduce((sum, t) => sum + t.amount, 0);
+        
         const pendingTransactions = transactions.filter(
             t => t.status === 'pending_payment' || t.status === 'payment_confirmed'
         ).length;
@@ -1249,6 +1259,8 @@ export async function getFarmNationDashboardStatsAction() {
                     completedDeals,
                     portfolioValue,
                     pendingTransactions,
+                    propertiesAcquired,
+                    totalInvestmentValue,
                     recentTransactions: transactions.slice(0, 5),
                     recentListings: properties.slice(0, 4),
                     role,
