@@ -71,6 +71,11 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
             // 2. Success! Cookie is set. Now get redirect URL from server.
             console.log("Client-side login success, fetching redirect...");
 
+            // Register session as active in this tab to satisfy SessionGuard
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem("ese_session_active", "true");
+            }
+
             // Force session update to be absolutely sure client state matches server
             showToast("Login successful!", "success");
 

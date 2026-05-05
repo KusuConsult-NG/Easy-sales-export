@@ -31,8 +31,9 @@ export default function SessionGuard() {
             const referrer = typeof document !== 'undefined' ? document.referrer : '';
             const isExternalReferrer = referrer && !referrer.includes(window.location.hostname);
             const isFreshEntry = !isTabSessionActive;
+            const isFromLoginPage = referrer && referrer.includes("/auth/login");
 
-            if (isFreshEntry || isExternalReferrer) {
+            if ((isFreshEntry || isExternalReferrer) && !isFromLoginPage) {
                 signOut({ 
                     callbackUrl: `/auth/login?reason=security_refresh&returnTo=${pathname}`,
                     redirect: true 
