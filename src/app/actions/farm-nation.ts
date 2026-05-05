@@ -324,12 +324,37 @@ export async function getMyPropertiesAction() {
             return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
-        const snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
-            .where("ownerId", "==", session.user.id)
-            .orderBy("createdAt", "desc")
-            .get();
+        let snapshot;
+        try {
+            snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                .where("ownerId", "==", session.user.id)
+                .orderBy("createdAt", "desc")
+                .get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION")) {
+                logger.warn("Missing index for getMyPropertiesAction, falling back to memory sort");
+                snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                    .where("ownerId", "==", session.user.id)
+                    .get();
+                
+                const properties = serializeDocs<Property>(snapshot.docs);
+                return { 
+                    success: true, 
+                    data: { 
+                        properties: properties.sort((a, b) => {
+                            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+                            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
+                            return dateB.getTime() - dateA.getTime();
+                        }) 
+                    }, 
+                    meta: null 
+                };
+            }
+            throw e;
+        }
 
         const properties = serializeDocs<Property>(snapshot.docs);
+
 
         return { success: true, data: { properties }, meta: null };
     } catch (error: any) {
@@ -440,12 +465,37 @@ export async function getMyPurchaseRequestsAction() {
             return { success: false, data: null, error: "Unauthorized", meta: null };
         }
 
-        const snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-            .where("buyerId", "==", session.user.id)
-            .orderBy("createdAt", "desc")
-            .get();
+        let snapshot;
+        try {
+            snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where("buyerId", "==", session.user.id)
+                .orderBy("createdAt", "desc")
+                .get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION")) {
+                logger.warn("Missing index for getMyPurchaseRequestsAction, falling back to memory sort");
+                snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                    .where("buyerId", "==", session.user.id)
+                    .get();
+                
+                const requests = serializeDocs(snapshot.docs);
+                return { 
+                    success: true, 
+                    data: { 
+                        requests: requests.sort((a: any, b: any) => {
+                            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+                            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
+                            return dateB.getTime() - dateA.getTime();
+                        }) 
+                    }, 
+                    meta: null 
+                };
+            }
+            throw e;
+        }
 
         const requests = serializeDocs(snapshot.docs);
+
 
         return { success: true, data: { requests }, meta: null };
     } catch (error: any) {
