@@ -314,9 +314,9 @@ export function canAccessAdminRoute(
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
 
     if (isModuleAdmin && !isSuperAdmin(userRoles) && !userRoles?.includes("admin")) {
-        // Module admins can only access their specific module and basic dashboard (which we'll restrict later in UI)
-        if (route === "/admin") return true;
-
+        // Module admins can only access their specific module and basic dashboard
+        if (route === "/admin" || route === "/admin/dashboard") return true;
+        
         if (isWaveAdmin && route.startsWith("/admin/wave")) return true;
         if (isCoopAdmin && route.startsWith("/admin/cooperatives")) return true;
         if (isMktAdmin && route.startsWith("/admin/marketplace")) return true;
