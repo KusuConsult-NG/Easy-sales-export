@@ -110,7 +110,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com",
+              "connect-src 'self' https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co https://api.cloudinary.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com",
               "frame-src 'self' https://js.paystack.co https://checkout.paystack.com https://www.youtube.com https://youtube.com https://firebasestorage.googleapis.com https://docs.google.com",
               "media-src 'self' https://firebasestorage.googleapis.com https://storage.googleapis.com blob:",
               "object-src 'none'",

@@ -72,11 +72,9 @@ async function uploadHandler(request: NextRequest) {
             );
         }
 
-        // Convert file to base64
+        // Convert file to buffer for Cloudinary
         const buffer = Buffer.from(await file.arrayBuffer());
-        const base64 = buffer.toString("base64");
-        const dataUri = `data:${file.type};base64,${base64}`;
-
+        
         // Build public_id
         const userId = session.user.id;
         const timestamp = Math.floor(Date.now() / 1000);
@@ -84,29 +82,59 @@ async function uploadHandler(request: NextRequest) {
         const publicId = `${safeName}/${userId}/${documentType}-${timestamp}`;
 
         // Sign the upload request
+        // Cloudinary signature: parameters must be in alphabetical order
+        // Parameters we are signing: public_id, timestamp
         const crypto = await import("crypto");
         const signatureStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
         const signature = crypto.createHash("sha256").update(signatureStr).digest("hex");
 
+        logger.info(`Cloudinary Upload Attempt: publicId=${publicId}, type=${file.type}, size=${file.size}`);
+        logger.info(`Signature String: public_id=${publicId}&timestamp=${timestamp}REDACTED`);
+
         // Build form data for Cloudinary upload API
         const cloudinaryForm = new FormData();
-        cloudinaryForm.append("file", dataUri);
+        
+        // Use a Blob for the file field - Cloudinary accepts this
+        const blob = new Blob([buffer], { type: file.type });
+        cloudinaryForm.append("file", blob, file.name);
+        
         cloudinaryForm.append("api_key", apiKey);
         cloudinaryForm.append("timestamp", String(timestamp));
         cloudinaryForm.append("public_id", publicId);
         cloudinaryForm.append("signature", signature);
 
         const resourceType = file.type === "application/pdf" ? "raw" : "image";
-        cloudinaryForm.append("resource_type", resourceType);
-
+        
         const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
-        const response = await fetch(uploadUrl, { method: "POST", body: cloudinaryForm });
+        
+        logger.info(`Fetching Cloudinary: ${uploadUrl}`);
+        const response = await fetch(uploadUrl, { 
+            method: "POST", 
+            body: cloudinaryForm,
+            cache: 'no-store'
+        });
 
         if (!response.ok) {
             const errBody = await response.text();
-            logger.error("Cloudinary upload failed:", errBody);
+            logger.error(`Cloudinary upload failed (HTTP ${response.status}):`, {
+                body: errBody,
+                publicId,
+                timestamp,
+                resourceType,
+                fileType: file.type,
+                fileSize: file.size
+            });
+            
+            let cleanError = "File upload failed";
+            try {
+                const parsed = JSON.parse(errBody);
+                if (parsed.error?.message) cleanError = parsed.error.message;
+            } catch {
+                cleanError = errBody;
+            }
+
             return NextResponse.json(
-                { success: false, error: "File upload failed. Please check your file and try again." },
+                { success: false, error: cleanError },
                 { status: 502 }
             );
         }
