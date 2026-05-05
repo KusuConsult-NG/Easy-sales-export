@@ -203,7 +203,7 @@ export default function ExportWindowsPage() {
                             setSelectedWindow(null);
                         }}
                         item={{
-                            id: selectedWindow.id,
+                            id: selectedWindow.id || "",
                             title: selectedWindow.title,
                             sellerId: "admin_export", // Export windows are managed by admin/platform
                             unit: "kg",
