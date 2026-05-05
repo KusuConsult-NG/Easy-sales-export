@@ -84,19 +84,33 @@ export default function CooperativeDashboardPage() {
     if (!membership) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
-                <h1 className="text-2xl font-bold text-slate-900">Not a Member Yet?</h1>
+                <h1 className="text-2xl font-bold text-slate-900">
+                    {loading ? "Loading..." : "Account Access Issue"}
+                </h1>
                 <p className="text-slate-600 text-center max-w-md">
-                    Join a cooperative today to access savings, loans, and investment opportunities.
+                    {loading ? "Please wait..." : "We couldn't load your cooperative profile. This usually happens if your registration is still being processed or there was a system error."}
                 </p>
-                <Link
-                    href="/cooperatives/onboarding"
-                    className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
-                >
-                    Join Cooperative
-                </Link>
+                
+                {!loading && (
+                    <div className="flex flex-col items-center gap-4">
+                        <Link
+                            href="/cooperatives/onboarding"
+                            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
+                        >
+                            Complete Registration
+                        </Link>
+                        <button 
+                            onClick={() => window.location.reload()}
+                            className="text-sm text-purple-600 hover:underline"
+                        >
+                            Retry Loading
+                        </button>
+                    </div>
+                )}
             </div>
         );
     }
+
 
     // Derived Financial Data
     const totalSavings = membership.savingsBalance;

@@ -26,28 +26,45 @@ export async function getDashboardDataAction() {
         }
 
         const userId = session.user.id;
+        logger.info(`[getDashboardData] Loading data for user: ${userId}`);
 
-        // Parallel queries for optimal performance
-        const [membershipSnapshot, transactionsSnapshot] = await Promise.all([
-            // Fetch membership data
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where('userId', '==', userId)
-                .get(),
+        let membershipSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where('userId', '==', userId)
+            .get();
 
-            // Fetch recent 10 transactions only
-            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
-                .where('userId', '==', userId)
-                .orderBy('date', 'desc')
-                .limit(10)
-                .get()
-        ]);
+        // FALLBACK: If query by field fails, try direct document ID lookup (parity with layout guard)
+        if (membershipSnapshot.empty) {
+            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+                logger.info(`[getDashboardData] Found membership via DocID fallback for user: ${userId}`);
+                // Mock a snapshot-like structure for the code below
+                membershipSnapshot = {
+                    empty: false,
+                    size: 1,
+                    docs: [docSnap]
+                } as any;
+            }
+        }
+
+        // Fetch recent 10 transactions
+        const transactionsSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS)
+            .where('userId', '==', userId)
+            .orderBy('date', 'desc')
+            .limit(10)
+            .get();
 
         if (membershipSnapshot.empty) {
+            logger.warn(`[getDashboardData] No membership found in ${COLLECTIONS.COOPERATIVE_MEMBERS} for user: ${userId}`);
             return {
                 success: false,
                 error: "No cooperative membership found",
             };
         }
+
+        logger.info(`[getDashboardData] Found ${membershipSnapshot.size} membership docs for user: ${userId}`);
+
+
 
         const sortedDocs = membershipSnapshot.docs.sort((a, b) => {
             const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
