@@ -27,8 +27,9 @@ import {
     Lock, Briefcase, Container, MessageSquare, User, Store,
     Waves, Building2, ClipboardCheck, ToggleLeft, BadgeCheck,
     UserX, MessageCircle, ShieldAlert, ChevronLeft, ChevronRight,
-    LogOut, X, Settings, Sprout
+    LogOut, X, Settings, Sprout, Zap
 } from "lucide-react";
+
 
 import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
@@ -99,8 +100,10 @@ const FARM_NATION_NAV: NavItem[] = [
 const MARKETPLACE_NAV: NavItem[] = [
     { name: "Browse Products",   href: "/marketplace/buyer/products", icon: Search },
     { name: "My Orders",         href: "/marketplace/buyer/orders",   icon: Package },
+    { name: "Village Market",    href: "/marketplace/village-market", icon: Zap },
     { name: "Escrow",            href: "/escrow",                     icon: Lock },
     { name: "Seller Dashboard",  href: "/marketplace/seller",         icon: Store,    sellerOnly: true },
+
     { name: "My Products",       href: "/marketplace/products",       icon: Package,  sellerOnly: true },
 ];
 
@@ -135,7 +138,9 @@ const ADMIN_NAV: NavItem[] = [
     { name: "WAVE Program",       href: "/admin/wave",               icon: Waves,          sectionLabel: "Modules" },
     { name: "Cooperatives",       href: "/admin/cooperatives",       icon: Building2 },
     { name: "Marketplace",        href: "/admin/marketplace",        icon: Store },
+    { name: "Village Market",     href: "/admin/marketplace/village-market", icon: Zap },
     { name: "Export Windows",     href: "/admin/export",             icon: Container },
+
     { name: "Farm Nation",        href: "/admin/farm-nation",        icon: Tractor },
     { name: "Academy",            href: "/admin/academy",            icon: GraduationCap },
     { name: "Finance",            href: "/admin/finance",            icon: Wallet,          sectionLabel: "System" },
