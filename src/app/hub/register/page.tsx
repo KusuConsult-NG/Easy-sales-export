@@ -16,8 +16,8 @@ export default async function HubRegisterPage() {
         redirect(`/auth/login?error=${encodeURIComponent(errorMessage)}`);
     }
 
-    // If authenticated, it means they are caught by the Hub Guard because their 
-    // profile is missing mandatory fields (like a phone number from legacy signups).
-    // Send them to the profile page to complete their data.
+    // If authenticated, it means they were caught by the Hub Guard because their 
+    // profile is critically missing data (like an email or doc record).
+    // Send them to the profile page to fix it.
     redirect("/profile?notice=complete-your-hub-registration");
 }

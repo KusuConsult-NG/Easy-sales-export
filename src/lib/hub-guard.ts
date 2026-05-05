@@ -68,17 +68,20 @@ export async function requireHubRegistration() {
             }
 
             // Legacy check for users who registered before the profileComplete flag existed.
-            // NOTE: phone is intentionally NOT required — social/Google login users
-            // often never provide a phone during signup. We only require Name and Email
-            // for the base Hub identity.
-            const hasName = Boolean(userData?.fullName || (userData?.firstName && userData?.lastName));
+            // NOTE: We now prioritize allowing access to the dashboard immediately after login.
+            // We only redirect if the most basic identity data (Email) is missing.
+            // Name is highly recommended but we don't hard-block the dashboard for it anymore.
             const hasEmail = Boolean(userData?.email);
-
-            const isFullyRegistered = hasName && hasEmail;
             
-            if (!isFullyRegistered) {
-                shouldRedirect = true;
+            // If they have an email, they have a valid hub identity.
+            // They can fill in the rest of their profile (name, phone, etc.) later.
+            if (hasEmail) {
+                return sessionResult;
             }
+
+            // If we reach here, it means the user doc exists but is critically corrupted (no email)
+            console.warn(`[HubGuard] Redirecting user ${sessionResult.session.user.id} - Missing critical email field.`);
+            shouldRedirect = true;
         }
     } catch(err) {
         console.error("Hub Guard Exception:", err);
