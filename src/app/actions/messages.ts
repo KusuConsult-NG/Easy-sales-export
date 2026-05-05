@@ -313,7 +313,30 @@ export async function searchUsersAction(query: string) {
 
         const ADMIN_ROLES = ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"];
 
-        // If no query, return ALL available administrators so the user can easily select one
+        // Determine user's modules to filter admins
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userRoles: string[] = userDoc.data()?.roles ?? [];
+        const userIsAdmin = userRoles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+
+        // Mapping of user roles to module keywords found in admin emails
+        const ROLE_MODULE_KEYWORDS: Record<string, string> = {
+            wave_participant: "wave",
+            cooperative_member: "cooperative",
+            academy_participant: "academy",
+            marketplace_buyer: "marketplace",
+            buyer: "marketplace",
+            seller: "marketplace",
+            export_participant: "export",
+            farmer: "farmnation",
+            land_owner: "farmnation",
+            investor: "farmnation"
+        };
+
+        const userModuleKeywords = userRoles
+            .map(role => ROLE_MODULE_KEYWORDS[role])
+            .filter(Boolean) as string[];
+
+        // If no query, return filtered administrators
         if (!trimmedQuery) {
             const adminsSnapshot = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains-any", ADMIN_ROLES)
@@ -329,23 +352,32 @@ export async function searchUsersAction(query: string) {
                         email: userData.email || "",
                         roles: userData.roles || []
                     };
+                })
+                .filter(admin => {
+                    // Admins see all other admins
+                    if (userIsAdmin) return true;
+                    
+                    // Always show global/super admins
+                    const email = admin.email.toLowerCase();
+                    if (email.includes("super") || email.includes("admin.easysalesexport")) return true;
+
+                    // Show module-specific admins if they match the user's modules
+                    return userModuleKeywords.some(keyword => email.includes(keyword));
                 });
 
             return { users: admins, error: null };
         }
 
-        // Generic search: pull admins first to guarantee they are never hidden
+        // Generic search: pull admins first and apply filtering
         let adminsSnapshot: any;
         let generalSnapshot: any;
 
         try {
             [adminsSnapshot, generalSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
-                // Use lastLoginAt so admins can always find recently active platform users easily
                 db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get()
             ]);
         } catch (e) {
-            // Fallback if the composite index is missing
             [adminsSnapshot, generalSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
                 db.collection(COLLECTIONS.USERS).limit(500).get()
@@ -353,14 +385,22 @@ export async function searchUsersAction(query: string) {
         }
 
         const users: UserSearchResult[] = [];
-        const seenIds = new Set<string>([session.user.id]); // Exclude self
+        const seenIds = new Set<string>([session.user.id]);
 
-        // Helper to process and filter users
         const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
             if (seenIds.has(doc.id)) return;
             const userData = doc.data();
             const fullName = (userData.fullName || "").toLowerCase();
             const email = (userData.email || "").toLowerCase();
+            const roles = userData.roles || [];
+
+            // Filter admins during search too
+            const isAdmin = roles.some((r: string) => ADMIN_ROLES.includes(r));
+            if (isAdmin && !userIsAdmin) {
+                const isGlobal = email.includes("super") || email.includes("admin.easysalesexport");
+                const matchesModule = userModuleKeywords.some(keyword => email.includes(keyword));
+                if (!isGlobal && !matchesModule) return;
+            }
 
             if (fullName.includes(trimmedQuery) || email.includes(trimmedQuery)) {
                 seenIds.add(doc.id);
@@ -368,7 +408,7 @@ export async function searchUsersAction(query: string) {
                     uid: doc.id,
                     fullName: userData.fullName || "User",
                     email: userData.email || "",
-                    roles: userData.roles || []
+                    roles: roles
                 });
             }
         };
@@ -395,24 +435,62 @@ export async function startSupportConversationAction() {
             return { error: "Not authenticated", conversationId: null };
         }
 
-        // Find an admin user
+        // Get user roles to find the right admin
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userRoles: string[] = userDoc.data()?.roles ?? [];
+
+        const ROLE_MODULE_KEYWORDS: Record<string, string> = {
+            wave_participant: "wave",
+            cooperative_member: "cooperative",
+            academy_participant: "academy",
+            marketplace_buyer: "marketplace",
+            buyer: "marketplace",
+            seller: "marketplace",
+            export_participant: "export",
+            farmer: "farmnation",
+            land_owner: "farmnation",
+            investor: "farmnation"
+        };
+
+        const userModuleKeywords = userRoles
+            .map(role => ROLE_MODULE_KEYWORDS[role])
+            .filter(Boolean) as string[];
+
+        // Find admins
         const adminSnapshot = await db.collection(COLLECTIONS.USERS)
-            .where("roles", "array-contains-any", ["admin", "super_admin"])
-            .limit(1)
+            .where("roles", "array-contains-any", ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"])
             .get();
 
         if (adminSnapshot.empty) {
             return { error: "No admin available currently", conversationId: null };
         }
 
-        const adminUid = adminSnapshot.docs[0].id;
+        // Pick the best admin for the user
+        let targetAdmin = adminSnapshot.docs.find(doc => {
+            const email = (doc.data().email || "").toLowerCase();
+            return userModuleKeywords.some(keyword => email.includes(keyword));
+        });
 
-        // If user is admin themselves, prevent
+        // Fallback to global admin if no module admin found
+        if (!targetAdmin) {
+            targetAdmin = adminSnapshot.docs.find(doc => {
+                const email = (doc.data().email || "").toLowerCase();
+                return email.includes("super") || email.includes("admin.easysalesexport");
+            });
+        }
+
+        // Final fallback to the first available admin
+        if (!targetAdmin) {
+            targetAdmin = adminSnapshot.docs[0];
+        }
+
+        const adminUid = targetAdmin.id;
+
+        // If user is admin themselves, prevent messaging themselves
         if (adminUid === session.user.id) {
             return { error: "You are an admin", conversationId: null };
         }
 
-        // Return the existing conversation or start a new one
         return await startConversationAction(adminUid);
     } catch (error) {
         logger.error("Start support conversation error", error);
