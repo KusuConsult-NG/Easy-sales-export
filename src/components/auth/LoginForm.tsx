@@ -87,8 +87,16 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 !rawCallback.includes('error=');
 
             if (isValidCallback) {
-                console.log("Using explicit callback URL:", rawCallback);
-                window.location.assign(rawCallback);
+                // SECURITY: Even if a callback exists, if the user is an admin, 
+                // we should check if they should be forced to /admin instead of the requested path.
+                const redirectResult = await getPostLoginRedirect(formData.email);
+                if (redirectResult.success && redirectResult.data?.redirectUrl === "/admin") {
+                    console.log("Admin detected, overriding callbackUrl to /admin");
+                    window.location.assign("/admin");
+                } else {
+                    console.log("Using explicit callback URL:", rawCallback);
+                    window.location.assign(rawCallback);
+                }
             } else {
                 // No valid callback — use smart redirect based on user's roles
                 try {

@@ -124,11 +124,16 @@ export async function getPostLoginRedirect(email: string) {
             // ── ADMIN OVERRIDE ──────────────────────────────────────────────
             // If the user has ANY admin role (system or module-specific),
             // always ensure they land on the Admin Dashboard by default.
-            const hasAdminRole = userRoles.some(role => 
-                role === 'admin' || 
-                role === 'super_admin' || 
-                role.endsWith('_admin')
-            );
+            const hasAdminRole = userRoles.some(role => {
+                const r = role.toLowerCase();
+                return (
+                    r === 'admin' || 
+                    r === 'super_admin' || 
+                    r === 'superadmin' ||
+                    r.endsWith('_admin') ||
+                    r.includes('admin_dashboard')
+                );
+            });
 
             if (hasAdminRole) {
                 logger.info(`[getPostLoginRedirect] User ${email} has admin privileges, redirecting to /admin`);
