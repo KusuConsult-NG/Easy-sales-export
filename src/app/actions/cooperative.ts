@@ -1056,20 +1056,32 @@ export async function getDirectoryMembersAction(): Promise<{
         // Only approved members
         const snapshot = await membershipsRef.where("membershipStatus", "==", "approved").get();
 
-        const members = snapshot.docs.map((doc: any) => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                name: `${data.firstName} ${data.lastName}`,
-                role: "Member",
-                location: `${data.lga}, ${data.stateOfOrigin}`,
-                occupation: data.occupation,
-                joined: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "Recent",
-                image: data.documents?.passportPhoto?.url || null
-            };
-        });
+        const members = snapshot.docs
+            .map((doc: any) => {
+                const data = doc.data();
+                // Real-time corruption check
+                const isCorrupted = !data.firstName || 
+                                   !data.lastName || 
+                                   data.firstName === "undefined" || 
+                                   data.lastName === "undefined";
+                
+                if (isCorrupted) return null;
+
+                return {
+                    id: doc.id,
+                    name: `${data.firstName} ${data.lastName}`,
+                    role: "Member",
+                    location: `${data.lga}, ${data.stateOfOrigin}`,
+                    occupation: data.occupation,
+                    joined: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "Recent",
+                    image: data.documents?.passportPhoto?.url || null,
+                    phone: data.phone || ""
+                };
+            })
+            .filter(Boolean); // Remove nulls (corrupted)
 
         return { success: true, data: { members }, meta: null };
+
     } catch (error) {
         logger.error("Failed to fetch directory:", error);
         return { error: "Failed to load directory", success: false };
