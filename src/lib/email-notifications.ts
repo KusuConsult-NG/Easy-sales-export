@@ -773,3 +773,55 @@ export async function sendExportProductRejectionEmail(
         metadata: { type: 'export_product_rejection', productName }
     });
 }
+
+/**
+ * Send Legacy Member Welcome Email
+ * Sent to members pre-registered by an admin.
+ */
+export async function sendLegacyMemberWelcomeEmail(
+    userEmail: string,
+    userName: string,
+    temporaryPassword: string
+) {
+    return sendEmailNotification({
+        to: userEmail,
+        subject: 'Welcome to Easy Sales Export - Your Account is Ready',
+        message: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background-color: #16a34a; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Welcome to the Platform!</h1>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${userName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        An administrator has pre-registered your account on the Easy Sales Export platform. 
+                        Your profile and service registrations have been pre-filled for you.
+                    </p>
+                    
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+                        <h3 style="margin-top: 0; color: #0f172a;">Your Temporary Login Credentials</h3>
+                        <p style="margin: 8px 0; font-size: 14px;"><strong>Email:</strong> ${userEmail}</p>
+                        <p style="margin: 8px 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${temporaryPassword}</code></p>
+                    </div>
+
+                    <p style="font-size: 14px; color: #64748b; margin-bottom: 24px;">
+                        <strong>Note:</strong> For security, you will be required to change this temporary password immediately after your first login.
+                    </p>
+
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/auth/login"
+                           style="background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Log In to My Account &rarr;
+                        </a>
+                    </div>
+                    
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export — Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
+        `,
+        metadata: { type: 'legacy_onboarding' },
+    });
+}

@@ -250,4 +250,39 @@ export const UpdateUserRolesSchema = z.object({
     roles: z.array(UserRoleSchema).min(1, "At least one role is required"),
 });
 
+/**
+ * Legacy Member Onboarding Schema
+ * Used by admins to pre-fill onboarding forms for legacy members
+ */
+export const LegacyOnboardingSchema = z.object({
+    fullName: strictNameSchema,
+    email: strictEmailSchema,
+    phone: strictPhoneSchema,
+    gender: z.enum(["male", "female"]),
+    roles: z.array(UserRoleSchema).min(1, "At least one role is required"),
+    state: z.string().min(2, "State is required"),
+    lga: z.string().min(2, "LGA is required"),
+    city: z.string().min(2, "City is required").optional(),
+    address: z.string().min(5, "Complete address is required"),
+    // Financial Details
+    bankName: z.string().optional(),
+    accountNumber: z.string().regex(/^\d{10}$/, "Account number must be 10 digits").optional(),
+    accountName: z.string().optional(),
+    bankCode: z.string().optional(),
+    // KYC Details
+    nin: z.string().length(11, "NIN must be 11 digits").optional(),
+    bvn: z.string().length(11, "BVN must be 11 digits").optional(),
+    // Optional service-specific pre-approvals
+    services: z.object({
+        marketplace: z.boolean().default(false),
+        export: z.boolean().default(false),
+        cooperative: z.boolean().default(false),
+        wave: z.boolean().default(false),
+        academy: z.boolean().default(false),
+        farmNation: z.boolean().default(false),
+    }).optional(),
+});
+
+export type LegacyOnboardingFormData = z.infer<typeof LegacyOnboardingSchema>;
+
 

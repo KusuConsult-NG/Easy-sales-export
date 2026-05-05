@@ -1,17 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Package2, TrendingUp, Calendar, MapPin, ArrowRight, Filter, Search, Database, Loader2, RefreshCw } from "lucide-react";
+import { Package2, TrendingUp, Calendar, MapPin, ArrowRight, Filter, Search, Loader2, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { getExportOpportunities, seedExportOpportunities, type ExportOpportunity } from "@/app/actions/export-investments";
+import { getExportOpportunities, type ExportOpportunity } from "@/app/actions/export-investments";
 import { toast } from "sonner";
 
 export default function ExportWindowsPage() {
     const [exportWindows, setExportWindows] = useState<ExportOpportunity[]>([]);
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
-    const [seeding, setSeeding] = useState(false);
     const [lastDocId, setLastDocId] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
 
@@ -53,12 +52,6 @@ export default function ExportWindowsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    async function handleSeed() {
-        setSeeding(true);
-        await seedExportOpportunities();
-        await loadWindows(true);
-        setSeeding(false);
-    }
 
     function handleLoadMore() {
         if (!loadingMore && hasMore) {
@@ -138,15 +131,7 @@ export default function ExportWindowsPage() {
                     <div className="text-center py-20 bg-white rounded-2xl shadow-lg">
                         <Package2 className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-bold text-slate-900 mb-2">No Export Windows Found</h3>
-                        <p className="text-slate-500 mb-6">There are currently no open investment opportunities.</p>
-                        <button
-                            onClick={handleSeed}
-                            disabled={seeding}
-                            className="inline-flex items-center gap-2 px-6 py-2 bg-purple-600 text-white font-semibold rounded-xl hover:bg-purple-700 transition disabled:opacity-50"
-                        >
-                            <Database className="w-4 h-4" />
-                            {seeding ? "Seeding..." : "Seed Initial Data"}
-                        </button>
+                        <p className="text-slate-500">There are currently no open investment opportunities.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

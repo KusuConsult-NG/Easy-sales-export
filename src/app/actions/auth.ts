@@ -135,6 +135,14 @@ export async function getPostLoginRedirect(email: string) {
                 );
             });
 
+            // ── SECURITY GUARD: LEGACY PASSWORD RESET ──────────────────────
+            // If the user was onboarded by an admin (legacy flow), 
+            // they MUST change their password on first login.
+            if ((userData as any).requiresPasswordChange) {
+                logger.info(`[getPostLoginRedirect] User ${email} requires password change, redirecting to security setup`);
+                return { success: true, data: { redirectUrl: '/auth/reset-legacy-password' } };
+            }
+
             if (hasAdminRole) {
                 // Determine specific admin landing page
                 let adminRedirect = '/admin';

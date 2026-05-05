@@ -21,8 +21,10 @@ import {
     LandListingVerificationSchema,
     LoanApplicationReviewSchema,
     ExportOnboardingReviewSchema,
-    UserKycVerificationSchema
+    UserKycVerificationSchema,
+    LegacyOnboardingSchema
 } from "@/lib/schemas";
+import { sendLegacyMemberWelcomeEmail } from "@/lib/email-notifications";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { atomicUpdateUser } from "@/lib/services/userService";
@@ -3509,5 +3511,232 @@ export async function getAdminSellerStatsAction(): Promise<{
     } catch (error: any) {
         logger.error("getAdminSellerStatsAction error:", error);
         return { success: false, error: error.message };
+    }
+}
+
+// ============================================
+// Onboard Legacy Member
+// ============================================
+
+/**
+ * Onboard Legacy Member Action
+ * Allows admins to pre-register existing members and pre-fill their profile data.
+ * Sends a welcome email with a temporary password.
+ */
+export async function onboardLegacyMemberAction(
+    formData: any
+): Promise<{ success: boolean; error?: string; message?: string }> {
+    try {
+        const adminCheck = await requireAdmin();
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        const { session } = sessionResult;
+
+        // Permission check
+        if (!hasAdminPermission(session.user.roles, "users:create")) {
+            return { error: "Unauthorized: Permission users:create required", success: false };
+        }
+
+        // Validate input
+        const validated = LegacyOnboardingSchema.safeParse(formData);
+        if (!validated.success) {
+            return { error: validated.error.issues[0].message, success: false };
+        }
+
+        const data = validated.data;
+
+        // 1. Check if user already exists (Email)
+        const existingAuth = await adminAuth.getUserByEmail(data.email).catch(() => null);
+        if (existingAuth) {
+            return { error: "A user with this email already exists in Auth", success: false };
+        }
+
+        // 2. 🔒 DEDUP GUARD: Check phone uniqueness (Fraud Prevention)
+        const phoneCheck = await db.collection(COLLECTIONS.USERS)
+            .where("phone", "==", data.phone)
+            .limit(1)
+            .get();
+        if (!phoneCheck.empty) {
+            return { error: "An account with this phone number already exists in the system.", success: false };
+        }
+
+        // 3. Generate temporary password
+        const tempPassword = crypto.randomBytes(6).toString('hex') + "!2Aa"; 
+
+        // 4. Create Firebase Auth user
+        const userRecord = await adminAuth.createUser({
+            email: data.email,
+            password: tempPassword,
+            displayName: data.fullName,
+            emailVerified: true,
+        });
+
+        // 5. Prepare structured name
+        const nameParts = data.fullName.trim().split(/\s+/);
+        const firstName = nameParts[0] || "";
+        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+        const otherName = nameParts.length > 2 ? nameParts.slice(1, -1).join(" ") : "";
+
+        // 6. Initialize Service Registrations
+        const serviceRegistrations: any = {};
+        if (data.services?.marketplace) {
+            serviceRegistrations.marketplace = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+        }
+        if (data.services?.export) {
+            serviceRegistrations.export = { status: "approved", approvedAt: FieldValue.serverTimestamp(), appliedAt: FieldValue.serverTimestamp() };
+        }
+        if (data.services?.cooperative) {
+            serviceRegistrations.cooperative = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+        }
+        if (data.services?.wave) {
+            serviceRegistrations.wave = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+        }
+        if (data.services?.academy) {
+            serviceRegistrations.academy = { status: "approved", enrolledAt: FieldValue.serverTimestamp() };
+        }
+        if (data.services?.farmNation) {
+            serviceRegistrations.farmNation = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+        }
+
+        // 7. Create User Document
+        const userDoc: any = {
+            uid: userRecord.uid,
+            fullName: data.fullName,
+            firstName,
+            lastName,
+            otherName: otherName || undefined,
+            email: data.email,
+            phone: data.phone,
+            gender: data.gender,
+            roles: data.roles,
+            isVerified: true,
+            verified: true,
+            stateOfOrigin: data.state,
+            lga: data.lga,
+            residentialAddress: data.address,
+            address: {
+                street: data.address,
+                city: data.city || "",
+                state: data.state,
+                lga: data.lga,
+                country: "Nigeria",
+            },
+            // Financials
+            bankAccountNumber: data.accountNumber,
+            bankAccountName: data.accountName,
+            bankCode: data.bankCode,
+            bankDetails: data.accountNumber ? {
+                accountNumber: data.accountNumber,
+                bankName: data.bankName || "",
+                accountName: data.accountName || "",
+                bankCode: data.bankCode || "",
+            } : undefined,
+            // KYC
+            nin: data.nin,
+            ninVerified: !!data.nin,
+            bvn: data.bvn,
+            bvnVerified: !!data.bvn,
+            isVerifiedBadge: true, 
+            // Security & Onboarding
+            requiresPasswordChange: true, 
+            serviceRegistrations,
+            onboardingCompleted: true, 
+            consentVersion: "1.0.0",
+            consentDate: FieldValue.serverTimestamp(),
+            notifications: {
+                email: true,
+                push: true,
+                sms: true
+            },
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            legacyOnboardedBy: session.user.id,
+            legacyOnboardedAt: FieldValue.serverTimestamp(),
+        };
+
+        const batch = db.batch();
+        batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc);
+
+        // 8. 🏗️ DEEP PROVISIONING: Initialize Service Documents
+        
+        // Cooperative Member Document
+        if (data.services?.cooperative || data.roles.includes("cooperative_member")) {
+            batch.set(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userRecord.uid), {
+                userId: userRecord.uid,
+                fullName: data.fullName,
+                firstName,
+                lastName,
+                email: data.email,
+                phone: data.phone,
+                savingsBalance: 0,
+                loanBalance: 0,
+                totalContributions: 0,
+                membershipStatus: "active",
+                paymentStatus: "completed",
+                tier: "tier1",
+                onboardingCompleted: true,
+                stateOfOrigin: data.state,
+                lga: data.lga,
+                bankAccountNumber: data.accountNumber,
+                bankName: data.bankName,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        // Vendor Settings Document
+        if (data.services?.marketplace || data.roles.includes("seller")) {
+            batch.set(db.collection(COLLECTIONS.VENDOR_SETTINGS).doc(userRecord.uid), {
+                userId: userRecord.uid,
+                storeInfo: {
+                    name: `${firstName}'s Store`,
+                    contactEmail: data.email,
+                    phone: data.phone,
+                },
+                paymentConfig: data.accountNumber ? {
+                    accountNumber: data.accountNumber,
+                    bankName: data.bankName,
+                    accountName: data.accountName,
+                    bankCode: data.bankCode,
+                } : {},
+                notifications: {
+                    newOrders: true,
+                    payments: true,
+                },
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        }
+
+        await batch.commit();
+
+        // 9. Send Welcome Email
+        await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+
+        // 8. Audit Log
+        await logAuditAction({
+            userId: session.user.id,
+            action: "user_onboard_legacy",
+            entityId: userRecord.uid,
+            entityType: "user",
+            details: `Legacy member ${data.email} onboarded by admin.`,
+            metadata: {
+                targetEmail: data.email,
+                roles: data.roles,
+                services: data.services
+            }
+        });
+
+        return { 
+            success: true, 
+            message: `Legacy member ${data.fullName} successfully onboarded. Credentials sent to ${data.email}.`,
+            error: null 
+        };
+
+    } catch (error: any) {
+        logger.error("Legacy onboarding error:", error);
+        return { success: false, error: error.message || "Failed to onboard legacy member" };
     }
 }
