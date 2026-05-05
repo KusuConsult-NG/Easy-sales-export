@@ -207,8 +207,23 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         
         q = q.limit(fetchLimit);
 
-        const snapshot = await q.get();
+        let snapshot;
+        try {
+            snapshot = await q.get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
+                logger.warn("Missing index for getStandardFarmNationRegistrantsAction, falling back to memory filter");
+                snapshot = await db.collection(COLLECTIONS.USERS)
+                    .where('serviceRegistrations.farmNation.status', '!=', null)
+                    .get();
+            } else {
+                throw e;
+            }
+        }
+
+        
         const users = serializeDocs(snapshot.docs);
+
 
         // Filter and map out the standard forms
         let applications = users.filter((user: any) => {
@@ -289,7 +304,16 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             });
         }
 
-        // Sorting is now handled entirely by the Firestore query.
+        // Sorting
+        const sortDirection = options.sortOrder || "desc";
+        applications.sort((a: any, b: any) => {
+            const dateA = a.data?.createdAt?.toDate?.() || new Date(a.data?.createdAt || 0);
+            const dateB = b.data?.createdAt?.toDate?.() || new Date(b.data?.createdAt || 0);
+            return sortDirection === "desc" 
+                ? dateB.getTime() - dateA.getTime()
+                : dateA.getTime() - dateB.getTime();
+        });
+
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
@@ -400,15 +424,21 @@ export async function getAdminLandVerificationsAction(options: {
                 .orderBy("createdAt", orderDirection);
         }
 
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                queryRef = queryRef.startAfter(lastDoc);
+        let snapshot;
+        try {
+            snapshot = await queryRef.limit(fetchLimit).get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
+                logger.warn("Missing index for getAdminLandVerificationsAction, falling back to memory sort");
+                snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).get();
+                // We will sort verifications array below
+            } else {
+                throw e;
             }
         }
 
-        const snapshot = await queryRef.limit(fetchLimit).get();
         let verifications = snapshot.docs.map(doc => {
+
             const data = doc.data();
             return {
                 id: doc.id,
@@ -428,6 +458,15 @@ export async function getAdminLandVerificationsAction(options: {
                 v.state?.toLowerCase().includes(q)
             );
         }
+
+        // Sorting
+        const sortDirection = options.sortOrder || "desc";
+        verifications.sort((a: any, b: any) => {
+            const dateA = a.createdAt?.getTime?.() || new Date(a.createdAt).getTime();
+            const dateB = b.createdAt?.getTime?.() || new Date(b.createdAt).getTime();
+            return sortDirection === "desc" ? dateB - dateA : dateA - dateB;
+        });
+
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
@@ -467,15 +506,20 @@ export async function getFarmNationTransactionsAction(options: {
                 .orderBy("createdAt", "desc");
         }
 
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                queryRef = queryRef.startAfter(lastDoc);
+        let snapshot;
+        try {
+            snapshot = await queryRef.limit(fetchLimit).get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
+                logger.warn("Missing index for getFarmNationTransactionsAction, falling back to memory sort");
+                snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).get();
+            } else {
+                throw e;
             }
         }
 
-        const snapshot = await queryRef.limit(fetchLimit).get();
         let transactions = snapshot.docs.map(doc => {
+
             const data = doc.data();
             return {
                 id: doc.id,
@@ -485,6 +529,14 @@ export async function getFarmNationTransactionsAction(options: {
                 paymentVerifiedAt: data.paymentVerifiedAt?.toDate() || undefined,
             };
         }) as any[];
+
+        // Sorting
+        transactions.sort((a: any, b: any) => {
+            const dateA = a.createdAt?.getTime?.() || new Date(a.createdAt).getTime();
+            const dateB = b.createdAt?.getTime?.() || new Date(b.createdAt).getTime();
+            return dateB - dateA;
+        });
+
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 

@@ -1170,18 +1170,39 @@ export async function getFarmNationDashboardStatsAction() {
         const userId = session.user.id;
 
         // Fetch in parallel: user's listings + purchase transactions as buyer
-        const [listingsSnap, transactionsSnap, userDoc] = await Promise.all([
-            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
-                .where('ownerId', '==', userId)
-                .orderBy('createdAt', 'desc')
-                .get(),
-            db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
-                .where('buyerId', '==', userId)
-                .orderBy('createdAt', 'desc')
-                .limit(10)
-                .get(),
-            db.collection(COLLECTIONS.USERS).doc(userId).get(),
-        ]);
+        let listingsSnap, transactionsSnap, userDoc;
+        try {
+            [listingsSnap, transactionsSnap, userDoc] = await Promise.all([
+                db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                    .where('ownerId', '==', userId)
+                    .orderBy('createdAt', 'desc')
+                    .get(),
+                db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                    .where('buyerId', '==', userId)
+                    .orderBy('createdAt', 'desc')
+                    .limit(10)
+                    .get(),
+                db.collection(COLLECTIONS.USERS).doc(userId).get(),
+            ]);
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
+                logger.warn("Missing index for Dashboard Stats, falling back to sequential memory sort");
+                // Fetch sequentially without sort
+                const [lSnap, tSnap, uDoc] = await Promise.all([
+                    db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where('ownerId', '==', userId).get(),
+                    db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).where('buyerId', '==', userId).limit(10).get(),
+                    db.collection(COLLECTIONS.USERS).doc(userId).get(),
+                ]);
+                listingsSnap = lSnap;
+                transactionsSnap = tSnap;
+                userDoc = uDoc;
+                
+                // We will sort listingsSnap.docs and transactionsSnap.docs below
+            } else {
+                throw e;
+            }
+        }
+
 
         const properties = serializeDocs<any>(listingsSnap.docs).map(d => ({
             id: d.id,
