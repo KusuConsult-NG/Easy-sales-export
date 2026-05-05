@@ -27,8 +27,9 @@ import {
     Lock, Briefcase, Container, MessageSquare, User, Store,
     Waves, Building2, ClipboardCheck, ToggleLeft, BadgeCheck,
     UserX, MessageCircle, ShieldAlert, ChevronLeft, ChevronRight,
-    LogOut, X, Settings,
+    LogOut, X, Settings, Sprout
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
 import { getModuleConfig } from "@/lib/module-config";
@@ -107,6 +108,14 @@ const EXPORT_NAV: NavItem[] = [
     { name: "Browse Windows",  href: "/export/windows",        icon: Container },
 ];
 
+const ESCROW_NAV: NavItem[] = [
+    { name: "Escrow Home",    href: "/escrow",          icon: Lock, exact: true },
+    { name: "Marketplace",    href: "/marketplace/buyer/dashboard", icon: Store },
+    { name: "Farm Nation",    href: "/farm-nation/properties", icon: Sprout },
+    { name: "Support",        href: "/messages",        icon: MessageSquare },
+];
+
+
 const ADMIN_NAV: NavItem[] = [
     { name: "Dashboard",          href: "/admin",                    icon: LayoutDashboard, exact: true },
     { name: "Analytics",          href: "/admin/analytics",          icon: TrendingUp },
@@ -144,8 +153,10 @@ function detectModuleKey(pathname: string): string {
     if (pathname.startsWith("/farm-nation"))  return "farm-nation";
     if (pathname.startsWith("/marketplace"))  return "marketplace";
     if (pathname.startsWith("/export"))       return "export";
+    if (pathname.startsWith("/escrow"))       return "escrow";
     if (pathname.startsWith("/admin"))        return "admin";
     return "dashboard";
+
 }
 
 function getModuleNav(moduleKey: string): NavItem[] {
@@ -156,8 +167,10 @@ function getModuleNav(moduleKey: string): NavItem[] {
         case "farm-nation":  return FARM_NATION_NAV;
         case "marketplace":  return MARKETPLACE_NAV;
         case "export":       return EXPORT_NAV;
+        case "escrow":       return ESCROW_NAV;
         case "admin":        return ADMIN_NAV;
         default:             return [];
+
     }
 }
 

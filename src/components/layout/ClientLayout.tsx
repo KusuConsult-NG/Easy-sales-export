@@ -46,8 +46,9 @@ function getSidebarMode(pathname: string): SidebarMode {
     // Module root landing pages (exact match only — not /academy/dashboard)
     const MODULE_ROOTS = [
         "/wave", "/academy", "/cooperatives",
-        "/marketplace", "/farm-nation", "/export", "/escrow",
+        "/marketplace", "/farm-nation", "/export",
     ];
+
     if (MODULE_ROOTS.includes(pathname)) return "none";
 
     // Non-member subpaths: onboarding, payment flows, landing variants
