@@ -872,6 +872,7 @@ export const COLLECTIONS = {
     CONVERSATIONS: "conversations",
     PRODUCT_REVIEWS: "product_reviews",
     REVIEWS: "product_reviews", // Alias for PRODUCT_REVIEWS
+    MARKETPLACE_QUOTES: "marketplace_quotes",
 
 
     // Education & Training

@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { getProductAction, getRelatedProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import QuoteRequestModal from "./_components/QuoteRequestModal";
 
 export default function ProductDetailPage() {
     const params = useParams();
@@ -18,6 +19,7 @@ export default function ProductDetailPage() {
     const [product, setProduct] = useState<Product & { sellerName?: string } | null>(null);
     const [error, setError] = useState("");
     const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+    const [showQuoteModal, setShowQuoteModal] = useState(false);
 
     useEffect(() => {
         async function loadProduct() {
@@ -194,10 +196,26 @@ export default function ProductDetailPage() {
                                 <ShoppingCart className="w-5 h-5" />
                                 Add to Cart
                             </button>
-                            <button className="px-8 py-4 bg-white text-green-600 font-bold text-lg rounded-xl border-2 border-green-600 hover:bg-green-50 transition-all">
-                                Contact Seller
+                            <button 
+                                onClick={() => setShowQuoteModal(true)}
+                                className="px-8 py-4 bg-white text-green-600 font-bold text-lg rounded-xl border-2 border-green-600 hover:bg-green-50 transition-all"
+                            >
+                                Request for Quote
                             </button>
                         </div>
+
+                        {showQuoteModal && (
+                            <QuoteRequestModal 
+                                product={{
+                                    id: product.id,
+                                    title: product.title,
+                                    sellerId: product.sellerId,
+                                    unit: product.unit,
+                                    sellerName: product.sellerName
+                                }}
+                                onClose={() => setShowQuoteModal(false)}
+                            />
+                        )}
 
                         {/* Specifications */}
                         <div className="bg-white rounded-2xl p-6 shadow-lg">
