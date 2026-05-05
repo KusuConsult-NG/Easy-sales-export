@@ -152,6 +152,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 "CredentialsSignin": "Invalid email or password",
                 "MissingCSRF": "Session expired — please refresh the page and try again.",
                 "session_expired": "Your session has expired. Please log in again.",
+                "security_refresh": "For your security, please sign in again to continue.",
                 "access_denied": "You do not have permission to access that resource.",
                 "Default": "Authentication failed."
             };

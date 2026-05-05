@@ -7,6 +7,7 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import { Toaster } from "sonner";
 
 import SessionActivityTracker from "@/components/auth/SessionActivityTracker";
+import SessionGuard from "@/components/auth/SessionGuard";
 import { ModuleSidebar } from "@/components/layout/ModuleSidebar";
 import { FirebaseAuthProvider } from "@/components/providers/FirebaseAuthProvider";
 import { useFCMRegistration } from "@/hooks/useFCMRegistration";
@@ -96,6 +97,7 @@ function LayoutContent({ children }: ClientLayoutProps) {
     return (
         <ToastProvider>
             {status === "authenticated" && <SessionActivityTracker />}
+            <SessionGuard />
 
             <>
                 {showSidebar ? (
