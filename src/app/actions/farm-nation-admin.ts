@@ -184,7 +184,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             .where('serviceRegistrations.farmNation.status', '!=', null);
 
         // Determine sorting direction based on input
-        const sortDirection = options.sortOrder || "desc";
+        const applicationsSortDirection = options.sortOrder || "desc";
 
         if (options.dateFrom) {
             const fromTs = new Date(options.dateFrom);
@@ -196,7 +196,8 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         }
 
         // We use createdAt for sorting to support date inequality
-        q = q.orderBy("createdAt", sortDirection);
+        q = q.orderBy("createdAt", applicationsSortDirection);
+
 
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
@@ -309,10 +310,11 @@ export async function getStandardFarmNationRegistrantsAction(options: {
 
             const dateA = a.data?.createdAt?.toDate?.() || new Date(a.data?.createdAt || 0);
             const dateB = b.data?.createdAt?.toDate?.() || new Date(b.data?.createdAt || 0);
-            return sortDirection === "desc" 
+            return applicationsSortDirection === "desc" 
                 ? dateB.getTime() - dateA.getTime()
                 : dateA.getTime() - dateB.getTime();
         });
+
 
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
@@ -460,12 +462,13 @@ export async function getAdminLandVerificationsAction(options: {
         }
 
         // Sorting
-        const sortDirection = options.sortOrder || "desc";
+        const landSortDirection = options.sortOrder || "desc";
         verifications.sort((a: any, b: any) => {
             const dateA = a.createdAt?.getTime?.() || new Date(a.createdAt).getTime();
             const dateB = b.createdAt?.getTime?.() || new Date(b.createdAt).getTime();
-            return sortDirection === "desc" ? dateB - dateA : dateA - dateB;
+            return landSortDirection === "desc" ? dateB - dateA : dateA - dateB;
         });
+
 
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
