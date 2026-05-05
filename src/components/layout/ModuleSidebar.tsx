@@ -34,11 +34,13 @@ import { cn } from "@/lib/utils";
 import { COMPANY_INFO } from "@/lib/constants";
 import { getModuleConfig } from "@/lib/module-config";
 import NotificationCenter from "./NotificationCenter";
+import { hasAppAccess } from "@/lib/role-app-mapping";
 import { signOut as nextAuthSignOut } from "next-auth/react";
 import type { UserRole } from "@/lib/types/roles";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
+
 
 const COLLAPSED_KEY = "sidebar_collapsed_v2";
 
@@ -51,8 +53,10 @@ interface NavItem {
     icon: React.ElementType;
     exact?: boolean;
     sellerOnly?: boolean;
+    moduleAccess?: string; // AppIdentifier string
     sectionLabel?: string; // renders a section header before this item
 }
+
 
 // ---------------------------------------------------------------------------
 // NAV DEFINITIONS — one per module
@@ -110,10 +114,11 @@ const EXPORT_NAV: NavItem[] = [
 
 const ESCROW_NAV: NavItem[] = [
     { name: "Escrow Home",    href: "/escrow",          icon: Lock, exact: true },
-    { name: "Marketplace",    href: "/marketplace/buyer/dashboard", icon: Store },
-    { name: "Farm Nation",    href: "/farm-nation/properties", icon: Sprout },
+    { name: "Marketplace",    href: "/marketplace/buyer/dashboard", icon: Store, moduleAccess: "marketplace" },
+    { name: "Farm Nation",    href: "/farm-nation/properties", icon: Sprout, moduleAccess: "farm-nation" },
     { name: "Support",        href: "/messages",        icon: MessageSquare },
 ];
+
 
 
 const ADMIN_NAV: NavItem[] = [
@@ -297,9 +302,18 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const theme        = buildTheme(moduleConfig.theme);
     const ModuleIcon   = moduleConfig.icon;
 
-    // ── Nav items — no enrollment check ──────────────────────────────────
+    // ── Nav items ────────────────────────────────────────────────────────
     const rawNav  = getModuleNav(moduleKey);
-    const navItems = rawNav.filter(item => !item.sellerOnly || isSeller);
+    const navItems = rawNav.filter(item => {
+        // Role check for marketplace seller items
+        if (item.sellerOnly && !isSeller) return false;
+
+        // Access check for cross-module items (like in Escrow)
+        if (item.moduleAccess && !hasAppAccess(roles, item.moduleAccess as any)) return false;
+
+        return true;
+    });
+
 
     // ── Persistence & mount ───────────────────────────────────────────────
     useEffect(() => {
