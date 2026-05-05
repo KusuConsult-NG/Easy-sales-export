@@ -62,8 +62,10 @@ export default function CooperativeDirectoryPage() {
         setLoading(true);
         try {
             // Start a support conversation (special action in messages.ts)
-            const result = await startSupportConversationAction("cooperative");
+            const moduleName = "cooperative";
+            const result = await startSupportConversationAction(moduleName);
             if (result.conversationId) {
+
                 router.push(`/messages?conversation=${result.conversationId}`);
             } else {
                 showToast(result.error || "Failed to contact admin", "error");
