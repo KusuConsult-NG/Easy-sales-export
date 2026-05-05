@@ -6,7 +6,7 @@
 
 "use client";
 
-import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2 } from "lucide-react";
+import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2, Zap } from "lucide-react";
 import { logger } from '@/lib/logger';
 import Link from "next/link";
 import { useState, useEffect } from "react";
