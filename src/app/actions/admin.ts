@@ -3716,18 +3716,17 @@ export async function onboardLegacyMemberAction(
         await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
 
         // 8. Audit Log
-        await logAuditAction({
-            userId: session.user.id,
-            action: "user_onboard_legacy",
-            entityId: userRecord.uid,
-            entityType: "user",
-            details: `Legacy member ${data.email} onboarded by admin.`,
-            metadata: {
+        await logAuditAction(
+            "legacy_member_invited",
+            userRecord.uid,
+            "user",
+            {
+                adminId: session.user.id,
                 targetEmail: data.email,
                 roles: data.roles,
                 services: data.services
             }
-        });
+        );
 
         return { 
             success: true, 
