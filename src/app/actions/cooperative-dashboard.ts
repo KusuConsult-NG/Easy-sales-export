@@ -58,9 +58,10 @@ export async function getDashboardDataAction() {
             logger.warn(`[getDashboardData] No membership found in ${COLLECTIONS.COOPERATIVE_MEMBERS} for user: ${userId}`);
             return {
                 success: false,
-                error: "No cooperative membership found",
+                error: `No cooperative membership found for ${userId}`,
             };
         }
+
 
         logger.info(`[getDashboardData] Found ${membershipSnapshot.size} membership docs for user: ${userId}`);
 

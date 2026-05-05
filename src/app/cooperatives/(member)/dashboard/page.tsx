@@ -31,6 +31,7 @@ import { useRouter } from "next/navigation";
 export default function CooperativeDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [membership, setMembership] = useState<CooperativeMembership | null>(null);
     const [transactions, setTransactions] = useState<CooperativeTransaction[]>([]);
 
@@ -43,11 +44,14 @@ export default function CooperativeDashboardPage() {
                 if (result.success && result.data?.membership) {
                     setMembership(result.data.membership);
                     setTransactions(result.data.transactions || []);
-                } else if (result.error?.includes("No cooperative")) {
-                    // Not a member - membership will be null
-                    setMembership(null);
+                } else {
+                    setError(result.error || "Unknown error");
+                    if (result.error?.includes("No cooperative")) {
+                        setMembership(null);
+                    }
                 }
             } catch (error) {
+
                 logger.error("Failed to load dashboard data:", error);
             } finally {
                 setLoading(false);
@@ -93,7 +97,11 @@ export default function CooperativeDashboardPage() {
                 
                 {!loading && (
                     <div className="flex flex-col items-center gap-4">
+                        <div className="p-3 bg-slate-100 rounded-lg text-[10px] font-mono text-slate-500 break-all max-w-xs text-center">
+                            Diagnostic Log: {error || "NO_MEMBER_RECORD"}
+                        </div>
                         <Link
+
                             href="/cooperatives/onboarding"
                             className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
                         >
@@ -107,6 +115,7 @@ export default function CooperativeDashboardPage() {
                         </button>
                     </div>
                 )}
+
             </div>
         );
     }
