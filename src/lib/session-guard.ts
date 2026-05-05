@@ -53,9 +53,13 @@ export async function requireSession(): Promise<
         // 2. Fallback to Firestore if cache misses
         if (!data) {
             const db = getAdminDb();
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const userId = session.user.id;
+            const userEmail = session.user.email;
+            console.log(`[SessionGuard] Fetching user doc for ID: ${userId} (Email: ${userEmail}) from collection: ${COLLECTIONS.USERS}`);
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
             if (!userDoc.exists) {
+                console.error(`[SessionGuard] Account NOT found in Firestore for ID: ${userId} (Email: ${userEmail})`);
                 return {
                     session: null,
                     error: {
@@ -65,6 +69,7 @@ export async function requireSession(): Promise<
                     },
                 };
             }
+
 
             data = userDoc.data();
 
