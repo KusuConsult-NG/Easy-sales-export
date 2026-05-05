@@ -37,7 +37,22 @@ export default async function CooperativeOnboardingPage(
         if (memberDoc.exists) {
             paymentStatus = memberDoc.data()?.paymentStatus || "pending";
         }
-    } catch {
+
+        // ── AUTHORITATIVE OVERRIDE ──────────────────────────────────────
+        // If profile says pending, double check actual payment records
+        if (paymentStatus !== "completed") {
+            const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("userId", "==", session.user.id)
+                .where("type", "==", "cooperative_membership_registration")
+                .where("status", "==", "completed")
+                .limit(1)
+                .get();
+                
+            if (!authPayment.empty) {
+                paymentStatus = "completed";
+            }
+        }
+    } catch (e) {
         // Safe fallback
     }
 

@@ -103,34 +103,44 @@ export async function getCooperativeStatsAction(): Promise<{
         } catch (e) {}
 
         // ── PAID MEMBERS COUNT (Paystack-authoritative) ──────────────────────
-        // Read from PROCESSED_PAYMENTS where type is cooperative_membership_registration
-        // and status is completed. This matches exactly what Paystack reports, because
-        // the sync and webhook both write here. COOPERATIVE_MEMBERS.paymentStatus can
-        // be stale for legacy registrations from the old cooperative portal.
-        const [membersSnapR] = await Promise.allSettled([
+        // We fetch BOTH the membership profiles AND the authoritative payments.
+        // This ensures the "Paid" count matches reality even if profiles are stale.
+        const [membersSnapR, paymentsSnapR] = await Promise.allSettled([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .limit(adminScope ? 5000 : 5000)
+                .limit(5000)
                 .get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "cooperative_membership_registration")
+                .where("status", "==", "completed")
+                .get()
         ]);
 
         const allMembers = membersSnapR.status === "fulfilled"
             ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
             : [];
+            
+        // Unique set of user IDs who have successfully paid
+        const paidUserIds = paymentsSnapR.status === "fulfilled"
+            ? new Set(paymentsSnapR.value.docs.map(doc => doc.data().userId))
+            : new Set();
 
-        const totalMembers = allMembers.length;
-        // For status breakdown, still use COOPERATIVE_MEMBERS paymentStatus (best effort)
-        const paidMembersList = allMembers.filter((m: any) => m.paymentStatus === "completed");
-        const paidMembersCount = paidMembersList.length;
+        const totalMembersCount = allMembers.length;
+        
+        // A member is "Paid" if their ID is in the authoritative paidUserIds set
+        const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.id));
+        
+        // Authoritative count is the total unique successful payments
+        const paidMembersCount = paidUserIds.size;
 
-        // Count approved members across both field names (membershipStatus and status)
-        // Some docs use membershipStatus="active", others use status="approved" — check both
+        // Count approved members (those who paid AND were reviewed by admin)
         const activeMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "active" || m.membershipStatus === "approved" ||
             m.status === "active" || m.status === "approved"
         ).length;
-        const pendingMembers = paidMembersList.filter((m: any) =>
-            m.membershipStatus === "pending" || m.status === "pending"
-        ).length;
+
+        // Pending are those who have PAID but are not yet "Active"
+        const pendingMembers = paidMembersCount - activeMembers;
+
         const suspendedMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "suspended" || m.status === "suspended"
         ).length;
@@ -218,7 +228,7 @@ export async function getCooperativeStatsAction(): Promise<{
             success: true as const,
             data: {
                 stats: {
-                    totalMembers,
+                    totalMembers: Math.max(totalMembersCount, paidMembersCount),
                     paidMembers: paidMembersCount,
                     activeMembers,
                     pendingMembers,
@@ -300,7 +310,20 @@ export async function getAllMembersAction(options?: {
         const snapshot = await q.get();
         const allMembers = serializeDocs(snapshot.docs);
 
-        let members = allMembers.filter((m: any) => m.paymentStatus === "completed");
+        // Fetch authoritative payments for these users to ensure consistency
+        const userIds = allMembers.map(m => m.id);
+        let paidUserIds = new Set();
+        
+        if (userIds.length > 0) {
+            // Fetch payments for these specific users (up to 30 at a time for IN query or just fetch all coop payments)
+            const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "cooperative_membership_registration")
+                .where("status", "==", "completed")
+                .get();
+            paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
+        }
+
+        let members = allMembers.filter((m: any) => m.paymentStatus === "completed" || paidUserIds.has(m.id));
         
         // If limit was specified without search, apply limit after filter
         if (!options?.search && options?.limit) {

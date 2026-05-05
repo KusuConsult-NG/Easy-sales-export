@@ -198,13 +198,23 @@ export async function registerCooperativeMemberAction(
                 return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false };
             }
 
-            // 🔒 Verify Payment Status
+            // 🔒 Verify Payment Status (Authoritative)
             isLegacyImport = Boolean(memberData?._importSource);
             if (!isLegacyImport && memberData?.paymentStatus !== "completed") {
-                return {
-                    error: "Payment not verified. Please ensure you have completed the payment step.",
-                    success: false,
-                };
+                // Double check processedPayments collection
+                const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                    .where("userId", "==", userId)
+                    .where("type", "==", "cooperative_membership_registration")
+                    .where("status", "==", "completed")
+                    .limit(1)
+                    .get();
+
+                if (authPayment.empty) {
+                    return {
+                        error: "Payment not verified. Please ensure you have completed the payment step.",
+                        success: false,
+                    };
+                }
             }
         }
 
@@ -757,6 +767,22 @@ export async function checkCooperativeStatusAction(): Promise<string | null> {
             );
             logger.info(`[checkCooperativeStatus] Backfilled status '${derivedStatus}' for user ${session.user.id}`);
             return derivedStatus;
+        }
+
+        // ── FINAL AUTHORITATIVE CHECK: Paystack Records ─────────────────
+        // If no profile status was found above, check the source of truth for payments.
+        // This handles cases where a user just paid but the background sync hasn't
+        // finished updating the member/user documents.
+        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("userId", "==", session.user.id)
+            .where("type", "==", "cooperative_membership_registration")
+            .where("status", "==", "completed")
+            .limit(1)
+            .get();
+
+        if (!paymentsSnap.empty) {
+            logger.info(`[checkCooperativeStatus] Auth-Paid status detected for user ${session.user.id}`);
+            return "legacy_pending_onboarding"; // Allow them to proceed to fill the form
         }
 
         return null;
