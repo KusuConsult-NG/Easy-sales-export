@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { getProductAction, getRelatedProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
-import QuoteRequestModal from "./_components/QuoteRequestModal";
+import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 
 export default function ProductDetailPage() {
     const params = useParams();
@@ -204,18 +204,18 @@ export default function ProductDetailPage() {
                             </button>
                         </div>
 
-                        {showQuoteModal && (
-                            <QuoteRequestModal 
-                                product={{
-                                    id: product.id,
-                                    title: product.title,
-                                    sellerId: product.sellerId,
-                                    unit: product.unit,
-                                    sellerName: product.sellerName
-                                }}
-                                onClose={() => setShowQuoteModal(false)}
-                            />
-                        )}
+                        <QuoteRequestModal 
+                            isOpen={showQuoteModal}
+                            onClose={() => setShowQuoteModal(false)}
+                            item={{
+                                id: product.id,
+                                title: product.title,
+                                sellerId: product.sellerId,
+                                unit: product.unit,
+                                sellerName: product.sellerName
+                            }}
+                            theme="marketplace"
+                        />
 
                         {/* Specifications */}
                         <div className="bg-white rounded-2xl p-6 shadow-lg">

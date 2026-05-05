@@ -83,7 +83,7 @@ export async function createExportWindowAction(
 ): Promise<CreateExportActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to create an export window", success: false };
@@ -206,7 +206,7 @@ export async function updateExportStatusAction(
 ): Promise<UpdateStatusActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -303,7 +303,7 @@ export async function updateExportWindowAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false, data: null, meta: null };
@@ -353,7 +353,7 @@ export async function getExportWindowsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -434,7 +434,7 @@ export async function getExportWindowDetailsAction(
 ): Promise<{ error: string | null; success: boolean; data?: ExportWindow; export?: ExportWindow }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -488,7 +488,7 @@ export async function submitExportOnboardingAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "Authentication required", success: false };
@@ -642,7 +642,7 @@ export async function getUserExportInvestmentsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Authentication required", success: false };
@@ -655,10 +655,23 @@ export async function getUserExportInvestmentsAction(
             .where("investorId", "==", userId)
 
         const snapshotRaw = await query.get();
-        // Since investments per user are small, we sort in memory to avoid missing index errors
+        
+        // Robust Sort: Handle both Timestamps and String dates gracefully
         const allDocs = snapshotRaw.docs.sort((a, b) => {
-             const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
-             const tB = b.data().createdAt?.toMillis() || b.data().bookedAt?.toMillis() || 0;
+             const dataA = a.data();
+             const dataB = b.data();
+             
+             const getMillis = (val: any) => {
+                 if (!val) return 0;
+                 if (typeof val.toMillis === 'function') return val.toMillis();
+                 if (val instanceof Date) return val.getTime();
+                 if (typeof val === 'string') return new Date(val).getTime();
+                 if (val.seconds) return val.seconds * 1000;
+                 return 0;
+             };
+
+             const tA = getMillis(dataA.createdAt) || getMillis(dataA.bookedAt) || 0;
+             const tB = getMillis(dataB.createdAt) || getMillis(dataB.bookedAt) || 0;
              return tB - tA;
         });
 
@@ -703,6 +716,15 @@ export async function getUserExportInvestmentsAction(
             const amount = data.amount || data.totalCost || 0;
             const expectedReturn = data.expectedReturn || (amount * 0.20);
 
+            const formatDate = (val: any) => {
+                if (!val) return new Date().toISOString();
+                if (typeof val.toDate === 'function') return val.toDate().toISOString();
+                if (val instanceof Date) return val.toISOString();
+                if (typeof val === 'string') return new Date(val).toISOString();
+                if (val.seconds) return new Date(val.seconds * 1000).toISOString();
+                return new Date().toISOString();
+            };
+
             return {
                 id: doc.id,
                 commodity,
@@ -712,7 +734,7 @@ export async function getUserExportInvestmentsAction(
                 daysRemaining,
                 startDate,
                 endDate,
-                createdAt: data.createdAt?.toDate()?.toISOString() || new Date().toISOString(),
+                createdAt: formatDate(data.createdAt),
             };
         }));
 
@@ -737,7 +759,7 @@ export async function getUserExportInvestmentsAction(
 export async function getUserExportStatsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { error: "Authentication required", success: false };
@@ -863,7 +885,7 @@ export async function investInExportAction(
 ): Promise<{ success: boolean; error?: string; data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Authentication required" };
@@ -922,7 +944,7 @@ export async function investInExportAction(
 export async function verifyExportInvestmentAction(reference: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -1012,7 +1034,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
 export async function getMyExportInvestmentsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -1066,7 +1088,7 @@ export async function extendEscrowAction(
 ): Promise<{ success: boolean; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         // Check admin role
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
@@ -1121,7 +1143,7 @@ export async function getExportApplicationAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
@@ -1153,7 +1175,7 @@ export async function requestExportRevisionAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, error: 'Admin access required' };
@@ -1228,7 +1250,7 @@ export async function approveExportApplicationAction(
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false, data: null, error: 'Admin access required', meta: null };
@@ -1306,7 +1328,7 @@ export async function resubmitExportApplicationAction(
 ) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, data: null, error: 'Unauthorized', meta: null };
 

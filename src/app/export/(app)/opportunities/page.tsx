@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Package, Loader2, ServerCrash, RefreshCw } from "lucide-react";
 import CountdownTimer from "@/components/CountdownTimer";
 import BookingModal from "@/components/modals/BookingModal";
+import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 import { getActiveExportWindowsAction } from "@/app/actions/export-aggregation";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
 
@@ -12,6 +13,7 @@ export default function ExportWindowsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
     const [selectedWindow, setSelectedWindow] = useState<ExportWindow | null>(null);
 
     async function loadWindows() {
@@ -154,16 +156,28 @@ export default function ExportWindowsPage() {
 
                                         <CountdownTimer endDate={new Date(window.endDate)} />
 
-                                        <button
-                                            onClick={() => {
-                                                setSelectedWindow(window);
-                                                setIsModalOpen(true);
-                                            }}
-                                            disabled={availableVolume === 0}
-                                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition shadow-lg shadow-blue-500/30"
-                                        >
-                                            {availableVolume === 0 ? "Window Full" : "Book Your Slot"}
-                                        </button>
+                                        <div className="flex flex-col gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedWindow(window);
+                                                    setIsModalOpen(true);
+                                                }}
+                                                disabled={availableVolume === 0}
+                                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition shadow-lg shadow-blue-500/30"
+                                            >
+                                                {availableVolume === 0 ? "Window Full" : "Book Your Slot"}
+                                            </button>
+
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedWindow(window);
+                                                    setIsQuoteModalOpen(true);
+                                                }}
+                                                className="w-full bg-white border-2 border-blue-600 text-blue-600 hover:bg-blue-50 font-semibold py-3 px-6 rounded-lg transition"
+                                            >
+                                                Request for Quote
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -180,6 +194,24 @@ export default function ExportWindowsPage() {
                     }}
                     exportWindow={selectedWindow}
                 />
+
+                {selectedWindow && (
+                    <QuoteRequestModal
+                        isOpen={isQuoteModalOpen}
+                        onClose={() => {
+                            setIsQuoteModalOpen(false);
+                            setSelectedWindow(null);
+                        }}
+                        item={{
+                            id: selectedWindow.id,
+                            title: selectedWindow.title,
+                            sellerId: "admin_export", // Export windows are managed by admin/platform
+                            unit: "kg",
+                            sellerName: "Export Aggregation"
+                        }}
+                        theme="export"
+                    />
+                )}
             </div>
         </div>
     );
