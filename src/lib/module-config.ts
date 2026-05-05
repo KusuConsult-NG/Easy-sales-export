@@ -75,10 +75,11 @@ export const MODULE_CONFIGS: Record<string, ModuleConfig> = {
     escrow: {
         name: "Secure Escrow",
         description: "Transaction Protection",
-        theme: "rose",
+        theme: "indigo",
         icon: Lock,
         pathPrefix: "/escrow",
     },
+
 };
 
 /**
