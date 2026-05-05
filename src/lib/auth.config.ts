@@ -33,7 +33,7 @@ export const authConfig = {
                 sameSite: "lax",
                 path: "/",
                 secure: process.env.NODE_ENV === "production",
-                maxAge: 30 * 24 * 60 * 60, // 30 days
+                maxAge: 24 * 60 * 60, // 24 hours (Reduced from 30 days for security and state sync)
             }
         },
         csrfToken: {
