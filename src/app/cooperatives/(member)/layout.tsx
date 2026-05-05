@@ -58,13 +58,46 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 }
             }
 
-            if (memberData) {
+            // --- DATA INTEGRITY GUARD ---
+            // If user has the role but NO member record, or the record is corrupted (undefined names)
+            // we must send them back to onboarding to complete their profile.
+            const isCorrupted = !memberData || 
+                               memberData.firstName === "undefined" || 
+                               memberData.lastName === "undefined" ||
+                               !memberData.firstName || 
+                               !memberData.lastName;
+
+            if (isCorrupted) {
+                logger.warn(`[CooperativeLayout] Purging corrupted/missing member record for user ${userId}`);
+                
+                const db = getAdminDb();
+                
+                // 1. Delete corrupted record if it exists
+                if (memberData) {
+                    await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).delete();
+                }
+
+                // 2. Reset service registration status in USERS collection so checkCooperativeStatusAction sees them as new
+                await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                    serviceRegistrations: {
+                        cooperative: { status: "pending_repair", repairedAt: new Date() },
+                        cooperatives: { status: "pending_repair", repairedAt: new Date() }
+                    }
+                }, { merge: true });
+
+                // 3. Invalidate Redis Cache to reflect the status change
+                const { redis, CacheKeys } = await import("@/lib/redis");
+                await redis.del(CacheKeys.userProfile(userId));
+
+                redirectPath = "/cooperatives/onboarding?notice=complete-your-registration";
+            } else {
                 userProfile = {
-                    firstName: memberData?.firstName || "",
-                    lastName: memberData?.lastName || "",
-                    tier: memberData?.membershipTier || ""
+                    firstName: memberData.firstName,
+                    lastName: memberData.lastName,
+                    tier: memberData.membershipTier || "Member"
                 };
             }
+
         }
     } catch (error) {
         logger.error("Session verification failed:", error);
