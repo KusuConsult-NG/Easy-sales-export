@@ -27,35 +27,45 @@ export async function checkAcademyStatusAction(): Promise<{ success: boolean; da
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        const registration = userData?.serviceRegistrations?.academy;
+        let currentStatus = userData?.serviceRegistrations?.academy?.status;
 
-        if (registration?.status) {
-            return { success: true, data: registration.status };
+        // ── AUTHORITATIVE CHECK: Check real application record ──────
+        // If status is not approved, check the source of truth for applications.
+        if (currentStatus !== "approved") {
+            const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where("userId", "==", session.user.id)
+                .orderBy("submittedAt", "desc")
+                .limit(1)
+                .get();
+
+            if (!appSnap.empty) {
+                const appData = appSnap.docs[0].data();
+                if (appData.status === "approved") {
+                    currentStatus = "approved";
+                    // Proactively backfill for performance in future logins
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+                        serviceRegistrations: { academy: { status: "approved", syncedAt: new Date().toISOString() } }
+                    }, { merge: true });
+                } else if (appData.status) {
+                    currentStatus = appData.status;
+                }
+            }
         }
 
-        // ── FALLBACK: Returning student whose data predates V2 schema ──────
-        // Query the raw academy_applications collection directly.
-        const legacySnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-            .where('userId', '==', session.user.id)
+        if (currentStatus) {
+            return { success: true, data: currentStatus };
+        }
+
+        // ── FINAL FALLBACK: Check for any payment records ──────────────
+        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("userId", "==", session.user.id)
+            .where("type", "==", "academy_registration")
+            .where("status", "==", "completed")
+            .limit(1)
             .get();
 
-        if (!legacySnap.empty) {
-            const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-                return bTime - aTime;
-            });
-            const legacyData = sortedDocs[0];
-            const legacyStatus = legacyData?.status ?? 'pending';
-
-            // Auto-backfill serviceRegistrations so future logins resolve instantly
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { academy: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
-                { merge: true }
-            );
-
-            logger.info(`[checkAcademyStatus] Backfilled legacy academy status '${legacyStatus}' for user ${session.user.id}`);
-            return { success: true, data: legacyStatus };
+        if (!paymentsSnap.empty) {
+            return { success: true, data: "payment_completed" };
         }
 
         return { success: true, data: null };
@@ -892,6 +902,18 @@ export async function checkAcademyPaymentStatusAction(): Promise<{ success: bool
         const userData = userDoc.data();
 
         if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed") {
+            return { success: true, data: "paid" };
+        }
+
+        // ── AUTHORITATIVE FALLBACK ──────────────────────────────────────
+        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("userId", "==", session.user.id)
+            .where("type", "==", "academy_registration")
+            .where("status", "==", "completed")
+            .limit(1)
+            .get();
+
+        if (!paymentsSnap.empty) {
             return { success: true, data: "paid" };
         }
 
