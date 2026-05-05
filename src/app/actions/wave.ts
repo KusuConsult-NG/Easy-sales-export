@@ -123,17 +123,39 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: "Unauthorized" };
 
-        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
-
         const registration = userData?.serviceRegistrations?.wave;
 
-        if (registration?.status) {
-            return { success: true, data: { status: registration.status } };
+        // ── AUTHORITATIVE CHECK: Check real application record ──────
+        // If status is not approved, check the source of truth for WAVE applications.
+        let status = registration?.status;
+        if (status !== "approved") {
+            const appSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("userId", "==", session.user.id)
+                .orderBy("applicationDate", "desc")
+                .limit(1)
+                .get();
+
+            if (!appSnap.empty) {
+                const appData = appSnap.docs[0].data();
+                if (appData.status === "approved") {
+                    status = "approved";
+                    // Proactively backfill for performance in future logins
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+                        serviceRegistrations: { wave: { status: "approved", syncedAt: new Date().toISOString() } }
+                    }, { merge: true });
+                } else if (appData.status) {
+                    status = appData.status;
+                }
+            }
         }
 
-        // ── FALLBACK: Returning student whose data predates V2 schema ──────
+        if (status) {
+            return { success: true, data: { status } };
+        }
+
+        // ── FALLBACK: Legacy Sync ──────
         const legacySnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
             .where('userId', '==', session.user.id)
             .get();

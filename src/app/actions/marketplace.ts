@@ -29,17 +29,39 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
 
-        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        const registration = userData?.serviceRegistrations?.marketplace;
+        let status = userData?.serviceRegistrations?.marketplace?.status;
+        let accountType = userData?.serviceRegistrations?.marketplace?.accountType;
 
-        if (registration?.status) {
-            return {
-                status: registration.status,
-                accountType: registration.accountType
-            };
+        // ── AUTHORITATIVE CHECK: Check real verification record ──────
+        // If status is not approved, check the source of truth for seller verifications.
+        if (status !== "approved") {
+            const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("userId", "==", session.user.id)
+                .orderBy("createdAt", "desc")
+                .limit(1)
+                .get();
+
+            if (!verSnap.empty) {
+                const verData = verSnap.docs[0].data();
+                if (verData.status === "approved") {
+                    status = "approved";
+                    accountType = verData.accountType || "seller";
+                    // Proactively backfill for performance in future logins
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+                        serviceRegistrations: { marketplace: { status: "approved", accountType, syncedAt: new Date().toISOString() } }
+                    }, { merge: true });
+                } else if (verData.status) {
+                    status = verData.status;
+                    accountType = verData.accountType || accountType;
+                }
+            }
+        }
+
+        if (status) {
+            return { status, accountType };
         }
 
         // ── FALLBACK: Returning user whose marketplace data predates V2 schema ──

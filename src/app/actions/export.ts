@@ -790,18 +790,40 @@ export async function checkExportStatusAction(): Promise<string | null> {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
-
-        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        const registration = userData?.serviceRegistrations?.export;
+        let status = userData?.serviceRegistrations?.export?.status;
 
-        if (registration?.status) {
-            return registration.status;
+        // ── AUTHORITATIVE CHECK: Check real application record ──────
+        // If status is not approved, check the source of truth for Export applications.
+        if (status !== "approved") {
+            const appSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where("userId", "==", session.user.id)
+                .orderBy("submittedAt", "desc")
+                .limit(1)
+                .get();
+
+            if (!appSnap.empty) {
+                const appData = appSnap.docs[0].data();
+                if (appData.status === "approved" || appData.status === "approved_admin") {
+                    status = "approved";
+                    // Proactively backfill for performance in future logins
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+                        serviceRegistrations: { export: { status: "approved", syncedAt: new Date().toISOString() } }
+                    }, { merge: true });
+                } else if (appData.status) {
+                    // Normalize statuses
+                    status = appData.status === "pending_review" ? "pending_approval" : appData.status;
+                }
+            }
         }
 
-        // ── FALLBACK: Returning student whose data predates V2 schema ──────
+        if (status) {
+            return status;
+        }
+
+        // ── FALLBACK: Legacy Sync ──────
         const legacySnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
             .where('userId', '==', session.user.id)
             .get();

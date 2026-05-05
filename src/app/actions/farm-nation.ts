@@ -866,14 +866,36 @@ export async function checkFarmNationStatusAction(): Promise<string | null> {
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
 
-        // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        const registration = userData?.serviceRegistrations?.farmNation;
+        let status = userData?.serviceRegistrations?.farmNation?.status;
 
-        if (registration?.status) {
-            return registration.status;
+        // ── AUTHORITATIVE CHECK: Check real application record ──────
+        // If status is not approved, check the source of truth for Farm Nation applications.
+        if (status !== "approved") {
+            const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where("userId", "==", session.user.id)
+                .orderBy("submittedAt", "desc")
+                .limit(1)
+                .get();
+
+            if (!appSnap.empty) {
+                const appData = appSnap.docs[0].data();
+                if (appData.status === "approved" || appData.status === "approved_admin") {
+                    status = "approved";
+                    // Proactively backfill for performance in future logins
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+                        serviceRegistrations: { farmNation: { status: "approved", syncedAt: new Date().toISOString() } }
+                    }, { merge: true });
+                } else if (appData.status) {
+                    status = appData.status;
+                }
+            }
+        }
+
+        if (status) {
+            return status;
         }
 
         // ── FALLBACK: Farm Nation data was stored directly in userData.farmNation ──
