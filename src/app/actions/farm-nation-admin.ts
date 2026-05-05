@@ -305,8 +305,8 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         }
 
         // Sorting
-        const sortDirection = options.sortOrder || "desc";
         applications.sort((a: any, b: any) => {
+
             const dateA = a.data?.createdAt?.toDate?.() || new Date(a.data?.createdAt || 0);
             const dateB = b.data?.createdAt?.toDate?.() || new Date(b.data?.createdAt || 0);
             return sortDirection === "desc" 
