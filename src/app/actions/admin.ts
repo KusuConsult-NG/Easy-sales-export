@@ -3110,12 +3110,10 @@ const InviteLegacyMemberSchema = z.object({
 async function _inviteLegacyMemberAction(
     data: z.infer<typeof InviteLegacyMemberSchema>
 ): Promise<{ error: string | null; success: boolean }> {
-    return { error: "This invite method is deprecated. Please use the 'Onboard Member' feature to add members directly with a default PIN.", success: false };
-    
-    // Original implementation below (preserved but unreachable)
+    /* Original implementation below (deprecated and causing build errors)
     try {
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+        if ("error" in adminCheck) return { error: (adminCheck as any).error, success: false };
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -3129,11 +3127,6 @@ async function _inviteLegacyMemberAction(
 
         const valid = InviteLegacyMemberSchema.safeParse(data);
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
-        }
-
-        const { email, firstName } = valid.data;
-
         // 1. Check if user is already a fully onboarded cooperative member
         let existingUid: string | null = null;
         try {
