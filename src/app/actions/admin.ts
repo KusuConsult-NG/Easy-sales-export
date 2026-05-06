@@ -3227,6 +3227,8 @@ async function _inviteLegacyMemberAction(
         logger.error("Failed to send cooperative invite:", error);
         return { error: error.message || "Failed to invite member", success: false };
     }
+    */
+    return { error: "Method deprecated", success: false };
 }
 
 async function _getStandardSellerVerificationsAction(
