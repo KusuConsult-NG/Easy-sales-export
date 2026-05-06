@@ -799,20 +799,23 @@ export async function sendLegacyMemberWelcomeEmail(
                     </p>
                     
                     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0;">
-                        <h3 style="margin-top: 0; color: #0f172a;">Your Temporary Login Credentials</h3>
+                        <h3 style="margin-top: 0; color: #0f172a;">Your Default Login PIN</h3>
                         <p style="margin: 8px 0; font-size: 14px;"><strong>Email:</strong> ${userEmail}</p>
-                        <p style="margin: 8px 0; font-size: 14px;"><strong>Temporary Password:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${temporaryPassword}</code></p>
+                        <p style="margin: 8px 0; font-size: 14px;"><strong>Default PIN:</strong> <code style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold;">${temporaryPassword}</code></p>
                     </div>
 
                     <p style="font-size: 14px; color: #64748b; margin-bottom: 24px;">
-                        <strong>Note:</strong> For security, you will be required to change this temporary password immediately after your first login.
+                        <strong>Note:</strong> For security, you will be required to change this PIN immediately after your first login attempt to access your dashboard.
                     </p>
 
-                    <div style="text-align: center; margin: 32px 0;">
-                        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/auth/login"
-                           style="background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
-                            Log In to My Account &rarr;
-                        </a>
+                    <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 24px; margin: 32px 0;">
+                        <h4 style="margin: 0 0 12px; color: #166534; font-size: 16px;">How to Access Your Account:</h4>
+                        <ol style="margin: 0; padding-left: 20px; color: #166534; font-size: 14px; line-height: 1.6;">
+                            <li>Open your web browser.</li>
+                            <li>Visit our official website at <strong>easysalesexport.com</strong></li>
+                            <li>Click on the <strong>"Login"</strong> button at the top right of the page.</li>
+                            <li>Enter your email and the default PIN provided above.</li>
+                        </ol>
                     </div>
                     
                     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />

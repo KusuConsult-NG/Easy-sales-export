@@ -3110,6 +3110,9 @@ const InviteLegacyMemberSchema = z.object({
 async function _inviteLegacyMemberAction(
     data: z.infer<typeof InviteLegacyMemberSchema>
 ): Promise<{ error: string | null; success: boolean }> {
+    return { error: "This invite method is deprecated. Please use the 'Onboard Member' feature to add members directly with a default PIN.", success: false };
+    
+    // Original implementation below (preserved but unreachable)
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { error: adminCheck.error, success: false };
@@ -3562,8 +3565,8 @@ export async function onboardLegacyMemberAction(
             return { error: "An account with this phone number already exists in the system.", success: false };
         }
 
-        // 3. Generate temporary password
-        const tempPassword = crypto.randomBytes(6).toString('hex') + "!2Aa"; 
+        // 3. Generate default numeric PIN (6 digits)
+        const tempPassword = Math.floor(100000 + Math.random() * 900000).toString(); 
 
         // 4. Create Firebase Auth user
         const userRecord = await adminAuth.createUser({
@@ -3730,7 +3733,7 @@ export async function onboardLegacyMemberAction(
 
         return { 
             success: true, 
-            message: `Legacy member ${data.fullName} successfully onboarded. Credentials sent to ${data.email}.`,
+            message: `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`,
             error: null 
         };
 

@@ -31,8 +31,8 @@ export default function ResetLegacyPasswordPage() {
             return;
         }
 
-        if (newPassword.length < 8) {
-            showToast("New password must be at least 8 characters", "error");
+        if (newPassword.length < 6) {
+            showToast("New PIN must be at least 6 characters", "error");
             return;
         }
 
@@ -44,18 +44,17 @@ export default function ResetLegacyPasswordPage() {
             
             if (result.success) {
                 // IMPORTANT: Also clear the requiresPasswordChange flag in Firestore
-                // We'll call a dedicated action for this or include it in changePasswordAction
                 const { clearLegacyPasswordFlagAction } = await import("@/app/actions/auth-extra");
                 await clearLegacyPasswordFlagAction();
 
                 setIsSuccess(true);
-                showToast("Password updated successfully", "success");
+                showToast("Account secured successfully", "success");
                 
                 setTimeout(() => {
                     router.push("/dashboard");
                 }, 2000);
             } else {
-                showToast(result.error || "Failed to update password. Check your temporary password.", "error");
+                showToast(result.error || "Failed to update security. Check your default PIN.", "error");
             }
         } catch (error) {
             showToast("An unexpected error occurred", "error");
@@ -106,7 +105,7 @@ export default function ResetLegacyPasswordPage() {
                     <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl mb-8 border border-blue-100">
                         <ShieldCheck className="w-6 h-6 text-blue-600 shrink-0" />
                         <p className="text-sm text-blue-800">
-                            You are using a temporary password provided by an administrator.
+                            You are using a default PIN provided by an administrator.
                         </p>
                     </div>
 
@@ -114,14 +113,14 @@ export default function ResetLegacyPasswordPage() {
                         {/* Current Password */}
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                Temporary Password
+                                Default PIN
                             </label>
                             <div className="relative">
                                 <input
                                     type={showCurrent ? "text" : "password"}
                                     value={currentPassword}
                                     onChange={(e) => setCurrentPassword(e.target.value)}
-                                    placeholder="Enter the password from your email"
+                                    placeholder="Enter the PIN from your email"
                                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                                     required
                                 />
@@ -140,17 +139,17 @@ export default function ResetLegacyPasswordPage() {
                         {/* New Password */}
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                New Password
+                                New Password / PIN
                             </label>
                             <div className="relative">
                                 <input
                                     type={showNew ? "text" : "password"}
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
-                                    placeholder="Create a strong password"
+                                    placeholder="Create a secure password or PIN"
                                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition"
                                     required
-                                    minLength={8}
+                                    minLength={6}
                                 />
                                 <button
                                     type="button"
@@ -160,7 +159,7 @@ export default function ResetLegacyPasswordPage() {
                                     {showNew ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">Minimum 8 characters with letters and numbers.</p>
+                            <p className="text-xs text-slate-500 mt-2">Minimum 6 characters for security.</p>
                         </div>
 
                         {/* Confirm Password */}
@@ -198,7 +197,7 @@ export default function ResetLegacyPasswordPage() {
                                     Updating Security...
                                 </>
                             ) : (
-                                "Update Password & Continue"
+                                "Secure Account & Continue"
                             )}
                         </button>
                     </form>

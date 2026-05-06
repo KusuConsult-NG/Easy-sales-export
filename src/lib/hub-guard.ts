@@ -63,8 +63,17 @@ export async function requireHubRegistration() {
             // `profileComplete` flag is written to Firestore. This is the primary
             // guard check — if it's true, skip all field-level validation.
             if (userData.profileComplete === true) {
-                // User has explicitly completed their profile. Never block them again.
+                // User has explicitly completed their profile. 
+                // CRITICAL: Check if they still need to secure their account (legacy members)
+                if (userData.requiresPasswordChange) {
+                    redirect("/auth/reset-legacy-password");
+                }
                 return sessionResult;
+            }
+
+            // Check for legacy members who haven't completed profile yet but have the flag
+            if (userData.requiresPasswordChange) {
+                redirect("/auth/reset-legacy-password");
             }
 
             // Legacy check for users who registered before the profileComplete flag existed.
