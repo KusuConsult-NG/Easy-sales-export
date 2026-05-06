@@ -3579,23 +3579,72 @@ export async function onboardLegacyMemberAction(
 
         // 6. Initialize Service Registrations
         const serviceRegistrations: any = {};
-        if (data.services?.marketplace) {
-            serviceRegistrations.marketplace = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+        const now = FieldValue.serverTimestamp();
+
+        if (data.services?.marketplace || data.roles.includes("seller") || data.roles.includes("marketplace_buyer")) {
+            // Determine account type from roles
+            let accountType = "buyer";
+            if (data.roles.includes("seller")) {
+                accountType = data.roles.includes("marketplace_buyer") ? "both" : "seller";
+            }
+
+            serviceRegistrations.marketplace = { 
+                status: "approved", 
+                accountType,
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                approvedAt: now 
+            };
         }
-        if (data.services?.export) {
-            serviceRegistrations.export = { status: "approved", approvedAt: FieldValue.serverTimestamp(), appliedAt: FieldValue.serverTimestamp() };
+
+        if (data.services?.export || data.roles.includes("export_participant")) {
+            serviceRegistrations.export = { 
+                status: "approved", 
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                approvedAt: now, 
+                appliedAt: now 
+            };
         }
-        if (data.services?.cooperative) {
-            serviceRegistrations.cooperative = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+
+        if (data.services?.cooperative || data.roles.includes("cooperative_member")) {
+            const coopState = { 
+                status: "approved", 
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                approvedAt: now 
+            };
+            // Support both singular and plural keys for maximum compatibility
+            serviceRegistrations.cooperative = coopState;
+            serviceRegistrations.cooperatives = coopState;
         }
-        if (data.services?.wave) {
-            serviceRegistrations.wave = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+
+        if (data.services?.wave || data.roles.includes("wave_participant")) {
+            serviceRegistrations.wave = { 
+                status: "approved", 
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                approvedAt: now 
+            };
         }
-        if (data.services?.academy) {
-            serviceRegistrations.academy = { status: "approved", enrolledAt: FieldValue.serverTimestamp() };
+
+        if (data.services?.academy || data.roles.includes("academy_participant")) {
+            serviceRegistrations.academy = { 
+                status: "approved", 
+                accountType: "learner",
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                enrolledAt: now 
+            };
         }
-        if (data.services?.farmNation) {
-            serviceRegistrations.farmNation = { status: "approved", approvedAt: FieldValue.serverTimestamp() };
+
+        if (data.services?.farmNation || data.roles.includes("farmer")) {
+            serviceRegistrations.farmNation = { 
+                status: "approved", 
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                approvedAt: now 
+            };
         }
 
         // 7. Create User Document
@@ -3684,8 +3733,33 @@ export async function onboardLegacyMemberAction(
             });
         }
 
-        // Vendor Settings Document
+        // Vendor Settings / Seller Profile Document
         if (data.services?.marketplace || data.roles.includes("seller")) {
+            // Mark as active/verified seller if role is present
+            const sellerStatus = data.roles.includes("seller") ? "approved" : "pending";
+            
+            batch.set(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(`legacy_${userRecord.uid}`), {
+                id: `legacy_${userRecord.uid}`,
+                userId: userRecord.uid,
+                status: sellerStatus,
+                businessName: `${firstName}'s Enterprise`,
+                phone: data.phone,
+                location: {
+                    state: data.state,
+                    lga: data.lga,
+                    address: data.address,
+                },
+                bankAccount: data.accountNumber ? {
+                    accountNumber: data.accountNumber,
+                    bankName: data.bankName || "",
+                    accountName: data.accountName || "",
+                    bankCode: data.bankCode || "",
+                } : undefined,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+            });
+
             batch.set(db.collection(COLLECTIONS.VENDOR_SETTINGS).doc(userRecord.uid), {
                 userId: userRecord.uid,
                 storeInfo: {
