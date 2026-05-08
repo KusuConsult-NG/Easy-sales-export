@@ -27,7 +27,7 @@ export async function clearLegacyPasswordFlagAction() {
         });
 
         logger.info(`[clearLegacyPasswordFlagAction] Security flag cleared for user ${session.user.id}`);
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("[clearLegacyPasswordFlagAction] Error clearing security flag", error);
         return { success: false as const, error: error.message };

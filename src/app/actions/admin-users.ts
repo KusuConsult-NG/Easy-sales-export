@@ -13,7 +13,7 @@ import { createNotificationAction } from "@/app/actions/notifications";
  * Fetch all admin and super_admin users — used to populate the assignment dropdown.
  */
 export async function getAdminUsersAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     admins?: { id: string; name: string; email: string; role: string }[];
 }> {
     try {
@@ -59,7 +59,7 @@ export async function assignDisputeAction(
     disputeId: string,
     assigneeId: string,
     assigneeName: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { success: false as const, error: adminCheck.error };
@@ -104,7 +104,7 @@ export async function assignDisputeAction(
             link: `/admin/marketplace/disputes/${disputeId}`,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         return { success: false as const, error: error.message };
     }

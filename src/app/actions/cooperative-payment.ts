@@ -19,12 +19,12 @@ function nairaToKobo(naira: number): number {
 }
 
 export type ActionState = {
-    success: true;
+    success: true as const
     error: null;
     message?: string;
     data?: any;
 } | {
-    success: false;
+    success: false as const
     error: string;
     message?: string;
     data?: any;
@@ -39,16 +39,16 @@ export async function initializeContributionPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: 'Authentication required', success: false };
+            return { error: 'Authentication required', success: false as const };
         }
 
         // Validate amount
         if (amount < 1000) {
-            return { error: 'Minimum contribution is ₦1,000', success: false };
+            return { error: 'Minimum contribution is ₦1,000', success: false as const };
         }
 
         if (amount > 1000000) {
-            return { error: 'Maximum contribution is ₦1,000,000', success: false };
+            return { error: 'Maximum contribution is ₦1,000,000', success: false as const };
         }
 
         // Initialize payment with Paystack (Paystack generates the reference)
@@ -93,7 +93,7 @@ export async function verifyContributionPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: 'Authentication required', success: false };
+            return { error: 'Authentication required', success: false as const };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
@@ -139,17 +139,17 @@ export async function verifyContributionPaymentAction(
 
         // User ID verification
         if (userId !== session.user.id) {
-            return { error: 'Payment verification failed: User mismatch', success: false };
+            return { error: 'Payment verification failed: User mismatch', success: false as const };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
         if (amountInNaira < 1000 || amountInNaira > 1000000) {
-            return { error: 'Invalid payment amount', success: false };
+            return { error: 'Invalid payment amount', success: false as const };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: 'Payment amount mismatch', success: false };
+            return { error: 'Payment amount mismatch', success: false as const };
         }
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity

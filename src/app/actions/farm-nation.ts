@@ -992,7 +992,7 @@ export async function uploadPropertyDocumentsAction(
         surveyPlan?: string;
         taxClearance?: string;
     }
-): Promise<{ error: string | null, success: true | false; data?: any; meta?: any }> {
+): Promise<{ error: string | null, success: boolean; data?: any; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1017,7 +1017,7 @@ export async function uploadPropertyDocumentsAction(
             verificationStatus: "pending_review" // Reset verification status if new docs added
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Upload documents error:", error);
         return { success: false as const, error: error.message };
@@ -1091,7 +1091,7 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
 /**
  * Fetch the current user's Farm Nation onboarding data for prefilling the edit form.
  */
-export async function getFarmNationApplicationAction(): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+export async function getFarmNationApplicationAction(): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1124,7 +1124,7 @@ export async function getFarmNationApplicationAction(): Promise<{ error: string 
  */
 export async function resubmitFarmNationApplicationAction(
     data: FarmNationOnboardingData
-): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

@@ -224,7 +224,7 @@ export async function getPostLoginRedirect(email: string) {
 // DEPRECATED: Old Server Action Login
 // Keeping a stub for type safety if needed, but logic moved to client
 export async function loginAction(prevState: any, formData: FormData) {
-    return { error: "Please use client-side login", success: false };
+    return { error: "Please use client-side login", success: false as const };
 }
 
 export async function registerAction(prevState: any, formData: FormData) {
@@ -395,7 +395,7 @@ export async function logoutAction() {
 export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const session = await auth();
         if (!session?.user?.id || !session.user.email) {
@@ -424,7 +424,7 @@ export async function changePasswordAction(
             password: newPassword
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Error changing password:", error);
         return { success: false as const, error: error.message || "An unexpected error occurred. Please try again." };

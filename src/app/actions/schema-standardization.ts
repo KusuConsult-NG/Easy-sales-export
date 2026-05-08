@@ -19,7 +19,10 @@ interface StandardizationReport {
  * 
  * @param dryRun If true, only logs changes without writing to DB.
  */
-export async function runSchemaStandardizationAction(dryRun: boolean = true): Promise<{ error: null, success: true | false; reports: StandardizationReport[] }> {
+export async function runSchemaStandardizationAction(dryRun: boolean = true): Promise<
+    | { success: true; error: null; reports: StandardizationReport[] }
+    | { success: false; error: string; data?: null; reports: StandardizationReport[] }
+> {
     const reports: StandardizationReport[] = [];
 
     try {

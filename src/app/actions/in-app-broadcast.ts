@@ -60,7 +60,7 @@ export interface InAppBroadcastPreview {
 }
 
 export interface InAppBroadcastResult {
-    error: null, success: true | false;
+    error: null, success: boolean;
     delivered: number;
     logId?: string;
 }

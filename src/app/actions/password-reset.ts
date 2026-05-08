@@ -11,11 +11,11 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface SendResetEmailState {
-    error: null, success: true | false;
+    error: null, success: boolean;
 }
 
 export interface ResetPasswordState {
-    error: null, success: true | false;
+    error: null, success: boolean;
 }
 
 /**

@@ -32,7 +32,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 // Check Marketplace Application Status Action
 // ============================================
 
-async function _checkMarketplaceStatusAction(): Promise<{ error: string | null, success: true | false; data: { status: string; accountType?: string } | null;  }> {
+async function _checkMarketplaceStatusAction(): Promise<{ error: string | null, success: boolean; data: { status: string; accountType?: string } | null;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -184,7 +184,7 @@ export interface SellerVerificationFormData {
 }
 
 export interface SellerVerificationState {
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         verificationId: string;
     };
@@ -330,7 +330,7 @@ export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVeri
  * Submit full marketplace onboarding (Profile + Verification + Files)
  */
 async function _submitMarketplaceOnboardingAction(
-    prevState: { error: string | null, success: true | false; data?: any } | null,
+    prevState: { error: string | null, success: boolean; data?: any } | null,
     formData: FormData
 ) {
     let sessionResult;
@@ -532,7 +532,7 @@ export interface ProductFormData {
 }
 
 export interface ProductActionState {
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         productId: string;
     };
@@ -1437,7 +1437,7 @@ async function _resubmitSellerVerificationAction(
         bankAccount?: { bankName: string; accountNumber: string; accountName: string; bankCode: string };
         [key: string]: any;
     }
-): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
+): Promise<{ error: string | null, success: boolean; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1519,7 +1519,7 @@ async function _updateSellerBadge(
     adminUserId: string,
     sellerId: string,
     grant: boolean
-): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
+): Promise<{ error: string | null, success: boolean; data?: { message: string };  }> {
     try {
         const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
         const adminRoles: string[] = adminDoc.data()?.roles || [];
@@ -1587,7 +1587,7 @@ async function _updateSellerBadge(
     }
 }
 
-async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
+async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: string | null, success: boolean; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1604,7 +1604,7 @@ async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ erro
 }
 export const grantSellerVerifiedBadgeAction = withFlexibleSafeAction("grantSellerVerifiedBadgeAction", _grantSellerVerifiedBadgeAction);
 
-async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
+async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: string | null, success: boolean; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1632,7 +1632,7 @@ export const revokeSellerVerifiedBadgeAction = withFlexibleSafeAction("revokeSel
 async function _updateSellerCategoryAction(
     sellerId: string,
     category: "wholesale" | "retail"
-): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
+): Promise<{ error: string | null, success: boolean; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();

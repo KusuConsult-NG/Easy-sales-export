@@ -21,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function getAdminExportCatalogAction(options: { 
     limit?: number; 
     lastDocId?: string; 
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; hasMore?: boolean; lastDocId?: string | null }> {
+} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; hasMore?: boolean; lastDocId?: string | null }> {
     try {
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)
@@ -72,7 +72,7 @@ export async function getAdminExportCatalogAction(options: {
     }
 }
 
-export async function createExportCatalogAction(productData: any): Promise<{ error: string | null, success: true | false; data?: any;  }> {
+export async function createExportCatalogAction(productData: any): Promise<{ error: string | null, success: boolean; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -116,7 +116,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ err
 // ============================================
 
 export async function getExportRequestStatsAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         total: number;
         pending: number;
@@ -165,7 +165,7 @@ export async function getExportRequestStatsAction(): Promise<{
 // ============================================
 
 export async function getExportCatalogStatsAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         totalProducts: number;
     };
@@ -194,7 +194,7 @@ export async function getExportCatalogStatsAction(): Promise<{
     }
 }
 
-export async function deleteExportCatalogAction(productId: string): Promise<{ error: string | null, success: true | false;  }> {
+export async function deleteExportCatalogAction(productId: string): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -210,14 +210,14 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ er
             deletedBy: session.user.id
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Delete export catalog error:", error);
         return { success: false as const, error: "Failed to delete item" };
     }
 }
 
-export async function getAdminPendingExportProductsAction(): Promise<{ error: string | null, success: true | false; data?: any[];  }> {
+export async function getAdminPendingExportProductsAction(): Promise<{ error: string | null, success: boolean; data?: any[];  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -241,7 +241,7 @@ export async function getAdminPendingExportProductsAction(): Promise<{ error: st
     }
 }
 
-export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ error: string | null, success: true | false;  }> {
+export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -286,7 +286,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
             }
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Review export product error:", error);
         return { success: false as const, error: "Failed to review product" };
@@ -296,7 +296,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
 /**
  * Fetch all export orders for admin dashboard
  */
-export async function getAdminExportOrdersAction(): Promise<{ error: string | null, success: true | false; data?: any[];  }> {
+export async function getAdminExportOrdersAction(): Promise<{ error: string | null, success: boolean; data?: any[];  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -335,7 +335,7 @@ export async function updateAdminExportOrderStatusAction(
     orderId: string, 
     status: string,
     documentData?: { name: string; url: string; type: string }
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -361,7 +361,7 @@ export async function updateAdminExportOrderStatusAction(
 
         await orderRef.update(updateData);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to update export order status:", error);
         return { success: false as const, error: "Failed to update export order status" };

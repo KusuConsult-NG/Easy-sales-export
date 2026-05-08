@@ -54,10 +54,10 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
 // GET: Retrieve current user's wallet
 // ---------------------------------------------------------------------------
 
-export async function getWalletAction(): Promise<{
-    error: null, success: true | false;
-    wallet?: Wallet;
-}> {
+export async function getWalletAction(): Promise<
+    | { success: true; error: null; wallet?: Wallet }
+    | { success: false; error: string; data?: null; wallet?: Wallet }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -75,11 +75,10 @@ export async function getWalletAction(): Promise<{
 // FUND: Initialize Paystack payment to top up the wallet
 // ---------------------------------------------------------------------------
 
-export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
-    error: null, success: true | false;
-    authorizationUrl?: string;
-    reference?: string;
-}> {
+export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
+    | { success: true; error: null; authorizationUrl?: string; reference?: string }
+    | { success: false; error: string; data?: null; authorizationUrl?: string; reference?: string }
+> {
     // Deposits are disabled per request
     const isFundingEnabled = false;
     if (!isFundingEnabled) {
@@ -151,10 +150,10 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
 // CONFIRM: Handle Paystack callback to credit the wallet
 // ---------------------------------------------------------------------------
 
-export async function confirmWalletFundingAction(reference: string): Promise<{
-    error: null, success: true | false;
-    newBalance?: number;
-}> {
+export async function confirmWalletFundingAction(reference: string): Promise<
+    | { success: true; error: null; newBalance?: number }
+    | { success: false; error: string; data?: null; newBalance?: number }
+> {
     try {
         // Verify with Paystack
         const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -242,7 +241,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
 export async function walletCheckoutAction(
     orderId: string,
     amountNGN: number
-): Promise<{ error: string | null, success: true | false; newBalance?: number;  }> {
+): Promise<{ error: string | null, success: boolean; newBalance?: number;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -323,7 +322,7 @@ export async function walletCheckoutAction(
 export async function withdrawFromWalletAction(
     amountNGN: number,
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
-): Promise<{ error: string | null, success: true | false; withdrawalId?: string;  }> {
+): Promise<{ error: string | null, success: boolean; withdrawalId?: string;  }> {
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
             return { success: false as const, error: "Invalid withdrawal amount" };
@@ -418,11 +417,10 @@ export async function withdrawFromWalletAction(
 export async function getWalletTransactionsAction(options?: {
     limit?: number;
     startAfter?: string; // Last transaction doc ID for cursor pagination
-}): Promise<{
-    error: null, success: true | false;
-    transactions?: WalletTransaction[];
-    hasMore?: boolean;
-}> {
+}): Promise<
+    | { success: true; error: null; transactions?: WalletTransaction[]; hasMore?: boolean }
+    | { success: false; error: string; data?: null; transactions?: WalletTransaction[]; hasMore?: boolean }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -461,7 +459,7 @@ export async function processWalletWithdrawalAction(
     transactionId: string,
     action: "approve" | "reject",
     note?: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -590,7 +588,7 @@ export async function processWalletWithdrawalAction(
             }
         }
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (err: any) {
         logger.error("processWalletWithdrawalAction error:", err);
         return { success: false as const, error: err.message || "Failed to process withdrawal" };
@@ -606,12 +604,10 @@ export async function getAdminWalletWithdrawalsAction(options: {
     limit?: number;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<{
-    error: null, success: true | false;
-    data?: any[];
-    lastDocId?: string;
-    hasMore?: boolean;
-}> {
+} = {}): Promise<
+    | { success: true; error: null; data?: any[]; lastDocId?: string; hasMore?: boolean }
+    | { success: false; error: string; data?: null; data?: any[]; lastDocId?: string; hasMore?: boolean }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };

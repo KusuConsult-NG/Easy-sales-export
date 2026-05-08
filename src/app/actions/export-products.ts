@@ -13,7 +13,7 @@ export async function submitExportProductAction(productData: any) {
         const { session } = sessionResult;
         
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const dataToSave = { ...productData };
@@ -41,7 +41,7 @@ export async function getUserExportProductsAction() {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const userId = session.user.id;
@@ -68,6 +68,6 @@ export async function getUserExportProductsAction() {
         };
     } catch (error: any) {
         logger.error("Get user export products error:", error);
-        return { error: "Failed to fetch products", success: false };
+        return { error: "Failed to fetch products", success: false as const };
     }
 }

@@ -40,8 +40,8 @@ import { atomicUpdateUser } from "@/lib/services/userService";
  */
 
 type ActionState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+    | { error: string; success: false as const }
+    | { error: null; success: true as const message: string };
 
 
 
@@ -57,18 +57,18 @@ async function _processWithdrawalAction(
     try {
         // Live role re-validation — bypasses stale JWT
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
-            return { error: "Unauthorized: Permission required - finance:process_withdrawals", success: false };
+            return { error: "Unauthorized: Permission required - finance:process_withdrawals", success: false as const };
         }
 
         const valid = WithdrawalProcessingSchema.safeParse({ withdrawalId, action, reasoning });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         // Try standard withdrawals first, then cooperative_withdrawals
@@ -86,7 +86,7 @@ async function _processWithdrawalAction(
         }
 
         if (!withdrawalDoc.exists) {
-            return { error: "Withdrawal request not found", success: false };
+            return { error: "Withdrawal request not found", success: false as const };
         }
 
         const withdrawalData = withdrawalDoc.data()!;
@@ -219,7 +219,7 @@ async function _processWithdrawalAction(
         };
     } catch (error: any) {
         logger.error("Process withdrawal error:", error);
-        return { error: "Failed to process withdrawal", success: false };
+        return { error: "Failed to process withdrawal", success: false as const };
     }
 }
 
@@ -235,12 +235,12 @@ async function _toggleUserVerificationAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         const valid = UserVerificationToggleSchema.safeParse({ userId });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         // Get current user doc
@@ -248,7 +248,7 @@ async function _toggleUserVerificationAction(
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { error: "User not found", success: false };
+            return { error: "User not found", success: false as const };
         }
 
         const currentData = userDoc.data()!;
@@ -285,7 +285,7 @@ async function _toggleUserVerificationAction(
         };
     } catch (error: any) {
         logger.error("Toggle user verification error:", error);
-        return { error: "Failed to update verification status", success: false };
+        return { error: "Failed to update verification status", success: false as const };
     }
 }
 
@@ -304,19 +304,19 @@ async function _toggleUserKycVerificationAction(
         const { session } = sessionResult;
         // Assuming "users:update" is sufficient for KYC. Could create a stricter role if needed.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         const valid = UserKycVerificationSchema.safeParse({ userId, field, currentStatus });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { error: "User not found", success: false };
+            return { error: "User not found", success: false as const };
         }
 
         const newVerificationStatus = !currentStatus;
@@ -380,7 +380,7 @@ async function _toggleUserKycVerificationAction(
         };
     } catch (error: any) {
         logger.error(`Toggle user KYC verification error (${field}):`, error);
-        return { error: `Failed to update ${field.toUpperCase()} verification status`, success: false };
+        return { error: `Failed to update ${field.toUpperCase()} verification status`, success: false as const };
     }
 }
  // ============================================
@@ -395,12 +395,12 @@ async function _toggleUserKycVerificationAction(
          if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
          const { session } = sessionResult;
          if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-             return { error: "Unauthorized: Permission required - users:update", success: false };
+             return { error: "Unauthorized: Permission required - users:update", success: false as const };
          }
          const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
          const userDoc = await userRef.get();
          if (!userDoc.exists) {
-             return { error: "User not found", success: false };
+             return { error: "User not found", success: false as const };
          }
          await userRef.update({
              gender,
@@ -429,7 +429,7 @@ async function _toggleUserKycVerificationAction(
          };
      } catch (error: any) {
          logger.error("Update user gender error:", error);
-         return { error: "Failed to update gender", success: false };
+         return { error: "Failed to update gender", success: false as const };
      }
  }
 
@@ -444,7 +444,7 @@ async function _getPendingWithdrawalsAction(
     statusFilter: "pending" | "completed" | "rejected" | "approved_pending_payout" | "all" = "pending"
 ): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     data?: any[];
     hasMore?: boolean;
 }> {
@@ -453,7 +453,7 @@ async function _getPendingWithdrawalsAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
-            return { error: "Unauthorized: Permission required - finance:read", success: false };
+            return { error: "Unauthorized: Permission required - finance:read", success: false as const };
         }
 
         // Helper to build a query per collection
@@ -491,7 +491,7 @@ async function _getPendingWithdrawalsAction(
         };
     } catch (error: any) {
         logger.error("Get withdrawals error:", error);
-        return { error: "Failed to fetch withdrawals", success: false };
+        return { error: "Failed to fetch withdrawals", success: false as const };
     }
 }
 
@@ -502,7 +502,7 @@ async function _getPendingWithdrawalsAction(
 
 async function _getPendingLandListings(limit = 50): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     listings?: any[];
 }> {
     try {
@@ -510,7 +510,7 @@ async function _getPendingLandListings(limit = 50): Promise<{
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
-            return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
+            return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const };
         }
 
         // Pending lists are usually small, but let's cap it anyway
@@ -529,7 +529,7 @@ async function _getPendingLandListings(limit = 50): Promise<{
         };
     } catch (error: any) {
         logger.error("Get pending land listings error:", error);
-        return { error: "Failed to fetch land listings", success: false };
+        return { error: "Failed to fetch land listings", success: false as const };
     }
 }
 
@@ -541,18 +541,18 @@ async function _verifyLandListing(
     try {
         // Live role re-validation — bypasses stale JWT
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
-            return { error: "Unauthorized: Permission required - land:verify_listings", success: false };
+            return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const };
         }
 
         const valid = LandListingVerificationSchema.safeParse({ listingId, decision, reason });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         // Update listing status
@@ -651,7 +651,7 @@ async function _verifyLandListing(
         };
     } catch (error: any) {
         logger.error("Verify land listing error:", error);
-        return { error: "Failed to verify land listing", success: false };
+        return { error: "Failed to verify land listing", success: false as const };
     }
 }
 
@@ -661,7 +661,7 @@ async function _verifyLandListing(
 
 async function _getPendingLoanApplications(): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     applications?: any[];
 }> {
     try {
@@ -669,7 +669,7 @@ async function _getPendingLoanApplications(): Promise<{
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
+            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
         }
 
         const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
@@ -686,7 +686,7 @@ async function _getPendingLoanApplications(): Promise<{
         };
     } catch (error: any) {
         logger.error("Get pending loan applications error:", error);
-        return { error: "Failed to fetch loan applications", success: false };
+        return { error: "Failed to fetch loan applications", success: false as const };
     }
 }
 
@@ -700,7 +700,7 @@ async function _getAllExportRequestsAction(
     lastDocId?: string
 ): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     exports?: any[];
     hasMore?: boolean;
 }> {
@@ -709,7 +709,7 @@ async function _getAllExportRequestsAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
-            return { error: "Unauthorized: Permission required - finance:read", success: false };
+            return { error: "Unauthorized: Permission required - finance:read", success: false as const };
         }
 
         let query: any = db.collection(COLLECTIONS.EXPORT_WINDOWS);
@@ -765,7 +765,7 @@ async function _getAllExportRequestsAction(
         } catch (serializeErr: any) {
             const msg = typeof serializeErr === 'string' ? serializeErr : (serializeErr?.message || "Unknown serialize error");
             console.error("CRASH DURING SERIALIZE:", msg);
-            return { error: "Failed to serialize export records", success: false };
+            return { error: "Failed to serialize export records", success: false as const };
         }
 
         return {
@@ -778,7 +778,7 @@ async function _getAllExportRequestsAction(
         // Enforce pure string error to prevent React Flight serialization crash
         const errMsg = typeof error === 'string' ? error : (error?.message || "Failed to fetch export requests");
         console.error("Get all export requests RAW error:", errMsg);
-        return { error: errMsg, success: false };
+        return { error: errMsg, success: false as const };
     }
 }
 
@@ -791,12 +791,12 @@ async function _approveLoanApplication(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
-            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false };
+            return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
         }
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
@@ -985,7 +985,7 @@ async function _approveLoanApplication(
         };
     } catch (error: any) {
         logger.error("Approve loan application error:", error);
-        return { error: error.message || "Failed to approve loan application", success: false };
+        return { error: error.message || "Failed to approve loan application", success: false as const };
     }
 }
 
@@ -999,12 +999,12 @@ async function _rejectLoanApplication(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
-            return { error: "Unauthorized: Permission required - finance:read", success: false };
+            return { error: "Unauthorized: Permission required - finance:read", success: false as const };
         }
 
         const valid = LoanApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
@@ -1069,7 +1069,7 @@ async function _rejectLoanApplication(
         return { error: null, success: true as const, message: "Loan application rejected" };
     } catch (error: any) {
         logger.error("Reject loan application error:", error);
-        return { error: error.message || "Failed to reject loan application", success: false };
+        return { error: error.message || "Failed to reject loan application", success: false as const };
     }
 }
 
@@ -1087,11 +1087,11 @@ async function _unlockUserAccount(email: string): Promise<ActionState> {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
-            return { error: "Unauthorized: Permission required - users:read", success: false };
+            return { error: "Unauthorized: Permission required - users:read", success: false as const };
         }
 
         if (!email || !email.includes("@")) {
-            return { error: "Invalid email address", success: false };
+            return { error: "Invalid email address", success: false as const };
         }
 
         // Reset rate limit
@@ -1114,7 +1114,7 @@ async function _unlockUserAccount(email: string): Promise<ActionState> {
         };
     } catch (error: any) {
         logger.error("Unlock account error:", error);
-        return { error: "Failed to unlock account", success: false };
+        return { error: "Failed to unlock account", success: false as const };
     }
 }
 // ============================================
@@ -1141,7 +1141,7 @@ interface GetUsersOptions {
 
 async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     users?: any[];
     lastDocId?: string;
     hasMore?: boolean;
@@ -1344,7 +1344,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
         };
     } catch (error: any) {
         logger.error("Get users error:", error);
-        return { error: "Failed to fetch users: " + error.message, success: false };
+        return { error: "Failed to fetch users: " + error.message, success: false as const };
     }
 }
 
@@ -1359,7 +1359,7 @@ async function _updateUserRolesAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
-            return { error: "Unauthorized: Permission required - users:assign_roles", success: false };
+            return { error: "Unauthorized: Permission required - users:assign_roles", success: false as const };
         }
 
         // Validate inputs
@@ -1367,12 +1367,12 @@ async function _updateUserRolesAction(
         const valid = UpdateUserRolesSchema.safeParse({ userId, roles });
 
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         // Prevent admin from removing their own admin role
         if (userId === session.user.id && !isAdmin(roles)) {
-            return { error: "Cannot remove your own admin privileges", success: false };
+            return { error: "Cannot remove your own admin privileges", success: false as const };
         }
 
         // ── Write serviceRegistrations for module roles ────────────────────────
@@ -1435,7 +1435,7 @@ async function _approveSellerVerificationAction(
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
             // Fallback for super_admin if specific role missing, or strict check
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required - users:verify_sellers", success: false };
+                return { error: "Unauthorized: Permission required - users:verify_sellers", success: false as const };
             }
         }
 
@@ -1444,14 +1444,14 @@ async function _approveSellerVerificationAction(
         const verificationDoc = await verificationRef.get();
 
         if (!verificationDoc.exists) {
-            return { error: "Verification request not found", success: false };
+            return { error: "Verification request not found", success: false as const };
         }
 
         const verificationData = verificationDoc.data()!;
         const userId = verificationData.userId;
 
         if (!userId) {
-            return { error: "Invalid verification request: Missing User ID", success: false };
+            return { error: "Invalid verification request: Missing User ID", success: false as const };
         }
 
         // Perform updates in a single transaction for atomicity
@@ -1559,7 +1559,7 @@ async function _approveSellerVerificationAction(
         };
     } catch (error: any) {
         logger.error("Approve seller verification error:", error);
-        return { error: "Failed to verify seller", success: false };
+        return { error: "Failed to verify seller", success: false as const };
     }
 }
 
@@ -1592,7 +1592,7 @@ async function _approveExportOnboardingAction(
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || (!hasAdminPermission(session.user.roles, "users:update") && !hasAdminPermission(session.user.roles, "export:approve_applications"))) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required", success: false };
+                return { error: "Unauthorized: Permission required", success: false as const };
             }
         }
 
@@ -1601,7 +1601,7 @@ async function _approveExportOnboardingAction(
         const appSnapshot = await appRef.get();
 
         if (appSnapshot.empty) {
-            return { error: "Application not found", success: false };
+            return { error: "Application not found", success: false as const };
         }
 
         const appDoc = appSnapshot.docs[0];
@@ -1609,7 +1609,7 @@ async function _approveExportOnboardingAction(
         const userId = appData.userId;
 
         if (!userId) {
-            return { error: "Invalid application: Missing User ID", success: false };
+            return { error: "Invalid application: Missing User ID", success: false as const };
         }
 
         // 2. Update Application Status
@@ -1698,7 +1698,7 @@ async function _approveExportOnboardingAction(
         };
     } catch (error: any) {
         logger.error("Approve export application error:", error);
-        return { error: "Failed to approve export application", success: false };
+        return { error: "Failed to approve export application", success: false as const };
     }
 }
 
@@ -1716,12 +1716,12 @@ async function _requestExportApplicationRevisionAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: admin or users:update role required", success: false };
+                return { error: "Unauthorized: admin or users:update role required", success: false as const };
             }
         }
 
         if (!revisionNote?.trim()) {
-            return { error: "Revision note is required", success: false };
+            return { error: "Revision note is required", success: false as const };
         }
 
         // Find the application — may be passed either as the Firestore doc ID or applicationId field
@@ -1740,7 +1740,7 @@ async function _requestExportApplicationRevisionAction(
                 .limit(1)
                 .get();
             if (snap.empty) {
-                return { error: "Application not found", success: false };
+                return { error: "Application not found", success: false as const };
             }
             appDocRef = snap.docs[0].ref;
             appData = snap.docs[0].data();
@@ -1748,7 +1748,7 @@ async function _requestExportApplicationRevisionAction(
 
         const userId = appData.userId;
         if (!userId) {
-            return { error: "Invalid application: Missing User ID", success: false };
+            return { error: "Invalid application: Missing User ID", success: false as const };
         }
 
         // Update application status
@@ -1802,12 +1802,12 @@ async function _requestExportApplicationRevisionAction(
         return { error: null, success: true as const, message: "Revision note sent to applicant" };
     } catch (error: any) {
         logger.error("Request export revision error:", error);
-        return { error: "Failed to send revision request", success: false };
+        return { error: "Failed to send revision request", success: false as const };
     }
 }
 
 async function _getExportApplicationsStatsAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         pending: number;
         approved: number;
@@ -1882,7 +1882,7 @@ async function _getStandardExportApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -2020,13 +2020,13 @@ async function _rejectExportApplicationAction(
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: Permission required - users:update", success: false };
+                return { error: "Unauthorized: Permission required - users:update", success: false as const };
             }
         }
 
         const valid = ExportOnboardingReviewSchema.safeParse({ applicationId, status: "rejected", reason });
         if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
+            return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
         // 1. Get Application Doc
@@ -2034,7 +2034,7 @@ async function _rejectExportApplicationAction(
         const appSnapshot = await appRef.get();
 
         if (appSnapshot.empty) {
-            return { error: "Application not found", success: false };
+            return { error: "Application not found", success: false as const };
         }
 
         const appDoc = appSnapshot.docs[0];
@@ -2042,7 +2042,7 @@ async function _rejectExportApplicationAction(
         const userId = appData.userId;
 
         if (!userId) {
-            return { error: "Invalid application: Missing User ID", success: false };
+            return { error: "Invalid application: Missing User ID", success: false as const };
         }
 
         // 2. Update Application Status
@@ -2129,7 +2129,7 @@ async function _rejectExportApplicationAction(
         };
     } catch (error: any) {
         logger.error("Reject export application error:", error);
-        return { error: "Failed to reject export application", success: false };
+        return { error: "Failed to reject export application", success: false as const };
     }
 }
 // ============================================
@@ -2140,7 +2140,7 @@ async function _getAcademyApplicationsAction(
     statusFilter?: "pending" | "under_review" | "approved" | "rejected"
 ): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     data?: any[];
 }> {
     try {
@@ -2152,7 +2152,7 @@ async function _getAcademyApplicationsAction(
             const roles = session.user.roles || [];
             const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
             if (!hasAcademyAccess) {
-                return { error: "Unauthorized: Permission required", success: false };
+                return { error: "Unauthorized: Permission required", success: false as const };
             }
         }
 
@@ -2208,7 +2208,7 @@ async function _getAcademyApplicationsAction(
         };
     } catch (error: any) {
         logger.error("Get Academy applications error:", error);
-        return { error: "Failed to fetch applications", success: false };
+        return { error: "Failed to fetch applications", success: false as const };
     }
 }
 
@@ -2222,7 +2222,7 @@ async function _approveAcademyApplicationAction(
         const roles = session.user.roles || [];
         const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
         if (!session?.user || !hasAcademyAccess) {
-            return { error: "Unauthorized", success: false };
+            return { error: "Unauthorized", success: false as const };
         }
 
         // Get application first
@@ -2230,7 +2230,7 @@ async function _approveAcademyApplicationAction(
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false };
+            return { error: "Application not found", success: false as const };
         }
 
         const appData = appDoc.data()!;
@@ -2238,7 +2238,7 @@ async function _approveAcademyApplicationAction(
         const userEmail = appData.personalInfo?.email;
 
         if (!userId) {
-            return { error: "Application missing user ID", success: false };
+            return { error: "Application missing user ID", success: false as const };
         }
 
         // 1. Update Application Status
@@ -2324,7 +2324,7 @@ async function _approveAcademyApplicationAction(
         };
     } catch (error: any) {
         logger.error("Approve Academy application error:", error);
-        return { error: "Failed to approve application", success: false };
+        return { error: "Failed to approve application", success: false as const };
     }
 }
 
@@ -2339,7 +2339,7 @@ async function _rejectAcademyApplicationAction(
         const roles = session.user.roles || [];
         const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
         if (!session?.user || !hasAcademyAccess) {
-            return { error: "Unauthorized", success: false };
+            return { error: "Unauthorized", success: false as const };
         }
 
         let userId: string | undefined;
@@ -2392,7 +2392,7 @@ async function _rejectAcademyApplicationAction(
         };
     } catch (error: any) {
         logger.error("Reject Academy application error:", error);
-        return { error: "Failed to reject application", success: false };
+        return { error: "Failed to reject application", success: false as const };
     }
 }
 
@@ -2408,7 +2408,7 @@ async function _markAcademyApplicationUnderReviewAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized", success: false };
+            return { error: "Unauthorized", success: false as const };
         }
 
         await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
@@ -2432,7 +2432,7 @@ async function _markAcademyApplicationUnderReviewAction(
         };
     } catch (error: any) {
         logger.error("Mark Academy application under review error:", error);
-        return { error: "Failed to update application status", success: false };
+        return { error: "Failed to update application status", success: false as const };
     }
 }
 
@@ -2454,7 +2454,7 @@ async function _savePlatformSettingsAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "config:update")) {
-            return { error: "Unauthorized: Admin access required", success: false };
+            return { error: "Unauthorized: Admin access required", success: false as const };
         }
 
         await db.collection(COLLECTIONS.PLATFORM_SETTINGS).doc("general").set({
@@ -2474,7 +2474,7 @@ async function _savePlatformSettingsAction(
         return { error: null, success: true as const, message: "Platform settings saved successfully" };
     } catch (error: any) {
         logger.error("Save platform settings error:", error);
-        return { error: "Failed to save settings", success: false };
+        return { error: "Failed to save settings", success: false as const };
     }
 }
 
@@ -2564,7 +2564,7 @@ async function _editApplicationAction(params: {
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
-                return { error: "Unauthorized: admin or users:update role required", success: false };
+                return { error: "Unauthorized: admin or users:update role required", success: false as const };
             }
         }
 
@@ -2581,7 +2581,7 @@ async function _editApplicationAction(params: {
             COLLECTIONS.LAND_LISTINGS,
         ];
         if (!ALLOWED_COLLECTIONS.includes(collectionName as any)) {
-            return { error: `Collection '${collectionName}' is not editable via this action`, success: false };
+            return { error: `Collection '${collectionName}' is not editable via this action`, success: false as const };
         }
 
         // Sanitize fields: only allow whitelisted keys
@@ -2593,7 +2593,7 @@ async function _editApplicationAction(params: {
         }
 
         if (Object.keys(sanitized).length === 0) {
-            return { error: "No valid fields to update", success: false };
+            return { error: "No valid fields to update", success: false as const };
         }
 
         // Fetch current doc to capture "before" snapshot for audit
@@ -2601,7 +2601,7 @@ async function _editApplicationAction(params: {
         const docSnap = await docRef.get();
 
         if (!docSnap.exists) {
-            return { error: `Document ${docId} not found in ${collectionName}`, success: false };
+            return { error: `Document ${docId} not found in ${collectionName}`, success: false as const };
         }
 
         const before: Record<string, any> = {};
@@ -2644,7 +2644,7 @@ async function _editApplicationAction(params: {
         };
     } catch (error: any) {
         logger.error("Edit application error:", error);
-        return { error: "Failed to update application: " + error.message, success: false };
+        return { error: "Failed to update application: " + error.message, success: false as const };
     }
 }
 
@@ -2665,13 +2665,13 @@ async function _toggleVerifiedBadgeAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         const ref = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
         const snap = await ref.get();
         if (!snap.exists) {
-            return { error: "Seller verification record not found", success: false };
+            return { error: "Seller verification record not found", success: false as const };
         }
 
         const data = snap.data()!;
@@ -2743,7 +2743,7 @@ async function _toggleVerifiedBadgeAction(
         };
     } catch (error: any) {
         logger.error("toggleVerifiedBadgeAction error:", error);
-        return { error: "Failed to update badge: " + error.message, success: false };
+        return { error: "Failed to update badge: " + error.message, success: false as const };
     }
 }
 
@@ -2761,14 +2761,14 @@ async function _manualAcademyEnrollmentAction(
         const { session } = sessionResult;
         // Check if admin has user update permissions (or a specific academy permission)
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { error: "User not found", success: false };
+            return { error: "User not found", success: false as const };
         }
 
         await userRef.update({
@@ -2823,7 +2823,7 @@ async function _manualAcademyEnrollmentAction(
         };
     } catch (error: any) {
         logger.error("Manual academy enrollment error:", error);
-        return { error: "Failed to enroll user: " + error.message, success: false };
+        return { error: "Failed to enroll user: " + error.message, success: false as const };
     }
 }
 
@@ -2839,11 +2839,11 @@ const InviteLegacyMemberSchema = z.object({
 
 async function _inviteLegacyMemberAction(
     data: z.infer<typeof InviteLegacyMemberSchema>
-): Promise<{ error: string | null; success: true | false }> {
+): Promise<{ error: string | null; success: boolean }> {
     /* Original implementation below (deprecated and causing build errors)
     try {
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { error: (adminCheck as any).error, success: false };
+        if ("error" in adminCheck) return { error: (adminCheck as any).error, success: false as const };
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -2851,7 +2851,7 @@ async function _inviteLegacyMemberAction(
 
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:create")) {
              if (!hasAdminPermission(session.user.roles, "cooperatives:approve_members")) {
-                return { error: "Unauthorized: Permission required - cooperatives:approve_members", success: false };
+                return { error: "Unauthorized: Permission required - cooperatives:approve_members", success: false as const };
              }
         }
 
@@ -2870,7 +2870,7 @@ async function _inviteLegacyMemberAction(
             const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(existingUid);
             const memberDoc = await memberRef.get();
             if (memberDoc.exists && memberDoc.data()?.onboardingCompleted === true) {
-                return { error: "User is already a fully onboarded cooperative member.", success: false };
+                return { error: "User is already a fully onboarded cooperative member.", success: false as const };
             }
         }
 
@@ -2935,11 +2935,11 @@ async function _inviteLegacyMemberAction(
 
                 if (emailError) {
                     logger.error("Resend API Error (Coop Invite):", emailError);
-                    return { error: "Invite created but failed to send email. Link: " + onboardingLink, success: true }; // Partial success
+                    return { error: "Invite created but failed to send email. Link: " + onboardingLink, success: true as const }; // Partial success
                 }
             } catch (err: any) {
                 logger.error("Resend Error (Coop Invite):", err);
-                return { error: "Invite created but failed to send email.", success: true };
+                return { error: "Invite created but failed to send email.", success: true as const };
             }
         } else {
              logger.warn("RESEND_API_KEY is not set. Assuming development mode. Invite created silently.");
@@ -2954,13 +2954,13 @@ async function _inviteLegacyMemberAction(
             metadata: { email: email },
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error: any) {
         logger.error("Failed to send cooperative invite:", error);
-        return { error: error.message || "Failed to invite member", success: false };
+        return { error: error.message || "Failed to invite member", success: false as const };
     }
     */
-    return { error: "Method deprecated", success: false };
+    return { error: "Method deprecated", success: false as const };
 }
 
 async function _getStandardSellerVerificationsAction(
@@ -2970,7 +2970,7 @@ async function _getStandardSellerVerificationsAction(
     sortOrder?: "asc" | "desc",
     dateFrom?: string,
     dateTo?: string
-): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any }> {
+): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -3205,7 +3205,7 @@ export const rejectWaveApplicationAction = _rejectWaveApplicationAction;
  * Returns accurate totals independent of pagination limits.
  */
 export async function getAdminSellerStatsAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     stats?: { total: number; pending: number; approved: number; rejected: number };
 }> {
     try {
@@ -3254,7 +3254,7 @@ async function _onboardLegacyMemberAction(
 ): Promise<ActionState> {
     try {
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
+        if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -3262,13 +3262,13 @@ async function _onboardLegacyMemberAction(
 
         // Permission check
         if (!hasAdminPermission(session.user.roles, "users:create")) {
-            return { error: "Unauthorized: Permission users:create required", success: false };
+            return { error: "Unauthorized: Permission users:create required", success: false as const };
         }
 
         // Validate input
         const validated = LegacyOnboardingSchema.safeParse(formData);
         if (!validated.success) {
-            return { error: validated.error.issues[0].message, success: false };
+            return { error: validated.error.issues[0].message, success: false as const };
         }
 
         const data = validated.data;
@@ -3276,7 +3276,7 @@ async function _onboardLegacyMemberAction(
         // 1. Check if user already exists (Email)
         const existingAuth = await adminAuth.getUserByEmail(data.email).catch(() => null);
         if (existingAuth) {
-            return { error: "A user with this email already exists in Auth", success: false };
+            return { error: "A user with this email already exists in Auth", success: false as const };
         }
 
         // 2. 🔒 DEDUP GUARD: Check phone uniqueness (Fraud Prevention)
@@ -3285,7 +3285,7 @@ async function _onboardLegacyMemberAction(
             .limit(1)
             .get();
         if (!phoneCheck.empty) {
-            return { error: "An account with this phone number already exists in the system.", success: false };
+            return { error: "An account with this phone number already exists in the system.", success: false as const };
         }
 
         // 3. Generate default numeric PIN (6 digits)

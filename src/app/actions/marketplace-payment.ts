@@ -97,7 +97,7 @@ async function _initializeOrderPaymentAction(
         const userId = session.user.id;
 
         if (deliveryFee < 0) {
-            return { error: "Invalid delivery fee", success: false };
+            return { error: "Invalid delivery fee", success: false as const };
         }
 
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
@@ -107,7 +107,7 @@ async function _initializeOrderPaymentAction(
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         if (totalAmount < fees.minOrderAmount) {
-            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
+            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const };
         }
 
         const { authorizationUrl, reference } = await initializePaystackPayment(
@@ -229,17 +229,17 @@ async function _verifyOrderPaymentAction(reference: string) {
 
         // Verify user match
         if (paystackUserId !== userId) {
-            return { error: "Payment verification failed: User mismatch", success: false };
+            return { error: "Payment verification failed: User mismatch", success: false as const };
         }
 
         const fees = await getPlatformFees();
         if (amountInNaira < fees.minOrderAmount || amountInNaira > fees.maxOrderAmount) {
-            return { error: "Invalid payment amount", success: false };
+            return { error: "Invalid payment amount", success: false as const };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: "Payment amount mismatch", success: false };
+            return { error: "Payment amount mismatch", success: false as const };
         }
 
         // Find order record
@@ -249,7 +249,7 @@ async function _verifyOrderPaymentAction(reference: string) {
             .get();
 
         if (orderQuery.empty) {
-            return { error: "Order record not found", success: false };
+            return { error: "Order record not found", success: false as const };
         }
 
         const orderDoc = orderQuery.docs[0];
@@ -407,7 +407,7 @@ async function _createBankTransferOrderAction(
         const { session } = sessionResult;
 
         if (deliveryFee < 0) {
-            return { error: "Invalid delivery fee", success: false };
+            return { error: "Invalid delivery fee", success: false as const };
         }
 
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
@@ -416,7 +416,7 @@ async function _createBankTransferOrderAction(
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         if (totalAmount < fees.minOrderAmount) {
-            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
+            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const };
         }
 
         const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));

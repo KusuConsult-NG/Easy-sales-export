@@ -117,7 +117,7 @@ export async function exportAuditLogsCSV(filters: {
     severity?: AuditSeverity;
     startDate?: string;
     endDate?: string;
-}): Promise<{ success: true; csv: string; error: null } | { success: false; error: string; csv?: undefined }> {
+}): Promise<{ success: true as const csv: string; error: null } | { success: false; error: string; csv?: undefined }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

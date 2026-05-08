@@ -21,7 +21,7 @@ export interface EscalationNote {
 export async function addEscalationNoteAction(
     disputeId: string,
     text: string
-): Promise<{ success: true | false; data?: { noteId: string }; error?: string }> {
+): Promise<{ success: boolean; data?: { noteId: string }; error?: string }> {
     if (!text.trim()) return { success: false as const, error: "Note text is required" };
     if (text.length > 2000) return { success: false as const, error: "Note too long (max 2000 chars)" };
 
@@ -65,7 +65,7 @@ export async function addEscalationNoteAction(
  */
 export async function getEscalationNotesAction(
     disputeId: string
-): Promise<{ error: string | null, success: true | false; data?: { notes: EscalationNote[] };  }> {
+): Promise<{ error: string | null, success: boolean; data?: { notes: EscalationNote[] };  }> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { success: false as const, error: adminCheck.error };

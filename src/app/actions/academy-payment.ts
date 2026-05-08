@@ -18,7 +18,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         authorizationUrl: string;
         reference: string;
@@ -43,12 +43,12 @@ export async function initializeEnrollmentPaymentAction(
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         // Validate amount
         if (amount < 1000) {
-            return { error: "Minimum enrollment fee is ₦1,000", success: false };
+            return { error: "Minimum enrollment fee is ₦1,000", success: false as const };
         }
 
         // Check if already enrolled
@@ -56,7 +56,7 @@ export async function initializeEnrollmentPaymentAction(
         const existingEnrollment = await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).get();
 
         if (existingEnrollment.exists) {
-            return { error: "You are already enrolled in this course", success: false };
+            return { error: "You are already enrolled in this course", success: false as const };
         }
 
         // Initialize payment with Paystack
@@ -109,18 +109,17 @@ export async function initializeEnrollmentPaymentAction(
  * Verify Academy Enrollment Payment
  * Updates enrollment status after successful payment
  */
-export async function verifyEnrollmentPaymentAction(reference: string): Promise<{
-    error: null, success: true | false;
-    data?: any;
-    meta?: any;
-}> {
+export async function verifyEnrollmentPaymentAction(reference: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any }
+    | { success: false; error: string; data?: null; data?: any; meta?: any }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
@@ -159,7 +158,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         // Verify user match
         if (metadata.userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false };
+            return { error: "Payment verification failed: User mismatch", success: false as const };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation against REAL course price

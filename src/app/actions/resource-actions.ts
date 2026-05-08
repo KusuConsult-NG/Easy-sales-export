@@ -32,7 +32,7 @@ export interface WaveResource {
 /**
  * Upload a resource to Firebase Storage and create Firestore record
  */
-export async function uploadResourceAction(formData: FormData): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+export async function uploadResourceAction(formData: FormData): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -143,7 +143,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{ error:
 /**
  * Get all active resources, optionally filtered by category
  */
-export async function getResourcesAction(category?: string): Promise<{ error: string | null, success: true | false; data?: WaveResource[]; meta?: any;  }> {
+export async function getResourcesAction(category?: string): Promise<{ error: string | null, success: boolean; data?: WaveResource[]; meta?: any;  }> {
     try {
         let query = db.collection(COLLECTIONS.WAVE_RESOURCES)
             .where("isActive", "==", true)
@@ -165,7 +165,7 @@ export async function getResourcesAction(category?: string): Promise<{ error: st
 /**
  * Track download and return resource URL
  */
-export async function downloadResourceAction(resourceId: string): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+export async function downloadResourceAction(resourceId: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -208,7 +208,7 @@ export async function downloadResourceAction(resourceId: string): Promise<{ erro
 /**
  * Soft delete a resource (admin only)
  */
-export async function deleteResourceAction(resourceId: string): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+export async function deleteResourceAction(resourceId: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -244,7 +244,7 @@ export async function deleteResourceAction(resourceId: string): Promise<{ error:
             targetType: "wave_resource",
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Delete resource error:", error);
         return { success: false as const, error: error.message || "Failed to delete resource" };
@@ -259,7 +259,7 @@ export async function updateResourceAction(
     title: string,
     description: string,
     tags?: string
-): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -295,7 +295,7 @@ export async function updateResourceAction(
             targetType: "wave_resource",
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Update resource error:", error);
         return { success: false as const, error: error.message || "Failed to update resource" };

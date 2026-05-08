@@ -26,7 +26,7 @@ async function _createResourceAction(data: {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ error: string | null, success: true | false; data?: any;  }> {
+}): Promise<{ error: string | null, success: boolean; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -78,7 +78,7 @@ async function _updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -105,7 +105,7 @@ async function _updateResourceAction(
             targetId: resourceId,
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Update resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -118,7 +118,7 @@ export const updateResourceAction = withFlexibleSafeAction("updateResourceAction
 
 async function _deleteResourceAction(
     resourceId: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -147,7 +147,7 @@ async function _deleteResourceAction(
             targetId: resourceId,
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Delete resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -170,7 +170,7 @@ async function _createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ error: string | null, success: true | false; data?: any;  }> {
+}): Promise<{ error: string | null, success: boolean; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -224,7 +224,7 @@ async function _updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -251,7 +251,7 @@ async function _updateTrainingEventAction(
             targetId: eventId,
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Update event error:", {
             userId: sessionResult?.session?.user?.id,
@@ -262,7 +262,7 @@ async function _updateTrainingEventAction(
 }
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
-async function _getEventParticipantsAction(eventId: string): Promise<{ error: string | null, success: true | false; data?: any;  }> {
+async function _getEventParticipantsAction(eventId: string): Promise<{ error: string | null, success: boolean; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -297,7 +297,7 @@ export const getEventParticipantsAction = withFlexibleSafeAction("getEventPartic
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-async function _getWaveApplicationsAction(): Promise<{ error: string | null, success: true | false; data?: any;  }> {
+async function _getWaveApplicationsAction(): Promise<{ error: string | null, success: boolean; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -327,7 +327,7 @@ export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicat
 
 async function _approveWaveApplicationAction(
     applicationId: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
@@ -437,7 +437,7 @@ async function _approveWaveApplicationAction(
             }
         }
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Approve application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -451,7 +451,7 @@ export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveA
 async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
@@ -544,7 +544,7 @@ async function _rejectWaveApplicationAction(
             }
         }
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Reject application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -563,7 +563,7 @@ async function _getStandardWaveApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -726,7 +726,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -802,7 +802,7 @@ async function _processWaveWithdrawalAction(data: {
     action: "approve" | "reject" | "complete";
     adminNotes?: string;
     transactionReference?: string;
-}): Promise<{ error: string | null, success: true | false; data?: any;  }> {
+}): Promise<{ error: string | null, success: boolean; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();

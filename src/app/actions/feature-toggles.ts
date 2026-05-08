@@ -38,7 +38,7 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> {
 export async function updateFeatureToggle(
     featureName: string,
     enabled: boolean
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -87,7 +87,7 @@ export async function updateFeatureToggle(
             details: `Feature '${featureName}' ${enabled ? "enabled" : "disabled"}`,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to update feature toggle:", error);
         return { success: false as const, error: error.message || "Failed to update toggle" };
@@ -97,10 +97,10 @@ export async function updateFeatureToggle(
 /**
  * Get all feature toggles (admin only)
  */
-export async function getAllFeatureToggles(): Promise<{
-    error: null, success: true | false;
-    data?: FeatureToggle[];
-}> {
+export async function getAllFeatureToggles(): Promise<
+    | { success: true; error: null; data?: FeatureToggle[] }
+    | { success: false; error: string; data?: null; data?: FeatureToggle[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

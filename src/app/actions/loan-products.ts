@@ -24,12 +24,10 @@ export interface LoanProduct {
 export async function getAdminLoanProductsAction(options: {
     limit?: number;
     lastDocId?: string;
-} = {}): Promise<{
-    error: null, success: true | false;
-    data?: LoanProduct[];
-    lastDocId?: string;
-    hasMore?: boolean;
-}> {
+} = {}): Promise<
+    | { success: true; error: null; data?: LoanProduct[]; lastDocId?: string; hasMore?: boolean }
+    | { success: false; error: string; data?: null; data?: LoanProduct[]; lastDocId?: string; hasMore?: boolean }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -89,7 +87,7 @@ export async function createAdminLoanProductAction(data: Omit<LoanProduct, "id">
             metadata: { name: data.name }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Create loan product error:", error);
         return { success: false as const, error: error.message };
@@ -115,7 +113,7 @@ export async function updateAdminLoanProductAction(productId: string, data: Part
             metadata: { ...data }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Update loan product error:", error);
         return { success: false as const, error: error.message };
@@ -145,7 +143,7 @@ export async function deleteAdminLoanProductAction(productId: string) {
             metadata: { name: doc.data()?.name }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Delete loan product error:", error);
         return { success: false as const, error: error.message };

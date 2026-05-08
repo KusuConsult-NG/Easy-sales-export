@@ -8,14 +8,10 @@ import { requireAdmin } from "@/lib/require-admin";
  * Quick diagnostic action to check if the broadcast system can read users.
  * Call from any admin page or browser console via fetch.
  */
-export async function diagnoseBroadcastAction(): Promise<{
-    error: null, success: true | false;
-    projectId?: string;
-    usersCollectionName: string;
-    totalUserDocs: number;
-    usersWithEmail: number;
-    sampleFields: string[];
-}> {
+export async function diagnoseBroadcastAction(): Promise<
+    | { success: true; error: null; projectId?: string; usersCollectionName: string; totalUserDocs: number; usersWithEmail: number; sampleFields: string[] }
+    | { success: false; error: string; data?: null; projectId?: string; usersCollectionName: string; totalUserDocs: number; usersWithEmail: number; sampleFields: string[] }
+> {
     try {
         const sessionResult = await requireAdmin();
         if ('error' in sessionResult) return { 

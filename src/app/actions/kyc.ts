@@ -20,7 +20,7 @@ import { invalidateUserCache } from '@/lib/cache-invalidation';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface KYCVerificationResult {
-    error: null, success: true | false;
+    error: null, success: boolean;
     isMatch?: boolean;
     /** Populated when names don't match — helps user see what name is on record */
     hint?: string;
@@ -248,7 +248,7 @@ export async function saveKYCProfileAction(payload: {
     state: string;
     idType?: string;
     idNumber?: string;
-}): Promise<{ error: string | null, success: true | false;  }> {
+}): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
@@ -374,7 +374,7 @@ export async function saveKYCProfileAction(payload: {
 
         await invalidateUserCache(userId);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error('Save KYC profile error', error);
         return { success: false as const, error: error?.message || 'Failed to save KYC profile' };

@@ -24,11 +24,10 @@ export async function bulkSuspendUsersAction(
     userIds: string[],
     reason: string,
     duration?: number // days, undefined = permanent
-): Promise<{
-    error: null, success: true | false;
-    suspended: number;
-    failed: string[];
-}> {
+): Promise<
+    | { success: true; error: null; suspended: number; failed: string[] }
+    | { success: false; error: string; data?: null; suspended: number; failed: string[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -151,11 +150,10 @@ export async function bulkSuspendUsersAction(
  */
 export async function bulkActivateUsersAction(
     userIds: string[]
-): Promise<{
-    error: null, success: true | false;
-    activated: number;
-    failed: string[];
-}> {
+): Promise<
+    | { success: true; error: null; activated: number; failed: string[] }
+    | { success: false; error: string; data?: null; activated: number; failed: string[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -259,11 +257,10 @@ export async function bulkAssignRolesAction(
     userIds: string[],
     rolesToAdd: string[],
     rolesToRemove: string[]
-): Promise<{
-    error: null, success: true | false;
-    updated: number;
-    failed: string[];
-}> {
+): Promise<
+    | { success: true; error: null; updated: number; failed: string[] }
+    | { success: false; error: string; data?: null; updated: number; failed: string[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -370,11 +367,10 @@ export async function bulkAssignRolesAction(
 export async function bulkDeleteUsersAction(
     userIds: string[],
     reason: string
-): Promise<{
-    error: null, success: true | false;
-    deleted: number;
-    failed: string[];
-}> {
+): Promise<
+    | { success: true; error: null; deleted: number; failed: string[] }
+    | { success: false; error: string; data?: null; deleted: number; failed: string[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -507,11 +503,10 @@ export async function createImpersonationTokenAction(
     targetUserId: string,
     reason: string,
     durationMinutes: number = 30
-): Promise<{
-    error: null, success: true | false;
-    token?: string;
-    expiresAt?: string;
-}> {
+): Promise<
+    | { success: true; error: null; token?: string; expiresAt?: string }
+    | { success: false; error: string; data?: null; token?: string; expiresAt?: string }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -598,10 +593,10 @@ export async function createImpersonationTokenAction(
  */
 export async function exportUserDataAction(
     userId: string
-): Promise<{
-    error: null, success: true | false;
-    data?: any;
-}> {
+): Promise<
+    | { success: true; error: null; data?: any }
+    | { success: false; error: string; data?: null; data?: any }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;

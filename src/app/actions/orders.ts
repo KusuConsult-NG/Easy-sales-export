@@ -17,7 +17,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
  */
 
 export interface CreateOrderState {
-    error: null, success: true | false;
+    error: null, success: boolean;
     orderId?: string;
     orderIds?: string[];
     paymentUrl?: string;

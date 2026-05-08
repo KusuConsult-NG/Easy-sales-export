@@ -134,12 +134,12 @@ export async function sendMessageAction(conversationId: string, text: string) {
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Not authenticated", success: false };
+            return { error: "Not authenticated", success: false as const };
         }
 
         const trimmedText = text.trim();
         if (!trimmedText) {
-            return { error: "Message cannot be empty", success: false };
+            return { error: "Message cannot be empty", success: false as const };
         }
 
         // Get conversation
@@ -147,7 +147,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
         const conversationDoc = await conversationRef.get();
 
         if (!conversationDoc.exists) {
-            return { error: "Conversation not found", success: false };
+            return { error: "Conversation not found", success: false as const };
         }
 
         const conversation = conversationDoc.data() as Conversation;
@@ -159,7 +159,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
             const roles: string[] = userDoc.data()?.roles ?? [];
             const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
             if (!isAdmin) {
-                return { error: "Access denied", success: false };
+                return { error: "Access denied", success: false as const };
             }
         }
 
@@ -191,7 +191,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
         return { success: true as const, error: null };
     } catch (error) {
         logger.error("Send message error", error);
-        return { error: "Failed to send message", success: false };
+        return { error: "Failed to send message", success: false as const };
     }
 }
 
@@ -204,7 +204,7 @@ export async function markAsReadAction(conversationId: string) {
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Not authenticated", success: false };
+            return { error: "Not authenticated", success: false as const };
         }
 
         const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
@@ -217,7 +217,7 @@ export async function markAsReadAction(conversationId: string) {
         return { success: true as const, error: null };
     } catch (error) {
         logger.error("Mark as read error", error);
-        return { error: "Failed to mark as read", success: false };
+        return { error: "Failed to mark as read", success: false as const };
     }
 }
 

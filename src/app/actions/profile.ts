@@ -147,7 +147,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
 
     await invalidateUserCache(userId);
 
-    return { error: null, success: true };
+    return { error: null, success: true as const };
 });
 
 /**
@@ -173,5 +173,5 @@ export const updateNotificationPreferencesAction = withSafeAction("updateNotific
         updatedAt: new Date(),
     });
 
-    return { error: null, success: true };
+    return { error: null, success: true as const };
 });

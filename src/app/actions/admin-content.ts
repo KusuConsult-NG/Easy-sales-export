@@ -50,10 +50,10 @@ function sanitizeForSerialization(obj: unknown): unknown {
  * - Marketplace Products (status: pending)
  * - Land Listings (verificationStatus: pending)
  */
-export async function getPendingContentAction(): Promise<{
-    error: null, success: true | false;
-    data?: PendingContentItem[];
-}> {
+export async function getPendingContentAction(): Promise<
+    | { success: true; error: null; data?: PendingContentItem[] }
+    | { success: false; error: string; data?: null; data?: PendingContentItem[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -126,7 +126,7 @@ export async function getPendingContentAction(): Promise<{
 export async function approveContentAction(
     id: string,
     type: ContentType
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -157,7 +157,7 @@ export async function approveContentAction(
                 return { success: false as const, error: "Invalid content type" };
         }
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
 
     } catch (error: any) {
         logger.error("Approve content error:", error);
@@ -169,7 +169,7 @@ export async function rejectContentAction(
     id: string,
     type: ContentType,
     reason: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -210,7 +210,7 @@ export async function rejectContentAction(
                 return { success: false as const, error: "Invalid content type" };
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Reject content error:", error);
         return { success: false as const, error: error.message };

@@ -66,7 +66,7 @@ export async function createAnnouncementAction(data: {
     priority: "low" | "medium" | "high" | "urgent";
     expiresAt?: string;
     adminId: string;
-}): Promise<{ error: string | null, success: true | false; announcementId?: string }> {
+}): Promise<{ error: string | null, success: boolean; announcementId?: string }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -159,7 +159,7 @@ export async function getActiveAnnouncementsAction(
 export async function deactivateAnnouncementAction(
     announcementId: string,
     adminId: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -177,7 +177,7 @@ export async function deactivateAnnouncementAction(
             "announcement"
         );
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Deactivation error:", error);
         return { success: false as const, error: "Failed to deactivate announcement" };
@@ -198,7 +198,7 @@ export async function createBannerAction(data: {
     endDate: string;
     position: "top" | "bottom" | "popup";
     adminId: string;
-}): Promise<{ error: string | null, success: true | false; bannerId?: string }> {
+}): Promise<{ error: string | null, success: boolean; bannerId?: string }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -280,7 +280,7 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
 export async function deactivateBannerAction(
     bannerId: string,
     adminId: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -298,7 +298,7 @@ export async function deactivateBannerAction(
             "banner"
         );
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Deactivation error:", error);
         return { success: false as const, error: "Failed to deactivate banner" };

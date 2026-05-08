@@ -32,14 +32,14 @@ interface VerifyAccountResponse {
 }
 
 export interface BankVerificationResult {
-    error: null, success: true | false;
+    error: null, success: boolean;
     accountName?: string;
 }
 
 /**
  * Fetch list of Nigerian banks supported by Paystack
  */
-export async function getBankList(): Promise<{ error: string | null, success: true | false; banks?: Bank[];  }> {
+export async function getBankList(): Promise<{ error: string | null, success: boolean; banks?: Bank[];  }> {
     try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };

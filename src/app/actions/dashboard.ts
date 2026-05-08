@@ -45,19 +45,19 @@ export type EscrowStatus = {
 
 type DashboardActionState = {
     error: string | null;
-    success: true | false;
+    success: boolean;
     data?: DashboardStats;
 };
 
 type ActivityActionState = {
     error: string | null;
-    success: true | false;
+    success: boolean;
     data?: RecentActivity;
 };
 
 type EscrowActionState = {
     error: string | null;
-    success: true | false;
+    success: boolean;
     data?: EscrowStatus;
 };
 
@@ -172,7 +172,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
         };
     } catch (error: any) {
         logger.error("Dashboard stats error:", error);
-        return { error: "Failed to fetch dashboard stats", success: false };
+        return { error: "Failed to fetch dashboard stats", success: false as const };
     }
 }
 
@@ -238,7 +238,7 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
         };
     } catch (error: any) {
         logger.error("Recent activity error:", error);
-        return { error: "Failed to fetch recent activity", success: false };
+        return { error: "Failed to fetch recent activity", success: false as const };
     }
 }
 
@@ -310,6 +310,6 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
         };
     } catch (error: any) {
         logger.error("Escrow status error:", error);
-        return { error: "Failed to fetch escrow status", success: false };
+        return { error: "Failed to fetch escrow status", success: false as const };
     }
 }

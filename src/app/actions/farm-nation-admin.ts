@@ -9,14 +9,14 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
-async function _getFarmNationStatsAction(): Promise<{ success: true; data: { stats: { totalApplications: number } } } | { success: false; error: string }> {
+async function _getFarmNationStatsAction(): Promise<{ success: true as const; data: { stats: { totalApplications: number } } } | { success: false; error: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false };
+            return { error: "Unauthorized: Permission required", success: false as const };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -56,18 +56,17 @@ async function _getFarmNationRegistrantsAction(options: {
     search?: string;
     status?: string;
     lastDocId?: string;
-} = {}): Promise<{
-    error: null, success: true | false;
-    data?: any;
-    meta?: any;
-}> {
+} = {}): Promise<
+    | { success: true; error: null; data?: any; meta?: any }
+    | { success: false; error: string; data?: null; data?: any; meta?: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false };
+            return { error: "Unauthorized: Permission required", success: false as const };
         }
 
         const pageSize = options.search ? 2000 : (options.limit || 20);
@@ -151,7 +150,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ success: true; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false; error: string }> {
+} = {}): Promise<{ success: true as const; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false; error: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -291,7 +290,7 @@ export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("ge
  * Uses Firestore COUNT queries — independent of pagination.
  */
 async function _getFarmNationVerificationStatsAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: {
         stats: {
             total: number;
@@ -358,7 +357,7 @@ async function _getAdminLandVerificationsAction(options: {
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -422,7 +421,7 @@ async function _getFarmNationTransactionsAction(options: {
     limit?: number;
     status?: string;
     lastDocId?: string;
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -471,7 +470,7 @@ async function _getFarmNationTransactionsAction(options: {
 }
 export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNationTransactionsAction", _getFarmNationTransactionsAction);
 
-async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ error: string | null, success: true | false; message?: string;  }> {
+async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ error: string | null, success: boolean; message?: string;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();

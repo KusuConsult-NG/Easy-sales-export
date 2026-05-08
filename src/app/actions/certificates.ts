@@ -40,7 +40,7 @@ export async function uploadCertificateAction(
         expiryDate?: string;
         issuer?: string;
     }
-): Promise<{ error: string | null, success: true | false; certificateId?: string }> {
+): Promise<{ error: string | null, success: boolean; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -121,7 +121,7 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
 export async function deleteCertificateAction(
     certificateId: string,
     userId: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -178,7 +178,7 @@ export async function deleteCertificateAction(
             },
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Certificate deletion error:", error);
         return { success: false as const, error: "Failed to delete certificate" };
@@ -188,7 +188,7 @@ export async function deleteCertificateAction(
 /**
  * Mark onboarding as complete
  */
-export async function completeOnboardingAction(userId: string): Promise<{ error: string | null, success: true | false;  }> {
+export async function completeOnboardingAction(userId: string): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -209,7 +209,7 @@ export async function completeOnboardingAction(userId: string): Promise<{ error:
             targetType: "onboarding_completion",
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error("Failed to complete onboarding:", error);
         return { success: false as const, error: "Failed to complete onboarding" };

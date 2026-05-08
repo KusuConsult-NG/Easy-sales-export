@@ -16,7 +16,7 @@ export interface BriefingRegistration extends BriefingRegistrationData {
 }
 
 export interface BriefingRegistrationsResult {
-    error: null, success: true | false;
+    error: null, success: boolean;
     data?: BriefingRegistration[];
     meta: {
         cursor: string | null;

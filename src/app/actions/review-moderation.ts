@@ -39,10 +39,10 @@ export async function getFlaggedReviewsAction(options?: {
     status?: "pending" | "approved" | "rejected" | "all";
     minFlags?: number;
     limit?: number;
-}): Promise<{
-    error: null, success: true | false;
-    data?: FlaggedReview[];
-}> {
+}): Promise<
+    | { success: true; error: null; data?: FlaggedReview[] }
+    | { success: false; error: string; data?: null; data?: FlaggedReview[] }
+> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -107,7 +107,7 @@ export async function getFlaggedReviewsAction(options?: {
  */
 export async function approveReviewAction(
     reviewId: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -140,7 +140,7 @@ export async function approveReviewAction(
             metadata: { productId: reviewDoc.data()?.productId },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to approve review:", error);
         return { success: false as const, error: error.message || "Failed to approve review" };
@@ -153,7 +153,7 @@ export async function approveReviewAction(
 export async function deleteReviewAction(
     reviewId: string,
     reason: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -221,7 +221,7 @@ export async function deleteReviewAction(
             },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to delete review:", error);
         return { success: false as const, error: error.message || "Failed to delete review" };
@@ -235,7 +235,7 @@ export async function suspendReviewerAction(
     userId: string,
     duration: number, // days
     reason: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -291,7 +291,7 @@ export async function suspendReviewerAction(
             logger.error("Cache invalidation failed after user suspension", err);
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to suspend reviewer:", error);
         return { success: false as const, error: error.message || "Failed to suspend user" };
@@ -303,7 +303,7 @@ export async function suspendReviewerAction(
  */
 export async function bulkApproveReviewsAction(
     reviewIds: string[]
-): Promise<{ error: string | null, success: true | false; approved: number;  }> {
+): Promise<{ error: string | null, success: boolean; approved: number;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;

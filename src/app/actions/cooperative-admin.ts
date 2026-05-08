@@ -260,7 +260,7 @@ async function _getAllMembersAction(options?: {
     limit?: number;
     search?: string;
 }): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     meta?: any;
     data?: { members: any[] };
 }> {
@@ -344,7 +344,7 @@ export const getAllMembersAction = withFlexibleSafeAction("getAllMembersAction",
 async function _updateMemberStatusAction(
     memberId: string,
     status: "active" | "suspended"
-): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
+): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -458,7 +458,7 @@ async function _getAllTransactionsAction(options?: {
     limit?: number;
     lastDocId?: string;
 }): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     meta?: any;
     data?: { transactions: Array<{
         id: string;
@@ -593,7 +593,7 @@ export async function getContributionReportsAction(options?: {
     month?: number;
     year?: number;
 }): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     meta?: any;
     data?: {
         reports: {
@@ -736,7 +736,7 @@ export async function getContributionReportsAction(options?: {
 // ============================================================================
 
 export async function getRecentActivityAction(): Promise<{
-    error: null, success: true | false;
+    error: null, success: boolean;
     meta?: any;
     data?: { activities: Array<{
         type: string;
@@ -801,7 +801,7 @@ export async function getRecentActivityAction(): Promise<{
  */
 export async function approveWithdrawalAction(
     withdrawalId: string
-): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
+): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -921,7 +921,7 @@ export async function approveWithdrawalAction(
 export async function rejectWithdrawalAction(
     withdrawalId: string,
     reason: string
-): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
+): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1045,7 +1045,7 @@ export async function rejectWithdrawalAction(
 export async function requestCooperativeRevisionAction(
     memberId: string,
     reason: string
-): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
+): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1132,7 +1132,7 @@ export async function getStandardCooperativeMembersAction(
         dateFrom?: string; // YYYY-MM-DD
         dateTo?: string;   // YYYY-MM-DD
     } = {}
-): Promise<{ error: string | null, success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; meta?: any }> {
+): Promise<{ error: string | null, success: boolean; data: any[]; hasMore: boolean; lastDocId?: string; meta?: any }> {
     const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();

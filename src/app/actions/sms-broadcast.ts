@@ -56,7 +56,7 @@ export interface SmsBroadcastPreview {
 }
 
 export interface SmsBroadcastResult {
-    error: null, success: true | false;
+    error: null, success: boolean;
     sent: number;
     failed: number;
     skipped: number;

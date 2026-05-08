@@ -40,14 +40,14 @@ import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/fire
 
 type ActionErrorState = {
     error: string;
-    success: false;
+    success: false as const
 };
 
 
 
 type CreateExportSuccessState = {
     error: null;
-    success: true;
+    success: true as const
     message: string;
     data: { orderId: string };
     meta: null;
@@ -55,7 +55,7 @@ type CreateExportSuccessState = {
 
 type UpdateStatusSuccessState = {
     error: null;
-    success: true;
+    success: true as const
     message: string;
     data: null;
     meta: null;
@@ -63,7 +63,7 @@ type UpdateStatusSuccessState = {
 
 type GetExportsSuccessState = {
     error: null;
-    success: true;
+    success: true as const
     data: ExportWindow[];
     meta: { cursor: string | null; hasMore: boolean } | null;
 };
@@ -86,12 +86,12 @@ export async function createExportWindowAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in to create an export window", success: false };
+            return { error: "You must be logged in to create an export window", success: false as const };
         }
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
         if (!idempotencyKey) {
-            return { error: "Missing security token. Please refresh the page.", success: false };
+            return { error: "Missing security token. Please refresh the page.", success: false as const };
         }
 
         // Extract and validate form data
@@ -185,14 +185,14 @@ export async function createExportWindowAction(
         logger.error("Create export window error:", error);
 
         if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance")) {
-            return { error: error.message, success: false };
+            return { error: error.message, success: false as const };
         }
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false };
+            return { error: "Please fill in all required fields correctly", success: false as const };
         }
 
-        return { error: "Failed to create export window. Please try again.", success: false };
+        return { error: "Failed to create export window. Please try again.", success: false as const };
     }
 }
 
@@ -209,25 +209,25 @@ export async function updateExportStatusAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false };
+            return { error: "Export window not found", success: false as const };
         }
 
         const data = exportDoc.data();
         // Verify ownership (unless admin)
         if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized to update this export", success: false };
+            return { error: "Unauthorized to update this export", success: false as const };
         }
 
         // Prevent duplicate status updates to avoid multiple completion emails
         if (data?.status === newStatus) {
-            return { error: `Status is already ${newStatus}`, success: false };
+            return { error: `Status is already ${newStatus}`, success: false as const };
         }
 
         // Update status
@@ -288,7 +288,7 @@ export async function updateExportStatusAction(
         };
     } catch (error: any) {
         logger.error("Update export status error:", error);
-        return { error: "Failed to update status", success: false };
+        return { error: "Failed to update status", success: false as const };
     }
 }
 
@@ -346,7 +346,7 @@ export async function getExportWindowsAction(
     lastId?: string
 ): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     data?: ExportWindow[];
     lastId?: string | null;
     meta?: any;
@@ -356,7 +356,7 @@ export async function getExportWindowsAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const userId = session.user.id;
@@ -431,30 +431,30 @@ export async function getExportRequestByIdAction(exportId: string) {
 
 export async function getExportWindowDetailsAction(
     exportId: string
-): Promise<{ error: string | null; success: true | false; data?: ExportWindow; export?: ExportWindow }> {
+): Promise<{ error: string | null; success: boolean; data?: ExportWindow; export?: ExportWindow }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false };
+            return { error: "Export window not found", success: false as const };
         }
 
         const data = exportDoc.data();
         if (!data) {
-            return { error: "Export window data is missing", success: false };
+            return { error: "Export window data is missing", success: false as const };
         }
 
         // Verify ownership (unless admin)
         if (data.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized to view this export", success: false };
+            return { error: "Unauthorized to view this export", success: false as const };
         }
 
         const exportWindow = serializeDoc<ExportWindow>(exportDoc.id, data);
@@ -467,7 +467,7 @@ export async function getExportWindowDetailsAction(
         };
     } catch (error: any) {
         logger.error("Get export details error:", error);
-        return { error: "Failed to fetch export details", success: false };
+        return { error: "Failed to fetch export details", success: false as const };
     }
 }
 
@@ -491,7 +491,7 @@ export async function submitExportOnboardingAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const userId = session.user.id;
@@ -627,7 +627,7 @@ export async function getUserExportInvestmentsAction(
     lastId?: string
 ): Promise<{
     error: string | null;
-    success: true | false;
+    success: boolean;
     meta?: any;
     data?: Array<{
         id: string;
@@ -646,7 +646,7 @@ export async function getUserExportInvestmentsAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const userId = session.user.id;
@@ -758,7 +758,7 @@ export async function getUserExportStatsAction() {
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const userId = session.user.id;
@@ -878,7 +878,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
 export async function investInExportAction(
     exportId: string,
     amount: number
-): Promise<{ error: string | null, success: true | false; data?: { authorizationUrl: string; reference: string } }> {
+): Promise<{ error: string | null, success: boolean; data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -937,7 +937,7 @@ export async function investInExportAction(
 // Verify Export Investment
 // ============================================
 
-export async function verifyExportInvestmentAction(reference: string): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+export async function verifyExportInvestmentAction(reference: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1015,7 +1015,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
         revalidatePath("/dashboard/export");
         revalidatePath(`/export/windows/${exportId}`);
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
 
     } catch (error: any) {
         logger.error("Verify export investment error:", error);
@@ -1079,7 +1079,7 @@ export async function extendEscrowAction(
     exportId: string,
     days: number,
     reason: string
-): Promise<{ error: string | null, success: true | false;  }> {
+): Promise<{ error: string | null, success: boolean;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1115,7 +1115,7 @@ export async function extendEscrowAction(
             metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Extend escrow error:", error);
         return { success: false as const, error: error.message };
@@ -1129,11 +1129,10 @@ export async function extendEscrowAction(
 /**
  * Get current user's existing export onboarding application (for pre-populating edit form)
  */
-export async function getExportApplicationAction(): Promise<{
-    error: null, success: true | false;
-    data?: any;
-    revisionNote?: string;
-}> {
+export async function getExportApplicationAction(): Promise<
+    | { success: true; error: null; data?: any; revisionNote?: string }
+    | { success: false; error: string; data?: null; data?: any; revisionNote?: string }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1165,7 +1164,7 @@ export async function getExportApplicationAction(): Promise<{
 export async function requestExportRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1228,7 +1227,7 @@ export async function requestExportRevisionAction(
             logger.error('Export revision email failed (non-blocking):', emailError);
         }
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error) {
         logger.error('requestExportRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision' };
@@ -1240,7 +1239,7 @@ export async function requestExportRevisionAction(
  */
 export async function approveExportApplicationAction(
     applicationId: string
-): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
+): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };

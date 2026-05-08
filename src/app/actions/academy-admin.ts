@@ -18,8 +18,8 @@ import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/li
  */
 
 type ActionState =
-    | { error: string; success: false; data?: null; meta?: null }
-    | { error: null; success: true; data: { message: string }; meta?: null };
+    | { error: string; success: false as const; data?: null; meta?: null }
+    | { error: null; success: true as const; data: { message: string }; meta?: null };
 
 /**
  * Approve Academy Learner Application
@@ -33,7 +33,7 @@ export async function approveAcademyApplicationAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         // 1. Get Application
@@ -41,14 +41,14 @@ export async function approveAcademyApplicationAction(
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false };
+            return { error: "Application not found", success: false as const };
         }
 
         const appData = appDoc.data()!;
         const userId = appData.userId;
 
         if (!userId) {
-            return { error: "Application missing user ID", success: false };
+            return { error: "Application missing user ID", success: false as const };
         }
 
         // Perform atomic updates in a transaction
@@ -152,7 +152,7 @@ export async function approveAcademyApplicationAction(
         };
     } catch (error: any) {
         logger.error("Approve Academy application error:", error);
-        return { error: "Failed to approve application", success: false };
+        return { error: "Failed to approve application", success: false as const };
     }
 }
 
@@ -169,7 +169,7 @@ export async function rejectAcademyApplicationAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         // 1. Get Application
@@ -177,7 +177,7 @@ export async function rejectAcademyApplicationAction(
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false };
+            return { error: "Application not found", success: false as const };
         }
 
         const appData = appDoc.data()!;
@@ -272,7 +272,7 @@ export async function rejectAcademyApplicationAction(
         };
     } catch (error: any) {
         logger.error("Reject Academy application error:", error);
-        return { error: "Failed to reject application", success: false };
+        return { error: "Failed to reject application", success: false as const };
     }
 }
 
@@ -291,14 +291,14 @@ export async function updateAcademyApplicationPaymentAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required", success: false };
+            return { error: "Unauthorized: Permission required", success: false as const };
         }
 
         const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false };
+            return { error: "Application not found", success: false as const };
         }
 
         const appData = appDoc.data()!;
@@ -341,7 +341,7 @@ export async function updateAcademyApplicationPaymentAction(
         };
     } catch (error: any) {
         logger.error("Update Academy application payment error:", error);
-        return { error: "Failed to update payment status", success: false };
+        return { error: "Failed to update payment status", success: false as const };
     }
 }
 
@@ -358,7 +358,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false };
+            return { error: "Unauthorized: Permission required - users:update", success: false as const };
         }
 
         const snapshot = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
@@ -378,7 +378,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<
         };
     } catch (error: any) {
         logger.error("Get pending Academy applications error:", error);
-        return { error: "Failed to fetch applications", success: false };
+        return { error: "Failed to fetch applications", success: false as const };
     }
 }
 
@@ -435,10 +435,10 @@ async function _getAcademyEnrollmentsAction(options?: {
 }
 export const getAcademyEnrollmentsAction = withFlexibleSafeAction("getAcademyEnrollmentsAction", _getAcademyEnrollmentsAction);
 
-async function _getAcademyInstructorsAction(): Promise<{
-    error: null, success: true | false;
-    data?: any[];
-}> {
+async function _getAcademyInstructorsAction(): Promise<
+    | { success: true; error: null; data: any[] }
+    | { success: false; error: string; data?: null }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -472,11 +472,10 @@ export const getAcademyInstructorsAction = withFlexibleSafeAction("getAcademyIns
 async function _getAcademyCoursesAction(options?: {
     limit?: number;
     search?: string;
-}): Promise<{
-    error: null, success: true | false;
-    meta?: any;
-    data?: { courses: any[] };
-}> {
+}): Promise<
+    | { success: true; error: null; data: { courses: any[] }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -522,23 +521,24 @@ async function _getAcademyCoursesAction(options?: {
 }
 export const getAcademyCoursesAction = withFlexibleSafeAction("getAcademyCoursesAction", _getAcademyCoursesAction);
 
-async function _getAcademyStatsAction(): Promise<{
-    error: null, success: true | false;
-    meta?: any;
-    data?: {
-        stats: {
-            totalCourses: number;
-            totalStudents: number;
-            totalEnrollments: number;
-            activeEnrollments: number;
-            completedCourses: number;
-            totalRevenue: number;
-            monthlyRevenue: number;
-            revenueGrowth: number;
-            courseRatings: number;
-        }
-    };
-}> {
+async function _getAcademyStatsAction(): Promise<
+    | {
+        success: true; error: null; data: {
+            stats: {
+                totalCourses: number;
+                totalStudents: number;
+                totalEnrollments: number;
+                activeEnrollments: number;
+                completedCourses: number;
+                totalRevenue: number;
+                monthlyRevenue: number;
+                revenueGrowth: number;
+                courseRatings: number;
+            }
+        }; meta?: any
+    }
+    | { success: false; error: string; data?: null; meta?: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -642,18 +642,20 @@ async function _getAcademyStatsAction(): Promise<{
 }
 export const getAcademyStatsAction = withFlexibleSafeAction("getAcademyStatsAction", _getAcademyStatsAction);
 
-async function _getAcademyApplicationStatsAction(): Promise<{
-    error: null, success: true | false;
-    data?: {
-        stats: {
-            totalApplications: number;
-            pending: number;
-            under_review: number;
-            approved: number;
-            rejected: number;
+async function _getAcademyApplicationStatsAction(): Promise<
+    | {
+        success: true; error: null; data: {
+            stats: {
+                totalApplications: number;
+                pending: number;
+                under_review: number;
+                approved: number;
+                rejected: number;
+            }
         }
-    };
-}> {
+    }
+    | { success: false; error: string; data?: null }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -698,7 +700,10 @@ export const getAcademyApplicationStatsAction = withFlexibleSafeAction("getAcade
 async function _upsertAcademyCourseAction(
     courseId: string | "new",
     courseData: any
-): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
+): Promise<
+    | { success: true; error: null; data: any; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -765,7 +770,10 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<
+    | { success: true; error: null; data: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }
+    | { success: false; error: string; data?: null; meta?: any; lastDocId?: string; hasMore?: boolean }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -927,6 +935,6 @@ export async function logAcademyExportAction(
         return { error: null, success: true as const, data: { message: "Export logged." } };
     } catch (error: any) {
         logger.error("Error logging export:", error);
-        return { error: "An unexpected error occurred", success: false };
+        return { error: "An unexpected error occurred", success: false as const };
     }
 }

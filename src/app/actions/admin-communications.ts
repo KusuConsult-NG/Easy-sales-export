@@ -8,12 +8,12 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { serializeDocs } from '@/lib/firestore-serialize';
 
 export interface SendBulkEmailState {
-    error: null, success: true | false;
+    error: null, success: boolean;
     recipientCount?: number;
 }
 
 export interface CreateAnnouncementState {
-    error: null, success: true | false;
+    error: null, success: boolean;
     id?: string;
 }
 
@@ -214,10 +214,10 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
 }
 
 export type GetEmailHistoryState = { error: string | null,
-    success: true;
+    success: true as const
     history: any[];
     } | {
-    success: false;
+    success: false as const
     error: string;
     history?: undefined;
 };
