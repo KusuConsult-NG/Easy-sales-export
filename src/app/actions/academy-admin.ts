@@ -367,7 +367,7 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
 
         const enrichedApps = applications.map(app => {
             const uData = userMap.get(app.userId as string) || {};
-            const pi = app.personalInfo || {};
+            const pi = (app.personalInfo || {}) as any;
             
             // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {
