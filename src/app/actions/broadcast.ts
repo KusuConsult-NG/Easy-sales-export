@@ -107,16 +107,16 @@ export async function previewBroadcastAction(broadcastData: any) {
         return { 
             success: false, 
             error: listResult.error || "Failed to estimate recipients",
-            count: undefined,
-            sample: undefined
+            count: null,
+            sample: []
         };
     }
     
     return {
         success: true,
         count: listResult.count,
-        sample: listResult.recipients?.slice(0, 5),
-        error: undefined
+        sample: listResult.recipients?.slice(0, 5) || [],
+        error: null
     };
 }
 
