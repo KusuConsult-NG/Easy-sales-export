@@ -11,7 +11,7 @@ import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
 type ActionState =
     | { error: string; success: false }
-    | { error: null; success: true as const message: string };
+    | { error: null; success: true; message: string };
 
 /**
  * Soft delete user (Preserve Referential Integrity)
