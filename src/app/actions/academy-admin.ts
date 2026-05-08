@@ -352,7 +352,7 @@ export async function updateAcademyApplicationPaymentAction(
  */
 export async function getPendingAcademyApplicationsAction(): Promise<{
     error?: string;
-    success: true | false;
+    error: null, success: true | false;
     data?: any;
     meta?: any;
 }> {
@@ -392,7 +392,7 @@ async function _getAcademyEnrollmentsAction(options?: {
     limit?: number;
     search?: string;
 }): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: { enrollments: any[] };
     error?: string;
@@ -433,7 +433,7 @@ async function _getAcademyEnrollmentsAction(options?: {
             });
         }
 
-        return { success: true as const, data: { enrollments }, meta: { hasMore: false, cursor: null } };
+        return { error: null, success: true as const, data: { enrollments }, meta: { hasMore: false, cursor: null } };
     } catch (error) {
         logger.error("Get academy enrollments error:", {
             userId: sessionResult?.session?.user?.id,
@@ -445,7 +445,7 @@ async function _getAcademyEnrollmentsAction(options?: {
 export const getAcademyEnrollmentsAction = withFlexibleSafeAction("getAcademyEnrollmentsAction", _getAcademyEnrollmentsAction);
 
 async function _getAcademyInstructorsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: any[];
     error?: string;
 }> {
@@ -468,7 +468,7 @@ async function _getAcademyInstructorsAction(): Promise<{
 
         const instructors = serializeDocs(instructorsSnap.docs);
 
-        return { success: true as const, data: instructors };
+        return { error: null, success: true as const, data: instructors };
     } catch (error) {
         logger.error("Get academy instructors error:", {
             userId: sessionResult?.session?.user?.id,
@@ -483,7 +483,7 @@ async function _getAcademyCoursesAction(options?: {
     limit?: number;
     search?: string;
 }): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: { courses: any[] };
     error?: string;
@@ -524,7 +524,7 @@ async function _getAcademyCoursesAction(options?: {
             });
         }
 
-        return { success: true as const, data: { courses }, meta: { hasMore: false, cursor: null } };
+        return { error: null, success: true as const, data: { courses }, meta: { hasMore: false, cursor: null } };
     } catch (error) {
         logger.error("Get academy courses error:", {
             userId: sessionResult?.session?.user?.id,
@@ -536,7 +536,7 @@ async function _getAcademyCoursesAction(options?: {
 export const getAcademyCoursesAction = withFlexibleSafeAction("getAcademyCoursesAction", _getAcademyCoursesAction);
 
 async function _getAcademyStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: {
         stats: {
@@ -625,7 +625,7 @@ async function _getAcademyStatsAction(): Promise<{
             : 0;
 
         const payload = {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 stats: {
                     totalCourses,
@@ -658,7 +658,7 @@ async function _getAcademyStatsAction(): Promise<{
 export const getAcademyStatsAction = withFlexibleSafeAction("getAcademyStatsAction", _getAcademyStatsAction);
 
 async function _getAcademyApplicationStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: {
         stats: {
             totalApplications: number;
@@ -694,7 +694,7 @@ async function _getAcademyApplicationStatsAction(): Promise<{
         const totalApplications = pending + under_review + approved + rejected;
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 stats: {
                     totalApplications,
@@ -715,7 +715,7 @@ export const getAcademyApplicationStatsAction = withFlexibleSafeAction("getAcade
 async function _upsertAcademyCourseAction(
     courseId: string | "new",
     courseData: any
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -764,7 +764,7 @@ async function _upsertAcademyCourseAction(
             metadata: { title: courseData.title },
         });
 
-        return { success: true as const, data: { id: courseId }, meta: null };
+        return { error: null, success: true as const, data: { id: courseId }, meta: null };
     } catch (error) {
         logger.error("Upsert academy course error:", {
             userId: sessionResult?.session?.user?.id,
@@ -783,7 +783,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -911,7 +911,7 @@ async function _getStandardAcademyApplicationsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: finalForms,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,

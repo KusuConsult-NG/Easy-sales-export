@@ -18,7 +18,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string | null;
     data?: {
         authorizationUrl: string;
@@ -91,7 +91,7 @@ export async function initializeEnrollmentPaymentAction(
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -111,7 +111,7 @@ export async function initializeEnrollmentPaymentAction(
  * Updates enrollment status after successful payment
  */
 export async function verifyEnrollmentPaymentAction(reference: string): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     data?: any;
     meta?: any;
@@ -220,7 +220,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Enrollment successful! Check your email for course access details." },
         };
     } catch (error: any) {

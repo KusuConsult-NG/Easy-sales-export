@@ -83,7 +83,7 @@ async function _submitProductReviewAction(data: {
 
         await _recalculateProductRating(data.productId);
 
-        return { success: true as const, data: { reviewId: reviewRef.id } };
+        return { error: null, success: true as const, data: { reviewId: reviewRef.id } };
     } catch (err: any) {
         logger.error("submitProductReviewAction error:", {
             userId: sessionResult?.session?.user?.id,
@@ -156,7 +156,7 @@ async function _submitSellerReviewAction(data: {
             _version: 0,
         });
 
-        return { success: true as const, data: { reviewId: reviewRef.id } };
+        return { error: null, success: true as const, data: { reviewId: reviewRef.id } };
     } catch (err: any) {
         logger.error("submitSellerReviewAction error:", {
             userId: sessionResult?.session?.user?.id,
@@ -190,14 +190,14 @@ async function _getProductReviewsAction(
             .limit(pageSize)
             .get();
 
-        return { success: true as const, data: { reviews: serializeDocs(snap.docs) } };
+        return { error: null, success: true as const, data: { reviews: serializeDocs(snap.docs) } };
     } catch (err: any) {
         logger.error("getProductReviewsAction error:", { 
             productId, 
             userId: sessionResult?.session?.user?.id,
             error: err instanceof Error ? err.message : String(err) 
         });
-        return { success: false as const, data: { reviews: [] } };
+        return { error: "Action failed", success: false as const, data: { reviews: [] } };
     }
 }
 export const getProductReviewsAction = withFlexibleSafeAction("getProductReviewsAction", _getProductReviewsAction);
@@ -217,7 +217,7 @@ async function _getSellerReviewSummaryAction(sellerId: string) {
             .get();
 
         if (snap.empty) {
-            return { success: true as const, summary: { averageRating: 0, totalReviews: 0, distribution: {} } };
+            return { error: null, success: true as const, summary: { averageRating: 0, totalReviews: 0, distribution: {} } };
         }
 
         const distribution: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
@@ -231,14 +231,14 @@ async function _getSellerReviewSummaryAction(sellerId: string) {
         });
 
         const averageRating = Math.round((total / snap.size) * 10) / 10;
-        return { success: true as const, data: { summary: { averageRating, totalReviews: snap.size, distribution } } };
+        return { error: null, success: true as const, data: { summary: { averageRating, totalReviews: snap.size, distribution } } };
     } catch (err: any) {
         logger.error("getSellerReviewSummaryAction error:", { 
             sellerId, 
             userId: sessionResult?.session?.user?.id,
             error: err instanceof Error ? err.message : String(err) 
         });
-        return { success: false as const, data: { summary: { averageRating: 0, totalReviews: 0, distribution: {} } } };
+        return { error: "Action failed", success: false as const, data: { summary: { averageRating: 0, totalReviews: 0, distribution: {} } } };
     }
 }
 export const getSellerReviewSummaryAction = withFlexibleSafeAction("getSellerReviewSummaryAction", _getSellerReviewSummaryAction);
@@ -286,7 +286,7 @@ async function _moderateReviewAction(
             if (productId) await _recalculateProductRating(productId);
         }
 
-        return { success: true as const, data: { message: "Review moderated successfully" } };
+        return { error: null, success: true as const, data: { message: "Review moderated successfully" } };
     } catch (err: any) {
         logger.error("moderateReviewAction error:", {
             reviewId,
@@ -329,7 +329,7 @@ async function _getPendingReviewsAction(options?: {
         ]);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 productReviews: serializeDocs(prodSnap.docs),
                 sellerReviews: serializeDocs(sellerSnap.docs),
@@ -340,7 +340,7 @@ async function _getPendingReviewsAction(options?: {
             userId: sessionResult?.session?.user?.id,
             error: err instanceof Error ? err.message : String(err) 
         });
-        return { success: false as const, data: { productReviews: [], sellerReviews: [] } };
+        return { error: "Action failed", success: false as const, data: { productReviews: [], sellerReviews: [] } };
     }
 }
 export const getPendingReviewsAction = withFlexibleSafeAction("getPendingReviewsAction", _getPendingReviewsAction);

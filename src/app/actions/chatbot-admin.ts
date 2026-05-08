@@ -62,7 +62,7 @@ export async function getChatThreadAction(
 }
 
 export interface ResolveSessionResult {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
 }
 
@@ -85,7 +85,7 @@ export async function resolveSessionAction(
             `Admin resolved chatbot session ${sessionId}`
         );
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (err: any) {
         return { success: false as const, error: err.message };
     }

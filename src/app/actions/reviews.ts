@@ -292,7 +292,7 @@ export async function getSellerRatingAction(sellerId: string) {
         const reviews: ProductReview[] = snapshot.docs.map((doc) => doc.data()) as ProductReview[];
 
         if (reviews.length === 0) {
-            return { success: true as const, stats: {
+            return { error: null, success: true as const, stats: {
                     averageRating: 0,
                     totalReviews: 0,
                     distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
@@ -312,7 +312,7 @@ export async function getSellerRatingAction(sellerId: string) {
             1: reviews.filter((r) => r.rating === 1).length,
         };
 
-        return { success: true as const, stats: {
+        return { error: null, success: true as const, stats: {
                 averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
                 totalReviews: reviews.length,
                 distribution, }
@@ -389,7 +389,7 @@ export async function getAdminReviewsAction(options: {
         }
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             reviews,
             stats,
             lastDocId: nextCursor,

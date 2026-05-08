@@ -20,7 +20,7 @@ export interface HealthReport {
     issues: HealthIssue[];
 }
 
-export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ success: true | false, data?: HealthReport, error?: string }> {
+export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ error: null, success: true | false, data?: HealthReport, error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -92,7 +92,7 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
         });
 
         return {
-             success: true as const,
+             error: null, success: true as const,
              data: {
                  totalScanned: usersSnap.size,
                  anomaliesFound: issues.length,

@@ -14,7 +14,7 @@ interface ScanResult {
     affectedIds: string[];
 }
 
-export async function runForensicScanAction(): Promise<{ success: true | false; results: ScanResult[]; error?: string }> {
+export async function runForensicScanAction(): Promise<{ error: null, success: true | false; results: ScanResult[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -330,7 +330,7 @@ export async function runForensicScanAction(): Promise<{ success: true | false; 
             results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
-        return { success: true as const, results };
+        return { error: null, success: true as const, results };
 
     } catch (error: any) {
         logger.error("Forensic scan failed:", error);

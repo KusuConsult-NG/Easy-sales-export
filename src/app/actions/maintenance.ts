@@ -61,7 +61,7 @@ export async function repairDataAction() {
         }
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             message: `Healed ${count} payment records and ${walletCount} wallet records.` 
         };
     } catch (error: any) {
@@ -100,7 +100,7 @@ export async function runConsistencyCheckAction() {
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             report: {
                 firestoreUserDocs: totalUsers,
                 uniqueEmailsInUsers: emails.size,

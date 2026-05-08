@@ -160,7 +160,7 @@ async function _initializeOrderPaymentAction(
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -369,7 +369,7 @@ async function _verifyOrderPaymentAction(reference: string) {
         Promise.allSettled(notifPromises).catch((e) => logger.error("[verifyOrderPaymentAction] Notification failed:", { userId, error: e }));
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 message: `Payment secured in Escrow! Order #${orderData.orderId} is now processing.`,
                 orderId: orderData.orderId,
@@ -468,7 +468,7 @@ async function _createBankTransferOrderAction(
             });
         });
 
-        return { success: true as const, data: { orderId, orderReference } };
+        return { error: null, success: true as const, data: { orderId, orderReference } };
     } catch (error) {
         logger.error("Bank transfer order creation error:", {
             userId: sessionResult?.session?.user?.id,
@@ -600,7 +600,7 @@ async function _createPaymentOnDeliveryOrderAction(
         }).catch((e) => logger.error("[POD] Notification error:", e));
 
         revalidatePath("/marketplace/buyer/orders");
-        return { success: true as const, data: { orderId } };
+        return { error: null, success: true as const, data: { orderId } };
     } catch (error) {
         logger.error("createPaymentOnDeliveryOrderAction error:", {
             userId: sessionResult?.session?.user?.id,

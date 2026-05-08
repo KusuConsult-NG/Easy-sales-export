@@ -35,7 +35,13 @@ const nextConfig: NextConfig = {
   },
   
   // Exclude native binaries and packages causing build issues
-  serverExternalPackages: ['firebase-admin'],
+  serverExternalPackages: [
+    'firebase-admin',
+    '@sentry/node',
+    '@sentry/nextjs',
+    '@opentelemetry/instrumentation',
+    '@prisma/instrumentation'
+  ],
 
   // Image optimization
   images: {

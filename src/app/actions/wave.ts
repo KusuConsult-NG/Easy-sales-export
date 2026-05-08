@@ -116,7 +116,7 @@ const waveApplicationSchema = z.object({
 /**
  * Check WAVE application status for current user
  */
-export async function checkWaveStatusAction(): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function checkWaveStatusAction(): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -152,7 +152,7 @@ export async function checkWaveStatusAction(): Promise<{ success: true | false; 
         }
 
         if (status) {
-            return { success: true as const, data: { status } };
+            return { error: null, success: true as const, data: { status } };
         }
 
         // ── FALLBACK: Legacy Sync ──────
@@ -175,10 +175,10 @@ export async function checkWaveStatusAction(): Promise<{ success: true | false; 
             );
 
             logger.info(`[checkWaveStatus] Backfilled legacy wave status '${legacyStatus}' for user ${session.user.id}`);
-            return { success: true as const, data: { status: legacyStatus } };
+            return { error: null, success: true as const, data: { status: legacyStatus } };
         }
 
-        return { success: true as const, data: null };
+        return { error: null, success: true as const, data: null };
     } catch (error) {
         logger.error("Check WAVE status error:", error);
         return { success: false as const, error: "Failed to check status" };
@@ -188,7 +188,7 @@ export async function checkWaveStatusAction(): Promise<{ success: true | false; 
 /**
  * Check if user is eligible for WAVE (female only)
  */
-export async function checkWaveEligibilityAction(userId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function checkWaveEligibilityAction(userId: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -202,7 +202,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
-            return { success: true as const, data: { eligible: false, reason: "User not found" } };
+            return { error: null, success: true as const, data: { eligible: false, reason: "User not found" } };
         }
 
         const userData = userDoc.data();
@@ -214,7 +214,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
         // Admins (including module-specific admins) are always eligible to view resources.
         if (userData?.gender !== "female" && !isUserAdmin) {
             return {
-                success: true as const,
+                error: null, success: true as const,
                 data: {
                     eligible: false,
                     reason: "WAVE program is exclusively for women entrepreneurs"
@@ -225,7 +225,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
         // Double check: If they are female but somehow missed the role, we should probably allow them (as long as gender is correct)
         // But let's stick to the gender field as the source of truth for eligibility.
 
-        return { success: true as const, data: { eligible: true } };
+        return { error: null, success: true as const, data: { eligible: true } };
     } catch (error) {
         logger.error("WAVE eligibility check error:", error);
         return { success: false as const, error: "Failed to check eligibility" };
@@ -236,7 +236,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
-export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -478,7 +478,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { applicationId },
         };
     } catch (error: any) {
@@ -493,7 +493,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
 /**
  * Enroll user in WAVE program
  */
-export async function enrollInWaveAction(userId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function enrollInWaveAction(userId: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -522,7 +522,7 @@ export async function enrollInWaveAction(userId: string): Promise<{ success: tru
             targetType: "wave_enrollment",
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("WAVE enrollment error:", error);
         return { success: false as const, error: "Failed to enroll in WAVE program" };
@@ -536,7 +536,7 @@ export async function getWaveResourcesAction(
     category?: string,
     cursor?: string | null,
     limit = 20
-): Promise<{ success: true | false; data?: WaveResource[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
+): Promise<{ error: null, success: true | false; data?: WaveResource[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
@@ -582,7 +582,7 @@ export async function getWaveResourcesAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true as const, data, meta: { cursor: nextCursor, hasMore } };
+        return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Failed to fetch WAVE resources:", error);
         return { success: false as const, error: "Failed to fetch resources", meta: { cursor: null, hasMore: false } };
@@ -595,7 +595,7 @@ export async function getWaveResourcesAction(
 export async function getWaveTrainingEventsAction(
     cursor?: string | null,
     limit = 20
-): Promise<{ success: true | false; data?: WaveTrainingEvent[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
+): Promise<{ error: null, success: true | false; data?: WaveTrainingEvent[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
@@ -626,7 +626,7 @@ export async function getWaveTrainingEventsAction(
             ? docs[docs.length - 1].data().date?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true as const, data, meta: { cursor: nextCursor, hasMore } };
+        return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Get training events error:", error);
         return { success: false as const, error: "Failed to fetch training events", meta: { cursor: null, hasMore: false } };
@@ -660,7 +660,7 @@ export interface ShipmentTracking {
 /**
  * Get user's shipment tracking info
  */
-export async function getShipmentTrackingAction(userId: string): Promise<{ success: true | false; data?: ShipmentTracking[]; meta?: any; error?: string }> {
+export async function getShipmentTrackingAction(userId: string): Promise<{ error: null, success: true | false; data?: ShipmentTracking[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -674,7 +674,7 @@ export async function getShipmentTrackingAction(userId: string): Promise<{ succe
             .where("memberId", "==", userId)
             .get();
 
-        return { success: true as const, data: serializeDocs<ShipmentTracking>(snapshot.docs) };
+        return { error: null, success: true as const, data: serializeDocs<ShipmentTracking>(snapshot.docs) };
     } catch (error) {
         logger.error("Get shipment tracking error:", error);
         return { success: false as const, error: "Failed to fetch shipment tracking" };
@@ -696,7 +696,7 @@ export async function updateShipmentStatusAction(
     status: ShipmentTracking["status"],
     location: string,
     note?: string
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -746,7 +746,7 @@ export async function updateShipmentStatusAction(
  * Sync shipment with carrier (Admin or Automator)
  * This fetches real-time updates from the Logistics Provider (GIG/Kwik)
  */
-export async function syncShipmentWithCarrierAction(shipmentId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function syncShipmentWithCarrierAction(shipmentId: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
@@ -795,7 +795,7 @@ export async function syncShipmentWithCarrierAction(shipmentId: string): Promise
                 lastSyncedAt: FieldValue.serverTimestamp()
             });
 
-            return { success: true };
+            return { error: null, success: true };
         }
 
         return { success: true }; // No updates found
@@ -829,7 +829,7 @@ export interface MemberEarnings {
 /**
  * Calculate member earnings from sales
  */
-export async function calculateEarningsAction(userId: string): Promise<{ success: true | false; data?: MemberEarnings; meta?: any; error?: string }> {
+export async function calculateEarningsAction(userId: string): Promise<{ error: null, success: true | false; data?: MemberEarnings; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -906,7 +906,7 @@ export async function calculateEarningsAction(userId: string): Promise<{ success
         };
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
-        return { success: true as const, data: serializeValue(result) as any };
+        return { error: null, success: true as const, data: serializeValue(result) as any };
     } catch (error) {
         logger.error("Calculate earnings error:", error);
         return { success: false as const, error: "Failed to calculate earnings" };
@@ -935,7 +935,7 @@ export async function generateCertificateAction(
     userId: string,
     programName: string,
     certificateType: WaveCertificate["certificateType"]
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -989,7 +989,7 @@ export async function generateCertificateAction(
 /**
  * Get member certificates
  */
-export async function getMemberCertificatesAction(userId: string): Promise<{ success: true | false; data?: WaveCertificate[]; meta?: any; error?: string }> {
+export async function getMemberCertificatesAction(userId: string): Promise<{ error: null, success: true | false; data?: WaveCertificate[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1003,7 +1003,7 @@ export async function getMemberCertificatesAction(userId: string): Promise<{ suc
             .where("memberId", "==", userId)
             .get();
 
-        return { success: true as const, data: serializeDocs<WaveCertificate>(snapshot.docs) };
+        return { error: null, success: true as const, data: serializeDocs<WaveCertificate>(snapshot.docs) };
     } catch (error) {
         logger.error("Get certificates error:", error);
         return { success: false as const, error: "Failed to load certificates" };
@@ -1013,7 +1013,7 @@ export async function getMemberCertificatesAction(userId: string): Promise<{ suc
 /**
  * Get current user's certificates (auth handled internally)
  */
-export async function getCurrentUserCertificatesAction(): Promise<{ success: true | false; data?: WaveCertificate[]; meta?: any; error?: string }> {
+export async function getCurrentUserCertificatesAction(): Promise<{ error: null, success: true | false; data?: WaveCertificate[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1036,7 +1036,7 @@ export async function getCurrentUserCertificatesAction(): Promise<{ success: tru
  */
 export async function uploadWaveResourceAction(
     resource: Omit<WaveResource, "id" | "uploadedAt" | "downloads">
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1069,7 +1069,7 @@ export async function uploadWaveResourceAction(
  */
 export async function incrementResourceDownloadAction(
     resourceId: string
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1094,7 +1094,7 @@ export async function incrementResourceDownloadAction(
 export async function registerForTrainingAction(
     userId: string,
     eventId: string
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1157,7 +1157,7 @@ export async function registerForTrainingAction(
  */
 export async function withdrawEarningsAction(
     amount: number
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1220,7 +1220,7 @@ export async function withdrawEarningsAction(
 /**
  * Get the current user's WAVE application (primarily for the review-pending page to show real submission date)
  */
-export async function getWaveApplicationStatusAction(userId?: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function getWaveApplicationStatusAction(userId?: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1237,7 +1237,7 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
             // Fallback: check serviceRegistrations on user doc
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(targetId).get();
             const reg = userDoc.data()?.serviceRegistrations?.wave;
-            return { success: true as const, data: { status: reg?.status || null } };
+            return { error: null, success: true as const, data: { status: reg?.status || null } };
         }
 
         const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
@@ -1249,7 +1249,7 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
         
         const { serializeValue } = await import("@/lib/firestore-serialize");
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 status: data.status || null,
                 submittedAt: serializeValue(data.createdAt || data.submittedAt || null),
@@ -1268,7 +1268,7 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
 /**
  * Get the current user's existing WAVE application data (for pre-populating edit form)
  */
-export async function getWaveApplicationAction(): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function getWaveApplicationAction(): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1284,7 +1284,7 @@ export async function getWaveApplicationAction(): Promise<{ success: true | fals
         if (!appDoc.exists) return { success: false as const, error: 'Application not found' };
 
         const data = appDoc.data();
-        return { success: true as const, data: { ...data, revisionNote: data?.revisionNote }, meta: null };
+        return { error: null, success: true as const, data: { ...data, revisionNote: data?.revisionNote }, meta: null };
     } catch (error) {
         logger.error('getWaveApplicationAction error:', error);
         return { success: false as const, error: 'Failed to fetch application' };
@@ -1297,7 +1297,7 @@ export async function getWaveApplicationAction(): Promise<{ success: true | fals
 export async function requestWaveRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1339,7 +1339,7 @@ export async function requestWaveRevisionAction(
             metadata: { action: 'revision_requested', reason },
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error('requestWaveRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision' };
@@ -1351,7 +1351,7 @@ export async function requestWaveRevisionAction(
  */
 export async function resubmitWaveApplicationAction(
     applicationData: z.infer<typeof waveApplicationSchema>
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1401,7 +1401,7 @@ export async function resubmitWaveApplicationAction(
             metadata: { action: 'application_resubmitted' },
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error('resubmitWaveApplicationAction error:', error);
         return { success: false as const, error: 'Failed to resubmit application' };

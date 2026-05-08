@@ -22,7 +22,7 @@ export async function getAuditLogsAction(filters: {
     limit?: number;
     lastDocId?: string;
 }): Promise<{ 
-    success: true; 
+    error: null, success: true; 
     data: AuditLogEntry[]; 
     logs: AuditLogEntry[]; 
     error: null; 
@@ -98,6 +98,7 @@ export async function getAuditLogsAction(filters: {
 
         return { 
             success: true as const, 
+            error: null,
             data: logs,       // consumed by useAdminData (looks for result.data)
             logs,             // consumed by audit.ts wrapper + exportAuditLogsCSV
             lastDocId: nextCursor,
@@ -182,7 +183,7 @@ export async function exportAuditLogsCSV(filters: {
  * Get audit log statistics
  */
 export async function getAuditStatsAction(days: number = 30): Promise<{
-    success: true;
+    error: null, success: true;
     stats: {
         totalLogs: number;
         bySeverity: { info: number; warning: number; critical: number };
@@ -216,7 +217,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
         try {
             const cachedStats = await getCached<any>(cacheKey);
             if (cachedStats) {
-                return { success: true as const, stats: cachedStats };
+                return { error: null, success: true as const, stats: cachedStats };
             }
         } catch (e) {
             // cache bypass on error

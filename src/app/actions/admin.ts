@@ -826,7 +826,7 @@ async function _approveLoanApplication(
             
             // Prevent double-processing
             if (loanData.status === "approved" || loanData.status === "disbursed") {
-                return { success: true as const, alreadyProcessed: true, loanData };
+                return { error: null, success: true as const, alreadyProcessed: true, loanData };
             }
 
             // Validate tier eligibility
@@ -854,7 +854,7 @@ async function _approveLoanApplication(
                         updatedAt: FieldValue.serverTimestamp(),
                     });
 
-                    return { success: true as const, makerApproval: true, loanData };
+                    return { error: null, success: true as const, makerApproval: true, loanData };
                 } else {
                     // Second Approval (Checker)
                     if (approvalChain.firstApprover === session.user.id) {
@@ -875,7 +875,7 @@ async function _approveLoanApplication(
                 reviewedAt: FieldValue.serverTimestamp(),
             });
 
-            return { success: true as const, finalApproval: true, loanData };
+            return { error: null, success: true as const, finalApproval: true, loanData };
         });
 
         if (txResult.alreadyProcessed) {
@@ -1836,7 +1836,7 @@ async function _requestExportApplicationRevisionAction(
 }
 
 async function _getExportApplicationsStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: {
         pending: number;
         approved: number;
@@ -1886,7 +1886,7 @@ async function _getExportApplicationsStatsAction(): Promise<{
             .catch(() => ({ data: () => ({ count: 0 }) })); 
 
         const payload = {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 pending: (pendingReviewCountSnap.data().count || 0) + (pendingCountSnap.data().count || 0),
                 approved: approvedCountSnap.data().count || 0,
@@ -1912,7 +1912,7 @@ async function _getStandardExportApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -2029,7 +2029,7 @@ async function _getStandardExportApplicationsAction(options: {
         }
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: finalForms,
             lastDocId: nextCursor,
             hasMore: hasMore,
@@ -3010,7 +3010,7 @@ async function _getStandardSellerVerificationsAction(
     sortOrder?: "asc" | "desc",
     dateFrom?: string,
     dateTo?: string
-): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any }> {
+): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -3193,7 +3193,7 @@ async function _getMarketplaceUsersAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: users,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
@@ -3253,7 +3253,7 @@ export const rejectWaveApplicationAction = _rejectWaveApplicationAction;
  * Returns accurate totals independent of pagination limits.
  */
 export async function getAdminSellerStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     stats?: { total: number; pending: number; approved: number; rejected: number };
     error?: string;
 }> {
@@ -3275,7 +3275,7 @@ export async function getAdminSellerStatsAction(): Promise<{
         ]);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             stats: {
                 total: total.data().count,
                 pending: pending.data().count,
@@ -3580,7 +3580,7 @@ async function _onboardLegacyMemberAction(
         });
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             message: `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`,
             error: null 
         };

@@ -82,7 +82,7 @@ async function _createEscrowAction(data: {
     amount: number;
     productName: string;
     productDescription: string;
-}): Promise<{ success: true | false; data?: { escrowId: string }; error?: string }> {
+}): Promise<{ error: null, success: true | false; data?: { escrowId: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -140,7 +140,7 @@ async function _createEscrowAction(data: {
             }
         })();
 
-        return { success: true as const, data: { escrowId: docRef.id } };
+        return { error: null, success: true as const, data: { escrowId: docRef.id } };
     } catch (error) {
         logger.error("Escrow creation error:", {
             userId: sessionResult?.session?.user?.id,
@@ -160,7 +160,7 @@ export const createEscrowAction = withFlexibleSafeAction("createEscrowAction", _
 async function _confirmEscrowPaymentAction(
     escrowId: string,
     paymentReference: string
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession().catch(() => null);
@@ -253,7 +253,7 @@ async function _confirmEscrowPaymentAction(
             }).catch((e) => logger.error("[confirmEscrowPaymentAction] Seller notification failed:", e));
         }
 
-        return { success: true as const, data: { message: "Payment confirmed successfully" } };
+        return { error: null, success: true as const, data: { message: "Payment confirmed successfully" } };
     } catch (error) {
         logger.error("Payment confirmation error:", {
             escrowId,
@@ -275,7 +275,7 @@ export const confirmEscrowPaymentAction = withFlexibleSafeAction("confirmEscrowP
 async function _requestEscrowReleaseAction(
     escrowId: string,
     sellerId: string
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -325,7 +325,7 @@ async function _requestEscrowReleaseAction(
             }).catch((e) => logger.error("[requestEscrowReleaseAction] Buyer notification failed:", e));
         }
 
-        return { success: true as const, data: { message: "Release requested successfully" } };
+        return { error: null, success: true as const, data: { message: "Release requested successfully" } };
     } catch (error) {
         logger.error("Release request error:", {
             escrowId,
@@ -347,7 +347,7 @@ export const requestEscrowReleaseAction = withFlexibleSafeAction("requestEscrowR
 async function _releaseEscrowAction(
     escrowId: string,
     adminId: string
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
         return { success: false as const, error: adminCheck.error };
@@ -425,7 +425,7 @@ async function _releaseEscrowAction(
             ]);
         }
 
-        return { success: true as const, data: { message: "Escrow funds released successfully" } };
+        return { error: null, success: true as const, data: { message: "Escrow funds released successfully" } };
     } catch (error) {
         logger.error("Escrow release error:", {
             escrowId,
@@ -450,7 +450,7 @@ async function _createDisputeAction(data: {
     initiatorId: string;
     respondentId: string;
     reason: string;
-}): Promise<{ success: true | false; data?: { disputeId: string }; error?: string }> {
+}): Promise<{ error: null, success: true | false; data?: { disputeId: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -534,7 +534,7 @@ async function _createDisputeAction(data: {
             }).catch((e) => logger.error("[createDisputeAction] Initiator notification failed:", e));
         }
 
-        return { success: true as const, data: { disputeId: disputeRef.id } };
+        return { error: null, success: true as const, data: { disputeId: disputeRef.id } };
     } catch (error) {
         logger.error("Dispute creation error:", {
             escrowId: data.escrowId,
@@ -557,7 +557,7 @@ async function _resolveDisputeAction(
     adminId: string,
     resolution: string,
     outcome: "release_seller" | "refund_buyer"  // matches DisputeResolution type in marketplace.ts
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     // Live role re-validation — bypasses the stale JWT
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
@@ -655,7 +655,7 @@ async function _resolveDisputeAction(
             ]);
         }
 
-        return { success: true as const, data: { message: "Dispute resolved successfully" } };
+        return { error: null, success: true as const, data: { message: "Dispute resolved successfully" } };
     } catch (error) {
         logger.error("Dispute resolution error:", {
             disputeId,
@@ -675,7 +675,7 @@ export const resolveDisputeAction = withFlexibleSafeAction("resolveDisputeAction
  */
 async function _escalateDisputeAction(
     disputeId: string
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
         return { success: false as const, error: adminCheck.error };
@@ -739,7 +739,7 @@ async function _escalateDisputeAction(
             }),
         ]);
 
-        return { success: true as const, data: { message: "Dispute escalated successfully" } };
+        return { error: null, success: true as const, data: { message: "Dispute escalated successfully" } };
     } catch (error) {
         logger.error("Dispute escalation error:", {
             disputeId,
@@ -759,7 +759,7 @@ async function _sendEscrowMessageAction(data: {
     senderId: string;
     senderName: string;
     message: string;
-}): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+}): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
@@ -790,7 +790,7 @@ async function _sendEscrowMessageAction(data: {
 
         await db.collection(COLLECTIONS.ESCROW_MESSAGES).add(messageData);
 
-        return { success: true as const, data: { message: "Message sent successfully" } };
+        return { error: null, success: true as const, data: { message: "Message sent successfully" } };
     } catch (error) {
         logger.error("Message send error:", {
             escrowId: data.escrowId,
@@ -805,7 +805,7 @@ export const sendEscrowMessageAction = withFlexibleSafeAction("sendEscrowMessage
 /**
  * Get escrow messages — only for escrow participants
  */
-export async function getEscrowMessagesAction(escrowId: string): Promise<{ success: true | false; data: Message[]; error?: string }> {
+export async function getEscrowMessagesAction(escrowId: string): Promise<{ error: null, success: true | false; data: Message[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, data: [], error: "Unauthorized" };
@@ -827,7 +827,7 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<{ succe
             .get();
 
         const messages = serializeDocs(snapshot.docs) as unknown as Message[];
-        return { success: true as const, data: messages };
+        return { error: null, success: true as const, data: messages };
     } catch (error) {
         logger.error("Failed to fetch messages:", error);
         return { success: false as const, data: [], error: "Failed to fetch messages" };
@@ -838,7 +838,7 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<{ succe
  * Get single escrow transaction by ID — only for participants or admins
  */
 export async function getEscrowTransactionByIdAction(escrowId: string): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: EscrowTransaction;
     error?: string
 }> {
@@ -865,7 +865,7 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 id: escrowDoc.id,
                 ...data

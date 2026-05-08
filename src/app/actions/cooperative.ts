@@ -786,7 +786,7 @@ async function _getTransactionsAction(): Promise<GetTransactionsState> {
 export const getTransactionsAction = withFlexibleSafeAction("getTransactionsAction", _getTransactionsAction);
 
 async function _getUserTierAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: {
         tier: "Member" | null;
         totalContributions: number;
@@ -794,14 +794,14 @@ async function _getUserTierAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, data: { tier: null, totalContributions: 0 } };
+        if (!sessionResult.session) return { error: "Action failed", success: false as const, data: { tier: null, totalContributions: 0 } };
         const { session } = sessionResult;
 
         const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
         const membershipDoc = await membershipRef.get();
 
         if (!membershipDoc.exists) {
-            return { success: true as const, data: { tier: null, totalContributions: 0 } };
+            return { error: null, success: true as const, data: { tier: null, totalContributions: 0 } };
         }
 
         const data = membershipDoc.data();
@@ -813,12 +813,12 @@ async function _getUserTierAction(): Promise<{
         const { calculateUserTier } = await import("@/lib/cooperative-tiers");
         const tier = calculateUserTier(totalContributions);
 
-        return { success: true as const, data: { tier, totalContributions } };
+        return { error: null, success: true as const, data: { tier, totalContributions } };
     } catch (error) {
         logger.error("Failed to get user tier:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, data: { tier: null, totalContributions: 0 } };
+        return { error: "Action failed", success: false as const, data: { tier: null, totalContributions: 0 } };
     }
 }
 export const getUserTierAction = withFlexibleSafeAction("getUserTierAction", _getUserTierAction);
@@ -1120,7 +1120,7 @@ export const createFixedSavingsAction = withFlexibleSafeAction("createFixedSavin
 // ============================================
 
 async function _getDirectoryMembersAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: any;
     error?: string;
@@ -1162,7 +1162,7 @@ async function _getDirectoryMembersAction(): Promise<{
             })
             .filter(Boolean); // Remove nulls (corrupted)
 
-        return { success: true as const, data: { members }, meta: null };
+        return { error: null, success: true as const, data: { members }, meta: null };
 
     } catch (error) {
         logger.error("Failed to fetch directory:", {
@@ -1181,7 +1181,7 @@ export const getDirectoryMembersAction = withFlexibleSafeAction("getDirectoryMem
  * Get the current user's existing cooperative onboarding data (for pre-populating edit form)
  */
 export async function getCooperativeApplicationAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: any;
     revisionNote?: string;
@@ -1206,7 +1206,7 @@ export async function getCooperativeApplicationAction(): Promise<{
             return bTime - aTime;
         });
         const data = sortedDocs[0];
-        return { success: true as const, data: { application: data, revisionNote: data?.revisionNote }, meta: null };
+        return { error: null, success: true as const, data: { application: data, revisionNote: data?.revisionNote }, meta: null };
     } catch (error) {
         logger.error('getCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
@@ -1220,7 +1220,7 @@ export async function getCooperativeApplicationAction(): Promise<{
  */
 export async function resubmitCooperativeApplicationAction(
     formData: FormData
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1301,7 +1301,7 @@ export async function resubmitCooperativeApplicationAction(
             logger.error("Failed to invalidate cache after Cooperative application resubmission:", err);
         }
 
-        return { success: true as const, data: { message: "Application resubmitted successfully." }, meta: null };
+        return { error: null, success: true as const, data: { message: "Application resubmitted successfully." }, meta: null };
     } catch (error) {
         logger.error('resubmitCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
@@ -1333,7 +1333,7 @@ export type MemberIdCardData = {
  * Gate 2: membershipStatus === 'active' (admin approved)
  */
 export async function getCooperativeMemberIdCardAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: MemberIdCardData;
     error?: string;
@@ -1392,7 +1392,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
         validUntil.setFullYear(validUntil.getFullYear() + 1);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
                 memberNumber,
@@ -1419,7 +1419,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
 export async function updatePassportPhotoAction(
     passportUrl: string,
     passportName: string
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Not authenticated" };
@@ -1443,7 +1443,7 @@ export async function updatePassportPhotoAction(
 
         revalidatePath("/cooperatives/id-card");
 
-        return { success: true as const, data: { message: "Passport photo updated" }, meta: null };
+        return { error: null, success: true as const, data: { message: "Passport photo updated" }, meta: null };
     } catch (error) {
         logger.error("updatePassportPhotoAction error:", error);
         return { success: false as const, error: "Failed to update passport photo. Please try again." };
@@ -1456,7 +1456,7 @@ export async function updatePassportPhotoAction(
 
 export async function validateCooperativeInviteAction(
     token: string
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     try {
         if (!token) return { success: false as const, error: "Invalid token" };
 
@@ -1474,7 +1474,7 @@ export async function validateCooperativeInviteAction(
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 email: data.email,
             },

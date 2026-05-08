@@ -374,7 +374,7 @@ async function _deleteVendorProductAction(
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Product deleted successfully" },
         };
     } catch (error: any) {

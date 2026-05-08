@@ -79,7 +79,7 @@ async function _getProductsAction(filters?: ProductFilters) {
             products = products.filter(product => product.category === filters.category);
         }
 
-        return { success: true as const, data: { products: serializeValue(products) } };
+        return { error: null, success: true as const, data: { products: serializeValue(products) } };
     } catch (error) {
         logger.error("Get products error:", {
             userId: sessionResult?.session?.user?.id,
@@ -106,7 +106,7 @@ async function _getProductByIdAction(productId: string) {
             return { success: false as const, error: "Product not found" };
         }
 
-        return { success: true as const, data: { product: serializeDoc<Product>(productDoc.id, productDoc.data()!) } };
+        return { error: null, success: true as const, data: { product: serializeDoc<Product>(productDoc.id, productDoc.data()!) } };
     } catch (error) {
         logger.error("Get product error:", {
             userId: sessionResult?.session?.user?.id,
@@ -132,7 +132,7 @@ async function _getFeaturedProductsAction() {
             .limit(8)
             .get();
 
-        return { success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
+        return { error: null, success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
     } catch (error) {
         logger.error("Get featured products error:", {
             userId: sessionResult?.session?.user?.id,
@@ -156,7 +156,7 @@ async function _getProductsByCategoryAction(category: string) {
             .where("category", "==", category)
             .get();
 
-        return { success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
+        return { error: null, success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
     } catch (error) {
         logger.error("Get products by category error:", {
             userId: sessionResult?.session?.user?.id,
@@ -184,7 +184,7 @@ async function _getBuyerOrdersAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        return { success: true as const, data: { orders: serializeDocs<Order>(snapshot.docs) } };
+        return { error: null, success: true as const, data: { orders: serializeDocs<Order>(snapshot.docs) } };
     } catch (error) {
         logger.error("Get buyer orders error:", {
             userId: sessionResult?.session?.user?.id,
@@ -247,7 +247,7 @@ async function _confirmOrderReceiptAction(orderId: string) {
             });
         });
 
-        return { success: true as const, data: { message: "Order confirmed and funds released to seller(s)." } };
+        return { error: null, success: true as const, data: { message: "Order confirmed and funds released to seller(s)." } };
 
     } catch (error) {
         logger.error("Confirm receipt error:", {

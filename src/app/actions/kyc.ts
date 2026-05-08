@@ -20,7 +20,7 @@ import { invalidateUserCache } from '@/lib/cache-invalidation';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface KYCVerificationResult {
-    success: true | false;
+    error: null, success: true | false;
     isMatch?: boolean;
     error?: string;
     /** Populated when names don't match — helps user see what name is on record */
@@ -250,7 +250,7 @@ export async function saveKYCProfileAction(payload: {
     state: string;
     idType?: string;
     idNumber?: string;
-}): Promise<{ success: true | false; error?: string }> {
+}): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };

@@ -32,7 +32,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 // Check Marketplace Application Status Action
 // ============================================
 
-async function _checkMarketplaceStatusAction(): Promise<{ success: true | false; data: { status: string; accountType?: string } | null; error?: string }> {
+async function _checkMarketplaceStatusAction(): Promise<{ error: null, success: true | false; data: { status: string; accountType?: string } | null; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -71,7 +71,7 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: true | false;
         }
 
         if (status) {
-            return { success: true as const, data: { status, accountType } };
+            return { error: null, success: true as const, data: { status, accountType } };
         }
 
         // ── FALLBACK: Returning user whose marketplace data predates V2 schema ──
@@ -101,7 +101,7 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: true | false;
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled legacy marketplace status '${legacyStatus}' for user ${session.user.id}`);
-            return { success: true as const, data: { status: legacyStatus, accountType: legacyAccountType } };
+            return { error: null, success: true as const, data: { status: legacyStatus, accountType: legacyAccountType } };
         }
 
         // ── FALLBACK 2: Check legacy sellerVerificationStatus field
@@ -116,7 +116,7 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: true | false;
                 },
                 { merge: true }
             );
-            return { success: true as const, data: { status: legacyStatus, accountType: derivedAccountType } };
+            return { error: null, success: true as const, data: { status: legacyStatus, accountType: derivedAccountType } };
         }
 
         // ── FALLBACK 3: Check seller_verifications collection
@@ -150,10 +150,10 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: true | false;
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled from seller_verifications status '${vStatus}' for user ${session.user.id}`);
-            return { success: true as const, data: { status: vStatus, accountType: vAccountType } };
+            return { error: null, success: true as const, data: { status: vStatus, accountType: vAccountType } };
         }
 
-        return { success: true as const, data: null };
+        return { error: null, success: true as const, data: null };
     } catch (error) {
         logger.error("checkMarketplaceStatus error:", {
             userId: sessionResult?.session?.user?.id,
@@ -185,7 +185,7 @@ export interface SellerVerificationFormData {
 }
 
 export interface SellerVerificationState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     data?: {
         verificationId: string;
@@ -276,7 +276,7 @@ async function _submitSellerVerificationAction(
             logger.error("Failed to invalidate cache after Seller Verification:", { userId, error: err });
         }
 
-        return { success: true as const, data: { verificationId } };
+        return { error: null, success: true as const, data: { verificationId } };
     } catch (error) {
         logger.error("Seller verification error:", {
             userId: sessionResult?.session?.user?.id,
@@ -307,7 +307,7 @@ async function _getSellerVerificationAction() {
             .get();
 
         if (snapshot.empty) {
-            return { success: true as const, data: { verification: null } };
+            return { error: null, success: true as const, data: { verification: null } };
         }
 
         const sortedDocs = snapshot.docs.sort((a, b) => {
@@ -317,7 +317,7 @@ async function _getSellerVerificationAction() {
         });
         const verification = serializeDoc<SellerVerification>(sortedDocs[0].id, sortedDocs[0].data());
 
-        return { success: true as const, data: { verification } };
+        return { error: null, success: true as const, data: { verification } };
     } catch (error) {
         logger.error("Get seller verification error:", {
             userId: sessionResult?.session?.user?.id,
@@ -332,7 +332,7 @@ export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVeri
  * Submit full marketplace onboarding (Profile + Verification + Files)
  */
 async function _submitMarketplaceOnboardingAction(
-    prevState: { success: true | false; error?: string; data?: any } | null,
+    prevState: { error: null, success: true | false; error?: string; data?: any } | null,
     formData: FormData
 ) {
     let sessionResult;
@@ -495,7 +495,7 @@ async function _submitMarketplaceOnboardingAction(
             logger.error("Failed to invalidate cache after Marketplace Onboarding:", { userId, error: err });
         }
 
-        return { success: true as const, data: { verificationId } };
+        return { error: null, success: true as const, data: { verificationId } };
     } catch (error) {
         logger.error("Marketplace onboarding error:", {
             userId: sessionResult?.session?.user?.id,
@@ -534,7 +534,7 @@ export interface ProductFormData {
 }
 
 export interface ProductActionState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     data?: {
         productId: string;
@@ -700,7 +700,7 @@ async function _createProductAction(
 
         await productRef.set(productData);
 
-        return { success: true as const, data: { productId } };
+        return { error: null, success: true as const, data: { productId } };
     } catch (error) {
         logger.error("Create product error:", {
             userId: sessionResult?.session?.user?.id,
@@ -773,7 +773,7 @@ async function _getMarketplaceProductsAction(params: {
             );
         }
 
-        return { success: true as const, data: { products } };
+        return { error: null, success: true as const, data: { products } };
     } catch (error) {
         logger.error("Get products error:", {
             error: error instanceof Error ? error.message : String(error)
@@ -799,7 +799,7 @@ async function _getProductByIdAction(productId: string) {
         const { serializeValue } = await import("@/lib/firestore-serialize");
         const product = serializeValue(ProductSchema.parse({ id: doc.id, ...data }));
 
-        return { success: true as const, data: { product } };
+        return { error: null, success: true as const, data: { product } };
     } catch (error) {
         logger.error("Get product by id error:", {
             productId,
@@ -848,7 +848,7 @@ async function _deleteProductAction(productId: string) {
         // Optional: Delete images from storage if needed
         // For now, we'll just delete the Firestore record to be safe and fast
 
-        return { success: true as const, data: { message: "Product deleted successfully" } };
+        return { error: null, success: true as const, data: { message: "Product deleted successfully" } };
     } catch (error) {
         logger.error("Delete product error:", {
             productId,
@@ -879,7 +879,7 @@ async function _getRecommendedProductsAction(limitCount: number = 3) {
             return serializeValue(parsed);
         });
 
-        return { success: true as const, data: { products } };
+        return { error: null, success: true as const, data: { products } };
     } catch (error) {
         logger.error("Get recommended products error:", {
             error: error instanceof Error ? error.message : String(error)
@@ -975,7 +975,7 @@ async function _getSellerProductsAction(options: {
             newLastId = (lastProduct as any).id;
         }
 
-        return { success: true as const, data: { products, lastId: newLastId, hasMore } };
+        return { error: null, success: true as const, data: { products, lastId: newLastId, hasMore } };
     } catch (error) {
         logger.error("Get seller products error:", {
             userId: sessionResult?.session?.user?.id,
@@ -1056,7 +1056,7 @@ async function _getSellerOrdersAction(options: {
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { success: true as const, data: { orders, lastId: newLastId, hasMore } };
+        return { error: null, success: true as const, data: { orders, lastId: newLastId, hasMore } };
     } catch (error) {
         logger.error("Get seller orders error:", {
             userId: sessionResult?.session?.user?.id,
@@ -1264,7 +1264,7 @@ async function _getBuyerStatsAction() {
         const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: { 
                 stats: {
                     activeOrders,
@@ -1309,7 +1309,7 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4) {
             .filter((p: any) => p.id !== productId);
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: { 
                 products: serializeValue(products.slice(0, limit)) 
             } 
@@ -1412,7 +1412,7 @@ async function _searchProductsAction(params: {
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: serializeValue({ 
                 products: finalProducts,
                 lastId: lastVisible ? lastVisible.id : undefined,
@@ -1445,7 +1445,7 @@ async function _resubmitSellerVerificationAction(
         bankAccount?: { bankName: string; accountNumber: string; accountName: string; bankCode: string };
         [key: string]: any;
     }
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1527,7 +1527,7 @@ async function _updateSellerBadge(
     adminUserId: string,
     sellerId: string,
     grant: boolean
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     try {
         const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
         const adminRoles: string[] = adminDoc.data()?.roles || [];
@@ -1595,7 +1595,7 @@ async function _updateSellerBadge(
     }
 }
 
-async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1612,7 +1612,7 @@ async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ succ
 }
 export const grantSellerVerifiedBadgeAction = withFlexibleSafeAction("grantSellerVerifiedBadgeAction", _grantSellerVerifiedBadgeAction);
 
-async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1640,7 +1640,7 @@ export const revokeSellerVerifiedBadgeAction = withFlexibleSafeAction("revokeSel
 async function _updateSellerCategoryAction(
     sellerId: string,
     category: "wholesale" | "retail"
-): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1703,7 +1703,7 @@ async function _updateSellerCategoryAction(
             }
         });
 
-        return { success: true as const, data: { message: "Seller category updated successfully" } };
+        return { error: null, success: true as const, data: { message: "Seller category updated successfully" } };
     } catch (error) {
         logger.error("updateSellerCategoryAction error:", {
             userId: sessionResult?.session?.user?.id,

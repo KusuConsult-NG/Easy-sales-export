@@ -8,13 +8,13 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { serializeDocs } from '@/lib/firestore-serialize';
 
 export interface SendBulkEmailState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     recipientCount?: number;
 }
 
 export interface CreateAnnouncementState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     id?: string;
 }
@@ -205,7 +205,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             updatedAt: FieldValue.serverTimestamp()
         });
 
-        return { success: true as const, id: announcementRef.id };
+        return { error: null, success: true as const, id: announcementRef.id };
     } catch (error) {
         logger.error('Failed to create announcement:', error);
         return {
@@ -216,7 +216,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
 }
 
 export type GetEmailHistoryState = {
-    success: true;
+    error: null, success: true;
     history: any[];
     error: null;
 } | {

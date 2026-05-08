@@ -51,7 +51,7 @@ function sanitizeForSerialization(obj: unknown): unknown {
  * - Land Listings (verificationStatus: pending)
  */
 export async function getPendingContentAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: PendingContentItem[];
     error?: string;
 }> {
@@ -116,7 +116,7 @@ export async function getPendingContentAction(): Promise<{
         // Sort by submittedAt desc (ISO strings sort lexicographically)
         pendingItems.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
-        return { success: true as const, data: pendingItems };
+        return { error: null, success: true as const, data: pendingItems };
 
     } catch (error: any) {
         logger.error("Get pending content error:", error);
@@ -127,7 +127,7 @@ export async function getPendingContentAction(): Promise<{
 export async function approveContentAction(
     id: string,
     type: ContentType
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -158,7 +158,7 @@ export async function approveContentAction(
                 return { success: false as const, error: "Invalid content type" };
         }
 
-        return { success: true };
+        return { error: null, success: true };
 
     } catch (error: any) {
         logger.error("Approve content error:", error);
@@ -170,7 +170,7 @@ export async function rejectContentAction(
     id: string,
     type: ContentType,
     reason: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

@@ -34,7 +34,7 @@ async function _getFarmNationStatsAction(): Promise<{ success: true; data: { sta
         
         const totalApplications = countSnap.data().count;
 
-        const payload = { success: true as const, data: { stats: { totalApplications } } };
+        const payload = { error: null, success: true as const, data: { stats: { totalApplications } } };
 
         try {
             await setCache(cacheKey, payload, 120);
@@ -58,7 +58,7 @@ async function _getFarmNationRegistrantsAction(options: {
     status?: string;
     lastDocId?: string;
 } = {}): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: any;
     meta?: any;
     error?: string;
@@ -123,7 +123,7 @@ async function _getFarmNationRegistrantsAction(options: {
         const hasMore = offset + pageSize < users.length;
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { users: paged },
             meta: {
                 hasMore,
@@ -136,7 +136,7 @@ async function _getFarmNationRegistrantsAction(options: {
             error: error instanceof Error ? error.message : String(error)
         });
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             data: null,
             meta: null,
             error: "Failed to fetch farm nation registrants",
@@ -271,7 +271,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: applications,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
@@ -295,7 +295,7 @@ export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("ge
  * Uses Firestore COUNT queries — independent of pagination.
  */
 async function _getFarmNationVerificationStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: {
         stats: {
             total: number;
@@ -331,7 +331,7 @@ async function _getFarmNationVerificationStatsAction(): Promise<{
         ]);
 
         const payload = {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 stats: {
                     total:    totalSnap.data().count,
@@ -363,7 +363,7 @@ async function _getAdminLandVerificationsAction(options: {
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<{ success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -409,7 +409,7 @@ async function _getAdminLandVerificationsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: verifications,
             lastDocId: nextCursor,
             hasMore: !!nextCursor
@@ -428,7 +428,7 @@ async function _getFarmNationTransactionsAction(options: {
     limit?: number;
     status?: string;
     lastDocId?: string;
-} = {}): Promise<{ success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -463,7 +463,7 @@ async function _getFarmNationTransactionsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: transactions,
             lastDocId: nextCursor,
             hasMore: !!nextCursor
@@ -478,7 +478,7 @@ async function _getFarmNationTransactionsAction(options: {
 }
 export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNationTransactionsAction", _getFarmNationTransactionsAction);
 
-async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ success: true | false; message?: string; error?: string }> {
+async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ error: null, success: true | false; message?: string; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();

@@ -26,7 +26,7 @@ async function _createResourceAction(data: {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ success: true | false; data?: any; error?: string }> {
+}): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -57,7 +57,7 @@ async function _createResourceAction(data: {
             targetId: resourceRef.id,
         });
 
-        return { success: true as const, data: { resourceId: resourceRef.id } };
+        return { error: null, success: true as const, data: { resourceId: resourceRef.id } };
     } catch (error) {
         logger.error("Create resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -78,7 +78,7 @@ async function _updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -105,7 +105,7 @@ async function _updateResourceAction(
             targetId: resourceId,
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Update resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -118,7 +118,7 @@ export const updateResourceAction = withFlexibleSafeAction("updateResourceAction
 
 async function _deleteResourceAction(
     resourceId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -147,7 +147,7 @@ async function _deleteResourceAction(
             targetId: resourceId,
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Delete resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -170,7 +170,7 @@ async function _createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ success: true | false; data?: any; error?: string }> {
+}): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -201,7 +201,7 @@ async function _createTrainingEventAction(data: {
             targetId: eventRef.id,
         });
 
-        return { success: true as const, data: { eventId: eventRef.id } };
+        return { error: null, success: true as const, data: { eventId: eventRef.id } };
     } catch (error) {
         logger.error("Create event error:", {
             userId: sessionResult?.session?.user?.id,
@@ -224,7 +224,7 @@ async function _updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -251,7 +251,7 @@ async function _updateTrainingEventAction(
             targetId: eventId,
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Update event error:", {
             userId: sessionResult?.session?.user?.id,
@@ -262,7 +262,7 @@ async function _updateTrainingEventAction(
 }
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
-async function _getEventParticipantsAction(eventId: string): Promise<{ success: true | false; data?: any; error?: string }> {
+async function _getEventParticipantsAction(eventId: string): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -282,7 +282,7 @@ async function _getEventParticipantsAction(eventId: string): Promise<{ success: 
 
         const participants = serializeDocs(snap.docs);
 
-        return { success: true as const, data: { participants } };
+        return { error: null, success: true as const, data: { participants } };
     } catch (error) {
         logger.error("Get participants error:", {
             userId: sessionResult?.session?.user?.id,
@@ -297,7 +297,7 @@ export const getEventParticipantsAction = withFlexibleSafeAction("getEventPartic
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-async function _getWaveApplicationsAction(): Promise<{ success: true | false; data?: any; error?: string }> {
+async function _getWaveApplicationsAction(): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -314,7 +314,7 @@ async function _getWaveApplicationsAction(): Promise<{ success: true | false; da
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
         const applications = serializeDocs(snapshot.docs);
 
-        return { success: true as const, data: { applications } };
+        return { error: null, success: true as const, data: { applications } };
     } catch (error) {
         logger.error("Get applications error:", {
             userId: sessionResult?.session?.user?.id,
@@ -327,7 +327,7 @@ export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicat
 
 async function _approveWaveApplicationAction(
     applicationId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
@@ -438,7 +438,7 @@ async function _approveWaveApplicationAction(
             }
         }
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Approve application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -452,7 +452,7 @@ export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveA
 async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
@@ -546,7 +546,7 @@ async function _rejectWaveApplicationAction(
             }
         }
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Reject application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -565,7 +565,7 @@ async function _getStandardWaveApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -706,7 +706,7 @@ async function _getStandardWaveApplicationsAction(options: {
         const hasMore = snapshot.docs.length === fetchLimit;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: finalForms,
             lastDocId,
             hasMore,
@@ -734,7 +734,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -783,7 +783,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: withdrawals,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
@@ -812,7 +812,7 @@ async function _processWaveWithdrawalAction(data: {
     action: "approve" | "reject" | "complete";
     adminNotes?: string;
     transactionReference?: string;
-}): Promise<{ success: true | false; data?: any; error?: string }> {
+}): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -892,7 +892,7 @@ async function _processWaveWithdrawalAction(data: {
                      await invalidateServiceCache(withdrawalData.userId, 'wave');
                  } catch (e) { }
              }
-             return { success: true as const, data: { status: action === "reject" ? "rejected" : "completed" } };
+             return { error: null, success: true as const, data: { status: action === "reject" ? "rejected" : "completed" } };
         }
 
         // PHASE 2: SIDE-EFFECT (PAYOUT)
@@ -953,7 +953,7 @@ async function _processWaveWithdrawalAction(data: {
                 } catch (e) { }
             }
 
-            return { success: true as const, data: { status: "completed" } };
+            return { error: null, success: true as const, data: { status: "completed" } };
 
         } catch (error: any) {
             logger.error(`[WAVE:Payout] Critical error during payout for ${withdrawalId}:`, error);

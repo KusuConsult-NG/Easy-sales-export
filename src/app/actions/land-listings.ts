@@ -63,7 +63,7 @@ export async function createLandListingAction(data: {
     category?: string;
     soilType?: string;
     waterSource?: string;
-}): Promise<{ success: true | false; error?: string; listingId?: string }> {
+}): Promise<{ error: null, success: true | false; error?: string; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ...data,
@@ -83,7 +83,7 @@ export async function createLandListingAction(data: {
             targetType: "land_listing_creation",
         });
 
-        return { success: true as const, listingId: docRef.id };
+        return { error: null, success: true as const, listingId: docRef.id };
     } catch (error) {
         logger.error("Land listing creation error:", error);
         return { success: false as const, error: "Failed to create land listing" };
@@ -96,7 +96,7 @@ export async function createLandListingAction(data: {
 async function submitForVerificationAction(
     listingId: string,
     ownerId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
@@ -116,7 +116,7 @@ async function submitForVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Verification submission error:", error);
         return { success: false as const, error: "Failed to submit for verification" };
@@ -129,7 +129,7 @@ async function submitForVerificationAction(
 export async function verifyLandListingAction(
     listingId: string,
     adminId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -165,7 +165,7 @@ export async function verifyLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Land verification error:", error);
         return { success: false as const, error: "Failed to verify listing" };
@@ -179,7 +179,7 @@ export async function rejectLandListingAction(
     listingId: string,
     adminId: string,
     reason: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -217,7 +217,7 @@ export async function rejectLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Land rejection error:", error);
         return { success: false as const, error: "Failed to reject listing" };
@@ -354,7 +354,7 @@ export async function submitLandListingAction(data: {
     documentUrls: string[];
     // Optional: GPS coordinates if available
     gpsCoordinates?: { latitude: number; longitude: number };
-}): Promise<{ success: true | false; error?: string; listingId?: string }> {
+}): Promise<{ error: null, success: true | false; error?: string; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ownerId: data.ownerId,
@@ -452,7 +452,7 @@ export async function submitLandInquiryAction(data: {
     buyerEmail: string;
     buyerPhone: string;
     message: string;
-}): Promise<{ success: true | false; error?: string }> {
+}): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         // 1. Save inquiry to database
         const inquiryRef = await db.collection(COLLECTIONS.LAND_INQUIRIES).add({
@@ -492,7 +492,7 @@ export async function submitLandInquiryAction(data: {
 /**
  * Get inquiries for a user (as seller)
  */
-export async function getLandInquiriesAction(userId: string): Promise<{ success: true | false; inquiries?: any[]; error?: string }> {
+export async function getLandInquiriesAction(userId: string): Promise<{ error: null, success: true | false; inquiries?: any[]; error?: string }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.LAND_INQUIRIES)
             .where("listingOwnerId", "==", userId)
@@ -509,13 +509,13 @@ export async function getLandInquiriesAction(userId: string): Promise<{ success:
 /**
  * Get single inquiry by ID
  */
-export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ success: true | false; inquiry?: any; error?: string }> {
+export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ error: null, success: true | false; inquiry?: any; error?: string }> {
     try {
         const docRef = db.collection(COLLECTIONS.LAND_INQUIRIES).doc(inquiryId);
         const docSnap = await docRef.get();
 
         if (docSnap.exists) {
-            return { success: true as const, inquiry: { id: docSnap.id, ...docSnap.data() } };
+            return { error: null, success: true as const, inquiry: { id: docSnap.id, ...docSnap.data() } };
         } else {
             return { success: false as const, error: "Inquiry not found" };
         }
@@ -531,7 +531,7 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ suc
 export async function deleteLandListingAction(
     listingId: string,
     adminId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -560,7 +560,7 @@ export async function deleteLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Land deletion error:", error);
         return { success: false as const, error: "Failed to delete listing" };

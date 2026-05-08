@@ -61,7 +61,7 @@ export interface InAppBroadcastPreview {
 }
 
 export interface InAppBroadcastResult {
-    success: true | false;
+    error: null, success: true | false;
     delivered: number;
     logId?: string;
     error?: string;

@@ -87,7 +87,7 @@ export async function createExportWindowAction(data: {
             },
         });
 
-        return { success: true as const, data: { windowId: docRef.id }, meta: null };
+        return { error: null, success: true as const, data: { windowId: docRef.id }, meta: null };
     } catch (error) {
         logger.error("Export window creation error:", error);
         return { success: false as const, data: null, error: "Failed to create export window", meta: null };
@@ -104,7 +104,7 @@ export async function getActiveExportWindowsAction() {
         const snapshot = await q.get();
 
         const windows = serializeDocs(snapshot.docs) as unknown as ExportWindow[];
-        return { success: true as const, data: windows, meta: null };
+        return { error: null, success: true as const, data: windows, meta: null };
     } catch (error) {
         logger.error("Failed to fetch export windows:", error);
         return { success: false as const, data: [], meta: null, error: "Failed to fetch" };
@@ -144,7 +144,7 @@ export async function bookExportSlotAction(data: {
 
         if (windowData.currentVolume + data.volume > windowData.targetVolume) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 meta: null,
                 error: `Only ${windowData.targetVolume - windowData.currentVolume}kg available`,
@@ -184,7 +184,7 @@ export async function bookExportSlotAction(data: {
             },
         });
 
-        return { success: true as const, data: { slotId: slotRef.id }, meta: null };
+        return { error: null, success: true as const, data: { slotId: slotRef.id }, meta: null };
     } catch (error) {
         logger.error("Slot booking error:", error);
         return { success: false as const, data: null, error: "Failed to book export slot", meta: null };
@@ -204,7 +204,7 @@ export async function getUserExportSlotsAction(userId: string) {
         const snapshot = await q.get();
 
         const slots = serializeDocs(snapshot.docs) as unknown as ExportSlot[];
-        return { success: true as const, data: slots, meta: null };
+        return { error: null, success: true as const, data: slots, meta: null };
     } catch (error) {
         logger.error("Failed to fetch export slots:", error);
         return { success: false as const, data: [], error: "Fetch failed", meta: null };

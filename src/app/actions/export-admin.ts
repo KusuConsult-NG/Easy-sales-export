@@ -21,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function getAdminExportCatalogAction(options: { 
     limit?: number; 
     lastDocId?: string; 
-} = {}): Promise<{ success: true | false; data?: any[]; meta?: any; error?: string; hasMore?: boolean; lastDocId?: string | null }> {
+} = {}): Promise<{ error: null, success: true | false; data?: any[]; meta?: any; error?: string; hasMore?: boolean; lastDocId?: string | null }> {
     try {
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)
@@ -45,7 +45,7 @@ export async function getAdminExportCatalogAction(options: {
             const nextCursor = hasMore ? docs[docs.length - 1].id : undefined;
 
             return { 
-                success: true as const, 
+                error: null, success: true as const, 
                 data: products, 
                 lastDocId: nextCursor,
                 hasMore: hasMore,
@@ -56,7 +56,7 @@ export async function getAdminExportCatalogAction(options: {
         // Only return default catalog if not paginated and collection is empty
         if (!options.lastDocId) {
             return { 
-                success: true as const, 
+                error: null, success: true as const, 
                 data: DEFAULT_CATALOG, 
                 lastDocId: null,
                 hasMore: false,
@@ -64,7 +64,7 @@ export async function getAdminExportCatalogAction(options: {
             };
         }
 
-        return { success: true as const, data: [], hasMore: false, meta: { hasMore: false } };
+        return { error: null, success: true as const, data: [], hasMore: false, meta: { hasMore: false } };
 
     } catch (error: any) {
         logger.error("Get export catalog error:", error);
@@ -72,7 +72,7 @@ export async function getAdminExportCatalogAction(options: {
     }
 }
 
-export async function createExportCatalogAction(productData: any): Promise<{ success: true | false; data?: any; error?: string }> {
+export async function createExportCatalogAction(productData: any): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -93,7 +93,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
                 updatedBy: session.user.id,
             }, { merge: true });
             
-            return { success: true as const, data: { id: productData.id } };
+            return { error: null, success: true as const, data: { id: productData.id } };
         } else {
             // Create new
             const dataToSave = { ...productData };
@@ -107,7 +107,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
                 createdBy: session.user.id,
             });
             
-            return { success: true as const, data: { id: ref.id } };
+            return { error: null, success: true as const, data: { id: ref.id } };
         }
     } catch (error: any) {
         logger.error("Create/update export catalog error:", error);
@@ -120,7 +120,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
 // ============================================
 
 export async function getExportRequestStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     data?: {
         total: number;
@@ -150,7 +150,7 @@ export async function getExportRequestStatsAction(): Promise<{
         ]);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 total: totalSnap.data().count,
                 pending: pendingSnap.data().count,
@@ -170,7 +170,7 @@ export async function getExportRequestStatsAction(): Promise<{
 // ============================================
 
 export async function getExportCatalogStatsAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     data?: {
         totalProducts: number;
@@ -191,7 +191,7 @@ export async function getExportCatalogStatsAction(): Promise<{
             .get();
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { totalProducts: snap.data().count },
         };
     } catch (error: any) {
@@ -200,7 +200,7 @@ export async function getExportCatalogStatsAction(): Promise<{
     }
 }
 
-export async function deleteExportCatalogAction(productId: string): Promise<{ success: true | false; error?: string }> {
+export async function deleteExportCatalogAction(productId: string): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -224,7 +224,7 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ su
     }
 }
 
-export async function getAdminPendingExportProductsAction(): Promise<{ success: true | false; data?: any[]; error?: string }> {
+export async function getAdminPendingExportProductsAction(): Promise<{ error: null, success: true | false; data?: any[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -249,7 +249,7 @@ export async function getAdminPendingExportProductsAction(): Promise<{ success: 
     }
 }
 
-export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ success: true | false; error?: string }> {
+export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
@@ -307,7 +307,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
 /**
  * Fetch all export orders for admin dashboard
  */
-export async function getAdminExportOrdersAction(): Promise<{ success: true | false; data?: any[]; error?: string }> {
+export async function getAdminExportOrdersAction(): Promise<{ error: null, success: true | false; data?: any[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -346,7 +346,7 @@ export async function updateAdminExportOrderStatusAction(
     orderId: string, 
     status: string,
     documentData?: { name: string; url: string; type: string }
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

@@ -104,7 +104,7 @@ async function _createDisputeAction(params: {
             });
         });
 
-        return { success: true as const, data: { disputeId: disputeRef.id } };
+        return { error: null, success: true as const, data: { disputeId: disputeRef.id } };
     } catch (error) {
         logger.error("Create dispute error:", {
             userId: sessionResult?.session?.user?.id,
@@ -143,7 +143,7 @@ async function _getBuyerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true as const, data: { disputes } };
+        return { error: null, success: true as const, data: { disputes } };
     } catch (error) {
         logger.error("Get buyer disputes error:", {
             userId: sessionResult?.session?.user?.id,
@@ -181,7 +181,7 @@ async function _getSellerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true as const, data: { disputes } };
+        return { error: null, success: true as const, data: { disputes } };
     } catch (error) {
         logger.error("Get seller disputes error:", {
             userId: sessionResult?.session?.user?.id,
@@ -264,7 +264,7 @@ async function _getAdminDisputesAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: {
                 disputes,
                 lastDocId: nextCursor,
@@ -317,7 +317,7 @@ async function _getDisputeByIdAction(disputeId: string) {
             resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt,
         } as Dispute;
 
-        return { success: true as const, data: { dispute: disputeData } };
+        return { error: null, success: true as const, data: { dispute: disputeData } };
     } catch (error) {
         logger.error("Get dispute error:", {
             disputeId,
@@ -416,7 +416,7 @@ async function _updateDisputeStatusAction(
             logger.error("Cache invalidation failed after dispute resolution", err);
         }
 
-        return { success: true as const, data: { message: "Dispute status updated successfully" } };
+        return { error: null, success: true as const, data: { message: "Dispute status updated successfully" } };
     } catch (error) {
         logger.error("Update dispute error:", {
             disputeId,

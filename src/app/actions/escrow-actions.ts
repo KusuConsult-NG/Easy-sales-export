@@ -130,7 +130,7 @@ async function _getAllEscrowTransactionsAdmin(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: {
                 transactions: serializeValue(transactions) as EscrowTransaction[],
                 lastDocId: nextCursor,

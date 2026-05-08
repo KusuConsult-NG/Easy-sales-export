@@ -140,7 +140,7 @@ export async function getPostLoginRedirect(email: string) {
             // they MUST change their password on first login.
             if ((userData as any).requiresPasswordChange) {
                 logger.info(`[getPostLoginRedirect] User ${email} requires password change, redirecting to security setup`);
-                return { success: true as const, data: { redirectUrl: '/auth/reset-legacy-password' } };
+                return { error: null, success: true as const, data: { redirectUrl: '/auth/reset-legacy-password' } };
             }
 
             if (hasAdminRole) {
@@ -159,7 +159,7 @@ export async function getPostLoginRedirect(email: string) {
                 }
 
                 logger.info(`[getPostLoginRedirect] User ${email} has admin privileges, redirecting to ${adminRedirect}`);
-                return { success: true as const, data: { redirectUrl: adminRedirect } };
+                return { error: null, success: true as const, data: { redirectUrl: adminRedirect } };
             }
 
             // CRITICAL: Check application status and redirect accordingly
@@ -191,13 +191,13 @@ export async function getPostLoginRedirect(email: string) {
 
                 if (directDashboard) {
                     logger.info(`[getPostLoginRedirect] User ${email} approved for '${firstApprovedKey}', direct redirect to: ${directDashboard}`);
-                    return { success: true as const, data: { redirectUrl: directDashboard } };
+                    return { error: null, success: true as const, data: { redirectUrl: directDashboard } };
                 }
 
                 // Fallback for unknown modules: use role-based primary app
                 const primaryApp = getPrimaryApp(userRoles);
                 logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${primaryApp}`);
-                return { success: true as const, data: { redirectUrl: primaryApp } };
+                return { error: null, success: true as const, data: { redirectUrl: primaryApp } };
             }
 
             // 2. Check for pending applications
@@ -206,7 +206,7 @@ export async function getPostLoginRedirect(email: string) {
             // 
             // Fallback for pending users AND new users: route directly to the User Dashboard
             logger.info(`[getPostLoginRedirect] User ${email} has no active apps, directing to default dashboard`);
-            return { success: true as const, data: { redirectUrl: '/dashboard' } };
+            return { error: null, success: true as const, data: { redirectUrl: '/dashboard' } };
         }
 
         // User has no applications yet — go to dashboard instead of /auth/get-started
@@ -215,7 +215,7 @@ export async function getPostLoginRedirect(email: string) {
     } catch (error: any) {
         logger.error('[getPostLoginRedirect] Error determining redirect', { email, error: error.message });
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             redirectUrl: '/dashboard',
             error: error.message
         };
@@ -399,7 +399,7 @@ export async function logoutAction() {
 export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const session = await auth();
         if (!session?.user?.id || !session.user.email) {

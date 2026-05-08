@@ -227,7 +227,7 @@ async function _getVendorSettingsAction() {
         const vendorDoc = await db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId).get();
 
         if (!vendorDoc.exists) {
-            return { success: true as const, data: { settings: {
+            return { error: null, success: true as const, data: { settings: {
                     storeInfo: null,
                     paymentConfig: null,
                     notifications: {

@@ -62,7 +62,7 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
 
     const nameSplit = splitName(userData.fullName || "");
 
-    return { success: true as const, data: { profile: {
+    return { error: null, success: true as const, data: { profile: {
             firstName: userData.firstName || nameSplit.first,
             lastName: userData.lastName || nameSplit.last,
             otherName: userData.otherName || "",
@@ -147,7 +147,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
 
     await invalidateUserCache(userId);
 
-    return { success: true };
+    return { error: null, success: true };
 });
 
 /**
@@ -173,5 +173,5 @@ export const updateNotificationPreferencesAction = withSafeAction("updateNotific
         updatedAt: new Date(),
     });
 
-    return { success: true };
+    return { error: null, success: true };
 });

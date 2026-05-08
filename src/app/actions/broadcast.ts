@@ -101,7 +101,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
         logger.info(`[Broadcast] Clean Sweep complete. Original Docs: ${snapshot.size}, Unique Recipients: ${uniqueList.length}`);
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             recipients: uniqueList, 
             count: uniqueList.length,
             originalDocCount: snapshot.size
@@ -118,7 +118,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
  * (Required by Communications UI)
  */
 export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{
-    success: true;
+    error: null, success: true;
     count: number | null;
     sample: any[];
     error: null;
@@ -139,7 +139,7 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
     }
     
     return {
-        success: true as const,
+        error: null, success: true as const,
         count: listResult.count ?? null,
         sample: listResult.recipients?.slice(0, 5) || [],
         error: null
@@ -151,11 +151,11 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
  * (Required by Communications UI)
  */
 export async function getBroadcastHistoryAction(): Promise<{
-    success: true;
+    error: null, success: true;
     logs: BroadcastLog[];
     error: null;
 } | {
-    success: false;
+    error: "Action failed", success: false;
     logs: BroadcastLog[];
     error: string;
 }> {

@@ -39,7 +39,7 @@ export async function getPlatformMetricsAction() {
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
         
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 totalUsers,
                 totalTransactions,
@@ -94,7 +94,7 @@ export async function getGlobalPendingApprovalsAction() {
         const totalPending = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 totalPending,
                 breakdown: counts

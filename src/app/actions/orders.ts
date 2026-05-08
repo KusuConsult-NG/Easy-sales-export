@@ -17,7 +17,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
  */
 
 export interface CreateOrderState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     orderId?: string;
     orderIds?: string[];
@@ -144,7 +144,7 @@ async function _createOrderAction(
                 transaction.set(orderRef, orderData);
             }
 
-            return { success: true as const, data: { orderId: orderIds[0], orderIds } };
+            return { error: null, success: true as const, data: { orderId: orderIds[0], orderIds } };
         });
 
     } catch (error) {
@@ -183,7 +183,7 @@ async function _getOrderByIdAction(orderId: string) {
         }
 
         const { serializeDoc } = await import("@/lib/firestore-serialize");
-        return { success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, orderData) } };
+        return { error: null, success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, orderData) } };
     } catch (error) {
         logger.error("Get order error:", {
             userId: sessionResult?.session?.user?.id,
@@ -229,7 +229,7 @@ async function _updateOrderPaymentAction(
             });
         });
 
-        return { success: true as const, data: { message: "Payment status updated successfully" } };
+        return { error: null, success: true as const, data: { message: "Payment status updated successfully" } };
     } catch (error) {
         logger.error("Update payment error:", {
             userId: sessionResult?.session?.user?.id,

@@ -23,9 +23,9 @@ export async function logTelemetryAction(level: 'debug' | 'info' | 'warn' | 'err
         } else {
             logger.debug(message, payload);
         }
-        return { success: true };
+        return { error: null, success: true };
     } catch (e) {
         console.error("Telemetry Action failed:", e);
-        return { success: false };
+        return { error: "Action failed", success: false };
     }
 }

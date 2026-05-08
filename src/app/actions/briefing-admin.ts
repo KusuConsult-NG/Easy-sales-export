@@ -16,7 +16,7 @@ export interface BriefingRegistration extends BriefingRegistrationData {
 }
 
 export interface BriefingRegistrationsResult {
-    success: true | false;
+    error: null, success: true | false;
     data?: BriefingRegistration[];
     error?: string;
     meta: {
@@ -213,7 +213,7 @@ export async function getBriefingRegistrationsAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true as const, data,
+        return { error: null, success: true as const, data,
             meta: { cursor: nextCursor, hasMore, totalCount } };
     } catch (error: any) {
         logger.error("getBriefingRegistrationsAction error:", error);

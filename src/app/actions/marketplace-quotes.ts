@@ -56,7 +56,7 @@ async function _submitQuoteRequestAction(data: QuoteRequestData) {
         revalidatePath(`/marketplace/products/${data.productId}`);
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: { 
                 quoteId: quoteRef.id,
                 message: "Quote request submitted successfully. The seller has been notified."
@@ -92,7 +92,7 @@ async function _getMyQuotesAction(role: "buyer" | "seller") {
 
         const quotes = serializeDocs(snapshot.docs);
 
-        return { success: true as const, data: { quotes } };
+        return { error: null, success: true as const, data: { quotes } };
     } catch (error) {
         logger.error("Get my quotes error:", {
             userId: sessionResult?.session?.user?.id,

@@ -64,7 +64,7 @@ export async function submitLoanApplication(
             console.error("Failed to log loan creation audit:", auditError);
         }
 
-        return { success: true as const, data: { loanId, userId: session.user.id } };
+        return { error: null, success: true as const, data: { loanId, userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -93,7 +93,7 @@ export async function getUserLoanApplications() {
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { success: true as const, data: { loans, } };
+        return { error: null, success: true as const, data: { loans, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch loan applications", loans: [] };
     }
@@ -124,7 +124,7 @@ export async function getLoanApplication(loanId: string) {
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
 
-        return { success: true as const, data: { loan, } };
+        return { error: null, success: true as const, data: { loan, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch loan application", loan: null };
     }
@@ -149,7 +149,7 @@ export async function getPendingLoanApplications() {
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { success: true as const, data: { loans, } };
+        return { error: null, success: true as const, data: { loans, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch pending loans", loans: [] };
     }
@@ -217,7 +217,7 @@ export async function approveLoanApplication(
             console.error("Failed to log loan approval/rejection audit:", auditError);
         }
 
-        return { success: true as const, data: { userId: session.user.id } };
+        return { error: null, success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -278,7 +278,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
             console.error("Failed to log loan disbursement audit:", auditError);
         }
 
-        return { success: true as const, data: { userId: session.user.id } };
+        return { error: null, success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         return { success: false as const, error: "Failed to disburse loan" };
     }
@@ -340,7 +340,7 @@ export async function getLoanStatistics() {
             }
         });
 
-        return { success: true as const, data: { stats, } };
+        return { error: null, success: true as const, data: { stats, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch loan statistics", stats: null };
     }

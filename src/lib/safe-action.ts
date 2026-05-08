@@ -8,6 +8,7 @@ import { z } from "zod";
  */
 export type ActionResponse<T = any> = {
     success: true;
+    error: null;
     data?: T;
 } | {
     success: false;

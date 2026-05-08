@@ -43,7 +43,7 @@ export async function createPaymentRecordAction(data: {
     purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string;
     metadata?: Record<string, any>;
-}): Promise<{ success: true | false; error?: string; paymentId?: string }> {
+}): Promise<{ error: null, success: true | false; error?: string; paymentId?: string }> {
     try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
@@ -71,7 +71,7 @@ export async function createPaymentRecordAction(data: {
             },
         });
 
-        return { success: true as const, paymentId: docRef.id };
+        return { error: null, success: true as const, paymentId: docRef.id };
     } catch (error) {
         logger.error("Payment record creation error:", error);
         return { success: false as const, error: "Failed to create payment record" };
@@ -84,7 +84,7 @@ export async function createPaymentRecordAction(data: {
 export async function verifyPaymentAction(
     paymentReference: string,
     paystackResponse: any
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         // Find payment by reference
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
@@ -120,7 +120,7 @@ export async function verifyPaymentAction(
         // Handle post-payment actions based on purpose
         await handlePostPaymentActions(paymentData, paymentDoc.id);
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Payment verification error:", error);
         return { success: false as const, error: "Failed to verify payment" };

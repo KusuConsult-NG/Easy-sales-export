@@ -14,7 +14,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string | null;
     meta?: any;
     data?: {
@@ -124,7 +124,7 @@ export async function initializeExportOrderPaymentAction(
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -251,7 +251,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 message: "Export order payment verified successfully.",
                 orderId: orderData.orderId,
@@ -267,7 +267,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         });
 
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             data: null,
             meta: null,
             error: "Failed to verify export order payment. Please contact support.",
@@ -370,7 +370,7 @@ export async function initializeInvestmentPaymentAction(
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -554,7 +554,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 message: `Investment successful! Your ₦${amountInNaira.toLocaleString()} investment in ${metadata.windowTitle} is now active.`,
                 investmentId: investmentDoc.id,
@@ -570,7 +570,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         });
 
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             data: null,
             meta: null,
             error: "Failed to verify investment payment. Please contact support with your payment reference.",

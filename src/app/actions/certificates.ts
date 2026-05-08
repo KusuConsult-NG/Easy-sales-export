@@ -40,7 +40,7 @@ export async function uploadCertificateAction(
         expiryDate?: string;
         issuer?: string;
     }
-): Promise<{ success: true | false; error?: string; certificateId?: string }> {
+): Promise<{ error: null, success: true | false; error?: string; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -93,7 +93,7 @@ export async function uploadCertificateAction(
             },
         });
 
-        return { success: true as const, certificateId: docRef.id };
+        return { error: null, success: true as const, certificateId: docRef.id };
     } catch (error) {
         logger.error("Certificate upload error:", error);
         return { success: false as const, error: "Failed to upload certificate" };
@@ -121,7 +121,7 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
 export async function deleteCertificateAction(
     certificateId: string,
     userId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -178,7 +178,7 @@ export async function deleteCertificateAction(
             },
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Certificate deletion error:", error);
         return { success: false as const, error: "Failed to delete certificate" };
@@ -188,7 +188,7 @@ export async function deleteCertificateAction(
 /**
  * Mark onboarding as complete
  */
-export async function completeOnboardingAction(userId: string): Promise<{ success: true | false; error?: string }> {
+export async function completeOnboardingAction(userId: string): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -209,7 +209,7 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
             targetType: "onboarding_completion",
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error("Failed to complete onboarding:", error);
         return { success: false as const, error: "Failed to complete onboarding" };

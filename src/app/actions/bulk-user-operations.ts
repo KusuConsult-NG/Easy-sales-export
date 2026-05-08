@@ -25,7 +25,7 @@ export async function bulkSuspendUsersAction(
     reason: string,
     duration?: number // days, undefined = permanent
 ): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     suspended: number;
     failed: string[];
     error?: string;
@@ -36,7 +36,7 @@ export async function bulkSuspendUsersAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 suspended: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:suspend",
@@ -49,7 +49,7 @@ export async function bulkSuspendUsersAction(
 
         if (userIds.length > 100) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 suspended: 0,
                 failed: userIds,
                 error: "Cannot suspend more than 100 users at once",
@@ -58,7 +58,7 @@ export async function bulkSuspendUsersAction(
 
         if (!reason || reason.trim().length < 10) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 suspended: 0,
                 failed: userIds,
                 error: "Suspension reason must be at least 10 characters",
@@ -134,12 +134,12 @@ export async function bulkSuspendUsersAction(
             logger.error("[bulkSuspendUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true as const, suspended: suspendedCount,
+        return { error: null, success: true as const, suspended: suspendedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk suspend users:", error);
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             suspended: 0,
             failed: userIds,
             error: error.message || "Failed to suspend users",
@@ -153,7 +153,7 @@ export async function bulkSuspendUsersAction(
 export async function bulkActivateUsersAction(
     userIds: string[]
 ): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     activated: number;
     failed: string[];
     error?: string;
@@ -164,7 +164,7 @@ export async function bulkActivateUsersAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 activated: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:update",
@@ -177,7 +177,7 @@ export async function bulkActivateUsersAction(
 
         if (userIds.length > 100) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 activated: 0,
                 failed: userIds,
                 error: "Cannot activate more than 100 users at once",
@@ -241,12 +241,12 @@ export async function bulkActivateUsersAction(
             logger.error("[bulkActivateUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true as const, activated: activatedCount,
+        return { error: null, success: true as const, activated: activatedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk activate users:", error);
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             activated: 0,
             failed: userIds,
             error: error.message || "Failed to activate users",
@@ -262,7 +262,7 @@ export async function bulkAssignRolesAction(
     rolesToAdd: string[],
     rolesToRemove: string[]
 ): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     updated: number;
     failed: string[];
     error?: string;
@@ -273,7 +273,7 @@ export async function bulkAssignRolesAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 updated: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:assign_roles",
@@ -286,7 +286,7 @@ export async function bulkAssignRolesAction(
 
         if (userIds.length > 100) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 updated: 0,
                 failed: userIds,
                 error: "Cannot update more than 100 users at once",
@@ -296,7 +296,7 @@ export async function bulkAssignRolesAction(
         // Prevent removing admin role via bulk operation
         if (rolesToRemove.includes("admin") || rolesToRemove.includes("super_admin")) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 updated: 0,
                 failed: userIds,
                 error: "Cannot remove admin roles via bulk operation",
@@ -354,12 +354,12 @@ export async function bulkAssignRolesAction(
             }
         );
 
-        return { success: true as const, updated: updatedCount,
+        return { error: null, success: true as const, updated: updatedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk assign roles:", error);
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             updated: 0,
             failed: userIds,
             error: error.message || "Failed to update user roles",
@@ -374,7 +374,7 @@ export async function bulkDeleteUsersAction(
     userIds: string[],
     reason: string
 ): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     deleted: number;
     failed: string[];
     error?: string;
@@ -385,7 +385,7 @@ export async function bulkDeleteUsersAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:delete (super_admin only)",
@@ -398,7 +398,7 @@ export async function bulkDeleteUsersAction(
 
         if (userIds.length > 50) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Cannot delete more than 50 users at once",
@@ -407,7 +407,7 @@ export async function bulkDeleteUsersAction(
 
         if (!reason || reason.trim().length < 10) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Deletion reason must be at least 10 characters",
@@ -417,7 +417,7 @@ export async function bulkDeleteUsersAction(
         // Prevent self-deletion
         if (userIds.includes(session.user.id || "")) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Cannot delete your own account",
@@ -489,12 +489,12 @@ export async function bulkDeleteUsersAction(
             logger.error("[bulkDeleteUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true as const, deleted: deletedCount,
+        return { error: null, success: true as const, deleted: deletedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk delete users:", error);
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             deleted: 0,
             failed: userIds,
             error: error.message || "Failed to delete users",
@@ -512,7 +512,7 @@ export async function createImpersonationTokenAction(
     reason: string,
     durationMinutes: number = 30
 ): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     token?: string;
     expiresAt?: string;
     error?: string;
@@ -587,7 +587,7 @@ export async function createImpersonationTokenAction(
             }
         );
 
-        return { success: true as const, token: impersonationRef.id,
+        return { error: null, success: true as const, token: impersonationRef.id,
             expiresAt: expiresAt.toISOString() };
     } catch (error: any) {
         logger.error("Failed to create impersonation token:", error);
@@ -604,7 +604,7 @@ export async function createImpersonationTokenAction(
 export async function exportUserDataAction(
     userId: string
 ): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: any;
     error?: string;
 }> {
@@ -702,7 +702,7 @@ export async function exportUserDataAction(
         );
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: userDataExport,
         };
     } catch (error: any) {

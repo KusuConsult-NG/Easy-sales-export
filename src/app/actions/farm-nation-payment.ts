@@ -18,7 +18,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    success: true | false;
+    error: null, success: true | false;
     error?: string | null;
     data?: {
         authorizationUrl: string;
@@ -113,7 +113,7 @@ export async function initializePropertyPaymentAction(
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -133,7 +133,7 @@ export async function initializePropertyPaymentAction(
  * Updates ownership after successful payment
  */
 export async function verifyPropertyPaymentAction(reference: string): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     message?: string;
     propertyId?: string;
@@ -255,7 +255,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             message: `Payment successful! Your funds are held securely in escrow for ${metadata.propertyTitle}.`,
             propertyId,
         };

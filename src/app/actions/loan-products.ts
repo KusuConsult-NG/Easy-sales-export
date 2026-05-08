@@ -25,7 +25,7 @@ export async function getAdminLoanProductsAction(options: {
     limit?: number;
     lastDocId?: string;
 } = {}): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: LoanProduct[];
     error?: string;
     lastDocId?: string;
@@ -60,7 +60,7 @@ export async function getAdminLoanProductsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: products,
             lastDocId: nextCursor,
             hasMore

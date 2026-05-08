@@ -502,7 +502,7 @@ export async function submitExportOnboardingAction(
 
         if (existingStatus === 'pending_approval' || existingStatus === 'under_review') {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: undefined,
                 error: "Your previous application is still being processed.",
                 meta: null
@@ -510,7 +510,7 @@ export async function submitExportOnboardingAction(
         }
         if (existingStatus === 'approved') {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: undefined,
                 error: "You are already registered for Export.",
                 meta: null
@@ -883,7 +883,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
 export async function investInExportAction(
     exportId: string,
     amount: number
-): Promise<{ success: true | false; error?: string; data?: { authorizationUrl: string; reference: string } }> {
+): Promise<{ error: null, success: true | false; error?: string; data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -930,7 +930,7 @@ export async function investInExportAction(
             `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/export/verify`
         );
 
-        return { success: true as const, data: initResult };
+        return { error: null, success: true as const, data: initResult };
 
     } catch (error: any) {
         logger.error("Invest in export error:", error);
@@ -942,7 +942,7 @@ export async function investInExportAction(
 // Verify Export Investment
 // ============================================
 
-export async function verifyExportInvestmentAction(reference: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function verifyExportInvestmentAction(reference: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1020,7 +1020,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
         revalidatePath("/dashboard/export");
         revalidatePath(`/export/windows/${exportId}`);
 
-        return { success: true };
+        return { error: null, success: true };
 
     } catch (error: any) {
         logger.error("Verify export investment error:", error);
@@ -1071,7 +1071,7 @@ export async function getMyExportInvestmentsAction() {
             };
         }));
 
-        return { success: true as const, data: investments };
+        return { error: null, success: true as const, data: investments };
     } catch (error) {
         logger.error("Get my investments error:", error);
         return { success: false as const, error: "Failed to fetch investments" };
@@ -1086,7 +1086,7 @@ export async function extendEscrowAction(
     exportId: string,
     days: number,
     reason: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1137,7 +1137,7 @@ export async function extendEscrowAction(
  * Get current user's existing export onboarding application (for pre-populating edit form)
  */
 export async function getExportApplicationAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: any;
     revisionNote?: string;
     error?: string;
@@ -1160,7 +1160,7 @@ export async function getExportApplicationAction(): Promise<{
             return bTime - aTime;
         });
         const data = sortedDocs[0];
-        return { success: true as const, data: { ...data, revisionNote: data?.revisionNote } };
+        return { error: null, success: true as const, data: { ...data, revisionNote: data?.revisionNote } };
     } catch (error) {
         logger.error('getExportApplicationAction error:', error);
         return { success: false as const, error: 'Failed to fetch application' };
@@ -1173,7 +1173,7 @@ export async function getExportApplicationAction(): Promise<{
 export async function requestExportRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1236,7 +1236,7 @@ export async function requestExportRevisionAction(
             logger.error('Export revision email failed (non-blocking):', emailError);
         }
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (error) {
         logger.error('requestExportRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision' };
@@ -1248,7 +1248,7 @@ export async function requestExportRevisionAction(
  */
 export async function approveExportApplicationAction(
     applicationId: string
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1310,7 +1310,7 @@ export async function approveExportApplicationAction(
             logger.error('Export approval email failed (non-blocking):', emailError);
         }
 
-        return { success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: null, meta: null };
     } catch (error) {
         logger.error('approveExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to approve application', meta: null };
@@ -1389,7 +1389,7 @@ export async function resubmitExportApplicationAction(
             logger.error("Failed to invalidate cache after Export application resubmission:", err);
         }
 
-        return { success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: null, meta: null };
     } catch (error) {
         logger.error('resubmitExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to resubmit application', meta: null };

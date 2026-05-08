@@ -63,7 +63,7 @@ export async function createLandListing(
             },
         });
 
-        return { success: true as const, data: { listingId: listingRef.id,
+        return { error: null, success: true as const, data: { listingId: listingRef.id,
             userId: session.user.id, } };
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -134,7 +134,7 @@ export async function getLandListings(filters?: z.infer<typeof landSearchSchema>
             });
         }
 
-        return { success: true as const, data: { listings, } };
+        return { error: null, success: true as const, data: { listings, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch land listings", listings: [] };
     }
@@ -173,7 +173,7 @@ export async function getLandListing(listingId: string) {
             verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate() : null,
         } as unknown as LandListing;
 
-        return { success: true as const, listing };
+        return { error: null, success: true as const, listing };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch listing", listing: null };
     }
@@ -210,7 +210,7 @@ export async function getMyLandListings() {
             } as unknown as LandListing;
         });
 
-        return { success: true as const, data: { listings, } };
+        return { error: null, success: true as const, data: { listings, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch your listings", listings: [] };
     }
@@ -268,7 +268,7 @@ export async function updateLandListing(
             },
         });
 
-        return { success: true as const, data: { userId: session.user.id } };
+        return { error: null, success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -327,7 +327,7 @@ export async function verifyLandListing(
             },
         });
 
-        return { success: true as const, data: { userId: session.user.id } };
+        return { error: null, success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -378,7 +378,7 @@ export async function deleteLandListing(listingId: string) {
             },
         });
 
-        return { success: true as const, data: { userId: session.user.id } };
+        return { error: null, success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         return { success: false as const, error: "Failed to delete listing" };
     }
@@ -441,7 +441,7 @@ export async function getLandStatistics() {
             stats.averagePrice = Math.round(stats.totalValue / stats.total);
         }
 
-        return { success: true as const, data: { stats, } };
+        return { error: null, success: true as const, data: { stats, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch statistics", stats: null };
     }

@@ -135,7 +135,7 @@ export async function getPropertiesAction(filters?: {
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { properties },
             meta: { cursor: lastDoc?.id || null, hasMore: snapshot.docs.length === pageSize }
         };
@@ -276,7 +276,7 @@ export async function listPropertyAction(input: PropertyListingInput) {
         const userData = userDoc.data()!;
         if (!userData.serviceRegistrations?.cooperative?.status || userData.serviceRegistrations.cooperative.status !== "approved") {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "Cooperative membership required to list properties. Please complete your cooperative registration.",
                 meta: null
@@ -289,7 +289,7 @@ export async function listPropertyAction(input: PropertyListingInput) {
 
         if (!validation.success) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: validation.error.issues[0]?.message || "Validation failed",
                 meta: null
@@ -336,7 +336,7 @@ export async function listPropertyAction(input: PropertyListingInput) {
         const docRef = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).add(property);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Property listed successfully. Awaiting admin verification.", propertyId: docRef.id },
             meta: null
         };
@@ -373,7 +373,7 @@ export async function getMyPropertiesAction() {
                 
                 const properties = serializeDocs<Property>(snapshot.docs);
                 return { 
-                    success: true as const, 
+                    error: null, success: true as const, 
                     data: { 
                         properties: properties.sort((a, b) => {
                             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
@@ -441,7 +441,7 @@ export async function initiatePropertyPurchaseAction(
         const userData = userDoc.data()!;
         if (!userData.serviceRegistrations?.cooperative?.status || userData.serviceRegistrations.cooperative.status !== "approved") {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "Cooperative membership required. Please complete your cooperative registration.",
                 meta: null
@@ -477,7 +477,7 @@ export async function initiatePropertyPurchaseAction(
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Purchase request created. Proceed to payment.", requestId: requestRef.id, amount: property.price },
             meta: null
         };
@@ -514,7 +514,7 @@ export async function getMyPurchaseRequestsAction() {
                 
                 const requests = serializeDocs(snapshot.docs);
                 return { 
-                    success: true as const, 
+                    error: null, success: true as const, 
                     data: { 
                         requests: requests.sort((a: any, b: any) => {
                             const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
@@ -586,7 +586,7 @@ export async function cancelPurchaseRequestAction(requestId: string) {
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Purchase request cancelled successfully" },
             meta: null
         };
@@ -630,7 +630,7 @@ export async function deletePropertyAction(propertyId: string) {
 
         if (!activeRequests.empty) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "Cannot delete property with active purchase requests",
                 meta: null
@@ -645,7 +645,7 @@ export async function deletePropertyAction(propertyId: string) {
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Property deleted successfully" },
             meta: null
         };
@@ -717,7 +717,7 @@ export async function updatePropertyAction(propertyId: string, updates: Partial<
         await propertyRef.update(updateData);
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { message: "Property updated successfully" },
             meta: null
         };
@@ -768,7 +768,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
 
         if (!session?.user?.id) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "Not authenticated. Please login first.",
                 meta: null
@@ -783,7 +783,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
 
         if (existingStatus === 'pending' || existingStatus === 'under_review') {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "Your previous application is still being processed.",
                 meta: null
@@ -791,7 +791,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         }
         if (existingStatus === 'approved') {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "You are already registered for Farm Nation.",
                 meta: null
@@ -801,7 +801,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         // Validate required fields
         if (!data.role || !data.profile || !data.terms) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "Missing required onboarding data",
                 meta: null
@@ -811,7 +811,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         // Validate terms acceptance
         if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: "You must accept all terms to continue",
                 meta: null
@@ -887,7 +887,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 role: data.role,
                 userId,
@@ -897,7 +897,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
     } catch (error: any) {
         logger.error("Error submitting Farm Nation onboarding:", error);
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             data: null,
             error: "An error occurred while processing your onboarding. Please try again.",
             meta: null
@@ -994,7 +994,7 @@ export async function uploadPropertyDocumentsAction(
         surveyPlan?: string;
         taxClearance?: string;
     }
-): Promise<{ success: true | false; data?: any; error?: string; meta?: any }> {
+): Promise<{ error: null, success: true | false; data?: any; error?: string; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1053,7 +1053,7 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
             // Must have at least C of O OR Survey Plan
             if (!property.documents?.cOfO && !property.documents?.surveyPlan) {
                 return {
-                    success: false as const,
+                    error: "Action failed", success: false as const,
                     data: null,
                     error: "Cannot verify property without documents (C of O or Survey Plan required).",
                     meta: null
@@ -1093,7 +1093,7 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
 /**
  * Fetch the current user's Farm Nation onboarding data for prefilling the edit form.
  */
-export async function getFarmNationApplicationAction(): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+export async function getFarmNationApplicationAction(): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1111,7 +1111,7 @@ export async function getFarmNationApplicationAction(): Promise<{ success: true 
         }
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { application: { ...farmNation, ...registration }, rejectionReason: registration?.rejectionReason },
             meta: null
         };
@@ -1126,7 +1126,7 @@ export async function getFarmNationApplicationAction(): Promise<{ success: true 
  */
 export async function resubmitFarmNationApplicationAction(
     data: FarmNationOnboardingData
-): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1325,7 +1325,7 @@ export async function getFarmNationDashboardStatsAction() {
             || 'buyer';
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 stats: {
                     totalHectares,

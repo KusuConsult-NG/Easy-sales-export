@@ -37,7 +37,7 @@ export async function createVillageMarketEventAction(data: {
     endTime: string;   // ISO string
     isRecurring?: boolean;
     recurringDay?: string;
-}): Promise<{ success: true | false; eventId?: string; error?: string }> {
+}): Promise<{ error: null, success: true | false; eventId?: string; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -87,7 +87,7 @@ export async function createVillageMarketEventAction(data: {
             startTime,
         });
 
-        return { success: true as const, eventId: eventDoc.id };
+        return { error: null, success: true as const, eventId: eventDoc.id };
     } catch (err: any) {
         logger.error("createVillageMarketEventAction error:", err);
         return { success: false as const, error: err.message || "Failed to create event" };
@@ -151,7 +151,7 @@ export async function getVillageMarketEventAction(eventId: string): Promise<{
 
 export async function joinVillageMarketEventAction(
     eventId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -177,7 +177,7 @@ export async function joinVillageMarketEventAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (err: any) {
         logger.error("joinVillageMarketEventAction error:", err);
         return { success: false as const, error: err.message || "Failed to join event" };
@@ -198,7 +198,7 @@ export async function addFlashSaleProductAction(data: {
     availableQuantity?: number;
     imageUrl?: string;
     productId?: string; // Reference to existing marketplace product
-}): Promise<{ success: true | false; flashProductId?: string; error?: string }> {
+}): Promise<{ error: null, success: true | false; flashProductId?: string; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -231,7 +231,7 @@ export async function addFlashSaleProductAction(data: {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const, flashProductId: docRef.id };
+        return { error: null, success: true as const, flashProductId: docRef.id };
     } catch (err: any) {
         logger.error("addFlashSaleProductAction error:", err);
         return { success: false as const, error: err.message || "Failed to add product" };
@@ -245,7 +245,7 @@ export async function addFlashSaleProductAction(data: {
 export async function addExternalMerchantAction(
     eventId: string,
     merchant: Omit<ExternalMerchant, "id">
-): Promise<{ success: true | false; merchantId?: string; error?: string }> {
+): Promise<{ error: null, success: true | false; merchantId?: string; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -263,7 +263,7 @@ export async function addExternalMerchantAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const, merchantId };
+        return { error: null, success: true as const, merchantId };
     } catch (err: any) {
         logger.error("addExternalMerchantAction error:", err);
         return { success: false as const, error: err.message || "Failed to add merchant" };
@@ -277,7 +277,7 @@ export async function addExternalMerchantAction(
 export async function updateVillageMarketEventStatusAction(
     eventId: string,
     status: "active" | "ended" | "cancelled"
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -292,7 +292,7 @@ export async function updateVillageMarketEventStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { error: null, success: true };
     } catch (err: any) {
         logger.error("updateVillageMarketEventStatusAction error:", err);
         return { success: false as const, error: err.message || "Failed to update event status" };
@@ -305,7 +305,7 @@ export async function updateVillageMarketEventStatusAction(
 
 export async function removeFlashSaleProductAction(
     flashProductId: string
-): Promise<{ success: true | false; error?: string }> {
+): Promise<{ error: null, success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -317,7 +317,7 @@ export async function removeFlashSaleProductAction(
         if (doc.data()?.sellerId !== userId) return { success: false as const, error: "Unauthorized" };
 
         await docRef.update({ status: "removed", updatedAt: FieldValue.serverTimestamp() });
-        return { success: true };
+        return { error: null, success: true };
     } catch (err: any) {
         logger.error("removeFlashSaleProductAction error:", err);
         return { success: false as const, error: err.message || "Failed to remove product" };
@@ -333,7 +333,7 @@ export async function getAdminVillageMarketEventsAction(options: {
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
 } = {}): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     data?: VillageMarketEvent[];
     error?: string;
     lastDocId?: string;
@@ -367,7 +367,7 @@ export async function getAdminVillageMarketEventsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: events,
             lastDocId: nextCursor,
             hasMore

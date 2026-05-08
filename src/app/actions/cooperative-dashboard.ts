@@ -81,7 +81,7 @@ export async function getDashboardDataAction() {
         }).slice(0, 10); // Keep only recent 10
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { membership, transactions },
             meta: null,
             error: null

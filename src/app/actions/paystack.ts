@@ -32,7 +32,7 @@ interface VerifyAccountResponse {
 }
 
 export interface BankVerificationResult {
-    success: true | false;
+    error: null, success: true | false;
     accountName?: string;
     error?: string;
 }
@@ -40,7 +40,7 @@ export interface BankVerificationResult {
 /**
  * Fetch list of Nigerian banks supported by Paystack
  */
-export async function getBankList(): Promise<{ success: true | false; banks?: Bank[]; error?: string }> {
+export async function getBankList(): Promise<{ error: null, success: true | false; banks?: Bank[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
@@ -70,7 +70,7 @@ export async function getBankList(): Promise<{ success: true | false; banks?: Ba
             return { success: false as const, error: 'Failed to fetch bank list' };
         }
 
-        return { success: true as const, banks: data.data, };
+        return { error: null, success: true as const, banks: data.data, };
     } catch (error) {
         logger.error('getBankList error:', error);
         return {
@@ -198,7 +198,7 @@ export async function verifyBankAccount(
             accountName: data.data.account_name
         });
 
-        return { success: true as const, accountName: data.data.account_name };
+        return { error: null, success: true as const, accountName: data.data.account_name };
     } catch (error) {
         logger.error('verifyBankAccount: Unexpected error', error);
 

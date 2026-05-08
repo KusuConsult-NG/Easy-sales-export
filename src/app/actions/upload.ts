@@ -6,7 +6,7 @@
  * STRATEGY:
  *  1. Validate auth, mime type, and file size
  *  2. Send file to Cloudinary via signed upload API
- *  3. Return { success: true as const, url } or { success: false as const, error }
+ *  3. Return { error: null, success: true as const, url } or { success: false as const, error }
  *
  * IMPORTANT: Firebase Storage is NOT used. All uploads go to Cloudinary.
  * The old Firebase Storage + Firestore fallback path was removed because:
@@ -31,7 +31,7 @@ const MAX_SIZE_MB = 5;
 // ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
     formData: FormData
-): Promise<{ success: true | false; url?: string; error?: string; fallback?: boolean }> {
+): Promise<{ error: null, success: true | false; url?: string; error?: string; fallback?: boolean }> {
     try {
         const file = formData.get("file") as File | null;
         const fileName = formData.get("fileName") as string;
@@ -114,7 +114,7 @@ export async function uploadDocumentAction(
         const url: string = result.secure_url;
 
         logger.info(`[uploadDocumentAction] Uploaded to Cloudinary: ${documentType} for user ${userId}`);
-        return { success: true as const, url };
+        return { error: null, success: true as const, url };
 
     } catch (error) {
         logger.error("[uploadDocumentAction] Unexpected error:", error);

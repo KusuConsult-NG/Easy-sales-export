@@ -282,7 +282,7 @@ async function _getVendorRevenueInsightsAction() {
             .sort((a, b) => b.revenue - a.revenue);
 
         return { 
-            success: true as const, 
+            error: null, success: true as const, 
             data: { 
                 insights: {
                     totalRevenue,

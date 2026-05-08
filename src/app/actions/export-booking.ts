@@ -44,7 +44,7 @@ export async function createBookingAction(data: CreateBookingData) {
 
         if (data.quantity > availableVolume) {
             return {
-                success: false as const,
+                error: "Action failed", success: false as const,
                 data: null,
                 error: `Only ${availableVolume}kg available`,
                 meta: null
@@ -69,7 +69,7 @@ export async function createBookingAction(data: CreateBookingData) {
         });
 
         return {
-            success: true as const,
+            error: null, success: true as const,
             data: { bookingId: bookingRef.id },
             error: null,
             meta: null
@@ -77,7 +77,7 @@ export async function createBookingAction(data: CreateBookingData) {
     } catch (error) {
         logger.error('Create booking error:', error);
         return {
-            success: false as const,
+            error: "Action failed", success: false as const,
             data: null,
             error: 'Failed to create booking',
             meta: null

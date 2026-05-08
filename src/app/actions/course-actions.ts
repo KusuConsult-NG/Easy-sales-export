@@ -48,7 +48,7 @@ export async function updateLessonProgress(
         // Or auto-complete? The "Honor System" fix is about verification.
         // Let's keep it manual but verified.
 
-        return { success: true as const, data: { userId: session.user.id,
+        return { error: null, success: true as const, data: { userId: session.user.id,
             completed: validated.progressPercent >= 95, } };
     } catch (error) {
         logger.error("Lesson progress error:", error);
@@ -119,7 +119,7 @@ export async function enrollInCourse(
             },
         });
 
-        return { success: true as const, data: { enrollmentId: enrollmentRef.id,
+        return { error: null, success: true as const, data: { enrollmentId: enrollmentRef.id,
             userId: session.user.id, } };
     } catch (error) {
         if (error instanceof z.ZodError) {
@@ -148,12 +148,12 @@ export async function getCourseProgress(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return { success: true as const, data: { progress: null, } };
+            return { error: null, success: true as const, data: { progress: null, } };
         }
 
         const progressData = snapshot.docs[0].data();
 
-        return { success: true as const, data: { progress: {
+        return { error: null, success: true as const, data: { progress: {
                 id: snapshot.docs[0].id,
                 userId: progressData.userId,
                 courseId: progressData.courseId,
@@ -182,10 +182,10 @@ export async function getLessonProgress(lessonId: string) {
         const doc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
 
         if (!doc.exists) {
-            return { success: true as const, data: { progress: null } };
+            return { error: null, success: true as const, data: { progress: null } };
         }
 
-        return { success: true as const, data: { progress: doc.data() as {
+        return { error: null, success: true as const, data: { progress: doc.data() as {
                 progressPercent: number;
                 lastWatchedSecond: number;
                 completed: boolean; } },
@@ -212,7 +212,7 @@ export async function getUserEnrolledCourses() {
 
         const enrollments = serializeDocs(snapshot.docs);
 
-        return { success: true as const, data: { courses: enrollments, } };
+        return { error: null, success: true as const, data: { courses: enrollments, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch enrolled courses", courses: [] };
     }
@@ -255,7 +255,7 @@ export async function completeCourse(courseId: string) {
             },
         });
 
-        return { success: true as const, data: { userId: session.user.id } };
+        return { error: null, success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         return { success: false as const, error: "Failed to complete course" };
     }
@@ -293,7 +293,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         if (!certSnapshot.empty) {
             // Return existing certificate
             const existingCert = certSnapshot.docs[0];
-            return { success: true as const, data: { certificateId: existingCert.id,
+            return { error: null, success: true as const, data: { certificateId: existingCert.id,
                 message: "Certificate already generated", } };
         }
 
@@ -335,7 +335,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             },
         });
 
-        return { success: true as const, data: { certificateId: certificateRef.id,
+        return { error: null, success: true as const, data: { certificateId: certificateRef.id,
             message: "Certificate generated successfully", } };
     } catch (error) {
         logger.error("Certificate generation error:", error);
@@ -358,12 +358,12 @@ export async function getCourseCertificate(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return { success: true as const, data: { certificate: null, } };
+            return { error: null, success: true as const, data: { certificate: null, } };
         }
 
         const certData = snapshot.docs[0].data();
 
-        return { success: true as const, data: { certificate: {
+        return { error: null, success: true as const, data: { certificate: {
                 id: snapshot.docs[0].id,
                 userId: certData.userId,
                 userName: certData.userName,

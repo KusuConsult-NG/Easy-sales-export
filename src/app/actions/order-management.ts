@@ -47,7 +47,7 @@ async function _getSellerOrdersAction(filters?: {
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { success: true as const, data: { orders } };
+        return { error: null, success: true as const, data: { orders } };
     } catch (error) {
         logger.error("Get seller orders error:", { 
             userId: sessionResult?.session?.user?.id,
@@ -122,7 +122,7 @@ async function _updateOrderStatusAction(
             transaction.update(orderRef, updateData);
         });
 
-        return { success: true as const, data: { message: "Order status updated" } };
+        return { error: null, success: true as const, data: { message: "Order status updated" } };
     } catch (error) {
         logger.error("Update order status error:", { 
             orderId, 
@@ -161,7 +161,7 @@ async function _getBuyerOrdersAction(filters?: {
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { success: true as const, data: { orders } };
+        return { error: null, success: true as const, data: { orders } };
     } catch (error) {
         logger.error("Get buyer orders error:", { 
             userId: sessionResult?.session?.user?.id,
@@ -242,7 +242,7 @@ async function _confirmDeliveryAction(orderId: string) {
             }
         }
 
-        return { success: true as const, data: { message: "Delivery confirmed" } };
+        return { error: null, success: true as const, data: { message: "Delivery confirmed" } };
     } catch (error) {
         logger.error("Confirm delivery error:", { 
             orderId, 
@@ -277,7 +277,7 @@ async function _getOrderDetailsAction(orderId: string) {
             return { success: false as const, error: "Unauthorized" };
         }
 
-        return { success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, data) } };
+        return { error: null, success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, data) } };
     } catch (error) {
         logger.error("Get order details error:", { 
             orderId, 

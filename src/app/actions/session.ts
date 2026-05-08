@@ -27,5 +27,5 @@ export async function switchModuleAction(moduleId: string) {
 
     revalidatePath("/", "layout");
     
-    return { success: true as const, moduleId };
+    return { error: null, success: true as const, moduleId };
 }

@@ -56,7 +56,7 @@ async function getAdminScope(userId: string, userRoles: string[]): Promise<strin
 // ============================================================================
 
 async function _getCooperativeStatsAction(): Promise<{
-    success: true;
+    error: null, success: true;
     meta?: any;
     data: {
         stats: {
@@ -219,7 +219,7 @@ async function _getCooperativeStatsAction(): Promise<{
                 : 0;
 
         const payload = {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 stats: {
                     totalMembers: Math.max(totalMembersCount, paidMembersCount),
@@ -268,7 +268,7 @@ async function _getAllMembersAction(options?: {
     limit?: number;
     search?: string;
 }): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: { members: any[] };
     error?: string;
@@ -342,7 +342,7 @@ async function _getAllMembersAction(options?: {
             });
         }
 
-        return { success: true as const, data: { members }, meta: { hasMore: false, cursor: null } };
+        return { error: null, success: true as const, data: { members }, meta: { hasMore: false, cursor: null } };
     } catch (error) {
         logger.error("Get all members error:", {
             userId: sessionResult?.session?.user?.id,
@@ -356,7 +356,7 @@ export const getAllMembersAction = withFlexibleSafeAction("getAllMembersAction",
 async function _updateMemberStatusAction(
     memberId: string,
     status: "active" | "suspended"
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -454,7 +454,7 @@ async function _updateMemberStatusAction(
             }
         }
         
-        return { success: true as const, data: { message: "Member status updated" }, meta: null };
+        return { error: null, success: true as const, data: { message: "Member status updated" }, meta: null };
     } catch (error) {
         logger.error("Update member status error:", {
             userId: sessionResult?.session?.user?.id,
@@ -475,7 +475,7 @@ async function _getAllTransactionsAction(options?: {
     limit?: number;
     lastDocId?: string;
 }): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: { transactions: Array<{
         id: string;
@@ -593,7 +593,7 @@ async function _getAllTransactionsAction(options?: {
 
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
 
-        return { success: true as const, data: { transactions }, meta: { hasMore, lastDocId: nextCursor } };
+        return { error: null, success: true as const, data: { transactions }, meta: { hasMore, lastDocId: nextCursor } };
     } catch (error) {
         logger.error("Get all transactions error:", {
             userId: sessionResult?.session?.user?.id,
@@ -612,7 +612,7 @@ export async function getContributionReportsAction(options?: {
     month?: number;
     year?: number;
 }): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: {
         reports: {
@@ -727,7 +727,7 @@ export async function getContributionReportsAction(options?: {
         const monthlyTrend = monthlyTrendData.map(b => ({ month: b.month, amount: b.amount }));
 
         const payload = {
-            success: true as const,
+            error: null, success: true as const,
             data: {
                 reports: {
                     totalContributions,
@@ -756,7 +756,7 @@ export async function getContributionReportsAction(options?: {
 // ============================================================================
 
 export async function getRecentActivityAction(): Promise<{
-    success: true | false;
+    error: null, success: true | false;
     meta?: any;
     data?: { activities: Array<{
         type: string;
@@ -803,7 +803,7 @@ export async function getRecentActivityAction(): Promise<{
             };
         });
 
-        return { success: true as const, data: { activities }, meta: null };
+        return { error: null, success: true as const, data: { activities }, meta: null };
     } catch (error) {
         logger.error("Get recent activity error:", error);
         return { success: false as const, error: "Failed to fetch activity" };
@@ -822,7 +822,7 @@ export async function getRecentActivityAction(): Promise<{
  */
 export async function approveWithdrawalAction(
     withdrawalId: string
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -926,7 +926,7 @@ export async function approveWithdrawalAction(
             logger.error("[approveWithdrawalAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true as const, data: { message: "Withdrawal approved" }, meta: null };
+        return { error: null, success: true as const, data: { message: "Withdrawal approved" }, meta: null };
 
     } catch (error: any) {
         logger.error("Approve withdrawal error:", error);
@@ -942,7 +942,7 @@ export async function approveWithdrawalAction(
 export async function rejectWithdrawalAction(
     withdrawalId: string,
     reason: string
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1048,7 +1048,7 @@ export async function rejectWithdrawalAction(
             logger.error("[rejectWithdrawalAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true as const, data: { message: "Withdrawal rejected" }, meta: null };
+        return { error: null, success: true as const, data: { message: "Withdrawal rejected" }, meta: null };
 
     } catch (error: any) {
         logger.error("Reject withdrawal error:", error);
@@ -1066,7 +1066,7 @@ export async function rejectWithdrawalAction(
 export async function requestCooperativeRevisionAction(
     memberId: string,
     reason: string
-): Promise<{ success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1154,7 +1154,7 @@ export async function getStandardCooperativeMembersAction(
         dateFrom?: string; // YYYY-MM-DD
         dateTo?: string;   // YYYY-MM-DD
     } = {}
-): Promise<{ success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
+): Promise<{ error: null, success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
     const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();

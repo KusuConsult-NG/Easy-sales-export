@@ -103,7 +103,7 @@ export async function sendAIMessage(
             },
         });
 
-        return { success: true as const, data: { response: aiResponse,
+        return { error: null, success: true as const, data: { response: aiResponse,
             chatId: chatRef.id,
             userId: session.user.id, } };
     } catch (error) {
@@ -148,7 +148,7 @@ export async function getAIChatHistory(maxMessages: number = 20) {
             } as AIChatMessage;
         }).reverse(); // Reverse to show oldest first
 
-        return { success: true as const, data: { messages, } };
+        return { error: null, success: true as const, data: { messages, } };
     } catch (error) {
         return { success: false as const, error: "Failed to fetch chat history", messages: [] };
     }
@@ -165,7 +165,7 @@ export async function getAISuggestions(context: { currentPage: string; userRole:
     // Generate contextual suggestions based on page
     const suggestions = generateSuggestions(context.currentPage, context.userRole);
 
-    return { success: true as const, data: { suggestions, } };
+    return { error: null, success: true as const, data: { suggestions, } };
 }
 
 /**

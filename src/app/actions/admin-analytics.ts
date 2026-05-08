@@ -296,7 +296,7 @@ export async function getDashboardStatsAction(options?: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface FinancialOverview {
-    success: true | false;
+    error: null, success: true | false;
     error?: string;
     totalRevenue: number;
     totalEscrowVolume: number;
@@ -445,7 +445,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
         // Silently skip — collection may not exist yet
     }
 
-    const payload: FinancialOverview = { success: true as const, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions, totalSuccessfulCount, totalAbandonedCount, totalFailedCount };
+    const payload: FinancialOverview = { error: null, success: true as const, totalRevenue, totalEscrowVolume, totalLoansDisbursed, pendingPayoutAmount, recentTransactions, failedTransactions, totalSuccessfulCount, totalAbandonedCount, totalFailedCount };
 
     try {
         await setCache(cacheKey, payload, 120); // Cache for 2 minutes
