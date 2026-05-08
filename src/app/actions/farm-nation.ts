@@ -370,7 +370,6 @@ export async function getMyPropertiesAction() {
                 snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
                     .where("ownerId", "==", session.user.id)
                     .get();
-                
                 const properties = serializeDocs<Property>(snapshot.docs);
                 return { 
                     error: null, success: true as const, 
@@ -511,7 +510,6 @@ export async function getMyPurchaseRequestsAction() {
                 snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
                     .where("buyerId", "==", session.user.id)
                     .get();
-                
                 const requests = serializeDocs(snapshot.docs);
                 return { 
                     error: null, success: true as const, 
@@ -994,7 +992,7 @@ export async function uploadPropertyDocumentsAction(
         surveyPlan?: string;
         taxClearance?: string;
     }
-): Promise<{ error: null, success: true | false; data?: any; error?: string; meta?: any }> {
+): Promise<{ error: string | null, success: true | false; data?: any; ; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1093,7 +1091,7 @@ export async function verifyPropertyAction(propertyId: string, verified: boolean
 /**
  * Fetch the current user's Farm Nation onboarding data for prefilling the edit form.
  */
-export async function getFarmNationApplicationAction(): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
+export async function getFarmNationApplicationAction(): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1126,7 +1124,7 @@ export async function getFarmNationApplicationAction(): Promise<{ error: null, s
  */
 export async function resubmitFarmNationApplicationAction(
     data: FarmNationOnboardingData
-): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1274,7 +1272,6 @@ export async function getFarmNationDashboardStatsAction() {
                 listingsSnap = lSnap;
                 transactionsSnap = tSnap;
                 userDoc = uDoc;
-                
                 // We will sort listingsSnap.docs and transactionsSnap.docs below
             } else {
                 throw e;
@@ -1314,7 +1311,6 @@ export async function getFarmNationDashboardStatsAction() {
         const completedPurchases = transactions.filter(t => t.status === 'completed' || t.status === 'payment_confirmed');
         const propertiesAcquired = completedPurchases.length;
         const totalInvestmentValue = completedPurchases.reduce((sum, t) => sum + t.amount, 0);
-        
         const pendingTransactions = transactions.filter(
             t => t.status === 'pending_payment' || t.status === 'payment_confirmed'
         ).length;

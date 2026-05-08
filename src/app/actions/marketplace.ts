@@ -32,7 +32,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 // Check Marketplace Application Status Action
 // ============================================
 
-async function _checkMarketplaceStatusAction(): Promise<{ error: null, success: true | false; data: { status: string; accountType?: string } | null; error?: string }> {
+async function _checkMarketplaceStatusAction(): Promise<{ error: string | null, success: true | false; data: { status: string; accountType?: string } | null;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -108,7 +108,6 @@ async function _checkMarketplaceStatusAction(): Promise<{ error: null, success: 
         if (userData?.sellerVerificationStatus) {
             const legacyStatus = userData.sellerVerificationStatus;
             const derivedAccountType = "seller";
-            
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
                 { 
                     serviceRegistrations: { marketplace: { status: legacyStatus, accountType: derivedAccountType, syncedFromLegacy: true, syncedAt: new Date().toISOString() } },
@@ -332,7 +331,7 @@ export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVeri
  * Submit full marketplace onboarding (Profile + Verification + Files)
  */
 async function _submitMarketplaceOnboardingAction(
-    prevState: { error: null, success: true | false; error?: string; data?: any } | null,
+    prevState: { error: string | null, success: true | false; ; data?: any } | null,
     formData: FormData
 ) {
     let sessionResult;
@@ -757,7 +756,6 @@ async function _getMarketplaceProductsAction(params: {
         }
 
         const snapshot = await query.limit(limitCount).get();
-        
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let products = snapshot.docs.map((doc: any) => {
             const data = doc.data();
@@ -831,7 +829,6 @@ async function _deleteProductAction(productId: string) {
         }
 
         const productData = productDoc.data();
-        
         // Ensure ownership
         if (productData?.sellerId !== userId) {
             // Check if admin
@@ -1082,7 +1079,6 @@ async function _getSellerAnalyticsAction() {
 
         const ordersRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId);
-        
         const productsRef = db.collection(COLLECTIONS.PRODUCTS)
             .where("sellerId", "==", userId);
 
@@ -1093,7 +1089,6 @@ async function _getSellerAnalyticsAction() {
                 count: AggregateField.count()
             })
             .get();
-        
         const totalSales = totalSalesSnapshot.data().totalAmount || 0;
         const totalOrdersCount = totalSalesSnapshot.data().count || 0;
 
@@ -1144,7 +1139,6 @@ async function _getSellerAnalyticsAction() {
                 avgRating: AggregateField.average("rating")
             })
             .get();
-        
         const totalProductViews = productStatsSnapshot.data().totalViews || 0;
         const averageRating = productStatsSnapshot.data().avgRating || 0;
 
@@ -1445,7 +1439,7 @@ async function _resubmitSellerVerificationAction(
         bankAccount?: { bankName: string; accountNumber: string; accountName: string; bankCode: string };
         [key: string]: any;
     }
-): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1527,7 +1521,7 @@ async function _updateSellerBadge(
     adminUserId: string,
     sellerId: string,
     grant: boolean
-): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
     try {
         const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
         const adminRoles: string[] = adminDoc.data()?.roles || [];
@@ -1595,7 +1589,7 @@ async function _updateSellerBadge(
     }
 }
 
-async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
+async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1612,7 +1606,7 @@ async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ erro
 }
 export const grantSellerVerifiedBadgeAction = withFlexibleSafeAction("grantSellerVerifiedBadgeAction", _grantSellerVerifiedBadgeAction);
 
-async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
+async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1640,7 +1634,7 @@ export const revokeSellerVerifiedBadgeAction = withFlexibleSafeAction("revokeSel
 async function _updateSellerCategoryAction(
     sellerId: string,
     category: "wholesale" | "retail"
-): Promise<{ error: null, success: true | false; data?: { message: string }; error?: string }> {
+): Promise<{ error: string | null, success: true | false; data?: { message: string };  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1672,7 +1666,6 @@ async function _updateSellerCategoryAction(
             // 2. Update Verification Document
             const verSnap = await transaction.get(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("userId", "==", sellerId));
-                
             if (!verSnap.empty) {
                 const sortedDocs = verSnap.docs.sort((a, b) => {
                     const aData = a.data();
@@ -1691,7 +1684,6 @@ async function _updateSellerCategoryAction(
             // 3. Denormalize onto all products
             const productsSnap = await transaction.get(db.collection(COLLECTIONS.PRODUCTS)
                 .where("sellerId", "==", sellerId));
-            
             if (!productsSnap.empty) {
                 productsSnap.docs.forEach((doc) => {
                     transaction.update(doc.ref, { 

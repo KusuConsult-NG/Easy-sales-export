@@ -26,7 +26,7 @@ async function _createResourceAction(data: {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
+}): Promise<{ error: string | null, success: true | false; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -78,7 +78,7 @@ async function _updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -118,7 +118,7 @@ export const updateResourceAction = withFlexibleSafeAction("updateResourceAction
 
 async function _deleteResourceAction(
     resourceId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -170,7 +170,7 @@ async function _createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
+}): Promise<{ error: string | null, success: true | false; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -224,7 +224,7 @@ async function _updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -262,7 +262,7 @@ async function _updateTrainingEventAction(
 }
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
-async function _getEventParticipantsAction(eventId: string): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
+async function _getEventParticipantsAction(eventId: string): Promise<{ error: string | null, success: true | false; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -297,7 +297,7 @@ export const getEventParticipantsAction = withFlexibleSafeAction("getEventPartic
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-async function _getWaveApplicationsAction(): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
+async function _getWaveApplicationsAction(): Promise<{ error: string | null, success: true | false; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -327,7 +327,7 @@ export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicat
 
 async function _approveWaveApplicationAction(
     applicationId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
@@ -357,7 +357,6 @@ async function _approveWaveApplicationAction(
             if (appData?.status !== "pending" && appData?.status !== "under_review") {
                 throw new Error("Application is not in a reviewable state");
             }
-            
             targetUserId = appData?.userId;
 
             transaction.update(appRef, {
@@ -452,7 +451,7 @@ export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveA
 async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
@@ -482,7 +481,6 @@ async function _rejectWaveApplicationAction(
             if (appData?.status !== "pending" && appData?.status !== "under_review") {
                 throw new Error("Application is not in a reviewable state");
             }
-            
             targetUserId = appData?.userId;
 
             transaction.update(appRef, {
@@ -565,7 +563,7 @@ async function _getStandardWaveApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -580,7 +578,6 @@ async function _getStandardWaveApplicationsAction(options: {
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
-        
         let countQ: Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
 
         if (options.status && options.status !== "all") {
@@ -605,12 +602,10 @@ async function _getStandardWaveApplicationsAction(options: {
                 q = q.startAfter(lastDoc);
             }
         }
-        
         q = q.limit(fetchLimit);
 
         const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
         let totalCount = 0;
-        
         try {
             const cachedCount = await getCached<number>(cacheKey);
             if (cachedCount !== null) {
@@ -620,7 +615,6 @@ async function _getStandardWaveApplicationsAction(options: {
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
-        
         if (totalCount === 0) {
             const countSnap = await countQ.count().get();
             totalCount = countSnap.data().count;
@@ -631,7 +625,6 @@ async function _getStandardWaveApplicationsAction(options: {
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
-        
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
@@ -697,7 +690,6 @@ async function _getStandardWaveApplicationsAction(options: {
                     f.data?.nin,
                     f.data?.bvn
                 ].filter(Boolean).join(" ").toLowerCase();
-                
                 return searchString.includes(s);
             });
         }
@@ -734,7 +726,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -749,7 +741,6 @@ async function _getStandardWaveWithdrawalsAction(options: {
         const fetchLimit = options.limit || 25;
         const orderDirection = options.sortOrder || "desc";
         let q: any = db.collection(COLLECTIONS.WAVE_WITHDRAWALS);
-        
         if (options.status && options.status !== "all") {
             q = q.where("status", "==", options.status);
         }
@@ -771,7 +762,6 @@ async function _getStandardWaveWithdrawalsAction(options: {
                 q = q.startAfter(lastDoc);
             }
         }
-        
         q = q.limit(fetchLimit + 1);
 
         const snapshot = await q.get();
@@ -812,7 +802,7 @@ async function _processWaveWithdrawalAction(data: {
     action: "approve" | "reject" | "complete";
     adminNotes?: string;
     transactionReference?: string;
-}): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
+}): Promise<{ error: string | null, success: true | false; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -832,7 +822,6 @@ async function _processWaveWithdrawalAction(data: {
         await db.runTransaction(async (tx) => {
             const snap = await tx.get(ref);
             if (!snap.exists) throw new Error("Withdrawal not found");
-            
             withdrawalData = snap.data();
             const currentStatus = withdrawalData.status;
 
@@ -900,7 +889,6 @@ async function _processWaveWithdrawalAction(data: {
         try {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId).get();
             const userData = userDoc.data();
-            
             if (!userData?.bankAccountNumber || !userData?.bankCode) {
                 // Rollback to pending
                 await ref.update({ 
@@ -963,7 +951,6 @@ async function _processWaveWithdrawalAction(data: {
                 payoutError: "Critical error during payout side-effect",
                 updatedAt: FieldValue.serverTimestamp(),
             }).catch(e => logger.error(`[WAVE:Rollback] Failed to rollback status for ${withdrawalId}:`, e));
-            
             return { success: false as const, error: "Critical payout failure. Status reverted to pending." };
         }
 

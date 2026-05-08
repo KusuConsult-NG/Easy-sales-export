@@ -66,7 +66,7 @@ export async function createAnnouncementAction(data: {
     priority: "low" | "medium" | "high" | "urgent";
     expiresAt?: string;
     adminId: string;
-}): Promise<{ error: null, success: true | false; error?: string; announcementId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; announcementId?: string }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -159,7 +159,7 @@ export async function getActiveAnnouncementsAction(
 export async function deactivateAnnouncementAction(
     announcementId: string,
     adminId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -198,7 +198,7 @@ export async function createBannerAction(data: {
     endDate: string;
     position: "top" | "bottom" | "popup";
     adminId: string;
-}): Promise<{ error: null, success: true | false; error?: string; bannerId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; bannerId?: string }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -280,7 +280,7 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
 export async function deactivateBannerAction(
     bannerId: string,
     adminId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };

@@ -656,12 +656,10 @@ export async function getUserExportInvestmentsAction(
             .where("investorId", "==", userId)
 
         const snapshotRaw = await query.get();
-        
         // Robust Sort: Handle both Timestamps and String dates gracefully
         const allDocs = snapshotRaw.docs.sort((a, b) => {
              const dataA = a.data();
              const dataB = b.data();
-             
              const getMillis = (val: any) => {
                  if (!val) return 0;
                  if (typeof val.toMillis === 'function') return val.toMillis();
@@ -682,12 +680,10 @@ export async function getUserExportInvestmentsAction(
              const idx = allDocs.findIndex(d => d.id === lastId);
              if (idx !== -1) startIndex = idx + 1;
         }
-        
         const paginatedDocs = allDocs.slice(startIndex, startIndex + limit);
 
         const investments = await Promise.all(paginatedDocs.map(async doc => {
             const data = doc.data();
-            
             // Soft-join to get the actual Export Window details dynamically
             let commodity = data.commodity || "Export Opportunity";
             let status = data.status || "pending";
@@ -704,7 +700,6 @@ export async function getUserExportInvestmentsAction(
                      status = wData.status || status; // Reflect parent window status
                      startDate = wData.startDate?.toDate()?.toISOString() || startDate;
                      endDate = wData.endDate?.toDate()?.toISOString() || endDate;
-                     
                      if (wData.endDate) {
                          const delivery = wData.endDate.toDate();
                          const diffTime = delivery.getTime() - new Date().getTime();
@@ -883,7 +878,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
 export async function investInExportAction(
     exportId: string,
     amount: number
-): Promise<{ error: null, success: true | false; error?: string; data?: { authorizationUrl: string; reference: string } }> {
+): Promise<{ error: string | null, success: true | false; ; data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -942,7 +937,7 @@ export async function investInExportAction(
 // Verify Export Investment
 // ============================================
 
-export async function verifyExportInvestmentAction(reference: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
+export async function verifyExportInvestmentAction(reference: string): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1042,7 +1037,6 @@ export async function getMyExportInvestmentsAction() {
         const snapshot = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
             .where("investorId", "==", session.user.id)
             .get();
-            
         // Use in-memory sort to avoid index compilation errors
         const allDocs = snapshot.docs.sort((a, b) => {
              const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
@@ -1054,7 +1048,6 @@ export async function getMyExportInvestmentsAction() {
             const data = doc.data();
             // Fetch window details for display safely
             let windowTitle = data.windowTitle || "Export Investment";
-            
             if (data.windowId) {
                  const windowDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId).get();
                  if (windowDoc.exists) {
@@ -1086,7 +1079,7 @@ export async function extendEscrowAction(
     exportId: string,
     days: number,
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1173,7 +1166,7 @@ export async function getExportApplicationAction(): Promise<{
 export async function requestExportRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
@@ -1248,7 +1241,7 @@ export async function requestExportRevisionAction(
  */
 export async function approveExportApplicationAction(
     applicationId: string
-): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };

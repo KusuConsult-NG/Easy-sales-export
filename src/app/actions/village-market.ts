@@ -37,7 +37,7 @@ export async function createVillageMarketEventAction(data: {
     endTime: string;   // ISO string
     isRecurring?: boolean;
     recurringDay?: string;
-}): Promise<{ error: null, success: true | false; eventId?: string; error?: string }> {
+}): Promise<{ error: string | null, success: true | false; eventId?: string;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -151,7 +151,7 @@ export async function getVillageMarketEventAction(eventId: string): Promise<{
 
 export async function joinVillageMarketEventAction(
     eventId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -198,7 +198,7 @@ export async function addFlashSaleProductAction(data: {
     availableQuantity?: number;
     imageUrl?: string;
     productId?: string; // Reference to existing marketplace product
-}): Promise<{ error: null, success: true | false; flashProductId?: string; error?: string }> {
+}): Promise<{ error: string | null, success: true | false; flashProductId?: string;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -245,7 +245,7 @@ export async function addFlashSaleProductAction(data: {
 export async function addExternalMerchantAction(
     eventId: string,
     merchant: Omit<ExternalMerchant, "id">
-): Promise<{ error: null, success: true | false; merchantId?: string; error?: string }> {
+): Promise<{ error: string | null, success: true | false; merchantId?: string;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -277,7 +277,7 @@ export async function addExternalMerchantAction(
 export async function updateVillageMarketEventStatusAction(
     eventId: string,
     status: "active" | "ended" | "cancelled"
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -305,7 +305,7 @@ export async function updateVillageMarketEventStatusAction(
 
 export async function removeFlashSaleProductAction(
     flashProductId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };

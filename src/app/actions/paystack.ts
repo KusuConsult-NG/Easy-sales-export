@@ -40,7 +40,7 @@ export interface BankVerificationResult {
 /**
  * Fetch list of Nigerian banks supported by Paystack
  */
-export async function getBankList(): Promise<{ error: null, success: true | false; banks?: Bank[]; error?: string }> {
+export async function getBankList(): Promise<{ error: string | null, success: true | false; banks?: Bank[];  }> {
     try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };

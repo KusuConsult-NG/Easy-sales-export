@@ -14,7 +14,7 @@ interface ScanResult {
     affectedIds: string[];
 }
 
-export async function runForensicScanAction(): Promise<{ error: null, success: true | false; results: ScanResult[]; error?: string }> {
+export async function runForensicScanAction(): Promise<{ error: string | null, success: true | false; results: ScanResult[];  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;

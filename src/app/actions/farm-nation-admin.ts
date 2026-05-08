@@ -31,7 +31,6 @@ async function _getFarmNationStatsAction(): Promise<{ success: true; data: { sta
             .where('serviceRegistrations.farmNation.status', '!=', null)
             .count()
             .get();
-        
         const totalApplications = countSnap.data().count;
 
         const payload = { error: null, success: true as const, data: { stats: { totalApplications } } };
@@ -188,7 +187,6 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 q = q.startAfter(lastDoc);
             }
         }
-        
         q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
@@ -263,7 +261,6 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                     app.data?.fullName,
                     app.data?.stateOfOrigin
                 ].filter(Boolean).join(" ").toLowerCase();
-                
                 return searchString.includes(s);
             });
         }
@@ -363,13 +360,12 @@ async function _getAdminLandVerificationsAction(options: {
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -428,13 +424,12 @@ async function _getFarmNationTransactionsAction(options: {
     limit?: number;
     status?: string;
     lastDocId?: string;
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -478,7 +473,7 @@ async function _getFarmNationTransactionsAction(options: {
 }
 export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNationTransactionsAction", _getFarmNationTransactionsAction);
 
-async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ error: null, success: true | false; message?: string; error?: string }> {
+async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ error: string | null, success: true | false; message?: string;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -490,7 +485,6 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
         }
 
         const txRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(transactionId);
-        
         await db.runTransaction(async (tx) => {
             const txDoc = await tx.get(txRef);
             if (!txDoc.exists) throw new Error("Transaction not found");
@@ -522,7 +516,6 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1),
             });
-            
             const payoutRef = db.collection("farm_nation_payouts").doc(transactionId);
             tx.set(payoutRef, {
                 transactionId,

@@ -245,7 +245,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
 export async function walletCheckoutAction(
     orderId: string,
     amountNGN: number
-): Promise<{ error: null, success: true | false; newBalance?: number; error?: string }> {
+): Promise<{ error: string | null, success: true | false; newBalance?: number;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
@@ -326,7 +326,7 @@ export async function walletCheckoutAction(
 export async function withdrawFromWalletAction(
     amountNGN: number,
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
-): Promise<{ error: null, success: true | false; withdrawalId?: string; error?: string }> {
+): Promise<{ error: string | null, success: true | false; withdrawalId?: string;  }> {
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
             return { success: false as const, error: "Invalid withdrawal amount" };
@@ -465,7 +465,7 @@ export async function processWalletWithdrawalAction(
     transactionId: string,
     action: "approve" | "reject",
     note?: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };

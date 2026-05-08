@@ -38,7 +38,7 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> {
 export async function updateFeatureToggle(
     featureName: string,
     enabled: boolean
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

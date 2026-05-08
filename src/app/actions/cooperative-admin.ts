@@ -123,7 +123,6 @@ async function _getCooperativeStatsAction(): Promise<{
         const allMembers = membersSnapR.status === "fulfilled"
             ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
             : [];
-            
         const paidUserIds = paymentsSnapR.status === "fulfilled"
             ? new Set(paymentsSnapR.value.docs.map(doc => doc.data().userId))
             : new Set();
@@ -161,7 +160,6 @@ async function _getCooperativeStatsAction(): Promise<{
 
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
@@ -169,7 +167,6 @@ async function _getCooperativeStatsAction(): Promise<{
         for (const doc of (await txnStream).docs) {
             const t = doc.data();
             totalTransactions++;
-            
             const amount = Number(t.amount) || 0;
             totalTransactionAmount += amount;
 
@@ -182,7 +179,6 @@ async function _getCooperativeStatsAction(): Promise<{
                     totalSavings += amount;
                 } else if (t.type === "contribution" || t.type === "membership_registration") {
                     totalContributions += amount;
-                    
                     if (t.date) {
                         const date = t.date.toDate ? t.date.toDate() : new Date(t.date);
                         if (date >= thirtyDaysAgo) {
@@ -204,7 +200,6 @@ async function _getCooperativeStatsAction(): Promise<{
         for (const doc of (await loansStream).docs) {
             const l = doc.data();
             if (validMemberIds && !validMemberIds.has(l.memberId)) continue;
-            
             totalLoans += Number(l.amount) || 0;
             if (l.status === "disbursed" || l.status === "approved") {
                 activeLoans++;
@@ -306,7 +301,6 @@ async function _getAllMembersAction(options?: {
 
         const userIds = allMembers.map(m => m.id);
         let paidUserIds = new Set();
-        
         if (userIds.length > 0) {
             const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "cooperative_membership_registration")
@@ -316,7 +310,6 @@ async function _getAllMembersAction(options?: {
         }
 
         let members = allMembers.filter((m: any) => m.paymentStatus === "completed" || paidUserIds.has(m.id));
-        
         if (!options?.search && options?.limit) {
             members = members.slice(0, options.limit);
         }
@@ -337,7 +330,6 @@ async function _getAllMembersAction(options?: {
                     m.nin,
                     m.bvn
                 ].filter(Boolean).join(" ").toLowerCase();
-                
                 return searchString.includes(s);
             });
         }
@@ -356,7 +348,7 @@ export const getAllMembersAction = withFlexibleSafeAction("getAllMembersAction",
 async function _updateMemberStatusAction(
     memberId: string,
     status: "active" | "suspended"
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -373,7 +365,6 @@ async function _updateMemberStatusAction(
         const emailData = await db.runTransaction(async (transaction) => {
             const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
             const memberDoc = await transaction.get(memberRef);
-            
             if (!memberDoc.exists) throw new Error("Member not found");
 
             transaction.update(memberRef, {
@@ -388,7 +379,6 @@ async function _updateMemberStatusAction(
                 const userRef = db.collection(COLLECTIONS.USERS).doc(memberId);
                 const userDoc = await transaction.get(userRef);
                 const userData = userDoc.data();
-                
                 if (userData?.email) {
                     notificationInfo = {
                         email: userData.email,
@@ -405,7 +395,6 @@ async function _updateMemberStatusAction(
                     _version: FieldValue.increment(1),
                 });
             }
-            
             return notificationInfo;
         });
 
@@ -414,7 +403,6 @@ async function _updateMemberStatusAction(
             try {
                 await invalidateCooperativeCache(memberId);
                 await invalidateAdminGlobalStats();
-                
                 // Clear scoped coop stats
                 const adminScope = await getAdminScope(session.user.id, session.user.roles);
                 if (adminScope) {
@@ -453,7 +441,6 @@ async function _updateMemberStatusAction(
                 logger.error('Cooperative approval email failed (non-blocking):', emailError);
             }
         }
-        
         return { error: null, success: true as const, data: { message: "Member status updated" }, meta: null };
     } catch (error) {
         logger.error("Update member status error:", {
@@ -543,7 +530,6 @@ async function _getAllTransactionsAction(options?: {
 
         const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(Boolean))];
         const userNameMap = new Map<string, string>();
-        
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 100) {
             const batch = userIds.slice(i, i + 100);
@@ -822,7 +808,7 @@ export async function getRecentActivityAction(): Promise<{
  */
 export async function approveWithdrawalAction(
     withdrawalId: string
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -942,7 +928,7 @@ export async function approveWithdrawalAction(
 export async function rejectWithdrawalAction(
     withdrawalId: string,
     reason: string
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1066,7 +1052,7 @@ export async function rejectWithdrawalAction(
 export async function requestCooperativeRevisionAction(
     memberId: string,
     reason: string
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1076,7 +1062,6 @@ export async function requestCooperativeRevisionAction(
         }
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
-        
         // Execute transaction for atomic updates to application and user registration
         const notificationData = await db.runTransaction(async (t) => {
             const memberDoc = await t.get(memberRef);
@@ -1154,7 +1139,7 @@ export async function getStandardCooperativeMembersAction(
         dateFrom?: string; // YYYY-MM-DD
         dateTo?: string;   // YYYY-MM-DD
     } = {}
-): Promise<{ error: null, success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; error?: string; meta?: any }> {
+): Promise<{ error: string | null, success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; ; meta?: any }> {
     const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();
@@ -1176,7 +1161,6 @@ export async function getStandardCooperativeMembersAction(
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
-        
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
         }
@@ -1204,7 +1188,6 @@ export async function getStandardCooperativeMembersAction(
         if (cursorSnap && cursorSnap.exists) {
             q = q.startAfter(cursorSnap);
         }
-        
         q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
@@ -1214,7 +1197,6 @@ export async function getStandardCooperativeMembersAction(
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
-        
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);

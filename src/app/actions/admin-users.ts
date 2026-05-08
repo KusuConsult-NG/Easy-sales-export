@@ -60,7 +60,7 @@ export async function assignDisputeAction(
     disputeId: string,
     assigneeId: string,
     assigneeName: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { success: false as const, error: adminCheck.error };

@@ -20,7 +20,7 @@ export interface HealthReport {
     issues: HealthIssue[];
 }
 
-export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ error: null, success: true | false, data?: HealthReport, error?: string }> {
+export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ error: string | null, success: true | false, data?: HealthReport,  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -41,7 +41,6 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
         usersSnap.forEach(doc => {
             const data = doc.data() as User;
             const uid = doc.id;
-            
             // 1. Unverified Seller Role
             if (data.roles?.includes("seller") && (!data.isVerified || data.sellerVerificationStatus !== "approved")) {
                 issues.push({
@@ -75,7 +74,6 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
             if (untypedData.updatedAt && untypedData.lastLoginAt) {
                  const lastLogin = (untypedData.lastLoginAt)?.toDate ? (untypedData.lastLoginAt).toDate().getTime() : new Date(untypedData.lastLoginAt).getTime();
                  const lastUpdated = (untypedData.updatedAt)?.toDate ? (untypedData.updatedAt).toDate().getTime() : new Date(untypedData.updatedAt).getTime();
-                 
                  // If document was mutated after their last login, their current JWT might be stale.
                  // This isn't inherently corruption, but raises a flag in health checks.
                  if (lastUpdated > (lastLogin + 86400000)) { // 24 hours drift

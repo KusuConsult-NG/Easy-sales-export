@@ -224,7 +224,6 @@ export async function verifyVotersCardAction(payload: {
         await invalidateUserCache(userId);
 
         logger.info("Voter's Card allowed and bypassed for manual review", { userId });
-        
         // Return 100% success to the frontend so KYCForm lets them proceed
         return { success: true as const, isMatch: true };
     } catch (error: any) {
@@ -250,7 +249,7 @@ export async function saveKYCProfileAction(payload: {
     state: string;
     idType?: string;
     idNumber?: string;
-}): Promise<{ error: null, success: true | false; error?: string }> {
+}): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };

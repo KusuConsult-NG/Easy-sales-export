@@ -98,7 +98,6 @@ async function _processWithdrawalAction(
             await db.runTransaction(async (transaction) => {
                 const freshDoc = await transaction.get(withdrawalRef);
                 if (!freshDoc.exists) throw new Error("Withdrawal request not found");
-                
                 const currentStatus = freshDoc.data()?.status;
                 if (currentStatus !== "pending") {
                     throw new Error(`Withdrawal is already ${currentStatus}`);
@@ -182,7 +181,6 @@ async function _processWithdrawalAction(
             await db.runTransaction(async (transaction) => {
                 const freshDoc = await transaction.get(withdrawalRef);
                 if (!freshDoc.exists) throw new Error("Withdrawal request not found");
-                
                 transaction.update(withdrawalRef, {
                     status: "rejected",
                     processedBy: session.user.id,
@@ -385,11 +383,9 @@ async function _toggleUserKycVerificationAction(
         return { error: `Failed to update ${field.toUpperCase()} verification status`, success: false };
     }
 }
- 
  // ============================================
  // Update User Gender (Admin Only)
  // ============================================
- 
  async function _updateUserGenderAction(
      userId: string,
      gender: "male" | "female"
@@ -398,23 +394,18 @@ async function _toggleUserKycVerificationAction(
          const sessionResult = await requireSession();
          if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
          const { session } = sessionResult;
- 
          if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
              return { error: "Unauthorized: Permission required - users:update", success: false };
          }
- 
          const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
          const userDoc = await userRef.get();
- 
          if (!userDoc.exists) {
              return { error: "User not found", success: false };
          }
- 
          await userRef.update({
              gender,
              updatedAt: FieldValue.serverTimestamp(),
          });
- 
          // CLEAR CACHE
          try {
              const { invalidateUserCache } = await import('@/lib/cache-invalidation');
@@ -423,7 +414,6 @@ async function _toggleUserKycVerificationAction(
          } catch (cacheError) {
              logger.error('[User Gender Update] Cache clear error:', cacheError);
          }
- 
          // Log audit
          await createAdminAuditLog({
              action: "user_gender_update",
@@ -432,7 +422,6 @@ async function _toggleUserKycVerificationAction(
              targetType: "user",
              metadata: { newGender: gender },
          });
- 
          return {
              error: null,
              success: true as const,
@@ -742,12 +731,10 @@ async function _getAllExportRequestsAction(
 
         const snapshot = await query.get();
         const rawDocs = snapshot.docs;
-        
         let exportsList = [];
         try {
             exportsList = rawDocs.map((doc: any) => {
                 const data = doc.data();
-                
                 // Safe mapping for Split-Schema (Private Requests vs Crowdfunded Opportunities)
                 const isCrowdfunded = !!data.targetVolume;
                 let calculatedAmount = Number(data.amount);
@@ -756,11 +743,9 @@ async function _getAllExportRequestsAction(
                         calculatedAmount = Number(data.targetVolume) * Number(data.slotPrice || 1);
                     }
                 }
-                
                 const quantityStr = isCrowdfunded 
                     ? `${data.targetVolume}kg` 
                     : String(data.quantity || "0");
-                    
                 const itemTitle = data.title || (isCrowdfunded ? `${data.commodity} Export Goal` : "Private Request");
                 const itemOrderId = data.orderId || (isCrowdfunded ? `PUBLIC-${doc.id.substring(0, 6)}` : "");
 
@@ -823,7 +808,6 @@ async function _approveLoanApplication(
                 throw new Error("Loan application not found");
             }
             const loanData = loanSnap.data()!;
-            
             // Prevent double-processing
             if (loanData.status === "approved" || loanData.status === "disbursed") {
                 return { error: null, success: true as const, alreadyProcessed: true, loanData };
@@ -954,7 +938,6 @@ async function _approveLoanApplication(
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
                             <p>Great news! Your loan application has been approved by our admin team.</p>
-                            
                             <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0;">
                                 <h3 style="color: #059669; margin-top: 0;">Loan Details:</h3>
                                 <p><strong>Amount:</strong> ₦${loanData.amount.toLocaleString()}</p>
@@ -963,14 +946,12 @@ async function _approveLoanApplication(
                                 <p><strong>Monthly Payment:</strong> ₦${Math.round(loanData.monthlyPayment).toLocaleString()}</p>
                                 <p><strong>Total Repayment:</strong> ₦${Math.round(loanData.totalRepayment).toLocaleString()}</p>
                             </div>
-    
                             <p><strong>Next Steps:</strong></p>
                             <ul>
                                 <li>${disbursementTransferCode ? 'Your funds have been transferred to your bank account.' : 'Funds will be disbursed to your account shortly.'}</li>
                                 <li>Your first repayment is due 30 days from disbursement</li>
                                 <li>You can track your repayment schedule in your dashboard</li>
                             </ul>
-    
                             <p>Thank you for being a valued member of our cooperative!</p>
                         </div>
                     `,
@@ -1237,7 +1218,6 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
                 countQuery = countQuery.where("address.lga", "==", options.lga);
             }
         }
-        
         // For search (email/phone), count directly against the filter
         if (options.search) {
             const search = options.search.trim();
@@ -1347,13 +1327,10 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
         // Page-offset slice: each page returns exactly pageSize items
         const offset = page * pageSize;
         const pagedUsers = filteredUsers.slice(offset, offset + pageSize);
-        
         // Determine total count explicitly ensuring DB truth overrides in-memory unless heavily filtered manually
         const hasManualFilters = options.status !== "all" || options.fromDate || options.toDate || (options.search && !options.search.includes("@") && !/^[\d+]+$/.test(options.search));
-        
         const totalAfterFilter = filteredUsers.length;
         const trueTotalCount = hasManualFilters ? totalAfterFilter : absoluteDbCount;
-        
         const hasMore = offset + pageSize < totalAfterFilter;
 
         return {
@@ -1535,7 +1512,6 @@ async function _approveSellerVerificationAction(
                             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                                 <h2 style="color: #059669;">You are now a Seller!</h2>
                                 <p>Congratulations! Your seller verification has been approved.</p>
-                                
                                 <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
                                     <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
                                     <p style="margin: 5px 0 0; color: #065f46;"><strong>Role:</strong> Seller</p>
@@ -1597,7 +1573,6 @@ async function updateExportStatsAtomic(decrementStatus?: 'pending' | 'approved' 
         const updates: any = {};
         if (decrementStatus) updates[decrementStatus] = FieldValue.increment(-1);
         if (incrementStatus) updates[incrementStatus] = FieldValue.increment(1);
-        
         if (Object.keys(updates).length > 0) {
             // FIX: No more fire-and-forget. Must await to ensure data integrity during process recycles.
             await statsRef.set(updates, { merge: true });
@@ -1679,7 +1654,6 @@ async function _approveExportOnboardingAction(
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #059669;">Welcome to Export Services!</h2>
                             <p>Your export onboarding application has been approved.</p>
-                            
                             <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
                                 <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
                                 <p style="margin: 5px 0 0; color: #065f46;"><strong>Service:</strong> Export Management</p>
@@ -1800,7 +1774,6 @@ async function _requestExportApplicationRevisionAction(
                             <h2 style="color: #ea580c;">Action Required: Correction Needed</h2>
                             <p>Dear ${appData.profile?.fullName || appData.userEmail},</p>
                             <p>Your Export Services application has been reviewed and requires some corrections before it can proceed.</p>
-                            
                             <div style="background: #fff7ed; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #ffedd5;">
                                 <p style="margin: 0; color: #9a3412; font-weight: bold;">Correction Required:</p>
                                 <p style="margin: 10px 0 0; color: #7c2d12; font-style: italic;">&ldquo;${revisionNote.trim()}&rdquo;</p>
@@ -1824,10 +1797,8 @@ async function _requestExportApplicationRevisionAction(
         }
 
         logger.info(`[Export Revision] Application ${applicationId} marked revision_required by admin ${session.user.id}`);
-        
         // FAST STATS UPDATER (Non-blocking fallback safe)
         updateExportStatsAtomic('pending', null);
-        
         return { error: null, success: true as const, message: "Revision note sent to applicant" };
     } catch (error: any) {
         logger.error("Request export revision error:", error);
@@ -1912,7 +1883,7 @@ async function _getStandardExportApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1925,7 +1896,6 @@ async function _getStandardExportApplicationsAction(options: {
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
-        
         if (options.status && options.status !== "all") {
             if (options.status === "pending") {
                 q = q.where("status", "in", ["pending", "pending_review"]);
@@ -1933,7 +1903,6 @@ async function _getStandardExportApplicationsAction(options: {
                 q = q.where("status", "==", options.status);
             }
         }
-        
         // Server-side date range filter
         if (options.dateFrom) {
             const fromTs = new Date(options.dateFrom);
@@ -1955,14 +1924,12 @@ async function _getStandardExportApplicationsAction(options: {
 
         const snapshot = await q.get();
         let applications = serializeDocs(snapshot.docs);
-        
         const hasMore = applications.length > fetchLimit;
         applications = applications.slice(0, fetchLimit);
         const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
         const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
-        
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
@@ -1979,7 +1946,6 @@ async function _getStandardExportApplicationsAction(options: {
             const profile = (app.profile || {}) as any;
             const kycName = kyc?.kycData?.firstName ? `${kyc.kycData.firstName} ${kyc.kycData.lastName || ''}`.trim() : null;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (profile?.fullName || kycName || "Unknown User");
-            
             // Normalize status to map perfectly to UI rules
             let status = app.status || "pending";
             if (status === "pending_review") status = "pending";
@@ -1999,7 +1965,6 @@ async function _getStandardExportApplicationsAction(options: {
                 lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
                 email:              app.userEmail           || app.email                  || uData.email        || null,
             };
-            
             return {
                 id: app.id,
                 user: {
@@ -2120,7 +2085,6 @@ async function _rejectExportApplicationAction(
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #ea580c;">Export Application Update</h2>
                             <p>Your recent application for Export Services has been reviewed.</p>
-                            
                             <div style="background: #fff7ed; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #ffedd5;">
                                 <p style="margin: 0; color: #9a3412;"><strong>Status:</strong> Action Required</p>
                                 <p style="margin: 10px 0 0; color: #9a3412;"><strong>Reason provided:</strong></p>
@@ -2796,7 +2760,6 @@ async function _manualAcademyEnrollmentAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        
         // Check if admin has user update permissions (or a specific academy permission)
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false };
@@ -2833,7 +2796,6 @@ async function _manualAcademyEnrollmentAction(
             const userData = userDoc.data();
             const userEmail = userData?.email || userData?.emailAddress;
             const userName = userData?.name || userData?.fullName || userData?.displayName || "Student";
-            
             if (userEmail) {
                 const { sendAcademyEnrollmentEmail } = await import('@/lib/email-notifications');
                 await sendAcademyEnrollmentEmail(userEmail, userName, plan);
@@ -2959,7 +2921,6 @@ async function _inviteLegacyMemberAction(
                             <h2 style="color: #6366f1;">Welcome to the Cooperative!</h2>
                             <p>Hello ${firstName || "Member"},</p>
                             <p>You have been invited to formally complete your cooperative onboarding on the Easy Sales Export platform. Because you're an existing member, <strong>your registration fee has already been waived</strong> when you use this direct link.</p>
-                            
                             <div style="background: #eef2ff; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #c7d2fe;">
                                 <p style="margin: 0; color: #4338ca;">Click the button below to join:</p>
                             </div>
@@ -3010,7 +2971,7 @@ async function _getStandardSellerVerificationsAction(
     sortOrder?: "asc" | "desc",
     dateFrom?: string,
     dateTo?: string
-): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any }> {
+): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -3028,7 +2989,6 @@ async function _getStandardSellerVerificationsAction(
 
         const direction = sortOrder || "desc";
         let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", direction);
-        
         if (statusFilter && statusFilter !== "all") {
             q = q.where("status", "==", statusFilter);
         }
@@ -3045,7 +3005,6 @@ async function _getStandardSellerVerificationsAction(
         if (cursorSnap && cursorSnap.exists) {
             q = q.startAfter(cursorSnap);
         }
-        
         q = q.limit(limitCount);
 
         const snapshot = await q.get();
@@ -3055,7 +3014,6 @@ async function _getStandardSellerVerificationsAction(
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
-        
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
@@ -3069,7 +3027,6 @@ async function _getStandardSellerVerificationsAction(
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
-            
             return {
                 id: app.id,
                 user: {
@@ -3108,7 +3065,6 @@ async function _getMarketplaceUsersAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -3119,7 +3075,6 @@ async function _getMarketplaceUsersAction(options: {
         q = q.where("serviceRegistrations.marketplace.status", "in", ["active", "approved", "pending", "suspended", "rejected", "under_review"]);
 
         const sortDirection = options.sortOrder || "desc";
-        
         if (options.dateFrom) {
             const fromTs = new Date(options.dateFrom);
             q = q.where("createdAt", ">=", fromTs);
@@ -3147,10 +3102,8 @@ async function _getMarketplaceUsersAction(options: {
             const data = doc.data();
             const marketplaceData = data.serviceRegistrations?.marketplace;
             let dbAccountType = marketplaceData?.accountType;
-            
             // Legacy fallback
             const hasSellerRole = (data.roles || []).includes("seller");
-            
             let buyerRole = "buyer_only";
             if (dbAccountType === "seller") buyerRole = "seller_only";
             else if (dbAccountType === "both") buyerRole = "both";
@@ -3486,7 +3439,6 @@ async function _onboardLegacyMemberAction(
         batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc);
 
         // 8. 🏗️ DEEP PROVISIONING: Initialize Service Documents
-        
         // Cooperative Member Document
         if (data.services?.cooperative || data.roles.includes("cooperative_member")) {
             batch.set(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userRecord.uid), {
@@ -3516,7 +3468,6 @@ async function _onboardLegacyMemberAction(
         if (data.services?.marketplace || data.roles.includes("seller")) {
             // Mark as active/verified seller if role is present
             const sellerStatus = data.roles.includes("seller") ? "approved" : "pending";
-            
             batch.set(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(`legacy_${userRecord.uid}`), {
                 id: `legacy_${userRecord.uid}`,
                 userId: userRecord.uid,

@@ -21,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function getAdminExportCatalogAction(options: { 
     limit?: number; 
     lastDocId?: string; 
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; meta?: any; error?: string; hasMore?: boolean; lastDocId?: string | null }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; ; hasMore?: boolean; lastDocId?: string | null }> {
     try {
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)
@@ -72,12 +72,11 @@ export async function getAdminExportCatalogAction(options: {
     }
 }
 
-export async function createExportCatalogAction(productData: any): Promise<{ error: null, success: true | false; data?: any; error?: string }> {
+export async function createExportCatalogAction(productData: any): Promise<{ error: string | null, success: true | false; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
-        
         if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -92,13 +91,11 @@ export async function createExportCatalogAction(productData: any): Promise<{ err
                 updatedAt: new Date(),
                 updatedBy: session.user.id,
             }, { merge: true });
-            
             return { error: null, success: true as const, data: { id: productData.id } };
         } else {
             // Create new
             const dataToSave = { ...productData };
             delete dataToSave.id;
-            
             const ref = await db.collection(COLLECTIONS.EXPORT_CATALOG).add({
                 ...dataToSave,
                 isActive: true,
@@ -106,7 +103,6 @@ export async function createExportCatalogAction(productData: any): Promise<{ err
                 createdAt: new Date(),
                 createdBy: session.user.id,
             });
-            
             return { error: null, success: true as const, data: { id: ref.id } };
         }
     } catch (error: any) {
@@ -200,12 +196,11 @@ export async function getExportCatalogStatsAction(): Promise<{
     }
 }
 
-export async function deleteExportCatalogAction(productId: string): Promise<{ error: null, success: true | false; error?: string }> {
+export async function deleteExportCatalogAction(productId: string): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
-        
         if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -224,12 +219,11 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ er
     }
 }
 
-export async function getAdminPendingExportProductsAction(): Promise<{ error: null, success: true | false; data?: any[]; error?: string }> {
+export async function getAdminPendingExportProductsAction(): Promise<{ error: string | null, success: true | false; data?: any[];  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
-        
         if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -249,18 +243,16 @@ export async function getAdminPendingExportProductsAction(): Promise<{ error: nu
     }
 }
 
-export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ error: null, success: true | false; error?: string }> {
+export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
-        
         if (!session?.user || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
-        
         const updates = action === 'approve' 
             ? { status: 'live', isActive: true } 
             : { status: 'rejected', isActive: false };
@@ -285,7 +277,6 @@ export async function reviewExportProductAction(productId: string, action: 'appr
                     const { sendExportProductApprovalEmail, sendExportProductRejectionEmail } = await import("@/lib/email-notifications");
                     const userName = userData.name || userData.firstName || "Export Participant";
                     const productName = productData.name || "Export Product";
-                    
                     if (action === 'approve') {
                         await sendExportProductApprovalEmail(userData.email, userName, productName);
                     } else {
@@ -307,7 +298,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
 /**
  * Fetch all export orders for admin dashboard
  */
-export async function getAdminExportOrdersAction(): Promise<{ error: null, success: true | false; data?: any[]; error?: string }> {
+export async function getAdminExportOrdersAction(): Promise<{ error: string | null, success: true | false; data?: any[];  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -346,7 +337,7 @@ export async function updateAdminExportOrderStatusAction(
     orderId: string, 
     status: string,
     documentData?: { name: string; url: string; type: string }
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -358,7 +349,6 @@ export async function updateAdminExportOrderStatusAction(
 
         const db = getAdminDb();
         const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderId);
-        
         // Import FieldValue from firebase-admin for arrayUnion
         const { FieldValue } = await import('firebase-admin/firestore');
 

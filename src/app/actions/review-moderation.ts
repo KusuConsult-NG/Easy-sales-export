@@ -108,7 +108,7 @@ export async function getFlaggedReviewsAction(options?: {
  */
 export async function approveReviewAction(
     reviewId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -154,7 +154,7 @@ export async function approveReviewAction(
 export async function deleteReviewAction(
     reviewId: string,
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -236,7 +236,7 @@ export async function suspendReviewerAction(
     userId: string,
     duration: number, // days
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -304,7 +304,7 @@ export async function suspendReviewerAction(
  */
 export async function bulkApproveReviewsAction(
     reviewIds: string[]
-): Promise<{ error: null, success: true | false; approved: number; error?: string }> {
+): Promise<{ error: string | null, success: true | false; approved: number;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;

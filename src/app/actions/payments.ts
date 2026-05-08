@@ -43,7 +43,7 @@ export async function createPaymentRecordAction(data: {
     purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string;
     metadata?: Record<string, any>;
-}): Promise<{ error: null, success: true | false; error?: string; paymentId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; paymentId?: string }> {
     try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
@@ -84,7 +84,7 @@ export async function createPaymentRecordAction(data: {
 export async function verifyPaymentAction(
     paymentReference: string,
     paystackResponse: any
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         // Find payment by reference
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)

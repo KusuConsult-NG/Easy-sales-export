@@ -15,7 +15,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 /**
  * Check if current user is enrolled in WAVE
  */
-export async function checkWaveMembershipAction(): Promise<{ error: null, success: true | false; data?: { enrolled: boolean; memberData?: any }; meta?: any; error?: string }> {
+export async function checkWaveMembershipAction(): Promise<{ error: string | null, success: true | false; data?: { enrolled: boolean; memberData?: any }; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -97,7 +97,7 @@ export async function checkWaveMembershipAction(): Promise<{ error: null, succes
 /**
  * Get member dashboard stats
  */
-export async function getWaveMemberStatsAction(): Promise<{ error: null, success: true | false; data?: { stats: any }; meta?: any; error?: string }> {
+export async function getWaveMemberStatsAction(): Promise<{ error: string | null, success: true | false; data?: { stats: any }; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -110,7 +110,6 @@ export async function getWaveMemberStatsAction(): Promise<{ error: null, success
         if (!membershipResult.success || !membershipResult.data?.enrolled) {
             return { success: false as const, error: "Not enrolled in WAVE" };
         }
-        
         const membership = membershipResult.data!;
 
         // Get resources accessed
@@ -154,7 +153,7 @@ export async function getWaveMemberStatsAction(): Promise<{ error: null, success
 /**
  * Track resource access
  */
-export async function trackResourceAccessAction(resourceId: string): Promise<{ error: null, success: true | false; data?: any; meta?: any; error?: string }> {
+export async function trackResourceAccessAction(resourceId: string): Promise<{ error: string | null, success: true | false; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -204,7 +203,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{ e
 /**
  * Get user's training registrations
  */
-export async function getUserTrainingRegistrationsAction(): Promise<{ error: null, success: true | false; data?: { registrations: any[] }; meta?: any; error?: string }> {
+export async function getUserTrainingRegistrationsAction(): Promise<{ error: string | null, success: true | false; data?: { registrations: any[] }; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

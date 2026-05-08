@@ -672,7 +672,6 @@ async function _submitWithdrawalAction(
             // Verify membership and balance
             const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
             const membershipDoc = await transaction.get(membershipsRef.doc(userId));
-            
             if (!membershipDoc.exists || membershipDoc.data()?.membershipStatus !== "active") {
                 throw new Error("You are not an active cooperative member");
             }
@@ -700,7 +699,6 @@ async function _submitWithdrawalAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp()
             });
-            
             // Log audit
             await logAuditAction(
                 "withdrawal_requested",
@@ -711,7 +709,6 @@ async function _submitWithdrawalAction(
         });
 
         revalidatePath("/cooperatives/withdrawals");
-        
         return { 
             success: true as const, 
             error: null,
@@ -1146,7 +1143,6 @@ async function _getDirectoryMembersAction(): Promise<{
                                    !data.lastName || 
                                    data.firstName === "undefined" || 
                                    data.lastName === "undefined";
-                
                 if (isCorrupted) return null;
 
                 return {
@@ -1220,7 +1216,7 @@ export async function getCooperativeApplicationAction(): Promise<{
  */
 export async function resubmitCooperativeApplicationAction(
     formData: FormData
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -1287,7 +1283,6 @@ export async function resubmitCooperativeApplicationAction(
 
         const batch = db.batch();
         batch.update(memberRef, updatePayload);
-        
         batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
             'serviceRegistrations.cooperatives.status': 'pending',
             updatedAt: FieldValue.serverTimestamp(),
@@ -1419,7 +1414,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
 export async function updatePassportPhotoAction(
     passportUrl: string,
     passportName: string
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Not authenticated" };
@@ -1456,7 +1451,7 @@ export async function updatePassportPhotoAction(
 
 export async function validateCooperativeInviteAction(
     token: string
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     try {
         if (!token) return { success: false as const, error: "Invalid token" };
 

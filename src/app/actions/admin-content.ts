@@ -127,7 +127,7 @@ export async function getPendingContentAction(): Promise<{
 export async function approveContentAction(
     id: string,
     type: ContentType
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -170,7 +170,7 @@ export async function rejectContentAction(
     id: string,
     type: ContentType,
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

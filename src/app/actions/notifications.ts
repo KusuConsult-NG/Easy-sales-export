@@ -34,7 +34,7 @@ export async function createNotificationAction(data: {
     message: string;
     link?: string;
     linkText?: string;
-}): Promise<{ error: null, success: true | false; error?: string; notificationId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; notificationId?: string }> {
     try {
         const notification: Omit<Notification, "id"> = {
             ...data,
@@ -57,7 +57,7 @@ export async function createNotificationAction(data: {
 export async function createBulkNotificationsAction(
     userIds: string[],
     notification: Omit<Notification, "id" | "userId">
-): Promise<{ error: null, success: true | false; error?: string; count?: number }> {
+): Promise<{ error: string | null, success: true | false; ; count?: number }> {
     try {
         const batch = db.batch();
         const notificationsRef = db.collection(COLLECTIONS.NOTIFICATIONS);
@@ -103,7 +103,7 @@ export async function getUserNotificationsAction(userId: string): Promise<Notifi
  */
 export async function markNotificationAsReadAction(
     notificationId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthenticated" };
@@ -132,7 +132,7 @@ export async function markNotificationAsReadAction(
 /**
  * Mark all notifications as read for user
  */
-export async function markAllAsReadAction(userId: string): Promise<{ error: null, success: true | false; error?: string }> {
+export async function markAllAsReadAction(userId: string): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)

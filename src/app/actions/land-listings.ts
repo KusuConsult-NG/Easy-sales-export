@@ -63,7 +63,7 @@ export async function createLandListingAction(data: {
     category?: string;
     soilType?: string;
     waterSource?: string;
-}): Promise<{ error: null, success: true | false; error?: string; listingId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ...data,
@@ -96,7 +96,7 @@ export async function createLandListingAction(data: {
 async function submitForVerificationAction(
     listingId: string,
     ownerId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
@@ -129,7 +129,7 @@ async function submitForVerificationAction(
 export async function verifyLandListingAction(
     listingId: string,
     adminId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -179,7 +179,7 @@ export async function rejectLandListingAction(
     listingId: string,
     adminId: string,
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -354,7 +354,7 @@ export async function submitLandListingAction(data: {
     documentUrls: string[];
     // Optional: GPS coordinates if available
     gpsCoordinates?: { latitude: number; longitude: number };
-}): Promise<{ error: null, success: true | false; error?: string; listingId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ownerId: data.ownerId,
@@ -452,7 +452,7 @@ export async function submitLandInquiryAction(data: {
     buyerEmail: string;
     buyerPhone: string;
     message: string;
-}): Promise<{ error: null, success: true | false; error?: string }> {
+}): Promise<{ error: string | null, success: true | false;  }> {
     try {
         // 1. Save inquiry to database
         const inquiryRef = await db.collection(COLLECTIONS.LAND_INQUIRIES).add({
@@ -492,7 +492,7 @@ export async function submitLandInquiryAction(data: {
 /**
  * Get inquiries for a user (as seller)
  */
-export async function getLandInquiriesAction(userId: string): Promise<{ error: null, success: true | false; inquiries?: any[]; error?: string }> {
+export async function getLandInquiriesAction(userId: string): Promise<{ error: string | null, success: true | false; inquiries?: any[];  }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.LAND_INQUIRIES)
             .where("listingOwnerId", "==", userId)
@@ -509,7 +509,7 @@ export async function getLandInquiriesAction(userId: string): Promise<{ error: n
 /**
  * Get single inquiry by ID
  */
-export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ error: null, success: true | false; inquiry?: any; error?: string }> {
+export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ error: string | null, success: true | false; inquiry?: any;  }> {
     try {
         const docRef = db.collection(COLLECTIONS.LAND_INQUIRIES).doc(inquiryId);
         const docSnap = await docRef.get();
@@ -531,7 +531,7 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ err
 export async function deleteLandListingAction(
     listingId: string,
     adminId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

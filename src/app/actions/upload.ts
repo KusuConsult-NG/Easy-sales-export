@@ -31,7 +31,7 @@ const MAX_SIZE_MB = 5;
 // ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
     formData: FormData
-): Promise<{ error: null, success: true | false; url?: string; error?: string; fallback?: boolean }> {
+): Promise<{ error: string | null, success: true | false; url?: string; ; fallback?: boolean }> {
     try {
         const file = formData.get("file") as File | null;
         const fileName = formData.get("fileName") as string;
@@ -62,7 +62,6 @@ export async function uploadDocumentAction(
         if (sizeMB > MAX_SIZE_MB) {
             return { success: false as const, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
-        
         logger.info(`[Upload:Start] User:${userId} | Stream Size: ${sizeMB.toFixed(2)}MB`);
 
         // ── Cloudinary credentials check ─────────────────────────────────────

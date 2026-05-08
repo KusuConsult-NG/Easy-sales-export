@@ -40,7 +40,7 @@ export async function uploadCertificateAction(
         expiryDate?: string;
         issuer?: string;
     }
-): Promise<{ error: null, success: true | false; error?: string; certificateId?: string }> {
+): Promise<{ error: string | null, success: true | false; ; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -121,7 +121,7 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
 export async function deleteCertificateAction(
     certificateId: string,
     userId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -188,7 +188,7 @@ export async function deleteCertificateAction(
 /**
  * Mark onboarding as complete
  */
-export async function completeOnboardingAction(userId: string): Promise<{ error: null, success: true | false; error?: string }> {
+export async function completeOnboardingAction(userId: string): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

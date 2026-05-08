@@ -105,7 +105,6 @@ export async function approveAcademyApplicationAction(
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #059669;">Welcome to Easy Sales Export Academy!</h2>
                             <p>We are thrilled to inform you that your Academy learner application has been approved.</p>
-                            
                             <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
                                 <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
                                 <p style="margin: 5px 0 0; color: #065f46;"><strong>Role:</strong> Academy Participant</p>
@@ -233,7 +232,6 @@ export async function rejectAcademyApplicationAction(
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                             <h2 style="color: #dc2626;">Academy Application Update</h2>
                             <p>Thank you for your interest in the Easy Sales Export Academy.</p>
-                            
                             <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
                                 <p>Unfortunately, we are unable to approve your application at this time.</p>
                                 <p><strong>Reason:</strong> ${reason}</p>
@@ -351,8 +349,8 @@ export async function updateAcademyApplicationPaymentAction(
  * Get Pending Academy Applications (Admin)
  */
 export async function getPendingAcademyApplicationsAction(): Promise<{
-    error?: string;
-    error: null, success: true | false;
+    error: string | null;
+    success: boolean;
     data?: any;
     meta?: any;
 }> {
@@ -370,7 +368,6 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
             .get();
 
         const applications = serializeDocs(snapshot.docs);
-        
         // Ensure sorting is consistent after serialization
         applications.sort((a: any, b: any) =>
             new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
@@ -411,7 +408,6 @@ async function _getAcademyEnrollmentsAction(options?: {
         }
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
-        
         const fetchLimit = options?.search ? 1000 : (options?.limit || 50);
         q = q.orderBy("enrolledAt", "desc").limit(fetchLimit);
 
@@ -428,7 +424,6 @@ async function _getAcademyEnrollmentsAction(options?: {
                     e.studentEmail,
                     e.status
                 ].filter(Boolean).join(" ").toLowerCase();
-                
                 return searchString.includes(s);
             });
         }
@@ -502,7 +497,6 @@ async function _getAcademyCoursesAction(options?: {
         }
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_COURSES);
-        
         const fetchLimit = options?.search ? 1000 : (options?.limit || 50);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
@@ -519,7 +513,6 @@ async function _getAcademyCoursesAction(options?: {
                     c.category,
                     c.level
                 ].filter(Boolean).join(" ").toLowerCase();
-                
                 return searchString.includes(s);
             });
         }
@@ -603,7 +596,6 @@ async function _getAcademyStatsAction(): Promise<{
 
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
@@ -674,7 +666,6 @@ async function _getAcademyApplicationStatsAction(): Promise<{
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        
         // Ensure user has admin permissions
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
@@ -715,7 +706,7 @@ export const getAcademyApplicationStatsAction = withFlexibleSafeAction("getAcade
 async function _upsertAcademyCourseAction(
     courseId: string | "new",
     courseData: any
-): Promise<{ error: null, success: true | false; meta?: any; data?: any; error?: string }> {
+): Promise<{ error: string | null, success: true | false; meta?: any; data?: any;  }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -728,7 +719,6 @@ async function _upsertAcademyCourseAction(
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };
         }
-        
         const { courseSchema } = await import("@/lib/schemas");
         const validated = courseSchema.safeParse(courseData);
         if (!validated.success) {
@@ -783,7 +773,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: null, success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -800,7 +790,6 @@ async function _getStandardAcademyApplicationsAction(options: {
         // NOTE: academy_applications documents use 'submittedAt', not 'createdAt'.
         // orderBy('submittedAt') is the authoritative sort for academy apps.
         let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
-        
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", options.status)
@@ -823,7 +812,6 @@ async function _getStandardAcademyApplicationsAction(options: {
                 q = q.startAfter(lastDoc);
             }
         }
-        
         q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
@@ -831,7 +819,6 @@ async function _getStandardAcademyApplicationsAction(options: {
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
-        
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
@@ -903,7 +890,6 @@ async function _getStandardAcademyApplicationsAction(options: {
                     f.data?.stateOfOrigin,
                     f.data?.phone
                 ].filter(Boolean).join(" ").toLowerCase();
-                
                 return searchString.includes(s);
             });
         }
@@ -937,7 +923,6 @@ export async function logAcademyExportAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        
         await createAdminAuditLog({
             action: "data_export",
             userId: session.user.id,

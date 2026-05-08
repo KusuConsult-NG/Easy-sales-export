@@ -44,7 +44,7 @@ export async function submitLoanApplicationAction(formData: {
     durationMonths: number;
     contributionAmount: number;
     tier: "Member";
-}): Promise<{ error: null, success: true | false; error?: string; applicationId?: string }> {
+}): Promise<{ error: string | null, success: true | false; ; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -227,7 +227,6 @@ export async function getAdminLoanApplicationsAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
-        
         if (!session?.user?.id || !session.user.roles?.some((r: string) =>
             r === "admin" || r === "super_admin" || r === "cooperative_admin"
         )) {
@@ -295,7 +294,6 @@ export async function getAdminLoanApplicationsExportAction(options: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
-        
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false as const, error: "Unauthorized" };
         }
@@ -398,7 +396,7 @@ export async function getAdminLoanStatsAction(): Promise<{
 export async function approveLoanAction(
     applicationId: string,
     adminId: string // Deprecated, use session
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -487,7 +485,7 @@ export async function rejectLoanAction(
     applicationId: string,
     adminId: string, // Deprecated, use session
     reason: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -538,7 +536,7 @@ export async function rejectLoanAction(
  */
 export async function disburseLoanAction(
     applicationId: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -632,7 +630,7 @@ export interface RepaymentInstallment {
  */
 export async function getRepaymentScheduleAction(
     loanId: string
-): Promise<{ error: null, success: true | false; error?: string; schedule?: RepaymentInstallment[] }> {
+): Promise<{ error: string | null, success: true | false; ; schedule?: RepaymentInstallment[] }> {
     try {
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
@@ -741,7 +739,7 @@ export async function submitRepaymentAction(data: {
     userId: string;
     amount: number;
     paymentReference: string;
-}): Promise<{ error: null, success: true | false; error?: string; penalty?: number }> {
+}): Promise<{ error: string | null, success: true | false; ; penalty?: number }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -885,7 +883,7 @@ export async function submitRepaymentAction(data: {
  */
 export async function getRepaymentHistoryAction(
     loanId: string
-): Promise<{ error: null, success: true | false; error?: string; payments?: any[] }> {
+): Promise<{ error: string | null, success: true | false; ; payments?: any[] }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;

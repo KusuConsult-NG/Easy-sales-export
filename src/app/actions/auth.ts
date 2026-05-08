@@ -146,7 +146,6 @@ export async function getPostLoginRedirect(email: string) {
             if (hasAdminRole) {
                 // Determine specific admin landing page
                 let adminRedirect = '/admin';
-                
                 // If they are a module admin but NOT a full system admin,
                 // send them directly to their module management area.
                 if (!userRoles.includes('admin') && !userRoles.includes('super_admin')) {
@@ -289,7 +288,6 @@ export async function registerAction(prevState: any, formData: FormData) {
         const registrationFirstName = nameParts[0] || "";
         let registrationOtherName = "";
         let registrationLastName = "";
-        
         if (nameParts.length > 2) {
              registrationOtherName = nameParts.slice(1, -1).join(" ");
              registrationLastName = nameParts[nameParts.length - 1];
@@ -337,14 +335,12 @@ export async function registerAction(prevState: any, formData: FormData) {
             const headersList = await headers();
             const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
             const normalizedHost = host.replace(/^www\./, "");
-            
             if (normalizedHost.includes("easysalesexportacademy.com")) redirectUrl = "/academy/setup";
             else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
             else if (normalizedHost.includes("market.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
             else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
             else if (normalizedHost.includes("easysalescooperative.com")) redirectUrl = "/cooperatives/onboarding";
             else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";
-            
         } catch (e) {
             logger.warn("Could not determine host for post-registration redirect:", { error: e instanceof Error ? e.message : String(e) });
         }
@@ -399,7 +395,7 @@ export async function logoutAction() {
 export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
-): Promise<{ error: null, success: true | false; error?: string }> {
+): Promise<{ error: string | null, success: true | false;  }> {
     try {
         const session = await auth();
         if (!session?.user?.id || !session.user.email) {
