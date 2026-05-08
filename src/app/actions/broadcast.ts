@@ -101,7 +101,12 @@ export async function getCleanBroadcastListAction() {
  * Preview Broadcast Action
  * (Required by Communications UI)
  */
-export async function previewBroadcastAction(broadcastData: any) {
+export async function previewBroadcastAction(broadcastData: any): Promise<{
+    success: boolean;
+    count: number | null;
+    sample: any[];
+    error: string | null;
+}> {
     const listResult = await getCleanBroadcastListAction();
     if (!listResult.success) {
         return { 
@@ -114,7 +119,7 @@ export async function previewBroadcastAction(broadcastData: any) {
     
     return {
         success: true,
-        count: listResult.count,
+        count: listResult.count ?? null,
         sample: listResult.recipients?.slice(0, 5) || [],
         error: null
     };
