@@ -148,8 +148,8 @@ export async function cleanupAbandonedDraftsAction() {
     try {
         const db = getAdminDb();
         // Placeholder for logic to delete old 'draft' applications
-        return { success: true, message: "Draft cleanup executed (Dry run)." };
+        return { success: true, message: "Draft cleanup executed (Dry run).", count: 0 };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, count: 0 };
     }
 }
