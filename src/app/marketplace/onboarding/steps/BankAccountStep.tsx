@@ -28,8 +28,11 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
     };
 
     function handleContinue() {
+        console.log("BankAccountStep: Continuing with data:", data);
         if (data?.accountName) {
             onNext();
+        } else {
+            console.warn("BankAccountStep: Cannot continue, accountName is missing");
         }
     };
 

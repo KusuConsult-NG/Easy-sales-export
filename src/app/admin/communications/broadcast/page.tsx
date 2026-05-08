@@ -18,7 +18,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
     Megaphone, Users, MapPin, Mail, Eye, Send, Loader2, Upload,
-    ChevronLeft, AlertTriangle, CheckCircle, Info,
+    ChevronLeft, AlertTriangle, CheckCircle, Info, Calendar
 } from "lucide-react";
 import {
     previewBroadcastAction,
@@ -144,6 +144,8 @@ export default function BroadcastComposePage() {
     const [sellerStatus, setSellerStatus] = useState<"pending" | "approved" | "suspended">("approved");
     const [moduleStatus, setModuleStatus] = useState("approved");
     const [farmNationRole, setFarmNationRole] = useState("");
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
     const [showPreview, setShowPreview] = useState(false);
@@ -170,6 +172,8 @@ export default function BroadcastComposePage() {
         moduleStatus: hasModuleStatus ? moduleStatus : undefined,
         farmNationRole: isFarmNation && farmNationRole ? farmNationRole as any : undefined,
         csvEmails: audience === "csv_upload" ? csvEmails : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
     });
 
     async function handleEstimate() {
@@ -414,6 +418,32 @@ export default function BroadcastComposePage() {
                                             </select>
                                         </div>
                                     )}
+
+                                    {/* Date Range Filter */}
+                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 mt-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                <Calendar className="w-3 h-3" /> Registered From
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={startDate}
+                                                onChange={(e) => { setStartDate(e.target.value); setRecipientCount(null); }}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                                <Calendar className="w-3 h-3" /> Registered To
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={endDate}
+                                                onChange={(e) => { setEndDate(e.target.value); setRecipientCount(null); }}
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}

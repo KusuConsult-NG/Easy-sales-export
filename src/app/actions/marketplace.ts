@@ -1352,22 +1352,25 @@ async function _resubmitSellerVerificationAction(data: any): Promise<ActionRespo
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
 
-        // Note: data is passed as a generic object from the onboarding form
-        // In the future, this should be validated with a proper schema.
+        // Find the most recent rejected verification for this user
+        const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+            .where("userId", "==", session.user.id)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
+
+        if (snapshot.empty) {
+            return { success: false as const, error: "No verification record found to resubmit.", data: null };
+        }
+
+        const doc = snapshot.docs[0];
+        const existing = doc.data();
         
-        const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(session.user.id);
-        const snapshot = await verificationRef.get();
-
-        if (!snapshot.exists) {
-            return { success: false as const, error: "Verification record not found", data: null };
-        }
-
-        const existing = snapshot.data();
         if (existing?.status !== "rejected") {
-            return { success: false as const, error: "Can only resubmit rejected verifications", data: null };
+            return { success: false as const, error: `Can only resubmit rejected verifications (Current: ${existing?.status})`, data: null };
         }
 
-        await verificationRef.update({ 
+        await doc.ref.update({ 
             ...data,
             status: "pending",
             submittedAt: FieldValue.serverTimestamp(),
@@ -1375,7 +1378,7 @@ async function _resubmitSellerVerificationAction(data: any): Promise<ActionRespo
             rejectionReason: null
         });
 
-        return { error: null, success: true as const, data: { verificationId: session.user.id } };
+        return { error: null, success: true as const, data: { verificationId: doc.id } };
     } catch (error: any) { 
         logger.error("Resubmit verification error:", error);
         return { success: false as const, error: error instanceof Error ? error.message : "Resubmission failed", data: null };

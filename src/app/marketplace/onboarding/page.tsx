@@ -16,6 +16,7 @@ import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import OnboardingLayout from "@/components/shared/OnboardingLayout";
 import StepIndicator from "@/components/shared/StepIndicator";
 import AccountTypeStep from "./steps/AccountTypeStep";
@@ -234,9 +235,11 @@ export default function MarketplaceOnboarding() {
                 } as any);
                 if (result.success) {
                     if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
+                    toast.success("Resubmitted successfully!");
                     router.push("/marketplace/onboarding/pending");
                 } else {
                     logger.error("Resubmission failed:", result.error);
+                    toast.error(result.error || "Resubmission failed");
                 }
                 return;
             }
@@ -271,6 +274,7 @@ export default function MarketplaceOnboarding() {
             if (result.success) {
                 // Clear draft on success
                 if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
+                toast.success("Onboarding completed!");
                 if (isSeller) {
                     router.push("/marketplace/onboarding/pending");
                 } else {
@@ -278,10 +282,12 @@ export default function MarketplaceOnboarding() {
                 }
             } else {
                 logger.error("Submission failed:", result.error);
+                toast.error(result.error || "Submission failed");
             }
 
-        } catch (error) {
+        } catch (error: any) {
             logger.error("Marketplace registration error:", error);
+            toast.error(error.message || "An unexpected error occurred");
         }
     };
 

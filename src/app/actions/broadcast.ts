@@ -29,7 +29,10 @@ export interface BroadcastFilters { audience: BroadcastAudience;
     sellerStatus?: "pending" | "approved" | "suspended";
     moduleStatus?: string;
     farmNationRole?: "buyer" | "seller" | "both";
-    csvEmails?: string[]; }
+    csvEmails?: string[];
+    startDate?: string; // ISO string
+    endDate?: string;   // ISO string
+}
 
 export interface BroadcastLog { id: string;
     subject: string;
@@ -73,7 +76,14 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
         const emailMap = new Map();
 
         snapshot.docs.forEach(doc => { const data = doc.data();
-            // We prioritize the 'email' field, falling back to 'userEmail' if present
+            // 3. Apply Date Range Filter if present
+            if (filters?.startDate || filters?.endDate) {
+                const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                if (filters.startDate && created < new Date(filters.startDate)) return;
+                if (filters.endDate && created > new Date(filters.endDate)) return;
+            }
+
+            // 4. Extract and normalize email
             const rawEmail = data.email || data.userEmail;
             
             if (rawEmail) {
