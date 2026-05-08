@@ -517,11 +517,11 @@ async function _getFarmNationTransactionsAction(options: {
             }
         }
         const snapshot = await queryRef.limit(fetchLimit).get();
-        const transactions = serializeDocs(snapshot.docs).map(doc => ({
+        const transactions = serializeDocs(snapshot.docs).map((doc: any) => ({
             ...doc,
-            createdAt: doc.createdAt?.toDate() || new Date(),
-            updatedAt: doc.updatedAt?.toDate() || new Date(),
-            paymentVerifiedAt: doc.paymentVerifiedAt?.toDate() || undefined
+            createdAt: doc.createdAt || new Date().toISOString(),
+            updatedAt: doc.updatedAt || new Date().toISOString(),
+            paymentVerifiedAt: doc.paymentVerifiedAt || undefined
         })) as any[];
 
         // HYDRATION: Batch-resolve user bank details (Sellers/Participants)
