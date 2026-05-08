@@ -17,7 +17,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 /**
  * Check Academy application status for current user
  */
-export async function checkAcademyStatusAction(): Promise<{ error: string | null, success: true | false; data?: string | null; ; meta?: any }> {
+export async function checkAcademyStatusAction(): Promise<{ error: string | null, success: true | false; data?: string | null; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized' };

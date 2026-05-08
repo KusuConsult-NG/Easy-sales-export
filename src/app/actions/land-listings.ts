@@ -63,7 +63,7 @@ export async function createLandListingAction(data: {
     category?: string;
     soilType?: string;
     waterSource?: string;
-}): Promise<{ error: string | null, success: true | false; ; listingId?: string }> {
+}): Promise<{ error: string | null, success: true | false; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ...data,
@@ -354,7 +354,7 @@ export async function submitLandListingAction(data: {
     documentUrls: string[];
     // Optional: GPS coordinates if available
     gpsCoordinates?: { latitude: number; longitude: number };
-}): Promise<{ error: string | null, success: true | false; ; listingId?: string }> {
+}): Promise<{ error: string | null, success: true | false; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ownerId: data.ownerId,

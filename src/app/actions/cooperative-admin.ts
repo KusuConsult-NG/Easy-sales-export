@@ -1139,7 +1139,7 @@ export async function getStandardCooperativeMembersAction(
         dateFrom?: string; // YYYY-MM-DD
         dateTo?: string;   // YYYY-MM-DD
     } = {}
-): Promise<{ error: string | null, success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; ; meta?: any }> {
+): Promise<{ error: string | null, success: true | false; data: any[]; hasMore: boolean; lastDocId?: string; meta?: any }> {
     const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();

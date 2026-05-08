@@ -992,7 +992,7 @@ export async function uploadPropertyDocumentsAction(
         surveyPlan?: string;
         taxClearance?: string;
     }
-): Promise<{ error: string | null, success: true | false; data?: any; ; meta?: any }> {
+): Promise<{ error: string | null, success: true | false; data?: any; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

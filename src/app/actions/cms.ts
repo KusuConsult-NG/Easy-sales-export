@@ -66,7 +66,7 @@ export async function createAnnouncementAction(data: {
     priority: "low" | "medium" | "high" | "urgent";
     expiresAt?: string;
     adminId: string;
-}): Promise<{ error: string | null, success: true | false; ; announcementId?: string }> {
+}): Promise<{ error: string | null, success: true | false; announcementId?: string }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
@@ -198,7 +198,7 @@ export async function createBannerAction(data: {
     endDate: string;
     position: "top" | "bottom" | "popup";
     adminId: string;
-}): Promise<{ error: string | null, success: true | false; ; bannerId?: string }> {
+}): Promise<{ error: string | null, success: true | false; bannerId?: string }> {
     try {
         const admin = await requireAdmin();
         if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };

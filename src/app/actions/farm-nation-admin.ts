@@ -360,7 +360,7 @@ async function _getAdminLandVerificationsAction(options: {
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -424,7 +424,7 @@ async function _getFarmNationTransactionsAction(options: {
     limit?: number;
     status?: string;
     lastDocId?: string;
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();

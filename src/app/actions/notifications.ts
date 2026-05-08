@@ -34,7 +34,7 @@ export async function createNotificationAction(data: {
     message: string;
     link?: string;
     linkText?: string;
-}): Promise<{ error: string | null, success: true | false; ; notificationId?: string }> {
+}): Promise<{ error: string | null, success: true | false; notificationId?: string }> {
     try {
         const notification: Omit<Notification, "id"> = {
             ...data,
@@ -57,7 +57,7 @@ export async function createNotificationAction(data: {
 export async function createBulkNotificationsAction(
     userIds: string[],
     notification: Omit<Notification, "id" | "userId">
-): Promise<{ error: string | null, success: true | false; ; count?: number }> {
+): Promise<{ error: string | null, success: true | false; count?: number }> {
     try {
         const batch = db.batch();
         const notificationsRef = db.collection(COLLECTIONS.NOTIFICATIONS);

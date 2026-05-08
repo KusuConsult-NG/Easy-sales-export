@@ -331,7 +331,7 @@ export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVeri
  * Submit full marketplace onboarding (Profile + Verification + Files)
  */
 async function _submitMarketplaceOnboardingAction(
-    prevState: { error: string | null, success: true | false; ; data?: any } | null,
+    prevState: { error: string | null, success: true | false; data?: any } | null,
     formData: FormData
 ) {
     let sessionResult;

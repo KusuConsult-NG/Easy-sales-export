@@ -878,7 +878,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
 export async function investInExportAction(
     exportId: string,
     amount: number
-): Promise<{ error: string | null, success: true | false; ; data?: { authorizationUrl: string; reference: string } }> {
+): Promise<{ error: string | null, success: true | false; data?: { authorizationUrl: string; reference: string } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };

@@ -21,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function getAdminExportCatalogAction(options: { 
     limit?: number; 
     lastDocId?: string; 
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; ; hasMore?: boolean; lastDocId?: string | null }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; hasMore?: boolean; lastDocId?: string | null }> {
     try {
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)

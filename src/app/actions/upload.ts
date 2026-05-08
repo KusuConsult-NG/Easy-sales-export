@@ -31,7 +31,7 @@ const MAX_SIZE_MB = 5;
 // ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
     formData: FormData
-): Promise<{ error: string | null, success: true | false; url?: string; ; fallback?: boolean }> {
+): Promise<{ error: string | null, success: true | false; url?: string; fallback?: boolean }> {
     try {
         const file = formData.get("file") as File | null;
         const fileName = formData.get("fileName") as string;

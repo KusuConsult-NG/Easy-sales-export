@@ -348,12 +348,10 @@ export async function updateAcademyApplicationPaymentAction(
 /**
  * Get Pending Academy Applications (Admin)
  */
-export async function getPendingAcademyApplicationsAction(): Promise<{
-    error: string | null;
-    success: boolean;
-    data?: any;
-    meta?: any;
-}> {
+export async function getPendingAcademyApplicationsAction(): Promise<
+    | { success: true; error: null; data: any; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -773,7 +771,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

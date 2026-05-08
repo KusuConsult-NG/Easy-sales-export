@@ -43,7 +43,7 @@ export async function createPaymentRecordAction(data: {
     purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string;
     metadata?: Record<string, any>;
-}): Promise<{ error: string | null, success: true | false; ; paymentId?: string }> {
+}): Promise<{ error: string | null, success: true | false; paymentId?: string }> {
     try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };

@@ -40,7 +40,7 @@ export async function uploadCertificateAction(
         expiryDate?: string;
         issuer?: string;
     }
-): Promise<{ error: string | null, success: true | false; ; certificateId?: string }> {
+): Promise<{ error: string | null, success: true | false; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

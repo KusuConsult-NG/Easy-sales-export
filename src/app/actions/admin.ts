@@ -1883,7 +1883,7 @@ async function _getStandardExportApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -2971,7 +2971,7 @@ async function _getStandardSellerVerificationsAction(
     sortOrder?: "asc" | "desc",
     dateFrom?: string,
     dateTo?: string
-): Promise<{ error: string | null, success: true | false; data?: any[]; ; meta?: any }> {
+): Promise<{ error: string | null, success: true | false; data?: any[]; meta?: any }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };

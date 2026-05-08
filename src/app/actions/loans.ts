@@ -44,7 +44,7 @@ export async function submitLoanApplicationAction(formData: {
     durationMonths: number;
     contributionAmount: number;
     tier: "Member";
-}): Promise<{ error: string | null, success: true | false; ; applicationId?: string }> {
+}): Promise<{ error: string | null, success: true | false; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -630,7 +630,7 @@ export interface RepaymentInstallment {
  */
 export async function getRepaymentScheduleAction(
     loanId: string
-): Promise<{ error: string | null, success: true | false; ; schedule?: RepaymentInstallment[] }> {
+): Promise<{ error: string | null, success: true | false; schedule?: RepaymentInstallment[] }> {
     try {
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
@@ -739,7 +739,7 @@ export async function submitRepaymentAction(data: {
     userId: string;
     amount: number;
     paymentReference: string;
-}): Promise<{ error: string | null, success: true | false; ; penalty?: number }> {
+}): Promise<{ error: string | null, success: true | false; penalty?: number }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
@@ -883,7 +883,7 @@ export async function submitRepaymentAction(data: {
  */
 export async function getRepaymentHistoryAction(
     loanId: string
-): Promise<{ error: string | null, success: true | false; ; payments?: any[] }> {
+): Promise<{ error: string | null, success: true | false; payments?: any[] }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;

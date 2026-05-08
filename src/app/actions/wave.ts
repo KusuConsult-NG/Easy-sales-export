@@ -536,7 +536,7 @@ export async function getWaveResourcesAction(
     category?: string,
     cursor?: string | null,
     limit = 20
-): Promise<{ error: string | null, success: true | false; data?: WaveResource[]; ; meta: { cursor: string | null; hasMore: boolean } }> {
+): Promise<{ error: string | null, success: true | false; data?: WaveResource[]; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
@@ -595,7 +595,7 @@ export async function getWaveResourcesAction(
 export async function getWaveTrainingEventsAction(
     cursor?: string | null,
     limit = 20
-): Promise<{ error: string | null, success: true | false; data?: WaveTrainingEvent[]; ; meta: { cursor: string | null; hasMore: boolean } }> {
+): Promise<{ error: string | null, success: true | false; data?: WaveTrainingEvent[]; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
