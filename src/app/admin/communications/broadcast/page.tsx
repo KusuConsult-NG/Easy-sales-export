@@ -178,14 +178,24 @@ export default function BroadcastComposePage() {
             return;
         }
         setEstimating(true);
-        const res = await previewBroadcastAction(buildFilters());
-        setEstimating(false);
-        if (!res.success) { 
-            showToast(res.error || "Failed to estimate recipients", "error"); 
-            return; 
+        try {
+            const res = await fetch("/api/admin/broadcast/estimate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(buildFilters()),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                showToast(data.error || "Failed to estimate recipients", "error");
+                setEstimating(false);
+                return;
+            }
+            setRecipientCount(data.data.count);
+            setRecipientSample(data.data.sample);
+        } catch (err: any) {
+            showToast(err.message || "Failed to estimate recipients — potential timeout.", "error");
         }
-        setRecipientCount(res.data.count);
-        setRecipientSample(res.data.sample);
+        setEstimating(false);
     };
 
     async function handleSend() {

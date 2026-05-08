@@ -64,8 +64,12 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
 
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
 
-        // 2. Fetch all records from the global 'users' collection
-        const snapshot = await db.collection(COLLECTIONS.USERS).get();
+        // 2. Fetch records from the global 'users' collection with specific fields and order
+        const snapshot = await db.collection(COLLECTIONS.USERS)
+            .select("email", "userEmail", "fullName", "firstName", "stateOfOrigin", "address", "onboardingCompleted", "updatedAt")
+            .orderBy("updatedAt", "desc")
+            .get();
+            
         const emailMap = new Map();
 
         snapshot.docs.forEach(doc => { const data = doc.data();
@@ -76,6 +80,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
                 const normalizedEmail = rawEmail.toLowerCase().trim();
                 
                 // Only keep the first instance of an email found (Deduplication)
+                // Since we sorted by updatedAt desc, we keep the most recently updated one
                 if (!emailMap.has(normalizedEmail)) {
                     emailMap.set(normalizedEmail, {
                         uid: doc.id,
@@ -83,7 +88,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
                         name: data.fullName || data.firstName || 'Member',
                         state: data.stateOfOrigin || data.address?.state || 'Unknown',
                         onboardingCompleted: data.onboardingCompleted || false,
-                        lastActive: data.updatedAt
+                        lastActive: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
                     });
                 }
             }
