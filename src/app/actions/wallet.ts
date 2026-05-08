@@ -62,7 +62,8 @@ export async function getWalletAction(): Promise<
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
-        const userId = sessionResult.session.user.id;
+        const { session } = sessionResult;
+        const userId = session.user.id;
 
         const wallet = await _getOrCreateWallet(userId);
         return { error: null, success: true as const, wallet , data: null };
@@ -87,14 +88,15 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
         data: null 
     };
 
+    /*
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
             return { success: false as const, error: "Minimum wallet funding amount is ₦100" , data: null };
         }
 
         const sessionResult = await requireSession();
-        const session = sessionResult.session;
-        if (!session) return { success: false as const, error: "Unauthorized" , data: null };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
+        const { session } = sessionResult;
         const userId = session.user.id;
         const userEmail = session.user.email;
 
@@ -156,6 +158,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
         logger.error("fundWalletViaPaystackAction error:", err);
         return { success: false as const, error: err.message || "Failed to initiate wallet funding" };
     }
+    */
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +263,8 @@ export async function walletCheckoutAction(
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
-        const userId = sessionResult.session.user.id;
+        const { session } = sessionResult;
+        const userId = session.user.id;
 
         // CRITICAL SECURITY FIX: Prevent negative-amount inflation attacks and NaN corruption
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN <= 0) {
@@ -341,13 +345,15 @@ export async function withdrawFromWalletAction(
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
+    // Wallet operations are currently disabled
+    return { 
+        success: false as const, 
+        error: "Wallet withdrawals are currently disabled for maintenance. Please try again later.", 
+        data: null 
+    };
+
+    /*
     try {
-        // Wallet operations are currently disabled
-        return { 
-            success: false as const, 
-            error: "Wallet withdrawals are currently disabled for maintenance. Please try again later.", 
-            data: null 
-        };
 
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
             return { success: false as const, error: "Invalid withdrawal amount" };
@@ -360,8 +366,8 @@ export async function withdrawFromWalletAction(
         }
 
         const sessionResult = await requireSession();
-        const session = sessionResult.session;
-        if (!session) return { success: false as const, error: "Unauthorized", data: null };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
         const userId = session.user.id;
 
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
@@ -433,6 +439,7 @@ export async function withdrawFromWalletAction(
         logger.error("withdrawFromWalletAction error:", err);
         return { success: false as const, error: err.message || "Withdrawal request failed" };
     }
+    */
 }
 
 // ---------------------------------------------------------------------------
@@ -449,7 +456,8 @@ export async function getWalletTransactionsAction(options?: {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
-        const userId = sessionResult.session.user.id;
+        const { session } = sessionResult;
+        const userId = session.user.id;
 
         const pageSize = options?.limit || 20;
         let query = db.collection(TXN_COLLECTION)
