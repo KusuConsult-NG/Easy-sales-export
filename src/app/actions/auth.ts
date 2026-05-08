@@ -299,7 +299,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
             const normalizedHost = host.replace(/^www\./, "");
             if (normalizedHost.includes("easysalesexportacademy.com")) redirectUrl = "/academy/setup";
             else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
-            else if (normalizedHost.includes("market.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
+            else if (normalizedHost.includes("marketplace.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
             else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
             else if (normalizedHost.includes("easysalescooperative.com")) redirectUrl = "/cooperatives/onboarding";
             else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";

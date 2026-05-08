@@ -197,7 +197,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         const snapshot = await q.get();
         const users = serializeDocs(snapshot.docs);
 
-        let applications = users.filter((user: any) => {
+        const applications = users.filter((user: any) => {
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
             if (options.status && options.status !== "all" && status !== options.status) return false;
             return true;
@@ -206,6 +206,13 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 ? `${user.firstName} ${user.lastName || ''}`.trim()
                 : (user.name || user.fullName || user.email || "Unknown User");
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
+
+            const bankDetails = user.bankDetails || {
+                bankName: user.bankName || user.bankAccount?.bankName || "N/A",
+                accountNumber: user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A",
+                accountName: user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A"),
+                bankCode: user.bankCode || user.bankAccount?.bankCode || "N/A"
+            };
 
             const profileAlias = { 
                 phone:   user.phone || user.phoneNumber || null,
@@ -216,6 +223,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             
             const mergedData = {
                 ...user,
+                bankDetails,
                 phone:              profileAlias.phone,
                 gender:             user.gender             || null,
                 dateOfBirth:        user.dateOfBirth        || user.dob           || null,
@@ -246,7 +254,8 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                     dob: mergedData.dateOfBirth || "Unknown",
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
-                    lga: mergedData.lga || "Unknown" 
+                    lga: mergedData.lga || "Unknown",
+                    bankDetails
                 },
                 status: status,
                 data: mergedData
@@ -388,7 +397,7 @@ async function _getAdminLandVerificationsAction(options: {
         }
 
         const snapshot = await queryRef.limit(fetchLimit).get();
-        let verifications = snapshot.docs.map(doc => {
+        const rawVerifications = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
                 id: doc.id,
@@ -398,6 +407,53 @@ async function _getAdminLandVerificationsAction(options: {
                 verifiedAt: data.verifiedAt?.toDate() || undefined
             };
         }) as any[];
+
+        // HYDRATION: Batch-resolve owner bank details
+        const ownerIds = [...new Set(rawVerifications.map((v: any) => v.ownerId).filter(Boolean))];
+        const ownerMap: Record<string, any> = {};
+
+        if (ownerIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < ownerIds.length; i += 30) {
+                chunks.push(ownerIds.slice(i, i + 30));
+            }
+
+            const ownerSnapsArray = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where(FieldPath.documentId(), "in", chunk)
+                        .get()
+                )
+            );
+
+            ownerSnapsArray.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    ownerMap[doc.id] = {
+                        name: data.name || data.fullName || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: data.bankDetails || {
+                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
+        }
+
+        let verifications = rawVerifications.map((v: any) => ({
+            ...v,
+            owner: ownerMap[v.ownerId] || null,
+            bankDetails: ownerMap[v.ownerId]?.bankDetails || {
+                bankName: "N/A",
+                accountNumber: "N/A",
+                accountName: "N/A",
+                bankCode: "N/A"
+            }
+        }));
 
         if (options.search) {
             const q = options.search.toLowerCase();
@@ -460,28 +516,72 @@ async function _getFarmNationTransactionsAction(options: {
                 queryRef = queryRef.startAfter(lastDoc);
             }
         }
-
         const snapshot = await queryRef.limit(fetchLimit).get();
-        let transactions = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt?.toDate() || new Date(),
-                updatedAt: data.updatedAt?.toDate() || new Date(),
-                paymentVerifiedAt: data.paymentVerifiedAt?.toDate() || undefined
-            };
-        }) as any[];
+        const transactions = serializeDocs(snapshot.docs).map(doc => ({
+            ...doc,
+            createdAt: doc.createdAt?.toDate() || new Date(),
+            updatedAt: doc.updatedAt?.toDate() || new Date(),
+            paymentVerifiedAt: doc.paymentVerifiedAt?.toDate() || undefined
+        })) as any[];
+
+        // HYDRATION: Batch-resolve user bank details (Sellers/Participants)
+        const participantIds = [...new Set(transactions.map((t: any) => t.sellerId).filter(Boolean))];
+        const participantMap: Record<string, any> = {};
+
+        if (participantIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < participantIds.length; i += 30) {
+                chunks.push(participantIds.slice(i, i + 30));
+            }
+
+            const participantSnapshots = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where("__name__", "in", chunk)
+                        .get()
+                )
+            );
+
+            participantSnapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    participantMap[doc.id] = {
+                        name: data.name || data.fullName || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: data.bankDetails || {
+                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
+        }
+
+        const enrichedTransactions = transactions.map((t: any) => ({
+            ...t,
+            participant: participantMap[t.sellerId] || null,
+            // Fallback for UI components expecting root bankDetails
+            bankDetails: participantMap[t.sellerId]?.bankDetails || {
+                bankName: "N/A",
+                accountNumber: "N/A",
+                accountName: "N/A",
+                bankCode: "N/A"
+            }
+        }));
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
             success: true, 
             error: null, 
-            data: transactions, 
+            data: enrichedTransactions, 
             meta: {
                 lastDocId: nextCursor, 
-                hasMore: !!nextCursor
+                hasMore: !!nextCursor,
+                totalFetched: enrichedTransactions.length
             }
         };
     } catch (error: any) {

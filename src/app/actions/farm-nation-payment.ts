@@ -9,6 +9,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { getBaseUrl } from "@/lib/server-utils";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -59,6 +60,9 @@ async function _initializePropertyPaymentAction(
             return { success: false, error: "You cannot purchase your own property", data: null };
         }
 
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/farm-nation/payment/callback`;
+
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
             session.user.email || "",
@@ -69,8 +73,9 @@ async function _initializePropertyPaymentAction(
                 propertyTitle,
                 sellerId,
                 type: "property_purchase",
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/farm-nation/payment/callback` 
-            }
+                callback_url: callbackUrl 
+            },
+            callbackUrl
         );
 
         // Create pending purchase record in FARM_NATION_TRANSACTIONS

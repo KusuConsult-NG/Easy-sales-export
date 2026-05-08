@@ -20,6 +20,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
+import { logger } from "@/lib/logger";
 
 function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
@@ -67,19 +68,27 @@ export type InAppBroadcastResult = ActionResponse<{
 async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
     const compact = Array.from(new Set(userIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)));
     const map = new Map<string, any>();
+    
+    // Create chunks to respect Firestore 100-document limit
+    const chunks = [];
     for (let i = 0; i < compact.length; i += 100) {
-        const batchIds = compact.slice(i, i + 100);
+        chunks.push(compact.slice(i, i + 100));
+    }
+
+    // Process all chunks in parallel for peak performance on Railway
+    await Promise.all(chunks.map(async (batchIds, index) => {
         const batchRefs = batchIds.map((id) => db.collection(COLLECTIONS.USERS).doc(id));
-        if (batchRefs.length === 0) continue;
+        if (batchRefs.length === 0) return;
         try {
             const snaps = await db.getAll(...batchRefs);
             for (const snap of snaps) {
                 if (snap.exists) map.set(snap.id, snap.data());
             }
         } catch (err) {
-            logger.error(`[InAppBroadcast] Failed to resolve users batch ${i}-${i + 100}`, err);
+            logger.error(`[InAppBroadcast] Failed to resolve users batch index ${index}`, err);
         }
-    }
+    }));
+
     return map;
 }
 

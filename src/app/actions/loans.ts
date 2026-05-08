@@ -263,7 +263,46 @@ export async function getAdminLoanApplicationsAction(options: {
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
-        const applications = serializeDocs(docs) as unknown as LoanApplication[];
+        const applicationsRaw = serializeDocs(docs) as unknown as any[];
+        
+        // Enrich with user details
+        const userIds = [...new Set(applicationsRaw.map(app => app.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
+        const userMap = new Map<string, any>();
+
+        const userPromises = [];
+        for (let i = 0; i < userIds.length; i += 100) {
+            const batchIds = userIds.slice(i, i + 100);
+            const refs = batchIds.map(id => db.collection(COLLECTIONS.USERS).doc(id));
+            if (refs.length > 0) {
+                userPromises.push(
+                    db.getAll(...refs).then(userDocs => {
+                        userDocs.forEach(doc => {
+                            if (doc.exists) userMap.set(doc.id, doc.data());
+                        });
+                    })
+                );
+            }
+        }
+        await Promise.all(userPromises);
+
+        const applications = applicationsRaw.map(app => {
+            const user = userMap.get(app.userId) || {};
+            const bankDetails = user.bankDetails || {
+                bankName: app.bankName || user.bankName || user.bankAccount?.bankName || "N/A",
+                accountNumber: app.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A",
+                accountName: app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A"),
+                bankCode: app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A"
+            };
+
+            return {
+                ...app,
+                userName: app.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || "Unknown"),
+                userEmail: app.userEmail || user.email || "",
+                bankName: bankDetails?.bankName || "",
+                accountNumber: bankDetails?.accountNumber || "",
+                accountName: bankDetails?.accountName || ""
+            };
+        });
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
@@ -330,11 +369,21 @@ export async function getAdminLoanApplicationsExportAction(options: {
 
         const enrichedLoans = loans.map(loan => {
             const user = userMap.get(loan.userId) || {};
+            const bankDetails = user.bankDetails || {
+                bankName: loan.bankName || user.bankName || user.bankAccount?.bankName || "N/A",
+                accountNumber: loan.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A",
+                accountName: loan.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A"),
+                bankCode: loan.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A"
+            };
+
             return {
                 ...loan,
                 phone: user.phone || "",
                 state: user.address?.state || user.stateOfOrigin || "",
-                lga: user.address?.lga || user.lga || ""
+                lga: user.address?.lga || user.lga || "",
+                bankName: bankDetails?.bankName || "",
+                accountNumber: bankDetails?.accountNumber || "",
+                accountName: bankDetails?.accountName || ""
             };
         });
 

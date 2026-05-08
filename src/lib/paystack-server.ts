@@ -156,7 +156,7 @@ export async function initializePaystackPayment(
                 amount,
                 channels: ["bank_transfer"],
                 metadata,
-                callback_url: callbackUrl || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
+                callback_url: callbackUrl || (metadata.callback_url as string) || `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/verify-payment`,
             }),
         });
 

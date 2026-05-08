@@ -12,6 +12,7 @@ import { rateLimit } from "@/lib/rate-limiter";
 import { rateLimitConfig } from "@/lib/rate-limits.config";
 import { notifyOrderPlaced, notifyPaymentReceived } from "@/lib/marketplace-notifications";
 import { withSafeAction } from "@/lib/safe-action";
+import { getBaseUrl } from "@/lib/server-utils";
 import type { CartItem } from "@/lib/types/marketplace";
 import type { ActionResponse } from "@/lib/safe-action";
 
@@ -108,6 +109,9 @@ async function _initializeOrderPaymentAction(
             return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const, data: null };
         }
 
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/marketplace/payment/callback`;
+
         const { authorizationUrl, reference } = await initializePaystackPayment(
             buyerEmail,
             nairaToKobo(totalAmount),
@@ -120,8 +124,9 @@ async function _initializeOrderPaymentAction(
                 deliveryFee: calculatedDeliveryFee,
                 totalAmount,
                 type: "marketplace_order",
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/marketplace/payment/callback` 
-            }
+                callback_url: callbackUrl 
+            },
+            callbackUrl
         );
 
         const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));

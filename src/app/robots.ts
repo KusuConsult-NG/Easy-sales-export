@@ -21,7 +21,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         'www.easysalesacademy.com': 'https://easysalesacademy.com/sitemap.xml',
         'farmnation.ng': 'https://farmnation.ng/sitemap.xml',
         'www.farmnation.ng': 'https://farmnation.ng/sitemap.xml',
-        'market.easysalesexport.com': 'https://market.easysalesexport.com/sitemap.xml',
+        'marketplace.easysalesexport.com': 'https://marketplace.easysalesexport.com/sitemap.xml',
         'wave.ng': 'https://wave.ng/sitemap.xml',
         'www.wave.ng': 'https://wave.ng/sitemap.xml',
     }

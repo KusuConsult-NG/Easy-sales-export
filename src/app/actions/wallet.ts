@@ -14,6 +14,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
+import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
@@ -98,6 +99,9 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
         const reference = `WALLET-${userId}-${Date.now()}`;
         const amountKobo = amountNGN * 100; // Paystack uses kobo
 
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/api/wallet/verify?ref=${reference}`;
+
         const paystackRes = await fetch("https://api.paystack.co/transaction/initialize", {
             method: "POST",
             headers: {
@@ -109,7 +113,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
                 amount: amountKobo,
                 reference,
                 channels: ["bank_transfer"],
-                callback_url: `${process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/api/wallet/verify?ref=${reference}`,
+                callback_url: callbackUrl,
                 metadata: {
                     userId,
                     type: "wallet_funding",
@@ -658,11 +662,59 @@ export async function getAdminWalletWithdrawalsAction(options: {
 
         const withdrawals = serializeDocs(docs);
 
+        // HYDRATION: Batch-resolve user bank details
+        const userIds = [...new Set(withdrawals.map((w: any) => w.userId).filter(Boolean))];
+        const userMap: Record<string, any> = {};
+
+        if (userIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                chunks.push(userIds.slice(i, i + 30));
+            }
+
+            const userSnapshots = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where("__name__", "in", chunk)
+                        .get()
+                )
+            );
+
+            userSnapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    userMap[doc.id] = {
+                        name: data.name || data.fullName || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: {
+                            bankName: data.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || "N/A",
+                            accountName: data.bankAccountName || "N/A",
+                            bankCode: data.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
+        }
+
+        const enrichedWithdrawals = withdrawals.map((w: any) => ({
+            ...w,
+            user: userMap[w.userId] || null,
+            // Fallback for UI components expecting root bankDetails
+            bankDetails: userMap[w.userId]?.bankDetails || w.bankDetails || {
+                bankName: "N/A",
+                accountNumber: "N/A",
+                accountName: "N/A",
+                bankCode: "N/A"
+            }
+        }));
+
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
             error: null, success: true as const, 
-            data: withdrawals,
+            data: enrichedWithdrawals,
             lastDocId: nextCursor,
             hasMore
         };

@@ -673,8 +673,16 @@ async function _getStandardWaveApplicationsAction(options: {
                    (app.firstName ? `${app.firstName} ${app.surname || app.lastName || ''}`.trim() : null) ||
                    "Unknown User");
 
+            const bankDetails = app.bankDetails || uData.bankDetails || {
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || app.fullName || uData.fullName || userName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
             const mergedData = {
                 ...app,
+                bankDetails,
                 phone:              app.phone              || uData.phone       || uData.phoneNumber || null,
                 gender:             app.gender             || uData.gender      || null,
                 dateOfBirth:        app.dateOfBirth        || uData.dob         || null,
@@ -698,6 +706,7 @@ async function _getStandardWaveApplicationsAction(options: {
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
                     lga: mergedData.lga || "Unknown",
+                    bankDetails
                 },
                 status: app.status || "pending",
                 data: mergedData
@@ -803,15 +812,63 @@ async function _getStandardWaveWithdrawalsAction(options: {
 
         const withdrawals = serializeDocs(docs);
 
+        // HYDRATION: Batch-resolve user bank details
+        const userIds = [...new Set(withdrawals.map((w: any) => w.userId).filter(Boolean))];
+        const userMap: Record<string, any> = {};
+
+        if (userIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                chunks.push(userIds.slice(i, i + 30));
+            }
+
+            const userSnapshots = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where(FieldPath.documentId(), "in", chunk)
+                        .get()
+                )
+            );
+
+            userSnapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    userMap[doc.id] = {
+                        name: data.name || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: {
+                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
+        }
+
+        const enrichedWithdrawals = withdrawals.map((w: any) => ({
+            ...w,
+            user: userMap[w.userId] || null,
+            // Fallback for UI components expecting root bankDetails
+            bankDetails: userMap[w.userId]?.bankDetails || {
+                bankName: "N/A",
+                accountNumber: "N/A",
+                accountName: "N/A",
+                bankCode: "N/A"
+            }
+        }));
+
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
             error: null, success: true as const, 
-            data: withdrawals,
+            data: enrichedWithdrawals,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
             meta: {
-                totalFetched: withdrawals.length,
+                totalFetched: enrichedWithdrawals.length,
                 hasMore: !!nextCursor
             }
         };

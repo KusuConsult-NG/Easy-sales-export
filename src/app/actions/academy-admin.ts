@@ -351,12 +351,49 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
             .get();
 
         const applications = serializeDocs(snapshot.docs);
+
+        // Standard Hydration Pattern
+        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        const userPromises = [];
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+            }
+        }
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+
+        const enrichedApps = applications.map(app => {
+            const uData = userMap.get(app.userId) || {};
+            const pi = app.personalInfo || {};
+            
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
+            return {
+                ...app,
+                userProfile: {
+                    name: uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (uData.name || pi.fullName || "Unknown"),
+                    email: uData.email || pi.email || "N/A",
+                    phone: uData.phone || uData.phoneNumber || pi.phone || "N/A"
+                },
+                bankDetails
+            };
+        });
+
         // Ensure sorting is consistent after serialization
-        applications.sort((a: any, b: any) =>
+        enrichedApps.sort((a: any, b: any) =>
             new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
         );
 
-        return { success: true, error: null, data: applications };
+        return { success: true, error: null, data: enrichedApps };
     } catch (error: any) {
         logger.error("Get pending Academy applications error:", error);
         return { success: false, error: "Failed to fetch applications", data: null };
@@ -389,6 +426,41 @@ async function _getAcademyEnrollmentsAction(options?: {
         const snapshot = await q.get();
         let enrollments = serializeDocs(snapshot.docs);
 
+        // Standard Hydration Pattern
+        const userIds = [...new Set(enrollments.map(e => e.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        const userPromises = [];
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+            }
+        }
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+
+        enrollments = enrollments.map(e => {
+            const uData = userMap.get(e.userId) || {};
+            
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
+            return {
+                ...e,
+                bankDetails,
+                userProfile: {
+                    name: uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (uData.name || e.studentName || "Unknown"),
+                    email: uData.email || e.studentEmail || "N/A",
+                    phone: uData.phone || uData.phoneNumber || "N/A"
+                }
+            };
+        });
+
         if (options?.search) {
             const s = options.search.toLowerCase().trim();
             enrollments = enrollments.filter((e: any) => {
@@ -397,7 +469,9 @@ async function _getAcademyEnrollmentsAction(options?: {
                     e.courseTitle,
                     e.studentName,
                     e.studentEmail,
-                    e.status
+                    e.status,
+                    e.userProfile?.name,
+                    e.userProfile?.email
                 ].filter(Boolean).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
@@ -817,6 +891,14 @@ async function _getStandardAcademyApplicationsAction(options: {
                 email:              app.email              || pi.email              || uData.email        || null,
             };
 
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: uData.bankName || "N/A",
+                accountNumber: uData.bankAccountNumber || "N/A",
+                accountName: uData.bankAccountName || "N/A",
+                bankCode: uData.bankCode || "N/A"
+            };
+
             return {
                 id: app.id,
                 user: {
@@ -830,6 +912,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                     lga: mergedData.lga || "Unknown",
                 },
                 status: app.status || "pending",
+                bankDetails,
                 data: mergedData
             };
         });

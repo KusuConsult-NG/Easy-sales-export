@@ -105,13 +105,52 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
             } as any;
         });
 
+        // 2. Batch fetch user profiles for bank details and contact info
+        const participantIds = Array.from(new Set(transactions.flatMap((t: any) => [t.buyerId, t.sellerId].filter(Boolean))));
+        const userProfiles: Record<string, any> = {};
+
+        if (participantIds.length > 0) {
+            const userPromises = [];
+            for (let i = 0; i < participantIds.length; i += 30) {
+                const chunk = participantIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(require("firebase-admin/firestore").FieldPath.documentId(), "in", chunk).get());
+                }
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(doc => {
+                const data = doc.data();
+                userProfiles[doc.id] = {
+                    firstName: data.firstName,
+                    lastName: data.lastName,
+                    email: data.email,
+                    phoneNumber: data.phoneNumber || data.phone || "N/A",
+                    bankDetails: data.bankDetails || {
+                        bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                        accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                        accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || "N/A",
+                        bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                    }
+                };
+            }));
+        }
+
+        // 3. Inject profiles into transactions
+        transactions = transactions.map((t: any) => ({
+            ...t,
+            buyerDetails: t.buyerId ? userProfiles[t.buyerId] : null,
+            sellerDetails: t.sellerId ? userProfiles[t.sellerId] : null
+        }));
+
         // Client-side search if specified
         if (options.search) { const s = options.search.toLowerCase();
             transactions = transactions.filter((t: any) => 
                 t.buyerEmail?.toLowerCase().includes(s) || 
                 t.sellerEmail?.toLowerCase().includes(s) || 
                 t.productName?.toLowerCase().includes(s) ||
-                t.paymentReference?.toLowerCase().includes(s)
+                t.paymentReference?.toLowerCase().includes(s) ||
+                t.buyerDetails?.email?.toLowerCase().includes(s) ||
+                t.sellerDetails?.email?.toLowerCase().includes(s)
             );
         }
 

@@ -53,7 +53,7 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
     COOPERATIVES: {
         id: 'mod_coop_001',
         name: 'Cooperative Society',
-        domain: 'cooperatives.easysalesexport.com',
+        domain: 'easysalescooperative.com',
         slug: 'cooperatives',
         version: '1.0.0',
         features: { hasAcademy: false, hasFinance: true, hasChat: true },
@@ -80,7 +80,7 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
     MARKETPLACE: {
         id: 'mod_mkt_001',
         name: 'Marketplace',
-        domain: 'marketplace.easysalesexport.com',
+        domain: 'easysalesmarket.com',
         slug: 'marketplace',
         version: '1.0.0',
         features: { hasAcademy: false, hasFinance: true, hasChat: true },

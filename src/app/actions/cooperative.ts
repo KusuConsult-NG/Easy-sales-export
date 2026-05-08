@@ -4,6 +4,8 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
+import { getBaseUrl } from "@/lib/server-utils";
+import { initializePaystackPayment, nairaToKobo } from "@/lib/paystack-server";
 import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
@@ -86,40 +88,29 @@ async function _initiateCooperativePaymentAction(
             // Preserve creation date if exists
             createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp() }, { merge: true });
 
-        // Initialize Paystack
-        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!paystackSecretKey) { return { error: "Payment system not configured", success: false as const, data: null };
-        }
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/cooperatives/payment/callback`;
 
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${paystackSecretKey}`,
-                "Content-Type": "application/json" },
-            body: JSON.stringify({ email: session.user.email,
-                amount: registrationFee * 100,
-                channels: ["bank_transfer", "card", "bank", "ussd"], // Broaden allowed channels to prevent payment failures
-                metadata: {
-                    userId,
-                    membershipId: userId,
-                    membershipTier: tier,
-                    type: "cooperative_membership_registration" },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback` }) });
-
-        if (!paystackResponse.ok) { return { error: "Failed to initialize payment", success: false as const, data: null };
-        }
-
-        const paystackData = await paystackResponse.json();
-
-        if (!paystackData.status || !paystackData.data?.authorization_url) { return { error: "Failed to generate payment link", success: false as const, data: null };
-        }
+        // Initialize payment with Paystack
+        const { authorizationUrl, reference } = await initializePaystackPayment(
+            session.user.email || "",
+            nairaToKobo(registrationFee),
+            {
+                userId,
+                membershipId: userId,
+                membershipTier: tier,
+                type: "cooperative_membership_registration",
+                callback_url: callbackUrl
+            },
+            callbackUrl
+        );
 
         // Save reference
-        await memberRef.update({ paymentReference: paystackData.data.reference });
+        await memberRef.update({ paymentReference: reference });
 
         return { error: null,  success: true as const,
             meta: null
-        , data: { message: "Action successful" } };
+        , data: { message: "Action successful", paymentUrl: authorizationUrl } as any };
 
     } catch (error) { logger.error("Initiate cooperative payment failed:", {
             tier,

@@ -23,7 +23,9 @@ const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((ac
 // Root domain alias
 DOMAIN_MAP["easysalesexport.com"] = "";
 
-const APEX_DOMAINS: string[] = Object.values(HUB_MODULES).map(m => m.domain);
+const APEX_DOMAINS: string[] = Object.values(HUB_MODULES)
+    .map(m => m.domain)
+    .filter(d => !d.endsWith(".easysalesexport.com"));
 APEX_DOMAINS.push("easysalesexport.com");
 
 const authMiddleware = auth((req: any) => {
@@ -34,7 +36,8 @@ const authMiddleware = auth((req: any) => {
         ""
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
-    // ── 1. Apex → www Redirect (High Priority) ─────────────────────────────────
+    // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
+    // Redirect apex domains to www for consistent session handling.
     if (APEX_DOMAINS.includes(hostname)) {
         const wwwUrl = req.nextUrl.clone();
         wwwUrl.host = `www.${hostname}`;
@@ -58,7 +61,7 @@ const authMiddleware = auth((req: any) => {
         }
     }
 
-    if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
+    if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/__session")) {
         // Handle landing page redirects for modules with sub-landing pages
         const MODULES_WITH_LANDING_SUBPAGE = new Set(["/wave", "/cooperatives"]);
         if (pathname === "/" && MODULES_WITH_LANDING_SUBPAGE.has(rewritePrefix)) {
@@ -100,8 +103,8 @@ export default async function middleware(req: any, event: any) {
             const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
             
             tokenNames.forEach(name => {
-                res.cookies.set(name, "", { domain, expires: new Date(0), path: "/" });
-                res.cookies.set(name, "", { expires: new Date(0), path: "/" });
+                (res as any).cookies.set(name, "", { domain, maxAge: 0, path: "/", secure: true });
+                (res as any).cookies.set(name, "", { maxAge: 0, path: "/", secure: true });
             });
         }
     }
@@ -125,6 +128,6 @@ export default async function middleware(req: any, event: any) {
 
 export const config = {
     matcher: [
-        "/((?!_next/static|_next/image|favicon.ico|images|grid.svg).*)",
+        "/((?!api/upload|_next/static|_next/image|favicon.ico|images|grid.svg).*)",
     ],
 };

@@ -29,7 +29,8 @@ export default function SessionGuard() {
             // If returning from an external site, or if the tab session flag is missing,
             // we force a logout to ensure the user must sign in again as requested.
             const referrer = typeof document !== 'undefined' ? document.referrer : '';
-            const isExternalReferrer = referrer && !referrer.includes(window.location.hostname);
+            const trustedDomains = ['easysalesexport.com', 'easysalesmarket.com', 'easysalescooperative.com'];
+            const isExternalReferrer = referrer && !trustedDomains.some(domain => referrer.includes(domain));
             const isFreshEntry = !isTabSessionActive;
             const isFromLoginPage = referrer && referrer.includes("/auth/login");
 

@@ -273,7 +273,43 @@ async function _getAllMembersAction(options?: {
             paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
         }
 
-        let members = allMembers.filter((m: any) => m.paymentStatus === "completed" || paidUserIds.has(m.id));
+        const membersRaw = allMembers.filter((m: any) => m.paymentStatus === "completed" || paidUserIds.has(m.id));
+
+        // --- HYDRATION START ---
+        const memberUserIds = [...new Set(membersRaw.map(m => m.userId || m.id).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        const userPromises = [];
+        for (let i = 0; i < memberUserIds.length; i += 30) {
+            const chunk = memberUserIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+            }
+        }
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+        // --- HYDRATION END ---
+
+        let members = membersRaw.map((m: any) => {
+            const uData = (userMap.get(m.userId || m.id) || {}) as any;
+            const bankDetails = uData.bankDetails || {
+                bankName: m.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: m.bankAccountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: m.bankAccountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: m.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
+            return {
+                ...m,
+                user: {
+                    id: m.userId || m.id,
+                    name: uData.fullName || uData.name || m.fullName || "Unknown Member",
+                    email: uData.email || m.email || "Unknown",
+                    phone: uData.phone || m.phone || "Unknown",
+                    bankDetails
+                }
+            };
+        });
+
         if (!options?.search && options?.limit) {
             members = members.slice(0, options.limit);
         }
@@ -292,7 +328,9 @@ async function _getAllMembersAction(options?: {
                     m.bankName,
                     m.accountNumber,
                     m.nin,
-                    m.bvn
+                    m.bvn,
+                    m.user?.name,
+                    m.user?.email
                 ].filter(Boolean).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
@@ -476,34 +514,58 @@ async function _getAllTransactionsAction(options?: {
             ...doc.data(),
         }));
 
+        // HYDRATION: Batch-resolve user profiles and bank details
         const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
-        const userNameMap = new Map<string, string>();
-        const userPromises = [];
-        for (let i = 0; i < userIds.length; i += 100) {
-            const batchIds = userIds.slice(i, i + 100);
-            const refs = batchIds.map(uid => db.collection(COLLECTIONS.USERS).doc(uid));
-            
-            if (refs.length > 0) {
-                userPromises.push(
-                    db.getAll(...refs).then(userDocs => {
-                        userDocs.forEach(doc => {
-                            if (doc.exists) {
-                                const data = doc.data();
-                                userNameMap.set(doc.id, data?.fullName || data?.displayName || data?.email || doc.id);
-                            }
-                        });
-                    }).catch(err => logger.error(`[CoopAdmin] Failed to fetch batch users ${i}-${i + 100}`, err))
-                );
+        const userMap: Record<string, any> = {};
+
+        if (userIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                chunks.push(userIds.slice(i, i + 30));
             }
+
+            const userSnapshots = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where(FieldPath.documentId(), "in", chunk)
+                        .get()
+                )
+            );
+
+            userSnapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    userMap[doc.id] = {
+                        name: data.fullName || data.name || data.displayName || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: {
+                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
         }
-        await Promise.all(userPromises);
 
         const transactions = rawDocs.map((raw: any) => {
             const dateVal = raw.date?.toDate ? raw.date.toDate() : (raw.date ? new Date(raw.date) : new Date());
+            const userProfile = userMap[raw.userId] || null;
+            
             return {
                 id: raw.id,
                 userId: raw.userId || "",
-                userName: userNameMap.get(raw.userId) || raw.userId || "Unknown",
+                userName: userProfile?.name || raw.userId || "Unknown",
+                user: userProfile,
+                // Root-level bankDetails for UI consistency
+                bankDetails: userProfile?.bankDetails || {
+                    bankName: raw.bankName || "N/A",
+                    accountNumber: raw.accountNumber || "N/A",
+                    accountName: raw.accountName || "N/A",
+                    bankCode: raw.bankCode || "N/A"
+                },
                 type: raw.type || "unknown",
                 amount: Number(raw.amount) || 0,
                 status: raw.status || "unknown",
@@ -1170,6 +1232,14 @@ export async function getStandardCooperativeMembersAction(
                 } : null,
             };
 
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
             return {
                 id: app.id,
                 user: {
@@ -1181,9 +1251,13 @@ export async function getStandardCooperativeMembersAction(
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
                     lga: mergedData.lga || "Unknown",
+                    bankDetails
                 },
                 status: app.membershipStatus || "pending",
-                data: mergedData
+                data: {
+                    ...mergedData,
+                    bankDetails
+                }
             };
         });
 

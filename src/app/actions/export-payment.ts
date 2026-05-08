@@ -7,6 +7,7 @@ import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getBaseUrl } from "@/lib/server-utils";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -76,6 +77,9 @@ export async function initializeExportOrderPaymentAction(
 
         const totalNGN = totalUSD * USD_TO_NGN_RATE;
 
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/export/buyer/cart/payment-callback`;
+
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
             buyerDetails.email,
@@ -86,7 +90,9 @@ export async function initializeExportOrderPaymentAction(
                 totalUSD,
                 totalNGN,
                 itemCount: cartItems.length,
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/buyer/cart/payment-callback` }
+                callback_url: callbackUrl 
+            },
+            callbackUrl
         );
 
         // Pre-create the order as "pending_payment"
@@ -274,6 +280,9 @@ export async function initializeInvestmentPaymentAction(
             };
         }
 
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/export/payment/callback`;
+
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
             session.user.email || "",
@@ -286,7 +295,9 @@ export async function initializeInvestmentPaymentAction(
                 investmentAmount,
                 expectedROI,
                 type: "export_investment",
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/payment/callback` }
+                callback_url: callbackUrl 
+            },
+            callbackUrl
         );
 
         // Create pending investment record

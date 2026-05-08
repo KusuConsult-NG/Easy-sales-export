@@ -476,18 +476,66 @@ async function _getPendingWithdrawalsAction(
         const toRecord = (doc: FirebaseFirestore.QueryDocumentSnapshot, source: string) =>
             ({ ...serializeDoc(doc.id, doc.data()), source });
 
-        const all = [
+        const withdrawals = [
             ...stdSnap.docs.map(d => toRecord(d, "withdrawal")),
             ...coopSnap.docs.map(d => toRecord(d, "cooperative_withdrawal")),
             ...waveSnap.docs.map(d => toRecord(d, "wave_withdrawal")),
         ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, limit);
 
+        // HYDRATION: Batch-resolve user bank details
+        const userIds = [...new Set(withdrawals.map((w: any) => w.userId).filter(Boolean))];
+        const userMap: Record<string, any> = {};
+
+        if (userIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                chunks.push(userIds.slice(i, i + 30));
+            }
+
+            const userSnapshots = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where(FieldPath.documentId(), "in", chunk)
+                        .get()
+                )
+            );
+
+            userSnapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    userMap[doc.id] = {
+                        name: data.name || data.fullName || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: {
+                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
+        }
+
+        const enrichedData = withdrawals.map((w: any) => ({
+            ...w,
+            user: userMap[w.userId] || null,
+            // Standardize bankDetails at root for UI components
+            bankDetails: userMap[w.userId]?.bankDetails || w.bankDetails || {
+                bankName: w.bankName || "N/A",
+                accountNumber: w.bankAccountNumber || w.accountNumber || "N/A",
+                accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || "N/A"),
+                bankCode: w.bankCode || "N/A"
+            }
+        }));
+
         return {
             error: null,
             success: true as const,
-            data: all,
-            hasMore: all.length === limit,
+            data: enrichedData,
+            hasMore: enrichedData.length === limit,
         };
     } catch (error: any) {
         logger.error("Get withdrawals error:", error);
@@ -520,12 +568,50 @@ async function _getPendingLandListings(limit = 50): Promise<{
             .limit(limit)
             .get();
 
-        const listings = snapshot.docs.map(doc => serializeDoc(doc.id, doc.data()));
+        const listings = serializeDocs(snapshot.docs);
+
+        // --- HYDRATION START ---
+        const userIds = [...new Set(listings.map(l => l.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        const userPromises = [];
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+            }
+        }
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+        // --- HYDRATION END ---
+
+        const hydratedListings = listings.map((l: any) => {
+            const uData = (userMap.get(l.userId as string) || {}) as any;
+            const userName = uData.name || uData.fullName || l.userName || "Unknown User";
+            
+            // Standardize bankDetails
+            const bankDetails = uData.bankDetails || {
+                bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
+            return {
+                ...l,
+                user: {
+                    id: l.userId,
+                    name: userName,
+                    email: uData.email || "Unknown",
+                    phone: uData.phone || uData.phoneNumber || "Unknown",
+                    bankDetails
+                }
+            };
+        });
 
         return {
             error: null,
             success: true as const,
-            listings,
+            listings: hydratedListings,
         };
     } catch (error: any) {
         logger.error("Get pending land listings error:", error);
@@ -679,10 +765,58 @@ async function _getPendingLoanApplications(): Promise<{
 
         const applications = serializeDocs(snapshot.docs);
 
+        // HYDRATION: Batch-resolve user bank details
+        const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
+        const userMap: Record<string, any> = {};
+
+        if (userIds.length > 0) {
+            const chunks = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                chunks.push(userIds.slice(i, i + 30));
+            }
+
+            const userSnapshots = await Promise.all(
+                chunks.map(chunk => 
+                    db.collection(COLLECTIONS.USERS)
+                        .where(FieldPath.documentId(), "in", chunk)
+                        .get()
+                )
+            );
+
+            userSnapshots.forEach(snap => {
+                snap.forEach(doc => {
+                    const data = doc.data();
+                    userMap[doc.id] = {
+                        name: data.name || data.fullName || "Unknown",
+                        email: data.email || "",
+                        phone: data.phone || "",
+                        bankDetails: {
+                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                        }
+                    };
+                });
+            });
+        }
+
+        const enrichedApplications = applications.map((app: any) => ({
+            ...app,
+            user: userMap[app.userId] || null,
+            // Fallback for UI components expecting root bankDetails
+            bankDetails: userMap[app.userId]?.bankDetails || {
+                bankName: app.bankName || "N/A",
+                accountNumber: app.accountNumber || "N/A",
+                accountName: app.accountName || (userMap[app.userId]?.name || "N/A"),
+                bankCode: app.bankCode || "N/A"
+            }
+        }));
+
         return {
             error: null,
             success: true as const,
-            applications,
+            applications: enrichedApplications,
         };
     } catch (error: any) {
         logger.error("Get pending loan applications error:", error);
@@ -1263,7 +1397,6 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate().toISOString() : (data.verifiedAt ? new Date(data.verifiedAt).toISOString() : undefined),
                 // Location
                 address: data.address,
-                state: data.address?.state || data.stateOfOrigin || "",
                 lga: data.address?.lga || data.lga || "",
                 // KYC fields — prefer nested kyc.* (written by live QoreID actions),
                 // fall back to legacy top-level fields for existing records
@@ -1280,7 +1413,12 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
                 cacVerified: data.cacVerified,
                 idType: data.kyc?.idType || data.idType,
                 // Other
-                bankDetails: data.bankDetails,
+                bankDetails: data.bankDetails || {
+                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                },
                 metadata: data.metadata,
                 accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType
             };
@@ -1959,6 +2097,14 @@ async function _getStandardExportApplicationsAction(options: {
                 lastName:           profile?.lastName       || app.lastName               || uData.lastName    || null,
                 email:              app.userEmail           || app.email                  || uData.email        || null,
             };
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
             return {
                 id: app.id,
                 user: {
@@ -1970,9 +2116,13 @@ async function _getStandardExportApplicationsAction(options: {
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
                     lga: mergedData.lga || "Unknown",
+                    bankDetails
                 },
                 status: status,
-                data: mergedData
+                data: {
+                    ...mergedData,
+                    bankDetails
+                }
             };
         });
 
@@ -2143,7 +2293,6 @@ async function _getAcademyApplicationsAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
-            // Fallback for now/testing or add permission
             const roles = session.user.roles || [];
             const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
             if (!hasAcademyAccess) {
@@ -2151,43 +2300,70 @@ async function _getAcademyApplicationsAction(
             }
         }
 
-        // NOTE: Compound queries (where + orderBy on different fields) require
-        // a composite Firestore index. To avoid that dependency, we:
-        // - Use only orderBy for the unfiltered case (single-field index exists)
-        // - Use only where for the filtered case, then sort in memory
         let snapshot;
         if (statusFilter) {
-            // Single-field filter only — avoids composite index requirement
             const filteredQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", statusFilter)
                 .limit(500);
             snapshot = await filteredQuery.get();
         } else {
-            // IMPORTANT: No orderBy here — Firestore silently excludes docs where
-            // 'submittedAt' is null/missing. We sort in-memory below instead.
             const allQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .limit(500);
             snapshot = await allQuery.get();
         }
 
-        const applications = snapshot.docs.map(doc => {
-            const data = doc.data();
-            const submittedRaw = data.submittedAt;
-            const reviewedRaw = data.reviewedAt;
+        const rawApplications = serializeDocs(snapshot.docs);
+
+        // --- HYDRATION START ---
+        const userIds = [...new Set(rawApplications.map(app => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        const userPromises = [];
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+            }
+        }
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+        // --- HYDRATION END ---
+
+        const applications = rawApplications.map(app => {
+            const uData = (userMap.get(app.userId as string) || {}) as any;
+            const submittedRaw = app.submittedAt;
+            const reviewedRaw = app.reviewedAt;
+
+            // Canonical bankDetails
+            const bankDetails = uData.bankDetails || {
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
+            const userName = uData.name || uData.fullName || app.personalInfo?.fullName || "Unknown Student";
+
             return {
-                id: doc.id,
-                ...data,
-                // Serialize as ISO string — Timestamps are not serializable across Server Action boundaries
+                id: app.id,
+                ...app,
+                user: {
+                    id: app.userId,
+                    name: userName,
+                    email: uData.email || app.personalInfo?.email || "Unknown",
+                    phone: uData.phone || app.personalInfo?.phone || "Unknown",
+                    bankDetails
+                },
+                // Serialize timestamps
                 submittedAt: submittedRaw?.toDate
-                    ? submittedRaw.toDate().toISOString()
+                    ? (submittedRaw.toDate() as Date).toISOString()
                     : submittedRaw instanceof Date
                         ? submittedRaw.toISOString()
-                        : new Date(0).toISOString(),
+                        : typeof submittedRaw === 'string' ? submittedRaw : new Date(0).toISOString(),
                 reviewedAt: reviewedRaw?.toDate
-                    ? reviewedRaw.toDate().toISOString()
+                    ? (reviewedRaw.toDate() as Date).toISOString()
                     : reviewedRaw instanceof Date
                         ? reviewedRaw.toISOString()
-                        : null,
+                        : typeof reviewedRaw === 'string' ? reviewedRaw : null,
             };
         });
 
@@ -2529,6 +2705,19 @@ export interface EditableApplicationFields {
     "nextOfKin.name"?: string;
     "nextOfKin.phone"?: string;
     "nextOfKin.address"?: string;
+    // Banking fields
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
+    bankCode?: string;
+    "bankDetails.bankName"?: string;
+    "bankDetails.accountNumber"?: string;
+    "bankDetails.accountName"?: string;
+    "bankDetails.bankCode"?: string;
+    "bankAccount.bankName"?: string;
+    "bankAccount.accountNumber"?: string;
+    "bankAccount.accountName"?: string;
+    "bankAccount.bankCode"?: string;
     // Land listing editable fields
     title?: string;
     "location.state"?: string;
@@ -2543,6 +2732,10 @@ const ALLOWED_EDIT_FIELDS: (keyof EditableApplicationFields)[] = [
     "phone", "email",
     "stateOfOrigin", "lga", "stateOfResidence", "lgaOfResidence", "residentialAddress", "occupation",
     "membershipTier", "nextOfKin.name", "nextOfKin.phone", "nextOfKin.address",
+    // Banking fields
+    "bankName", "accountNumber", "accountName", "bankCode",
+    "bankDetails.bankName", "bankDetails.accountNumber", "bankDetails.accountName", "bankDetails.bankCode",
+    "bankAccount.bankName", "bankAccount.accountNumber", "bankAccount.accountName", "bankAccount.bankCode",
     // Land listing fields
     "title", "location.state", "location.lga",
 ];
@@ -3021,6 +3214,15 @@ async function _getStandardSellerVerificationsAction(
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
+            
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: app.bankName || app.bankAccount?.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
+                accountNumber: app.accountNumber || app.bankAccountNumber || app.bankAccount?.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
+                accountName: app.accountName || app.bankAccountName || app.bankAccount?.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
+                bankCode: app.bankCode || app.bankAccount?.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
             return {
                 id: app.id,
                 user: {
@@ -3032,9 +3234,13 @@ async function _getStandardSellerVerificationsAction(
                     address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
                     state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
                     lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
+                    bankDetails
                 },
                 status: app.status || "pending",
-                data: app
+                data: {
+                    ...app,
+                    bankDetails
+                }
             };
         });
 
@@ -3113,7 +3319,13 @@ async function _getMarketplaceUsersAction(options: {
                 roles: data.roles || [],
                 buyerRole,
                 status: data.status || "active",
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : null)
+                createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : null),
+                bankDetails: data.bankDetails || {
+                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
+                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
+                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
+                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                }
             };
         }).filter(Boolean) as any[];
 
@@ -3401,7 +3613,7 @@ async function _onboardLegacyMemberAction(
             bankDetails: data.accountNumber ? {
                 accountNumber: data.accountNumber,
                 bankName: data.bankName || "",
-                accountName: data.accountName || "",
+                accountName: data.accountName || data.fullName || "",
                 bankCode: data.bankCode || "",
             } : undefined,
             // KYC
@@ -3476,6 +3688,12 @@ async function _onboardLegacyMemberAction(
                     accountNumber: data.accountNumber,
                     bankName: data.bankName || "",
                     accountName: data.accountName || "",
+                    bankCode: data.bankCode || "",
+                } : undefined,
+                bankDetails: data.accountNumber ? {
+                    accountNumber: data.accountNumber,
+                    bankName: data.bankName || "",
+                    accountName: data.accountName || data.fullName || "",
                     bankCode: data.bankCode || "",
                 } : undefined,
                 createdAt: FieldValue.serverTimestamp(),

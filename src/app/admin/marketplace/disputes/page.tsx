@@ -286,28 +286,34 @@ export default function AdminDisputesPage() {
                                     </div>
 
                                     {/* Parties */}
-                                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                                        <div className="flex gap-6 text-sm">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between pt-4 border-t border-gray-200 gap-4">
+                                        <div className="flex flex-wrap gap-6 text-sm">
                                             <div>
-                                                <span className="text-gray-500">Buyer:</span>
-                                                <span className="ml-2 font-semibold text-gray-900">
-                                                    {dispute.buyerId?.slice(0, 8) || "Unknown"}
-                                                </span>
+                                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Buyer</p>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-gray-900">
+                                                        {(dispute as any).buyerDetails?.firstName ? `${(dispute as any).buyerDetails.firstName} ${(dispute as any).buyerDetails.lastName}` : (dispute.buyerId?.slice(0, 8) || "Unknown")}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-500">{(dispute as any).buyerDetails?.email || "No email"}</span>
+                                                </div>
                                             </div>
                                             <div>
-                                                <span className="text-gray-500">Seller:</span>
-                                                <span className="ml-2 font-semibold text-gray-900">
-                                                    {dispute.sellerId?.slice(0, 8) || "Unknown"}
-                                                </span>
+                                                <p className="text-xs font-bold text-gray-400 uppercase mb-1">Seller</p>
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-gray-900">
+                                                        {(dispute as any).sellerDetails?.firstName ? `${(dispute as any).sellerDetails.firstName} ${(dispute as any).sellerDetails.lastName}` : (dispute.sellerId?.slice(0, 8) || "Unknown")}
+                                                    </span>
+                                                    <span className="text-[10px] text-gray-500">{(dispute as any).sellerDetails?.email || "No email"}</span>
+                                                </div>
                                             </div>
                                         </div>
 
                                         <button
                                             onClick={() => router.push(`/admin/marketplace/disputes/${dispute.id}`)}
-                                            className="px-4 py-2 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition flex items-center gap-2"
+                                            className="px-6 py-2.5 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 shadow-sm transition flex items-center gap-2 self-end md:self-center"
                                         >
                                             <EyeIcon className="w-4 h-4" />
-                                            Review
+                                            Review Case
                                         </button>
                                     </div>
                                 </div>

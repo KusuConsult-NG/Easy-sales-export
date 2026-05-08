@@ -100,6 +100,11 @@ export async function POST(request: NextRequest) {
                 accountNumber,
                 accountName,
             },
+            bankAccount: {
+                bankName,
+                accountNumber,
+                accountName,
+            },
             status: "pending",
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),

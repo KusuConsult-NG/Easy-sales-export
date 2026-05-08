@@ -10,6 +10,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { getBaseUrl } from "@/lib/server-utils";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
@@ -50,6 +51,9 @@ export async function initializeEnrollmentPaymentAction(
         if (existingEnrollment.exists) { return { error: "You are already enrolled in this course", success: false as const, data: null };
         }
 
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/academy/verify-payment`;
+
         // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
             session.user.email || "",
@@ -61,7 +65,9 @@ export async function initializeEnrollmentPaymentAction(
                 fullName,
                 phone,
                 type: "academy_enrollment",
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/verify-payment` }
+                callback_url: callbackUrl 
+            },
+            callbackUrl
         );
 
         // Save pending enrollment with payment reference
@@ -220,36 +226,23 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             amount = ACADEMY_CONFIG.plans.elite.fee;
         }
 
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${paystackSecretKey}`,
-                "Content-Type": "application/json",
+        const baseUrl = await getBaseUrl();
+        const callbackUrl = `${baseUrl}/academy/payment/callback`;
+
+        const { authorizationUrl, reference } = await initializePaystackPayment(
+            session.user.email || "",
+            nairaToKobo(amount),
+            {
+                userId,
+                purpose: "academy_registration",
+                plan: planToStore,
+                callback_url: callbackUrl
             },
-            body: JSON.stringify({
-                email: session.user.email,
-                amount: amount * 100, // Kobo
-                metadata: {
-                    userId,
-                    purpose: "academy_registration",
-                    plan: planToStore,
-                },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
-            }),
-        });
-
-        if (!paystackResponse.ok) {
-            return { error: "Failed to initialize payment", success: false as const , data: null };
-        }
-
-        const paystackData = await paystackResponse.json();
-
-        if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return { error: "Failed to generate payment link", success: false as const , data: null };
-        }
+            callbackUrl
+        );
 
         return {
-            error: null, success: true as const, data: { paymentUrl: paystackData.data.authorization_url } };
+            error: null, success: true as const, data: { paymentUrl: authorizationUrl } };
     } catch (error) {
         logger.error("Academy payment init failed:", {
             plan,

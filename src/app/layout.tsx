@@ -109,7 +109,7 @@ export default function RootLayout({
     "sameAs": [
       "https://easysalesacademy.com",
       "https://farmnation.ng",
-      "https://market.easysalesexport.com",
+      "https://marketplace.easysalesexport.com",
       "https://wave.ng"
     ]
   };

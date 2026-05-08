@@ -20,7 +20,30 @@ import {
     releaseEscrowFunds,
     refundEscrowToBuyer,
 } from "@/app/actions/escrow-actions";
-import type { EscrowTransaction, EscrowStatus } from "@/types/escrow";
+import type { EscrowTransaction as BaseEscrowTransaction, EscrowStatus } from "@/types/escrow";
+
+type EscrowTransaction = BaseEscrowTransaction & {
+    buyerDetails?: {
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        bankDetails?: {
+            bankName: string;
+            accountNumber: string;
+            accountName: string;
+        };
+    };
+    sellerDetails?: {
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        bankDetails?: {
+            bankName: string;
+            accountNumber: string;
+            accountName: string;
+        };
+    };
+};
 import { formatCurrency } from "@/lib/utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
@@ -257,8 +280,8 @@ export default function AdminEscrowPage() {
                                             <p className="font-bold text-gray-900 text-base mb-1 truncate">{tx.productName}</p>
 
                                             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">
-                                                <span>Buyer: <span className="font-mono text-xs">{tx.buyerEmail ?? tx.buyerId?.slice(0, 8)}</span></span>
-                                                <span>Seller: <span className="font-mono text-xs">{tx.sellerEmail ?? tx.sellerId?.slice(0, 8)}</span></span>
+                                                <span>Buyer: <span className="font-semibold text-gray-900">{tx.buyerDetails?.firstName ? `${tx.buyerDetails.firstName} ${tx.buyerDetails.lastName}` : (tx.buyerEmail ?? tx.buyerId?.slice(0, 8))}</span></span>
+                                                <span>Seller: <span className="font-semibold text-gray-900">{tx.sellerDetails?.firstName ? `${tx.sellerDetails.firstName} ${tx.sellerDetails.lastName}` : (tx.sellerEmail ?? tx.sellerId?.slice(0, 8))}</span></span>
                                             </div>
 
                                             {tx.paymentReference && (
@@ -355,11 +378,41 @@ export default function AdminEscrowPage() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-gray-500">Buyer</span>
-                                <span className="font-mono text-xs text-gray-900">{modal.tx.buyerEmail ?? modal.tx.buyerId?.slice(0, 12)}</span>
+                                <span className="font-semibold text-gray-900 text-right">
+                                    {modal.tx.buyerDetails?.firstName ? `${modal.tx.buyerDetails.firstName} ${modal.tx.buyerDetails.lastName}` : (modal.tx.buyerEmail ?? modal.tx.buyerId?.slice(0, 12))}
+                                    <br /><span className="text-[10px] font-mono text-gray-400">{modal.tx.buyerDetails?.email || "No Email"}</span>
+                                </span>
                             </div>
-                            <div className="flex justify-between">
+                            <div className="flex justify-between border-b border-gray-100 pb-2">
                                 <span className="text-gray-500">Seller</span>
-                                <span className="font-mono text-xs text-gray-900">{modal.tx.sellerEmail ?? modal.tx.sellerId?.slice(0, 12)}</span>
+                                <span className="font-semibold text-gray-900 text-right">
+                                    {modal.tx.sellerDetails?.firstName ? `${modal.tx.sellerDetails.firstName} ${modal.tx.sellerDetails.lastName}` : (modal.tx.sellerEmail ?? modal.tx.sellerId?.slice(0, 12))}
+                                    <br /><span className="text-[10px] font-mono text-gray-400">{modal.tx.sellerDetails?.email || "No Email"}</span>
+                                </span>
+                            </div>
+
+                            {/* Recipient Bank Details */}
+                            <div className="pt-2">
+                                <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">
+                                    Recipient Bank Details ({modal.type === "release" ? "Seller" : "Buyer"})
+                                </p>
+                                {(() => {
+                                    const details = modal.type === "release" ? modal.tx.sellerDetails?.bankDetails : modal.tx.buyerDetails?.bankDetails;
+                                    if (!details || (details.bankName === "N/A" && details.accountNumber === "N/A")) {
+                                        return (
+                                            <div className="flex items-center gap-2 text-red-500 bg-red-50 p-2 rounded-lg">
+                                                <AlertTriangle className="w-4 h-4" />
+                                                <span className="font-bold">No Bank Details Found!</span>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-1 shadow-inner">
+                                            <p className="font-bold text-gray-900 leading-none">{details.accountName}</p>
+                                            <p className="text-xs text-gray-600">{details.bankName} • {details.accountNumber}</p>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
 

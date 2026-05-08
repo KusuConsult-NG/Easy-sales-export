@@ -367,19 +367,67 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                 {/* Parties */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div className="bg-white rounded-2xl shadow-lg p-6">
-                        <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2 border-b border-gray-100 pb-2">
                             <User className="w-5 h-5 text-primary" />
-                            {isEscrowDispute ? "Initiator" : "Buyer"}
+                            {isEscrowDispute ? "Initiator (Buyer)" : "Buyer"}
                         </h3>
-                        <p className="text-sm text-gray-600">ID: {dispute.buyerId ?? dispute.initiatorId ?? "—"}</p>
+                        {(() => {
+                            const details = (dispute as any).buyerDetails;
+                            if (!details) return <p className="text-sm text-gray-400 italic">No buyer details available.</p>;
+                            return (
+                                <div className="space-y-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-400 uppercase">Contact Information</p>
+                                        <p className="text-sm font-semibold text-gray-900">{details.firstName} {details.lastName}</p>
+                                        <p className="text-xs text-gray-600">{details.email}</p>
+                                        <p className="text-xs text-gray-600">{details.phoneNumber || "No phone"}</p>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-50">
+                                        <p className="text-xs font-bold text-gray-400 uppercase mb-1">Bank Account</p>
+                                        {details.bankDetails?.bankName !== "N/A" ? (
+                                            <div className="bg-slate-50 p-2 rounded-lg">
+                                                <p className="text-sm font-bold text-gray-900">{details.bankDetails.accountName}</p>
+                                                <p className="text-[11px] text-gray-600">{details.bankDetails.bankName} • {details.bankDetails.accountNumber}</p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-red-500 font-medium italic">No bank details provided</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-lg p-6">
-                        <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                        <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2 border-b border-gray-100 pb-2">
                             <User className="w-5 h-5 text-primary" />
-                            {isEscrowDispute ? "Respondent" : "Seller"}
+                            {isEscrowDispute ? "Respondent (Seller)" : "Seller"}
                         </h3>
-                        <p className="text-sm text-gray-600">ID: {dispute.sellerId ?? dispute.respondentId ?? "—"}</p>
+                        {(() => {
+                            const details = (dispute as any).sellerDetails;
+                            if (!details) return <p className="text-sm text-gray-400 italic">No seller details available.</p>;
+                            return (
+                                <div className="space-y-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-400 uppercase">Contact Information</p>
+                                        <p className="text-sm font-semibold text-gray-900">{details.firstName} {details.lastName}</p>
+                                        <p className="text-xs text-gray-600">{details.email}</p>
+                                        <p className="text-xs text-gray-600">{details.phoneNumber || "No phone"}</p>
+                                    </div>
+                                    <div className="pt-2 border-t border-gray-50">
+                                        <p className="text-xs font-bold text-gray-400 uppercase mb-1">Bank Account</p>
+                                        {details.bankDetails?.bankName !== "N/A" ? (
+                                            <div className="bg-slate-50 p-2 rounded-lg">
+                                                <p className="text-sm font-bold text-gray-900">{details.bankDetails.accountName}</p>
+                                                <p className="text-[11px] text-gray-600">{details.bankDetails.bankName} • {details.bankDetails.accountNumber}</p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-red-500 font-medium italic">No bank details provided</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
 

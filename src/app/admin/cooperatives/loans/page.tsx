@@ -30,6 +30,9 @@ type LoanApplication = {
     rejectionReason?: string;
     approvedBy?: string;
     approvedAt?: Date;
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
 };
 
 type FilterType = "all" | "pending" | "approved" | "rejected";
@@ -187,14 +190,15 @@ export default function AdminLoansPage() {
             const headers = [
                 "Name", "Email", "Phone", "State", "LGA", "Loan Product", "Amount (₦)",
                 "Interest Rate", "Duration (months)", "Monthly Payment (₦)",
-                "Purpose", "Status", "Applied Date"
+                "Purpose", "Status", "Applied Date", "Bank Name", "Account Number", "Account Name"
             ];
             const rows = exportData.map((a: any) => [
                 a.fullName || "", a.userEmail || "", a.phone || "", a.state || "", a.lga || "",
                 a.tier || "", a.amount,
                 `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
                 a.purpose || "", a.status,
-                new Date(a.appliedAt as any).toLocaleDateString("en-NG")
+                new Date(a.appliedAt as any).toLocaleDateString("en-NG"),
+                a.bankName || "", a.accountNumber || "", a.accountName || ""
             ]);
             const csv = [
                 headers.join(","),
@@ -427,6 +431,20 @@ export default function AdminLoansPage() {
                                 <div><p className="text-sm text-slate-600">Monthly Payment</p><p className="font-semibold text-green-600">{formatCurrency(selectedApplication.monthlyPayment)}</p></div>
                                 <div><p className="text-sm text-slate-600">Applied</p><p className="font-semibold">{new Date(selectedApplication.appliedAt).toLocaleDateString()}</p></div>
                             </div>
+                            
+                            {(selectedApplication.bankName || selectedApplication.accountNumber) && (
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                                        <DollarSign className="w-4 h-4 text-primary" /> Banking Details
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><p className="text-xs text-slate-500">Bank Name</p><p className="font-semibold text-sm">{selectedApplication.bankName || "N/A"}</p></div>
+                                        <div><p className="text-xs text-slate-500">Account Number</p><p className="font-semibold text-sm font-mono">{selectedApplication.accountNumber || "N/A"}</p></div>
+                                        <div className="col-span-2"><p className="text-xs text-slate-500">Account Name</p><p className="font-semibold text-sm">{selectedApplication.accountName || "N/A"}</p></div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <h3 className="font-bold text-slate-900 mb-2">Purpose</h3>
                                 <p className="text-slate-600">{selectedApplication.purpose}</p>

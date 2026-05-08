@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 const BASE_URL = 'https://easysalesexport.com'
 const ACADEMY_URL = 'https://easysalesacademy.com'
 const FARM_NATION_URL = 'https://farmnation.ng'
-const MARKETPLACE_URL = 'https://market.easysalesexport.com'
+const MARKETPLACE_URL = 'https://marketplace.easysalesexport.com'
 const WAVE_URL = 'https://wave.ng'
 
 // Static public routes (no auth required)
