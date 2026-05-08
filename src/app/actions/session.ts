@@ -22,7 +22,8 @@ export async function switchModuleAction(moduleId: string) {
     
     // We can also store this in a cookie for middleware to read
     const { cookies } = await import("next/headers");
-    cookies().set("current_module_id", moduleId, { path: "/", maxAge: 60 * 60 * 24 * 7 });
+    const cookieStore = await cookies();
+    cookieStore.set("current_module_id", moduleId, { path: "/", maxAge: 60 * 60 * 24 * 7 });
 
     revalidatePath("/", "layout");
     
