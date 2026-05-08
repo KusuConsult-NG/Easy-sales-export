@@ -9,6 +9,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Order, Product } from "@/lib/types/marketplace";
 
 import { getPlatformFees } from "@/lib/system-settings";
+import { withOptimisticLock } from "@/lib/data-integrity";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 /**
  * Server Actions for Order Management
@@ -34,7 +36,7 @@ export interface OrderItem {
 /**
  * Create a new order with atomic inventory checking
  */
-export async function createOrderAction(
+async function _createOrderAction(
     items: OrderItem[],
     deliveryAddress: {
         street: string;
@@ -44,28 +46,21 @@ export async function createOrderAction(
         phone: string;
     }
 ): Promise<CreateOrderState> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const userId = session.user.id;
-
         const fees = await getPlatformFees();
         
-        // 🔒 TRANSACTION: Prevent Overselling
         return await db.runTransaction(async (transaction) => {
-            // 1. Read all products first (Concurrency requirement)
             const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
             const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
-            const sellerOrders = new Map<string, { items: any[], subtotal: number }>();
+            const sellerOrders = new Map<string, { items: { productId: string; productTitle: string; quantity: number; unitPrice: number; totalPrice: number; tier: string }[], subtotal: number }>();
 
-            // 2. Validate Inventory & Calculate Logic
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const productDoc = productDocs[i];
@@ -76,7 +71,6 @@ export async function createOrderAction(
 
                 const product = productDoc.data() as Product;
 
-                // 2a. Check Inventory Strictness
                 if (product.availableQuantity < item.quantity) {
                     throw new Error(`OUT OF STOCK: "${product.title}" has only ${product.availableQuantity} units remaining.`);
                 }
@@ -95,9 +89,9 @@ export async function createOrderAction(
                 const so = sellerOrders.get(sellerId)!;
                 so.subtotal += totalPrice;
 
-                // 2b. Decrement Inventory in Transaction
                 transaction.update(productRefs[i], {
                     availableQuantity: product.availableQuantity - item.quantity,
+                    _version: FieldValue.increment(1),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
 
@@ -112,22 +106,22 @@ export async function createOrderAction(
             }
 
             const orderIds: string[] = [];
-            const deliveryFeePerSeller = fees.baseDeliveryFee; // Dynamic fee instead of hardcoded 5000
+            const deliveryFeePerSeller = fees.baseDeliveryFee;
 
             for (const [sellerId, data] of sellerOrders.entries()) {
                 const total = data.subtotal + deliveryFeePerSeller;
                 
-                // 3. Create Order
                 const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc();
                 const orderId = orderRef.id;
                 orderIds.push(orderId);
 
-                const orderData: Partial<Order> = {
+                const orderData: Order = {
                     id: orderId,
                     orderNumber: `ORD-${Date.now()}-${sellerId.slice(0,4)}`,
                     buyerId: userId,
                     sellerId,
-                    items: data.items,
+                    productIds: data.items.map(i => i.productId),
+                    items: data.items as any,
                     deliveryAddress: {
                         recipientName: session.user.name || "",
                         recipientPhone: deliveryAddress.phone,
@@ -142,37 +136,39 @@ export async function createOrderAction(
                     totalAmount: total,
                     status: "pending_payment",
                     buyerConfirmed: false,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
+                    _version: 0,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
                 };
 
                 transaction.set(orderRef, orderData);
             }
 
-            return { success: true, orderId: orderIds[0], orderIds };
+            return { success: true, data: { orderId: orderIds[0], orderIds } };
         });
 
-    } catch (error: any) {
-        logger.error("Create order error:", error);
+    } catch (error) {
+        logger.error("Create order error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return {
             success: false,
-            error: error.message || "Failed to create order",
+            error: error instanceof Error ? error.message : "Failed to create order",
         };
     }
 }
+export const createOrderAction = withFlexibleSafeAction("createOrderAction", _createOrderAction);
 
 /**
  * Get order by ID
  */
-export async function getOrderByIdAction(orderId: string) {
+async function _getOrderByIdAction(orderId: string) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
@@ -180,59 +176,67 @@ export async function getOrderByIdAction(orderId: string) {
             return { success: false, error: "Order not found" };
         }
 
-        const order = orderDoc.data() as Order;
+        const orderData = orderDoc.data();
 
-        // Verify user owns this order
-        if (order.buyerId !== session.user.id) {
+        if (orderData?.buyerId !== session.user.id) {
             return { success: false, error: "Unauthorized" };
         }
 
-        return { success: true, order };
-    } catch (error: any) {
-        logger.error("Get order error:", error);
-        return { success: false, error: error.message };
+        const { serializeDoc } = await import("@/lib/firestore-serialize");
+        return { success: true, data: { order: serializeDoc<Order>(orderDoc.id, orderData) } };
+    } catch (error) {
+        logger.error("Get order error:", {
+            userId: sessionResult?.session?.user?.id,
+            orderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
+export const getOrderByIdAction = withFlexibleSafeAction("getOrderByIdAction", _getOrderByIdAction);
 
 /**
  * Update order payment status
  */
-export async function updateOrderPaymentAction(
+async function _updateOrderPaymentAction(
     orderId: string,
     paymentReference: string,
     paymentStatus: "success" | "failed"
 ) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
+        await withOptimisticLock<Order>(orderRef, undefined, (transaction, order) => {
+            if (order.buyerId !== session.user.id) {
+                throw new Error("Unauthorized");
+            }
 
-        if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
-        }
+            if (order.status === "confirmed" || order.paymentStatus === "paid") {
+                return;
+            }
 
-        const order = orderDoc.data() as Order;
-
-        if (order.buyerId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
-        }
-
-        await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).update({
-            paymentStatus: paymentStatus === "success" ? "paid" : "failed",
-            paymentReference,
-            status: paymentStatus === "success" ? "confirmed" : "cancelled",
-            updatedAt: new Date(),
+            transaction.update(orderRef, {
+                paymentStatus: paymentStatus === "success" ? "paid" : "failed",
+                paymentReference,
+                status: paymentStatus === "success" ? "confirmed" : "cancelled",
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Update payment error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { message: "Payment status updated successfully" } };
+    } catch (error) {
+        logger.error("Update payment error:", {
+            userId: sessionResult?.session?.user?.id,
+            orderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Update failed" };
     }
 }
+export const updateOrderPaymentAction = withFlexibleSafeAction("updateOrderPaymentAction", _updateOrderPaymentAction);

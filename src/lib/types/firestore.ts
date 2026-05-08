@@ -143,11 +143,14 @@ export interface User {
             submittedAt?: Date;
             paymentStatus?: "pending" | "completed" | "failed";
             plan?: "foundation" | "standard" | "elite" | "advanced";
+            accountType?: "learner" | "instructor" | "admin";
+            onboardingCompleted?: boolean;
         };
     };
 
     createdAt: Date;
     updatedAt: Date;
+    _version?: number;
 }
 
 export interface ExportWindow {
@@ -257,6 +260,7 @@ export interface Cooperative {
 }
 
 export interface CooperativeMember {
+    _version?: number;
     id: string;
     cooperativeId?: string;
     userId: string;
@@ -578,6 +582,7 @@ export interface MarketplaceOrder {
     escrowTransactionId?: string;
     createdAt: Date;
     updatedAt?: Date;
+    _version?: number;
 }
 
 export interface BriefingSubmission {
@@ -696,6 +701,7 @@ export interface WaveWithdrawal {
     payoutError?: string;
     createdAt: Date;
     updatedAt?: Date;
+    _version?: number;
 }
 
 export interface PlatformSettings {
@@ -842,6 +848,12 @@ export const COLLECTIONS = {
     // Land & Marketplace
     PRODUCTS: "products",
     MARKETPLACE_ORDERS: "marketplaceOrders",
+    MARKETPLACE_CARTS: "marketplace_carts",
+
+    // Academy
+    ACADEMY_APPLICATIONS: "academy_applications",
+    ACADEMY_COURSES: "academy_courses",
+    ACADEMY_ENROLLMENTS: "academy_enrollments",
     LAND_LISTINGS: "land_listings",
     LAND_VERIFICATIONS: "land_verifications",
     SELLER_VERIFICATIONS: "seller_verifications",
@@ -876,10 +888,8 @@ export const COLLECTIONS = {
 
 
     // Education & Training
-    ACADEMY_APPLICATIONS: "academy_applications",
     COURSES: "courses",
     ENROLLMENTS: "enrollments",
-    ACADEMY_COURSES: "academy_courses",
     ACADEMY_QUIZZES: "academy_quizzes",
     QUIZ_ATTEMPTS: "quiz_attempts",
     ACADEMY_LIVE_SESSIONS: "academy_live_sessions",

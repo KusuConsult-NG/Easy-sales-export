@@ -4,24 +4,15 @@ import { db } from "@/lib/firebase-admin";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
-/**
- * Get Farm Nation global stats (Admin)
- */
-export async function getFarmNationStatsAction(): Promise<{
-    success: boolean;
-    data?: {
-        stats: {
-            totalApplications: number;
-        }
-    };
-    error?: string;
-}> {
+async function _getFarmNationStatsAction(): Promise<{ success: true; data: { stats: { totalApplications: number } } } | { success: false; error: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
@@ -51,17 +42,16 @@ export async function getFarmNationStatsAction(): Promise<{
 
         return payload;
     } catch (error: any) {
-        logger.error("Get farm nation stats error:", error);
+        logger.error("Get farm nation stats error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch farm nation stats" };
     }
 }
+export const getFarmNationStatsAction = withFlexibleSafeAction("getFarmNationStatsAction", _getFarmNationStatsAction);
 
-/**
- * Get all users who have submitted a Farm Nation registration.
- * Queries users collection and filters in-memory for those with
- * serviceRegistrations.farmNation field populated.
- */
-export async function getFarmNationRegistrantsAction(options: {
+async function _getFarmNationRegistrantsAction(options: {
     limit?: number;
     page?: number;
     search?: string;
@@ -73,8 +63,9 @@ export async function getFarmNationRegistrantsAction(options: {
     meta?: any;
     error?: string;
 }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
@@ -84,8 +75,6 @@ export async function getFarmNationRegistrantsAction(options: {
         const pageSize = options.search ? 2000 : (options.limit || 20);
         const page = options.page ?? 0;
 
-        // Firestore can't query "field exists" directly, so fetch all users and
-        // filter in-memory for those with a farm nation registration.
         const snapshot = await db.collection(COLLECTIONS.USERS).limit(500).get();
 
         let users = snapshot.docs
@@ -102,21 +91,18 @@ export async function getFarmNationRegistrantsAction(options: {
                     roles: data.roles || [],
                     isVerified: data.isVerified ?? false,
                     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0),
-                    // Farm Nation onboarding profile (if saved to top-level farmNation field)
                     farmNation: data.farmNation,
                     serviceRegistrations: { farmNation },
                 };
             })
             .filter(Boolean) as any[];
 
-        // Status filter
         if (options.status && options.status !== "all") {
             users = users.filter(u =>
                 u.serviceRegistrations?.farmNation?.status === options.status
             );
         }
 
-        // Search filter
         if (options.search) {
             const q = options.search.toLowerCase();
             users = users.filter(u =>
@@ -126,7 +112,6 @@ export async function getFarmNationRegistrantsAction(options: {
             );
         }
 
-        // Sort by submittedAt desc (most recent first)
         users.sort((a, b) => {
             const aT = a.serviceRegistrations?.farmNation?.submittedAt?.seconds || 0;
             const bT = b.serviceRegistrations?.farmNation?.submittedAt?.seconds || 0;
@@ -146,44 +131,44 @@ export async function getFarmNationRegistrantsAction(options: {
             }
         };
     } catch (error: any) {
-        logger.error("getFarmNationRegistrantsAction error:", error);
+        logger.error("getFarmNationRegistrantsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return {
             success: false,
             data: null,
             meta: null,
-            error: "Failed to fetch farm nation registrants: " + error.message,
+            error: "Failed to fetch farm nation registrants",
         };
     }
 }
+export const getFarmNationRegistrantsAction = withFlexibleSafeAction("getFarmNationRegistrantsAction", _getFarmNationRegistrantsAction);
 
-export async function getStandardFarmNationRegistrantsAction(options: {
+async function _getStandardFarmNationRegistrantsAction(options: {
     limit?: number;
     search?: string;
-    status?: "pending" | "approved" | "rejected" | "revision_required" | "all";
+    status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ success: true; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false; error: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
-        // Query users who have a Farm Nation service registration.
-        // The field serviceRegistrations.farmNation.status is written during onboarding
-        // (farm-nation.ts sets it to "pending" on submission).
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q: any = db.collection(COLLECTIONS.USERS)
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS)
             .where('serviceRegistrations.farmNation.status', '!=', null);
 
-        // Determine sorting direction based on input
         const applicationsSortDirection = options.sortOrder || "desc";
 
         if (options.dateFrom) {
@@ -195,9 +180,7 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             q = q.where("createdAt", "<=", toTs);
         }
 
-        // We use createdAt for sorting to support date inequality
         q = q.orderBy("createdAt", applicationsSortDirection);
-
 
         if (options.lastDocId) {
             const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
@@ -208,38 +191,19 @@ export async function getStandardFarmNationRegistrantsAction(options: {
         
         q = q.limit(fetchLimit);
 
-        let snapshot;
-        try {
-            snapshot = await q.get();
-        } catch (e: any) {
-            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
-                logger.warn("Missing index for getStandardFarmNationRegistrantsAction, falling back to memory filter");
-                snapshot = await db.collection(COLLECTIONS.USERS)
-                    .where('serviceRegistrations.farmNation.status', '!=', null)
-                    .get();
-            } else {
-                throw e;
-            }
-        }
-
-        
+        const snapshot = await q.get();
         const users = serializeDocs(snapshot.docs);
 
-
-        // Filter and map out the standard forms
         let applications = users.filter((user: any) => {
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
             if (options.status && options.status !== "all" && status !== options.status) return false;
             return true;
         }).map((user: any) => {
-            // Fix: check firstName presence FIRST to avoid "undefined undefined" for legacy users
             const userName = user.firstName
                 ? `${user.firstName} ${user.lastName || ''}`.trim()
                 : (user.name || user.fullName || user.email || "Unknown User");
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
 
-            // Flatten nested address & personal fields so admin modal reads consistent top-level keys.
-            // Also inject a synthetic farmNation.profile alias so the admin page's nested paths resolve.
             const profileAlias = {
                 phone:   user.phone || user.phoneNumber || null,
                 state:   user.stateOfOrigin || user.address?.state || user.state || null,
@@ -255,7 +219,6 @@ export async function getStandardFarmNationRegistrantsAction(options: {
                 stateOfOrigin:      profileAlias.state,
                 lga:                profileAlias.lga,
                 residentialAddress: profileAlias.address,
-                // Inject farmNation.profile so admin page paths resolve when the nested object is missing
                 farmNation: {
                     ...(user.farmNation || {}),
                     profile: {
@@ -305,18 +268,6 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             });
         }
 
-        // Sorting
-        applications.sort((a: any, b: any) => {
-
-            const dateA = a.data?.createdAt?.toDate?.() || new Date(a.data?.createdAt || 0);
-            const dateB = b.data?.createdAt?.toDate?.() || new Date(b.data?.createdAt || 0);
-            return applicationsSortDirection === "desc" 
-                ? dateB.getTime() - dateA.getTime()
-                : dateA.getTime() - dateB.getTime();
-        });
-
-
-
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
@@ -330,16 +281,20 @@ export async function getStandardFarmNationRegistrantsAction(options: {
             }
         };
     } catch (error) {
-        logger.error("Get standard Farm Nation registrants error:", error);
-        return { success: false, error: "Failed to fetch normalized Farm Nation applications" };
+        logger.error("Get standard Farm Nation registrants error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch applications" };
     }
 }
+export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("getStandardFarmNationRegistrantsAction", _getStandardFarmNationRegistrantsAction);
 
 /**
  * Get aggregate counts for land_listings by verification status.
  * Uses Firestore COUNT queries — independent of pagination.
  */
-export async function getFarmNationVerificationStatsAction(): Promise<{
+async function _getFarmNationVerificationStatsAction(): Promise<{
     success: boolean;
     data?: {
         stats: {
@@ -351,13 +306,13 @@ export async function getFarmNationVerificationStatsAction(): Promise<{
     };
     error?: string;
 }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -380,44 +335,48 @@ export async function getFarmNationVerificationStatsAction(): Promise<{
             data: {
                 stats: {
                     total:    totalSnap.data().count,
-                    pending:  pendingSnap.data().count, // false
-                    verified: verifiedSnap.data().count, // true
-                    rejected: 0, // Not supported in boolean schema
+                    pending:  pendingSnap.data().count,
+                    verified: verifiedSnap.data().count,
+                    rejected: 0,
                 },
             },
         };
 
         try {
-            await setCache(cacheKey, payload, 60); // 60-second cache
+            await setCache(cacheKey, payload, 60);
         } catch (e) {}
 
         return payload;
     } catch (error: any) {
-        logger.error("getFarmNationVerificationStatsAction error:", error);
-        return { success: false, error: "Failed to fetch verification stats" };
+        logger.error("getFarmNationVerificationStatsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch stats" };
     }
 }
+export const getFarmNationVerificationStatsAction = withFlexibleSafeAction("getFarmNationVerificationStatsAction", _getFarmNationVerificationStatsAction);
 
-export async function getAdminLandVerificationsAction(options: {
+async function _getAdminLandVerificationsAction(options: {
     limit?: number;
     search?: string;
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}) {
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
-        let queryRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).orderBy("createdAt", orderDirection);
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).orderBy("createdAt", orderDirection);
 
         if (options.status && options.status !== "all") {
             const isVerified = options.status === "verified";
@@ -426,26 +385,12 @@ export async function getAdminLandVerificationsAction(options: {
                 .orderBy("createdAt", orderDirection);
         }
 
-        let snapshot;
-        try {
-            snapshot = await queryRef.limit(fetchLimit).get();
-        } catch (e: any) {
-            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
-                logger.warn("Missing index for getAdminLandVerificationsAction, falling back to memory sort");
-                snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).get();
-                // We will sort verifications array below
-            } else {
-                throw e;
-            }
-        }
-
+        const snapshot = await queryRef.limit(fetchLimit).get();
         let verifications = snapshot.docs.map(doc => {
-
             const data = doc.data();
             return {
                 id: doc.id,
                 ...data,
-                // Map verified boolean to verificationStatus for UI compatibility
                 verificationStatus: data.verified ? "verified" : "pending",
                 createdAt: data.createdAt?.toDate() || new Date(),
                 verifiedAt: data.verifiedAt?.toDate() || undefined,
@@ -461,16 +406,6 @@ export async function getAdminLandVerificationsAction(options: {
             );
         }
 
-        // Sorting
-        const landSortDirection = options.sortOrder || "desc";
-        verifications.sort((a: any, b: any) => {
-            const dateA = a.createdAt?.getTime?.() || new Date(a.createdAt).getTime();
-            const dateB = b.createdAt?.getTime?.() || new Date(b.createdAt).getTime();
-            return landSortDirection === "desc" ? dateB - dateA : dateA - dateB;
-        });
-
-
-
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
@@ -480,28 +415,32 @@ export async function getAdminLandVerificationsAction(options: {
             hasMore: !!nextCursor
         };
     } catch (error: any) {
-        logger.error("Get admin land verifications error:", error);
-        return { success: false, error: error.message };
+        logger.error("Get admin land verifications error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch verifications" };
     }
 }
+export const getAdminLandVerificationsAction = withFlexibleSafeAction("getAdminLandVerificationsAction", _getAdminLandVerificationsAction);
 
-export async function getFarmNationTransactionsAction(options: {
+async function _getFarmNationTransactionsAction(options: {
     limit?: number;
     status?: string;
     lastDocId?: string;
-} = {}) {
+} = {}): Promise<{ success: boolean; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 50;
-        let queryRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).orderBy("createdAt", "desc");
 
         if (options.status && options.status !== "all") {
             queryRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
@@ -509,20 +448,8 @@ export async function getFarmNationTransactionsAction(options: {
                 .orderBy("createdAt", "desc");
         }
 
-        let snapshot;
-        try {
-            snapshot = await queryRef.limit(fetchLimit).get();
-        } catch (e: any) {
-            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
-                logger.warn("Missing index for getFarmNationTransactionsAction, falling back to memory sort");
-                snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).get();
-            } else {
-                throw e;
-            }
-        }
-
+        const snapshot = await queryRef.limit(fetchLimit).get();
         let transactions = snapshot.docs.map(doc => {
-
             const data = doc.data();
             return {
                 id: doc.id,
@@ -533,14 +460,6 @@ export async function getFarmNationTransactionsAction(options: {
             };
         }) as any[];
 
-        // Sorting
-        transactions.sort((a: any, b: any) => {
-            const dateA = a.createdAt?.getTime?.() || new Date(a.createdAt).getTime();
-            const dateB = b.createdAt?.getTime?.() || new Date(b.createdAt).getTime();
-            return dateB - dateA;
-        });
-
-
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
@@ -550,19 +469,23 @@ export async function getFarmNationTransactionsAction(options: {
             hasMore: !!nextCursor
         };
     } catch (error: any) {
-        logger.error("Get admin farm nation transactions error:", error);
-        return { success: false, error: error.message };
+        logger.error("Get admin farm nation transactions error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch transactions" };
     }
 }
+export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNationTransactionsAction", _getFarmNationTransactionsAction);
 
-export async function releaseFarmNationEscrowAction(transactionId: string) {
+async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -581,7 +504,6 @@ export async function releaseFarmNationEscrowAction(transactionId: string) {
             const propertyDoc = await tx.get(propertyRef);
             if (!propertyDoc.exists) throw new Error("Property not found");
 
-            // Finalize transfer of ownership
             tx.update(propertyRef, {
                 status: "sold",
                 ownerId: txData.buyerId,
@@ -589,33 +511,38 @@ export async function releaseFarmNationEscrowAction(transactionId: string) {
                 previousOwnerId: txData.sellerId,
                 soldAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
 
-            // Mark Escrow as Released
             tx.update(txRef, {
                 status: "completed",
                 escrowStatus: "released",
                 escrowReleasedAt: FieldValue.serverTimestamp(),
                 escrowReleasedBy: session.user.id,
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
             
-            // Record the seller payout in ledger
             const payoutRef = db.collection("farm_nation_payouts").doc(transactionId);
             tx.set(payoutRef, {
                 transactionId,
                 propertyId: txData.propertyId,
                 sellerId: txData.sellerId,
                 amount: txData.escrowAmount,
-                status: "pending_transfer", // Awaiting actual bank transfer
+                status: "pending_transfer",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: 0,
             });
         });
 
         return { success: true, message: "Escrow released and property ownership transferred successfully." };
     } catch (error: any) {
-        logger.error("Release Farm Nation Escrow error:", error);
-        return { success: false, error: error.message };
+        logger.error("Release Farm Nation Escrow error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error.message || "Failed to release escrow" };
     }
 }
+export const releaseFarmNationEscrowAction = withFlexibleSafeAction("releaseFarmNationEscrowAction", _releaseFarmNationEscrowAction);

@@ -5,7 +5,11 @@ import { logger } from "@/lib/logger";
 export interface LegacyAuditLogEntry {
     userId: string;
     action: string;
-    details: string;
+    details?: string;
+    resourceId?: string;
+    resourceType?: string;
+    targetId?: string;
+    targetType?: string;
     metadata?: Record<string, any>;
     ip?: string;
     userAgent?: string;
@@ -19,7 +23,9 @@ export async function logAuditAction(entry: LegacyAuditLogEntry) {
         await createAuditLog({
             userId: entry.userId,
             action: entry.action as AuditAction,
-            details: entry.details,
+            details: entry.details || "",
+            targetId: entry.resourceId || entry.targetId,
+            targetType: entry.resourceType || entry.targetType,
             metadata: entry.metadata,
             ipAddress: entry.ip,
             userAgent: entry.userAgent,

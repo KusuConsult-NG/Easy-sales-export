@@ -50,22 +50,22 @@ function timestampToIso(ts: unknown): string {
  * @param value - Raw value from Firestore (doc.data(), field value, etc.)
  * @returns A deep-cloned plain object with all Timestamps serialized
  */
-export function serializeValue(value: unknown): unknown {
+export function serializeValue<T = any>(value: any): T {
     if (value === null || value === undefined) return value;
 
     // Firestore Timestamp → ISO string
     if (isTimestamp(value)) {
-        return timestampToIso(value as { toDate: () => Date });
+        return timestampToIso(value as { toDate: () => Date }) as any;
     }
 
     // Date → ISO string (for consistency)
     if (value instanceof Date) {
-        return value.toISOString();
+        return value.toISOString() as any;
     }
 
     // Arrays — recurse into each element
     if (Array.isArray(value)) {
-        return value.map(serializeValue);
+        return value.map(serializeValue) as any;
     }
 
     // Plain objects — recurse into each property
@@ -74,11 +74,11 @@ export function serializeValue(value: unknown): unknown {
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
             result[k] = serializeValue(v);
         }
-        return result;
+        return result as any;
     }
 
     // Primitives (string, number, boolean) — safe as-is
-    return value;
+    return value as T;
 }
 
 /**
@@ -95,11 +95,19 @@ export function serializeValue(value: unknown): unknown {
  */
 export function serializeDoc<T = Record<string, unknown>>(
     id: string,
-    data: DocumentData | undefined
+    data: DocumentData | undefined,
+    schema?: import("zod").ZodSchema<T>
 ): T {
     if (!data) return { id } as unknown as T;
-    return serializeValue({ id, ...data }) as T;
+    const serialized = serializeValue({ id, ...data });
+    
+    if (schema) {
+        return schema.parse(serialized);
+    }
+    
+    return serialized as T;
 }
+
 
 import { logger } from "./logger";
 
@@ -126,27 +134,34 @@ export function serializeDocs<T = Record<string, unknown>>(
 
 import type { User, WaveApplication } from "./types/firestore";
 
+import { UserSchema } from "./validations/user";
+
 /**
  * Standardize User entity to ensure consistent formatting.
  * Prioritizes computed name combinations over legacy fields.
+ * Uses Zod for strict schema gating and data healing.
  */
 export function serializeUser(id: string, data: DocumentData | undefined): User {
-    const raw = serializeDoc<User>(id, data);
+    const rawDoc = serializeDoc<any>(id, data);
     
-    // Compute a consistent full name
-    let computedFullName = raw.fullName || "Unknown User";
-    if (raw.firstName || raw.lastName) {
-        const parts = [raw.firstName, raw.otherName, raw.lastName].filter(Boolean);
+    // Strict Schema Gating & Data Healing
+    const validated = UserSchema.parse(rawDoc);
+    
+    // Compute a consistent full name if structured fields are present
+    let computedFullName = validated.fullName;
+    if (validated.firstName || validated.lastName) {
+        const parts = [validated.firstName, validated.lastName].filter(Boolean);
         if (parts.length > 0) {
             computedFullName = parts.join(" ");
         }
     }
     
     return {
-        ...raw,
+        ...validated,
         fullName: computedFullName,
-    };
+    } as User;
 }
+
 
 /**
  * Standardize WaveApplication entity.

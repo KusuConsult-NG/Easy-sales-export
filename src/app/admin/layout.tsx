@@ -5,6 +5,9 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { canAccessAdminRoute } from "@/lib/admin-permissions";
 import { headers } from "next/headers";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const sessionResult = await requireSession();
 

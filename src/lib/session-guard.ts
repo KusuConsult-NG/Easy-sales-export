@@ -98,9 +98,12 @@ export async function requireSession(): Promise<
             };
         }
 
-        // Force-sync live roles from database/cache over stale JWT roles
+        // Force-sync live roles and serviceRegistrations from database/cache over stale JWT roles
         if (data?.roles) {
             session.user.roles = data.roles;
+        }
+        if (data?.serviceRegistrations) {
+            session.user.serviceRegistrations = data.serviceRegistrations;
         }
     } catch (e) {
         console.error("[SessionGuard] Verification failed:", e);

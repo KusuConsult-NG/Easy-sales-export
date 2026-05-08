@@ -11,7 +11,8 @@ import { createNotificationAction } from "@/app/actions/notifications";
 import { verifyPaystackPayment } from "@/lib/paystack-server";
 import { smsEscrowReleased, smsDisputeResolved } from "@/lib/termii";
 import { pushEscrowReleased, pushDisputeResolved } from "@/lib/fcm";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 /**
  * Marketplace Escrow System
@@ -73,7 +74,7 @@ export interface Message {
 /**
  * Create escrow transaction
  */
-export async function createEscrowAction(data: {
+async function _createEscrowAction(data: {
     buyerId: string;
     buyerEmail: string;
     sellerId: string;
@@ -81,9 +82,10 @@ export async function createEscrowAction(data: {
     amount: number;
     productName: string;
     productDescription: string;
-}): Promise<{ success: boolean; error?: string; escrowId?: string }> {
+}): Promise<{ success: boolean; data?: { escrowId: string }; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) {
             return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
         }
@@ -92,54 +94,62 @@ export async function createEscrowAction(data: {
             return { success: false, error: "Unauthorized" };
         }
 
-        const escrow: Omit<EscrowTransaction, "id"> = {
+        const escrow: Omit<EscrowTransaction, "id"> & { _version: number } = {
             ...data,
-            // ✅ FIX: write participants array so array-contains queries in getUserEscrowTransactions work
             participants: [data.buyerId, data.sellerId],
             status: "pending",
+            _version: 0,
             createdAt: FieldValue.serverTimestamp(),
         };
 
         const docRef = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).add(escrow);
 
-        await createAdminAuditLog({
-            action: "escrow_created",
-            userId: data.buyerId,
-            targetId: docRef.id,
-            targetType: "escrow_transaction",
-            metadata: {
-                amount: data.amount,
-                seller: data.sellerId,
-                product: data.productName,
-            },
-        });
+        (async () => {
+            try {
+                await createAdminAuditLog({
+                    action: "escrow_created",
+                    userId: data.buyerId,
+                    targetId: docRef.id,
+                    targetType: "escrow_transaction",
+                    metadata: {
+                        amount: data.amount,
+                        seller: data.sellerId,
+                        product: data.productName,
+                    },
+                });
 
-        // Notify buyer that escrow has been created
-        await createNotificationAction({
-            userId: data.buyerId,
-            type: "escrow",
-            title: "Escrow Created",
-            message: `Your escrow for "${data.productName}" (₦${data.amount.toLocaleString()}) has been created. Please complete payment to secure the transaction.`,
-            link: `/escrow/${docRef.id}`,
-            linkText: "View Escrow",
-        }).catch((e) => logger.error("[createEscrowAction] Notification failed:", e));
+                await createNotificationAction({
+                    userId: data.buyerId,
+                    type: "escrow",
+                    title: "Escrow Created",
+                    message: `Your escrow for "${data.productName}" (₦${data.amount.toLocaleString()}) has been created. Please complete payment to secure the transaction.`,
+                    link: `/escrow/${docRef.id}`,
+                    linkText: "View Escrow",
+                });
 
-        // Notify seller that a buyer has initiated escrow
-        await createNotificationAction({
-            userId: data.sellerId,
-            type: "escrow",
-            title: "New Escrow Transaction",
-            message: `A buyer has initiated a secured escrow for "${data.productName}" (₦${data.amount.toLocaleString()}). Funds will be held until delivery is confirmed.`,
-            link: `/escrow/${docRef.id}`,
-            linkText: "View Escrow",
-        }).catch((e) => logger.error("[createEscrowAction] Seller notification failed:", e));
+                await createNotificationAction({
+                    userId: data.sellerId,
+                    type: "escrow",
+                    title: "New Escrow Transaction",
+                    message: `A buyer has initiated a secured escrow for "${data.productName}" (₦${data.amount.toLocaleString()}). Funds will be held until delivery is confirmed.`,
+                    link: `/escrow/${docRef.id}`,
+                    linkText: "View Escrow",
+                });
+            } catch (sideEffectError) {
+                logger.error("[createEscrowAction] Side effects failed:", sideEffectError);
+            }
+        })();
 
-        return { success: true, escrowId: docRef.id };
+        return { success: true, data: { escrowId: docRef.id } };
     } catch (error) {
-        logger.error("Escrow creation error:", error);
+        logger.error("Escrow creation error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to create escrow transaction" };
     }
 }
+export const createEscrowAction = withFlexibleSafeAction("createEscrowAction", _createEscrowAction);
 
 /**
  * Confirm payment and move to funded status.
@@ -147,12 +157,14 @@ export async function createEscrowAction(data: {
  * Runs inside a transaction to guard the state transition:
  * only `pending → funded` is valid.
  */
-export async function confirmEscrowPaymentAction(
+async function _confirmEscrowPaymentAction(
     escrowId: string,
     paymentReference: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+    let sessionResult;
     try {
-        // ── 1. Verify with Paystack before touching Firestore ─────────────────
+        sessionResult = await requireSession().catch(() => null);
+
         let paystackData: Awaited<ReturnType<typeof verifyPaystackPayment>>;
         try {
             paystackData = await verifyPaystackPayment(paymentReference);
@@ -168,17 +180,14 @@ export async function confirmEscrowPaymentAction(
             };
         }
 
-        // ── 2. Fetch the escrow doc to cross-check the amount ─────────────────
         const escrowSnap = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId).get();
         if (!escrowSnap.exists) return { success: false, error: "Escrow transaction not found" };
 
         const escrowDoc = escrowSnap.data() as EscrowTransaction;
 
-        // Paystack amounts are in kobo (1 naira = 100 kobo)
         const paidAmountNaira = paystackData.data.amount / 100;
         const expectedAmount = escrowDoc.amount;
 
-        // Allow ±1 naira tolerance for rounding differences
         if (Math.abs(paidAmountNaira - expectedAmount) > 1) {
             logger.warn(
                 `[confirmEscrowPayment] Amount mismatch on ${escrowId}: expected ₦${expectedAmount}, got ₦${paidAmountNaira}`
@@ -189,7 +198,6 @@ export async function confirmEscrowPaymentAction(
             };
         }
 
-        // ── 3. Firestore transaction: pending → funded ─────────────────────────
         const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
         let escrowData: EscrowTransaction | null = null;
 
@@ -210,6 +218,8 @@ export async function confirmEscrowPaymentAction(
                 status: "funded",
                 paymentReference,
                 paidAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
         });
 
@@ -224,7 +234,6 @@ export async function confirmEscrowPaymentAction(
                 { paymentReference, channel: paystackData.data.channel }
             );
 
-            // Notify buyer: payment confirmed
             await createNotificationAction({
                 userId: tx.buyerId,
                 type: "escrow",
@@ -234,7 +243,6 @@ export async function confirmEscrowPaymentAction(
                 linkText: "View Escrow",
             }).catch((e) => logger.error("[confirmEscrowPaymentAction] Buyer notification failed:", e));
 
-            // Notify seller: funds are now held
             await createNotificationAction({
                 userId: tx.sellerId,
                 type: "escrow",
@@ -245,12 +253,18 @@ export async function confirmEscrowPaymentAction(
             }).catch((e) => logger.error("[confirmEscrowPaymentAction] Seller notification failed:", e));
         }
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Payment confirmation error:", error);
-        return { success: false, error: error.message || "Failed to confirm payment" };
+        return { success: true, data: { message: "Payment confirmed successfully" } };
+    } catch (error) {
+        logger.error("Payment confirmation error:", {
+            escrowId,
+            paymentReference,
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to confirm payment" };
     }
 }
+export const confirmEscrowPaymentAction = withFlexibleSafeAction("confirmEscrowPaymentAction", _confirmEscrowPaymentAction);
 
 /**
  * Seller requests escrow release.
@@ -258,13 +272,13 @@ export async function confirmEscrowPaymentAction(
  * Runs inside a transaction: only a `funded` escrow belonging to this seller
  * can be marked for release.
  */
-export async function requestEscrowReleaseAction(
+async function _requestEscrowReleaseAction(
     escrowId: string,
     sellerId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+    let sessionResult;
     try {
-        // Verify the caller is the actual seller
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) {
             return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
         }
@@ -293,13 +307,14 @@ export async function requestEscrowReleaseAction(
             tx.update(escrowRef, {
                 releaseRequestedAt: FieldValue.serverTimestamp(),
                 releaseRequestedBy: sellerId,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
         });
 
         if (escrowData) {
             const tx = escrowData as EscrowTransaction;
 
-            // Notify buyer: seller has requested release
             await createNotificationAction({
                 userId: tx.buyerId,
                 type: "escrow",
@@ -310,12 +325,18 @@ export async function requestEscrowReleaseAction(
             }).catch((e) => logger.error("[requestEscrowReleaseAction] Buyer notification failed:", e));
         }
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Release request error:", error);
-        return { success: false, error: error.message || "Failed to request release" };
+        return { success: true, data: { message: "Release requested successfully" } };
+    } catch (error) {
+        logger.error("Release request error:", {
+            escrowId,
+            sellerId,
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to request release" };
     }
 }
+export const requestEscrowReleaseAction = withFlexibleSafeAction("requestEscrowReleaseAction", _requestEscrowReleaseAction);
 
 /**
  * Admin releases escrow to seller.
@@ -323,11 +344,10 @@ export async function requestEscrowReleaseAction(
  * Uses requireAdmin() for live role re-validation (not stale JWT).
  * Runs inside a transaction: only a `funded` escrow can be released.
  */
-export async function releaseEscrowAction(
+async function _releaseEscrowAction(
     escrowId: string,
     adminId: string
-): Promise<{ success: boolean; error?: string }> {
-    // Live role re-validation — bypasses the stale JWT
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
         return { success: false, error: adminCheck.error };
@@ -355,6 +375,8 @@ export async function releaseEscrowAction(
                 status: "released",
                 releasedAt: FieldValue.serverTimestamp(),
                 releasedBy: adminId,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
         });
 
@@ -372,7 +394,6 @@ export async function releaseEscrowAction(
                 }
             );
 
-            // Notify seller: funds released
             await createNotificationAction({
                 userId: tx.sellerId,
                 type: "escrow",
@@ -382,7 +403,6 @@ export async function releaseEscrowAction(
                 linkText: "View Details",
             }).catch((e) => logger.error("[releaseEscrowAction] Seller notification failed:", e));
 
-            // Notify buyer: release confirmed
             await createNotificationAction({
                 userId: tx.buyerId,
                 type: "escrow",
@@ -392,26 +412,30 @@ export async function releaseEscrowAction(
                 linkText: "View Details",
             }).catch((e) => logger.error("[releaseEscrowAction] Buyer notification failed:", e));
 
-            // SMS + Push (non-fatal)
             const [sellerDoc, buyerDoc] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).doc(tx.sellerId).get(),
                 db.collection(COLLECTIONS.USERS).doc(tx.buyerId).get(),
             ]);
             const sellerPhone: string | undefined = sellerDoc.data()?.phone ?? sellerDoc.data()?.phoneNumber;
-            const orderRef = escrowId; // use escrow ID as order reference in SMS
+            const orderRef = escrowId; 
             await Promise.allSettled([
                 sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, tx.amount) : Promise.resolve(),
                 pushEscrowReleased(tx.sellerId, orderRef, tx.amount, escrowId),
-                pushDisputeResolved(tx.buyerId, tx.sellerId, orderRef), // reuses push helper — just informs buyer
+                pushDisputeResolved(tx.buyerId, tx.sellerId, orderRef),
             ]);
         }
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Escrow release error:", error);
-        return { success: false, error: error.message || "Failed to release escrow" };
+        return { success: true, data: { message: "Escrow funds released successfully" } };
+    } catch (error) {
+        logger.error("Escrow release error:", {
+            escrowId,
+            adminId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to release escrow" };
     }
 }
+export const releaseEscrowAction = withFlexibleSafeAction("releaseEscrowAction", _releaseEscrowAction);
 
 /**
  * Create dispute.
@@ -420,15 +444,19 @@ export async function releaseEscrowAction(
  * update the escrow status. Previously two separate writes could leave
  * the escrow in `funded` while a dispute existed (or vice versa).
  */
-export async function createDisputeAction(data: {
+async function _createDisputeAction(data: {
     escrowId: string;
     initiatedBy: "buyer" | "seller";
     initiatorId: string;
     respondentId: string;
     reason: string;
-}): Promise<{ success: boolean; error?: string; disputeId?: string }> {
+}): Promise<{ success: boolean; data?: { disputeId: string }; error?: string }> {
+    let sessionResult;
     try {
-        // Check if dispute already exists (outside transaction — read-only guard)
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
         const existingQuery = db.collection(COLLECTIONS.DISPUTES)
             .where("escrowId", "==", data.escrowId)
             .where("status", "in", ["open", "under_review"]);
@@ -439,7 +467,7 @@ export async function createDisputeAction(data: {
         }
 
         const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(data.escrowId);
-        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(); // auto-ID
+        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
 
         let escrowSnapData: EscrowTransaction | null = null;
 
@@ -456,16 +484,21 @@ export async function createDisputeAction(data: {
 
             escrowSnapData = escrowData;
 
-            const dispute: Omit<Dispute, "id"> = {
+            const dispute: Omit<Dispute, "id"> & { _version: number } = {
                 ...data,
                 evidence: [],
                 status: "open",
+                _version: 0,
                 createdAt: FieldValue.serverTimestamp(),
             };
 
-            // Atomic: create dispute + update escrow status in one commit
             tx.set(disputeRef, dispute);
-            tx.update(escrowRef, { status: "disputed", disputeId: disputeRef.id });
+            tx.update(escrowRef, { 
+                status: "disputed", 
+                disputeId: disputeRef.id,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
         await createAdminAuditLog({
@@ -482,7 +515,6 @@ export async function createDisputeAction(data: {
         if (escrowSnapData) {
             const tx = escrowSnapData as EscrowTransaction;
 
-            // Notify respondent: a dispute has been raised
             await createNotificationAction({
                 userId: data.respondentId,
                 type: "dispute",
@@ -492,7 +524,6 @@ export async function createDisputeAction(data: {
                 linkText: "View Dispute",
             }).catch((e) => logger.error("[createDisputeAction] Respondent notification failed:", e));
 
-            // Notify initiator: dispute confirmed
             await createNotificationAction({
                 userId: data.initiatorId,
                 type: "dispute",
@@ -503,12 +534,17 @@ export async function createDisputeAction(data: {
             }).catch((e) => logger.error("[createDisputeAction] Initiator notification failed:", e));
         }
 
-        return { success: true, disputeId: disputeRef.id };
-    } catch (error: any) {
-        logger.error("Dispute creation error:", error);
-        return { success: false, error: error.message || "Failed to create dispute" };
+        return { success: true, data: { disputeId: disputeRef.id } };
+    } catch (error) {
+        logger.error("Dispute creation error:", {
+            escrowId: data.escrowId,
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to create dispute" };
     }
 }
+export const createDisputeAction = withFlexibleSafeAction("createDisputeAction", _createDisputeAction);
 
 /**
  * Admin resolves dispute.
@@ -516,12 +552,12 @@ export async function createDisputeAction(data: {
  * Uses requireAdmin() for live role re-validation.
  * Uses a transaction to atomically update both dispute and escrow documents.
  */
-export async function resolveDisputeAction(
+async function _resolveDisputeAction(
     disputeId: string,
     adminId: string,
     resolution: string,
     outcome: "release_seller" | "refund_buyer"  // matches DisputeResolution type in marketplace.ts
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
     // Live role re-validation — bypasses the stale JWT
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
@@ -619,21 +655,27 @@ export async function resolveDisputeAction(
             ]);
         }
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Dispute resolution error:", error);
-        return { success: false, error: error.message || "Failed to resolve dispute" };
+        return { success: true, data: { message: "Dispute resolved successfully" } };
+    } catch (error) {
+        logger.error("Dispute resolution error:", {
+            disputeId,
+            adminId,
+            outcome,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to resolve dispute" };
     }
 }
+export const resolveDisputeAction = withFlexibleSafeAction("resolveDisputeAction", _resolveDisputeAction);
 
 /**
  * Admin escalates an open or under_review dispute.
  * Sets escalated = true, changes status to under_review, logs audit, and
  * notifies both parties so they know their case is being prioritised.
  */
-export async function escalateDisputeAction(
+async function _escalateDisputeAction(
     disputeId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
     const adminCheck = await requireAdmin();
     if ("error" in adminCheck) {
         return { success: false, error: adminCheck.error };
@@ -697,23 +739,27 @@ export async function escalateDisputeAction(
             }),
         ]);
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Dispute escalation error:", error);
-        return { success: false, error: error.message || "Failed to escalate dispute" };
+        return { success: true, data: { message: "Dispute escalated successfully" } };
+    } catch (error) {
+        logger.error("Dispute escalation error:", {
+            disputeId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to escalate dispute" };
     }
 }
+export const escalateDisputeAction = withFlexibleSafeAction("escalateDisputeAction", _escalateDisputeAction);
 
 /**
  * Send message in escrow chat.
  * Validates both sender session and that they are a participant of the escrow.
  */
-export async function sendEscrowMessageAction(data: {
+async function _sendEscrowMessageAction(data: {
     escrowId: string;
     senderId: string;
     senderName: string;
     message: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
@@ -744,30 +790,35 @@ export async function sendEscrowMessageAction(data: {
 
         await db.collection(COLLECTIONS.ESCROW_MESSAGES).add(messageData);
 
-        return { success: true };
+        return { success: true, data: { message: "Message sent successfully" } };
     } catch (error) {
-        logger.error("Message send error:", error);
+        logger.error("Message send error:", {
+            escrowId: data.escrowId,
+            senderId: data.senderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to send message" };
     }
 }
+export const sendEscrowMessageAction = withFlexibleSafeAction("sendEscrowMessageAction", _sendEscrowMessageAction);
 
 /**
  * Get escrow messages — only for escrow participants
  */
-export async function getEscrowMessagesAction(escrowId: string): Promise<Message[]> {
+export async function getEscrowMessagesAction(escrowId: string): Promise<{ success: boolean; data: Message[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return [];
+        if (!sessionResult.session) return { success: false, data: [], error: "Unauthorized" };
         const { session } = sessionResult;
 
         // Verify they are a participant
         const escrowDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId).get();
-        if (!escrowDoc.exists) return [];
+        if (!escrowDoc.exists) return { success: false, data: [], error: "Escrow not found" };
         const escrow = escrowDoc.data() as EscrowTransaction;
         const userId = session.user.id;
         if (escrow.buyerId !== userId && escrow.sellerId !== userId) {
             logger.warn(`[getEscrowMessages] Non-participant access attempt by ${userId} on escrow ${escrowId}`);
-            return [];
+            return { success: false, data: [], error: "Access denied" };
         }
 
         const snapshot = await db.collection(COLLECTIONS.ESCROW_MESSAGES)
@@ -775,10 +826,11 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<Message
             .orderBy("createdAt", "asc")
             .get();
 
-        return serializeDocs(snapshot.docs) as unknown as Message[];
+        const messages = serializeDocs(snapshot.docs) as unknown as Message[];
+        return { success: true, data: messages };
     } catch (error) {
         logger.error("Failed to fetch messages:", error);
-        return [];
+        return { success: false, data: [], error: "Failed to fetch messages" };
     }
 }
 

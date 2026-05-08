@@ -21,7 +21,7 @@ export interface EscalationNote {
 export async function addEscalationNoteAction(
     disputeId: string,
     text: string
-): Promise<{ success: boolean; noteId?: string; error?: string }> {
+): Promise<{ success: boolean; data?: { noteId: string }; error?: string }> {
     if (!text.trim()) return { success: false, error: "Note text is required" };
     if (text.length > 2000) return { success: false, error: "Note too long (max 2000 chars)" };
 
@@ -54,7 +54,7 @@ export async function addEscalationNoteAction(
             metadata: { noteAdded: true, noteId: noteRef.id },
         });
 
-        return { success: true, noteId: noteRef.id };
+        return { success: true, data: { noteId: noteRef.id } };
     } catch (error: any) {
         return { success: false, error: error.message };
     }
@@ -65,7 +65,7 @@ export async function addEscalationNoteAction(
  */
 export async function getEscalationNotesAction(
     disputeId: string
-): Promise<{ success: boolean; notes?: EscalationNote[]; error?: string }> {
+): Promise<{ success: boolean; data?: { notes: EscalationNote[] }; error?: string }> {
     try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { success: false, error: adminCheck.error };
@@ -82,7 +82,7 @@ export async function getEscalationNotesAction(
             ...(doc.data() as Omit<EscalationNote, "id">),
         }));
 
-        return { success: true, notes };
+        return { success: true, data: { notes } };
     } catch (error: any) {
         return { success: false, error: error.message };
     }

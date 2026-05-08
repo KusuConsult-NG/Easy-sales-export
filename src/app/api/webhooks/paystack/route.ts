@@ -7,7 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
-import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration, processFarmNationRegistration, processWaveRegistration } from "@/lib/paystack-fulfillment";
+import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration } from "@/lib/paystack-fulfillment";
 
 // Force dynamic since we read headers
 export const dynamic = 'force-dynamic';
@@ -68,10 +68,6 @@ export async function POST(req: NextRequest) {
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
                     await processAcademyRegistration(reference, amountPaidv, userId, plan);
-                } else if (type === "farm_nation_registration" || type === "farm_nation_subscription") {
-                    await processFarmNationRegistration(reference, amountPaidv, userId);
-                } else if (type === "wave_registration" || type === "wave_application") {
-                    await processWaveRegistration(reference, amountPaidv, userId);
                 } else {
                     // Log unhandled types so they appear in Vercel logs — never silently drop money.
                     logger.warn(`[Paystack Webhook] UNHANDLED payment type: "${type}" for reference ${reference}. Amount: ${amountPaidv}. Metadata: ${JSON.stringify(metadata)}`);

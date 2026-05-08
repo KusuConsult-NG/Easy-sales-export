@@ -1,0 +1,25 @@
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
+
+/**
+ * NextAuth v5 Middleware
+ * 
+ * This middleware runs at the edge and enforces authentication
+ * and platform-wide payment gating as defined in auth.config.ts.
+ */
+export const { auth: middleware } = NextAuth(authConfig);
+
+// Matcher determines which routes trigger this middleware
+export const config = {
+    matcher: [
+        /*
+         * Match all request paths except for the ones starting with:
+         * - api (API routes)
+         * - _next/static (static files)
+         * - _next/image (image optimization files)
+         * - favicon.ico (favicon file)
+         * - images (public images)
+         */
+        "/((?!api|_next/static|_next/image|favicon.ico|images).*)",
+    ],
+};

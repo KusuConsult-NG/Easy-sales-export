@@ -28,7 +28,7 @@ export default function VendorOrdersPage() {
             const result = await getVendorOrdersAction(filters);
 
             if (result.success) {
-                setOrders(result.orders || []);
+                setOrders(result.data?.orders || []);
             } else {
                 showToast(result.error || "Failed to load orders", "error");
             }

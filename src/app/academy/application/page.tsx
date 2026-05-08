@@ -54,7 +54,7 @@ export default function AcademyApplicationPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isPaying, setIsPaying] = useState(false);
     const [paymentStatus, setPaymentStatus] = useState<"paid" | "unpaid">("unpaid");
-    const [selectedPlan, setSelectedPlan] = useState<"foundation" | "advanced" | "elite">("foundation");
+    const [selectedPlan, setSelectedPlan] = useState<"foundation" | "standard" | "elite">("foundation");
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
@@ -361,7 +361,7 @@ export default function AcademyApplicationPage() {
 
         const PLANS = [
         { id: "foundation", name: "Foundation Plan", price: 25000 },
-        { id: "advanced", name: "Advanced Plan", price: 50000 },
+        { id: "standard", name: "Standard Plan", price: 50000 },
         { id: "elite", name: "Elite Plan", price: 100000 },
     ] as const;
 

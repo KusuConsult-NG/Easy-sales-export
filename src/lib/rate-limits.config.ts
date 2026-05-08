@@ -47,6 +47,12 @@ export const rateLimitConfig = {
         maxRequests: 5,
     },
 
+    // KYC lookups - very strict (cost optimization)
+    kyc: {
+        interval: 60 * 60 * 1000, // 1 hour
+        maxRequests: 3, // 3 lookups per hour per user
+    },
+
     // Admin operations - generous (legitimate admin workload)
     admin: {
         interval: 60 * 1000, // 1 minute

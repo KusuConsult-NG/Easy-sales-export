@@ -232,12 +232,12 @@ export async function processCooperativeRegistration(reference: string, amount: 
         }
     }
 
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const transactionRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
 
-        t.set(memberRef, {
+        transaction.set(memberRef, {
             userId,          // ensure legacy-created docs always carry the userId field
             paymentStatus: "completed",
             paymentReference: reference,
@@ -248,23 +248,19 @@ export async function processCooperativeRegistration(reference: string, amount: 
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // Update the central USERS document
-        t.set(userRef, {
-            serviceRegistrations: {
-                cooperatives: {
-                    paymentStatus: "completed",
-                    paymentReference: reference,
-                    paymentAmount: amount,
-                    membershipTier: normalisedTier,
-                    status: "legacy_pending_onboarding", // Sentinel to show the form but hide payment
-                    paidAt: FieldValue.serverTimestamp(),
-                }
-            },
+        // Update the central USERS document with dot notation to preserve other modules
+        transaction.update(userRef, {
+            "serviceRegistrations.cooperatives.paymentStatus": "completed",
+            "serviceRegistrations.cooperatives.paymentReference": reference,
+            "serviceRegistrations.cooperatives.paymentAmount": amount,
+            "serviceRegistrations.cooperatives.membershipTier": normalisedTier,
+            "serviceRegistrations.cooperatives.status": "legacy_pending_onboarding", // Sentinel to show the form but hide payment
+            "serviceRegistrations.cooperatives.paidAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
 
         // Create the registration fee transaction so it shows in their history
-        t.set(transactionRef, {
+        transaction.set(transactionRef, {
             userId,
             cooperativeId: "default",
             type: "registration_fee",
@@ -275,7 +271,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
             reference
         });
 
-        t.set(processedRef, {
+        transaction.set(processedRef, {
             reference,
             type: "cooperative_membership_registration",
             userId,
@@ -286,7 +282,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
             source: "webhook"
         });
 
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
             userId,
             type: "cooperative_registration",
@@ -339,45 +335,44 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
     // Validate Amount
     let expectedAmount = 25000; // foundation
-    if (normalisedPlan === "advanced") expectedAmount = 50000;
+    if (normalisedPlan === "standard" || normalisedPlan === "advanced") expectedAmount = 50000;
     if (normalisedPlan === "elite") expectedAmount = 100000;
+
+    // Canonicalize plan name
+    const planToStore = (normalisedPlan === "advanced") ? "standard" : normalisedPlan;
 
     if (amount < expectedAmount - 1) {
         logger.error(`[Paystack Webhook] Academy Payment Underpaid. Expected ${expectedAmount}, Paid ${amount}`);
         throw new Error("Insufficient payment amount");
     }
 
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (transaction) => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
-        // 1. Update User Service Registration
-        t.set(userRef, {
-            serviceRegistrations: {
-                academy: {
-                    paymentStatus: "completed",
-                    paymentReference: reference,
-                    paymentAmount: amount,
-                    plan: normalisedPlan,
-                    paidAt: FieldValue.serverTimestamp(),
-                }
-            },
+        // 1. Update User Service Registration with dot notation
+        transaction.update(userRef, {
+            "serviceRegistrations.academy.paymentStatus": "completed",
+            "serviceRegistrations.academy.paymentReference": reference,
+            "serviceRegistrations.academy.paymentAmount": amount,
+            "serviceRegistrations.academy.plan": planToStore,
+            "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        });
 
         // 2. Mark Processed
-        t.set(processedRef, {
+        transaction.set(processedRef, {
             reference,
             type: "academy_registration",
             userId,
             amount,
-            plan,
+            plan: planToStore,
             processedAt: FieldValue.serverTimestamp(),
             status: "completed",
             source: "webhook"
         });
 
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
+        transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
             userId,
             type: "academy_registration",
@@ -413,7 +408,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
             paymentStatus: "completed",
             paymentReference: reference,
             paymentAmount: amount,
-            plan: normalisedPlan,
+            plan: planToStore,
             submittedAt: FieldValue.serverTimestamp(),
             source: "webhook",
         });
@@ -438,105 +433,61 @@ export async function processAcademyRegistration(reference: string, amount: numb
 }
 
 /**
- * Handle Farm Nation Registration Payment
- * NOTE: Farm Nation sends metadata.type = "farm_nation_registration"
+ * Handle Farm Nation Fulfillment
  */
 export async function processFarmNationRegistration(reference: string, amount: number, userId: string) {
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (transaction) => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
-        t.set(userRef, {
-            serviceRegistrations: {
-                farmNation: {
-                    paymentStatus: "completed",
-                    paymentReference: reference,
-                    paymentAmount: amount,
-                    status: "pending_review",
-                    paidAt: FieldValue.serverTimestamp(),
-                }
-            },
+        transaction.update(userRef, {
+            "serviceRegistrations.farm_nation.paymentStatus": "completed",
+            "serviceRegistrations.farm_nation.paymentReference": reference,
+            "serviceRegistrations.farm_nation.status": "pending",
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        t.set(processedRef, {
-            reference, type: "farm_nation_registration",
-            userId, amount,
-            processedAt: FieldValue.serverTimestamp(),
-            source: "webhook",
         });
 
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
-            id: reference,
-            userId,
-            type: "farm_nation_registration",
-            module: "farm_nation",
-            amount: amount,
-            currency: "NGN",
-            status: "completed",
-            date: FieldValue.serverTimestamp(),
+        transaction.set(processedRef, {
             reference,
-            description: "Farm Nation payment"
+            type: "farm_nation_registration",
+            userId,
+            amount,
+            processedAt: FieldValue.serverTimestamp(),
+            status: "completed",
+            source: "webhook"
         });
     });
 
-    try {
-        await invalidateUserCache(userId);
-    } catch (err) {
-        logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
-    }
-
+    await invalidateUserCache(userId);
     logger.info(`[Paystack Webhook] Processed Farm Nation Registration for ${userId}`);
 }
 
 /**
- * Handle WAVE Registration Payment
- * NOTE: WAVE sends metadata.type = "wave_registration" or "wave_application"
+ * Handle WAVE Fulfillment
  */
 export async function processWaveRegistration(reference: string, amount: number, userId: string) {
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (transaction) => {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
-        t.set(userRef, {
-            serviceRegistrations: {
-                wave: {
-                    paymentStatus: "completed",
-                    paymentReference: reference,
-                    paymentAmount: amount,
-                    status: "pending_review",
-                    paidAt: FieldValue.serverTimestamp(),
-                }
-            },
+        transaction.update(userRef, {
+            "serviceRegistrations.wave.paymentStatus": "completed",
+            "serviceRegistrations.wave.paymentReference": reference,
+            "serviceRegistrations.wave.status": "pending",
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        t.set(processedRef, {
-            reference, type: "wave_registration",
-            userId, amount,
-            processedAt: FieldValue.serverTimestamp(),
-            source: "webhook",
         });
 
-        t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
-            id: reference,
-            userId,
-            type: "wave_registration",
-            module: "wave",
-            amount: amount,
-            currency: "NGN",
-            status: "completed",
-            date: FieldValue.serverTimestamp(),
+        transaction.set(processedRef, {
             reference,
-            description: "Wave application payment"
+            type: "wave_registration",
+            userId,
+            amount,
+            processedAt: FieldValue.serverTimestamp(),
+            status: "completed",
+            source: "webhook"
         });
     });
 
-    try {
-        await invalidateUserCache(userId);
-    } catch (err) {
-        logger.error(`[Paystack Webhook] Cache clear error for ${userId}:`, err);
-    }
-
+    await invalidateUserCache(userId);
     logger.info(`[Paystack Webhook] Processed WAVE Registration for ${userId}`);
 }

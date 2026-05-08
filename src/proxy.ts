@@ -1,0 +1,109 @@
+import NextAuth from "next-auth";
+import { authConfig } from "@/lib/auth.config";
+import { NextResponse } from "next/server";
+import { isSharedDomainPath } from "@/lib/route-manifest";
+
+/**
+ * Hub Middleware - Optimized for Edge Runtime
+ * 
+ * Performance Goal: Keep execution time under 50ms to prevent Vercel CPU timeouts.
+ * Strategy: Move all complex RBAC and logic to Server Components/Layouts.
+ */
+
+const { auth } = NextAuth(authConfig);
+
+import { HUB_MODULES } from "@/config/modules.config";
+
+// Derive maps from HUB_MODULES
+const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((acc, mod) => {
+    acc[mod.domain] = `/${mod.slug}`;
+    return acc;
+}, {} as Record<string, string>);
+
+// Root domain alias
+DOMAIN_MAP["easysalesexport.com"] = "";
+
+const APEX_DOMAINS: string[] = Object.values(HUB_MODULES).map(m => m.domain);
+APEX_DOMAINS.push("easysalesexport.com");
+
+const authMiddleware = auth((req: any) => {
+    const { pathname } = req.nextUrl;
+    const hostname = (
+        req.headers.get("x-forwarded-host") ||
+        req.headers.get("host") ||
+        ""
+    ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
+
+    // ── 1. Apex → www Redirect (High Priority) ─────────────────────────────────
+    if (APEX_DOMAINS.includes(hostname)) {
+        const wwwUrl = req.nextUrl.clone();
+        wwwUrl.host = `www.${hostname}`;
+        wwwUrl.protocol = "https:";
+        wwwUrl.port = "";
+        return NextResponse.redirect(wwwUrl, { status: 308 });
+    }
+
+    const response = NextResponse.next();
+    response.headers.set("x-app-version", process.env.NEXT_PUBLIC_APP_VERSION || "1.1.0");
+
+    // ── 2. Domain Rewrite Logic (Module Silos) ─────────────────────────────────
+    const normalizedHostname = hostname.replace(/^www\./, "");
+    let rewritePrefix = DOMAIN_MAP[normalizedHostname];
+
+    // Subdomain alias fallback
+    if (rewritePrefix === undefined && normalizedHostname.endsWith(".easysalesexport.com")) {
+        const subdomain = normalizedHostname.replace(".easysalesexport.com", "");
+        if (Object.values(DOMAIN_MAP).includes(`/${subdomain}`)) {
+            rewritePrefix = `/${subdomain}`;
+        }
+    }
+
+    if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
+        // Handle landing page redirects for modules with sub-landing pages
+        const MODULES_WITH_LANDING_SUBPAGE = new Set(["/wave", "/cooperatives"]);
+        if (pathname === "/" && MODULES_WITH_LANDING_SUBPAGE.has(rewritePrefix)) {
+            const landingUrl = new URL(`https://${hostname}${rewritePrefix}/landing`);
+            return NextResponse.redirect(landingUrl, { status: 302 });
+        }
+
+        // Apply rewrite if not a shared route and not already prefixed
+        if (!pathname.startsWith(rewritePrefix) && !isSharedDomainPath(pathname)) {
+            const url = req.nextUrl.clone();
+            url.pathname = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
+            const rewriteRes = NextResponse.rewrite(url);
+            response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
+            return rewriteRes;
+        }
+    }
+
+    // ── 3. Clean-up & Pass-through ───────────────────────────────────────────
+    // RBAC and Gating are intentionally DEFERRED to layouts and authConfig 
+    // to prevent Edge Runtime bottlenecks.
+    return response;
+});
+
+export default async function proxy(req: any, event: any) {
+    const res = await authMiddleware(req, event);
+    
+    // Explicit bypass for Admin Login to prevent NextAuth session-collision redirects
+    if (req.nextUrl.pathname === "/auth/login/admin" && res && res.status >= 300 && res.status <= 399) {
+        const nextRes = NextResponse.next();
+        res.headers.forEach((value: string, key: string) => {
+            if (key.toLowerCase() !== 'location') nextRes.headers.set(key, value);
+        });
+        return nextRes;
+    }
+
+    // Force 401 JSON for unauthorized API requests (prevents HTML redirect loops in mobile apps)
+    if (req.nextUrl.pathname.startsWith('/api/') && res && res.status >= 300 && res.status <= 399) {
+        return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+    
+    return res;
+}
+
+export const config = {
+    matcher: [
+        "/((?!_next/static|_next/image|favicon.ico|images|grid.svg).*)",
+    ],
+};

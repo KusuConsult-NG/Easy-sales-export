@@ -57,6 +57,8 @@ export const authConfig = {
                 token.verified = user.verified ?? true;
                 token.onboardingCompleted = user.onboardingCompleted;
                 token.sellerVerificationStatus = user.sellerVerificationStatus;
+                token.serviceRegistrations = user.serviceRegistrations;
+                token.currentModuleId = user.currentModuleId || "platform";
             }
             return token;
         },
@@ -71,10 +73,12 @@ export const authConfig = {
                 session.user.verified = token.verified as boolean;
                 session.user.onboardingCompleted = token.onboardingCompleted as boolean | undefined;
                 session.user.sellerVerificationStatus = token.sellerVerificationStatus as string | undefined;
+                session.user.serviceRegistrations = token.serviceRegistrations as Record<string, any> | undefined;
+                session.user.currentModuleId = token.currentModuleId as string || "platform";
             }
             return session;
         },
-        authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: URL } }) {
+        async authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: URL } }) {
             const isLoggedIn = !!auth?.user;
             const { pathname } = nextUrl;
 
@@ -86,6 +90,53 @@ export const authConfig = {
 
             if (isProtectedPath(pathname) && !isLoggedIn) {
                 return false; // NextAuth redirects to signIn page
+            }
+
+            // ── Platform-Wide Payment Gating ─────────────────────────────
+            if (isLoggedIn) {
+                const serviceRegs = auth.user.serviceRegistrations || {};
+                
+                // Identify which module is being accessed based on URL prefix
+                const moduleMatch = pathname.match(/^\/(wave|cooperatives|academy|marketplace|farm-nation|export)/);
+                if (moduleMatch) {
+                    const moduleId = moduleMatch[1].replace("-", ""); // farm-nation -> farmNation
+                    const reg = serviceRegs[moduleId] || 
+                                (moduleId === 'farmNation' ? serviceRegs['farm_nation'] : null) ||
+                                (moduleId === 'cooperatives' ? serviceRegs['cooperative'] : null);
+                    
+                    // If they are deep in a module but haven't completed payment, redirect them to the module's onboarding/payment page
+                    // Exceptions: allow access to onboarding/payment/verify-payment paths themselves to avoid loops
+                    const isPaymentFlow = pathname.includes("/onboarding") || 
+                                        pathname.includes("/payment") || 
+                                        pathname.includes("/verify") ||
+                                        pathname.includes("/setup") ||
+                                        pathname.includes("/application");
+
+                    const modulesRequiringPayment = ['cooperatives', 'academy'];
+                    
+                    // ── SCOPED MEMBERSHIP GUARD ─────────────────────────────────
+                    // If accessing via a module-specific domain, ensure membership is active
+                    const { HUB_MODULES } = await import("@/config/modules.config");
+                    const currentModule = Object.values(HUB_MODULES).find(m => m.slug === moduleId);
+                    
+                    if (currentModule && !isPaymentFlow) {
+                        const status = reg?.status || "pending";
+                        const isApproved = status === "approved" || status === "active" || status === "paid";
+                        
+                        // If not approved and not on a public/onboarding path, redirect to onboarding
+                        if (!isApproved) {
+                            const redirectUrl = new URL(`/${moduleId}/onboarding`, nextUrl.origin);
+                            return Response.redirect(redirectUrl);
+                        }
+                    }
+
+                    if (modulesRequiringPayment.includes(moduleId) && reg && reg.status === "approved" && reg.paymentStatus !== "completed" && !isPaymentFlow) {
+                        // Redirect to the module's primary onboarding/payment entry point
+                        const redirectUrl = new URL(`/${moduleMatch[1]}/onboarding`, nextUrl.origin);
+                        if (moduleId === 'academy') redirectUrl.pathname = '/academy/setup';
+                        return Response.redirect(redirectUrl);
+                    }
+                }
             }
 
             // All other routes: allow (individual layouts handle their own auth)

@@ -82,9 +82,17 @@ export default function FarmNationApplicationsPage() {
                 dateTo: dateRange.to || undefined,
             });
 
+            if (!result.success) {
+                return {
+                    success: false,
+                    error: result.error,
+                    data: [],
+                    hasMore: false,
+                };
+            }
+
             return {
-                success: result.success,
-                error: result.error,
+                success: true,
                 data: result.data || [],
                 hasMore: !!result.hasMore,
                 lastDocId: result.lastDocId,
@@ -107,8 +115,12 @@ export default function FarmNationApplicationsPage() {
                 dateTo: dateRange.to || undefined,
             });
 
-            if (!result.success || !result.data) {
+            if (!result.success) {
                 throw new Error(result.error || "Failed to fetch data for export");
+            }
+
+            if (!result.data) {
+                throw new Error("No data available for export");
             }
 
             const exportData = result.data;

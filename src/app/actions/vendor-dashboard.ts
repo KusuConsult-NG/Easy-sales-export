@@ -1,21 +1,23 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { logger } from "@/lib/logger";
 
 /**
  * VENDOR DASHBOARD ANALYTICS ACTIONS
  */
 
-export async function getVendorSalesStatsAction() {
+async function _getVendorSalesStatsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -61,17 +63,23 @@ export async function getVendorSalesStatsAction() {
             }
         });
 
-        return { success: true, stats };
+        return { success: true, data: { stats } };
     } catch (error: any) {
+        logger.error("getVendorSalesStatsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorSalesStatsAction = withFlexibleSafeAction("getVendorSalesStatsAction", _getVendorSalesStatsAction);
 
-export async function getVendorRevenueTrendsAction() {
+async function _getVendorRevenueTrendsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -113,17 +121,23 @@ export async function getVendorRevenueTrendsAction() {
             });
         }
 
-        return { success: true, trends };
+        return { success: true, data: { trends } };
     } catch (error: any) {
+        logger.error("getVendorRevenueTrendsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorRevenueTrendsAction = withFlexibleSafeAction("getVendorRevenueTrendsAction", _getVendorRevenueTrendsAction);
 
-export async function getTopSellingProductsAction(limit: number = 5) {
+async function _getTopSellingProductsAction(limit: number = 5) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -162,17 +176,23 @@ export async function getTopSellingProductsAction(limit: number = 5) {
             .sort((a, b) => b.totalRevenue - a.totalRevenue)
             .slice(0, limit);
 
-        return { success: true, products };
+        return { success: true, data: { products } };
     } catch (error: any) {
+        logger.error("getTopSellingProductsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getTopSellingProductsAction = withFlexibleSafeAction("getTopSellingProductsAction", _getTopSellingProductsAction);
 
-export async function getVendorInventoryStatsAction() {
+async function _getVendorInventoryStatsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -209,17 +229,23 @@ export async function getVendorInventoryStatsAction() {
         });
 
         stats.lowStockProducts.sort((a, b) => a.stock - b.stock);
-        return { success: true, stats };
+        return { success: true, data: { stats } };
     } catch (error: any) {
+        logger.error("getVendorInventoryStatsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorInventoryStatsAction = withFlexibleSafeAction("getVendorInventoryStatsAction", _getVendorInventoryStatsAction);
 
-export async function getVendorRevenueInsightsAction() {
+async function _getVendorRevenueInsightsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -255,23 +281,34 @@ export async function getVendorRevenueInsightsAction() {
             .map(([category, revenue]) => ({ category, revenue }))
             .sort((a, b) => b.revenue - a.revenue);
 
-        return { success: true, insights: {
-                totalRevenue,
-                pendingPayouts,
-                completedTransactions,
-                averageOrderValue,
-                revenueByCategory, }
+        return { 
+            success: true, 
+            data: { 
+                insights: {
+                    totalRevenue,
+                    pendingPayouts,
+                    completedTransactions,
+                    averageOrderValue,
+                    revenueByCategory, 
+                }
+            }
         };
     } catch (error: any) {
+        logger.error("getVendorRevenueInsightsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorRevenueInsightsAction = withFlexibleSafeAction("getVendorRevenueInsightsAction", _getVendorRevenueInsightsAction);
 
-export async function getVendorActivityFeedAction(limit: number = 20) {
+async function _getVendorActivityFeedAction(limit: number = 20) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
         const vendorId = session.user.id;
@@ -317,8 +354,14 @@ export async function getVendorActivityFeedAction(limit: number = 20) {
         });
 
         activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        return { success: true, activities: activities.slice(0, limit) };
+        return { success: true, data: { activities: serializeValue(activities.slice(0, limit)) } };
     } catch (error: any) {
+        logger.error("getVendorActivityFeedAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorActivityFeedAction = withFlexibleSafeAction("getVendorActivityFeedAction", _getVendorActivityFeedAction);
+

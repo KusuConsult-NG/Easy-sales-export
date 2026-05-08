@@ -9,24 +9,34 @@
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, AggregateField } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin"; // Use Admin DB
-import { uploadFileToStorage } from "@/lib/storage-admin";
+// import { uploadFileToStorage } from "@/lib/storage-admin";
+
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { SellerVerification, Product, CartItem, Order, ProductCategory, DeliveryMethod } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { unstable_cache } from "next/cache";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { 
+    ProductSchema, 
+    OrderSchema, 
+    SellerAnalyticsSchema,
+    MarketplaceOnboardingSchema,
+    SellerVerificationSchema
+} from "@/lib/validations/marketplace";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 // ============================================
 // Check Marketplace Application Status Action
 // ============================================
 
-export async function checkMarketplaceStatusAction(): Promise<{ status: string; accountType?: string } | null> {
+async function _checkMarketplaceStatusAction(): Promise<{ success: boolean; data: { status: string; accountType?: string } | null; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return null;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, data: null, error: "Unauthorized" };
         const { session } = sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -36,7 +46,6 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
         let accountType = userData?.serviceRegistrations?.marketplace?.accountType;
 
         // ── AUTHORITATIVE CHECK: Check real verification record ──────
-        // If status is not approved, check the source of truth for seller verifications.
         if (status !== "approved") {
             const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("userId", "==", session.user.id)
@@ -51,7 +60,8 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
                     accountType = verData.accountType || "seller";
                     // Proactively backfill for performance in future logins
                     await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-                        serviceRegistrations: { marketplace: { status: "approved", accountType, syncedAt: new Date().toISOString() } }
+                        serviceRegistrations: { marketplace: { status: "approved", accountType, syncedAt: new Date().toISOString() } },
+                        _version: FieldValue.increment(1)
                     }, { merge: true });
                 } else if (verData.status) {
                     status = verData.status;
@@ -61,11 +71,10 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
         }
 
         if (status) {
-            return { status, accountType };
+            return { success: true, data: { status, accountType } };
         }
 
         // ── FALLBACK: Returning user whose marketplace data predates V2 schema ──
-        // Marketplace stores seller data in MARKETPLACE_SELLERS by userId
         const legacySellerSnap = await db.collection(COLLECTIONS.MARKETPLACE_SELLERS)
             .where('userId', '==', session.user.id)
             .limit(1)
@@ -85,32 +94,32 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
                             syncedFromLegacy: true,
                             syncedAt: new Date().toISOString()
                         }
-                    }
+                    },
+                    _version: FieldValue.increment(1)
                 },
                 { merge: true }
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled legacy marketplace status '${legacyStatus}' for user ${session.user.id}`);
-            return { status: legacyStatus, accountType: legacyAccountType };
+            return { success: true, data: { status: legacyStatus, accountType: legacyAccountType } };
         }
 
-        // ── FALLBACK 2: Check legacy sellerVerificationStatus field on the user doc itself
+        // ── FALLBACK 2: Check legacy sellerVerificationStatus field
         if (userData?.sellerVerificationStatus) {
             const legacyStatus = userData.sellerVerificationStatus;
-            
-            // In the legacy system, users with sellerVerificationStatus were sellers.
-            // If they are missing accountType, default them to "seller" so they don't get trapped in the buyer dashboard.
             const derivedAccountType = "seller";
             
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { marketplace: { status: legacyStatus, accountType: derivedAccountType, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
+                { 
+                    serviceRegistrations: { marketplace: { status: legacyStatus, accountType: derivedAccountType, syncedFromLegacy: true, syncedAt: new Date().toISOString() } },
+                    _version: FieldValue.increment(1)
+                },
                 { merge: true }
             );
-            return { status: legacyStatus, accountType: derivedAccountType };
+            return { success: true, data: { status: legacyStatus, accountType: derivedAccountType } };
         }
 
         // ── FALLBACK 3: Check seller_verifications collection
-        // Sometimes the user document gets out of sync with the verification document
         const verificationSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
             .where('userId', '==', session.user.id)
             .get();
@@ -134,21 +143,26 @@ export async function checkMarketplaceStatusAction(): Promise<{ status: string; 
                             syncedFromLegacy: true,
                             syncedAt: new Date().toISOString()
                         }
-                    }
+                    },
+                    _version: FieldValue.increment(1)
                 },
                 { merge: true }
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled from seller_verifications status '${vStatus}' for user ${session.user.id}`);
-            return { status: vStatus, accountType: vAccountType };
+            return { success: true, data: { status: vStatus, accountType: vAccountType } };
         }
 
-        return null;
+        return { success: true, data: null };
     } catch (error) {
-        logger.error("Error checking Marketplace status:", error);
-        return null;
+        logger.error("checkMarketplaceStatus error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: null, error: "Failed to check marketplace status" };
     }
 }
+export const checkMarketplaceStatusAction = withFlexibleSafeAction("checkMarketplaceStatusAction", _checkMarketplaceStatusAction);
 
 // ============================================================================
 // SELLER VERIFICATION
@@ -173,24 +187,23 @@ export interface SellerVerificationFormData {
 export interface SellerVerificationState {
     success: boolean;
     error?: string;
-    verificationId?: string;
+    data?: {
+        verificationId: string;
+    };
 }
 
 /**
  * Submit seller verification application
  */
-export async function submitSellerVerificationAction(
+async function _submitSellerVerificationAction(
     prevState: SellerVerificationState,
     formData: FormData
 ): Promise<SellerVerificationState> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
 
         const userId = session.user.id;
 
@@ -240,46 +253,53 @@ export async function submitSellerVerificationAction(
             },
             createdAt: new Date(),
             updatedAt: new Date(),
+            _version: 0,
         };
 
-        await verificationRef.set(verificationData);
+        // Atomic update of verification doc and user record
+        await db.runTransaction(async (transaction) => {
+            transaction.set(verificationRef, verificationData);
 
-        // Update user record
-        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-        await userRef.update({
-            sellerVerificationStatus: "pending",
-            sellerVerificationId: verificationId,
-            updatedAt: FieldValue.serverTimestamp(),
+            // Update user record
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            transaction.update(userRef, {
+                sellerVerificationStatus: "pending",
+                sellerVerificationId: verificationId,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
         try {
             await invalidateUserCache(userId);
         } catch (err) {
-            logger.error("Failed to invalidate cache after Seller Verification:", err);
+            logger.error("Failed to invalidate cache after Seller Verification:", { userId, error: err });
         }
 
-        return { success: true, verificationId, };
-    } catch (error: any) {
-        logger.error("Seller verification error:", error);
+        return { success: true, data: { verificationId } };
+    } catch (error) {
+        logger.error("Seller verification error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return {
             success: false,
-            error: error.message || "Failed to submit verification"
+            error: error instanceof Error ? error.message : "Failed to submit verification"
         };
     }
 }
+export const submitSellerVerificationAction = withFlexibleSafeAction("submitSellerVerificationAction", _submitSellerVerificationAction);
+
 
 /**
  * Get seller verification status
  */
-export async function getSellerVerificationAction() {
+async function _getSellerVerificationAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
 
         const userId = session.user.id;
         const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
@@ -290,35 +310,36 @@ export async function getSellerVerificationAction() {
             return { success: true, data: { verification: null } };
         }
 
-        const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
-            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snapshot.docs.sort((a, b) => {
+            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
-        const verification = serializeDoc<SellerVerification>(sortedDocs[0].id, sortedDocs[0]);
+        const verification = serializeDoc<SellerVerification>(sortedDocs[0].id, sortedDocs[0].data());
 
         return { success: true, data: { verification } };
-    } catch (error: any) {
-        logger.error("Get seller verification error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Get seller verification error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
+export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVerificationAction", _getSellerVerificationAction);
 
 /**
  * Submit full marketplace onboarding (Profile + Verification + Files)
  */
-export async function submitMarketplaceOnboardingAction(
-    prevState: any,
+async function _submitMarketplaceOnboardingAction(
+    prevState: { success: boolean; error?: string; data?: any } | null,
     formData: FormData
 ) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
 
         const userId = session.user.id;
         const timestamp = Date.now();
@@ -347,6 +368,7 @@ export async function submitMarketplaceOnboardingAction(
             const destination = `${path}/${userId}/${fileName}`;
 
             // Use signed URLs (private/secure) for verification docs
+            const { uploadFileToStorage } = await import("@/lib/storage-admin");
             return await uploadFileToStorage(file, destination, false);
         };
 
@@ -360,7 +382,7 @@ export async function submitMarketplaceOnboardingAction(
             businessRegistrationUrl = await uploadFile(bizRegFile, "start_selling/documents");
         }
 
-        // Upload Farm Photos (expecting farmPhotos_0, farmPhotos_1, etc.)
+        // Upload Farm Photos
         for (const key of Array.from(formData.keys())) {
             if (key.startsWith("farmPhotos_")) {
                 const file = formData.get(key) as File;
@@ -387,13 +409,13 @@ export async function submitMarketplaceOnboardingAction(
         let location = { state: "", lga: "", address: "" };
         try {
             location = JSON.parse(locationStr);
-        } catch (e) { logger.warn("Failed to parse location JSON, using defaults"); }
+        } catch (e) { logger.warn("Failed to parse location JSON, using defaults", { userId }); }
 
         const bankAccountStr = formData.get("bankAccount") as string;
         let bankAccount = { bankName: "", accountNumber: "", accountName: "" };
         try {
             bankAccount = JSON.parse(bankAccountStr);
-        } catch (e) { logger.warn("Failed to parse bankAccount JSON, using defaults"); }
+        } catch (e) { logger.warn("Failed to parse bankAccount JSON, using defaults", { userId }); }
 
         const verificationId = `seller_${userId}_${timestamp}`;
         const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
@@ -406,85 +428,84 @@ export async function submitMarketplaceOnboardingAction(
             businessType: formData.get("businessType"),
             phone: formData.get("phone"),
             location,
-
-            // Seller Categorization (NEW)
             sellerCategory: (formData.get("sellerCategory") as string) || "retail",
-
-            // Interest Profile
-            accountType: formData.get("accountType"), // seller or both
+            accountType: formData.get("accountType"), 
             sellerCategories: JSON.parse(formData.get("sellerCategories") as string || "[]"),
             productionCapacity: formData.get("productionCapacity"),
             certifications: JSON.parse(formData.get("certifications") as string || "[]"),
-
-            // Documents
             documents: {
                 businessRegistrationUrl,
                 farmPhotoUrls,
                 productSampleUrls,
             },
-
-            // Bank
             bankAccount,
-
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
         };
 
-        // 3. Save to Firestore
-        await verificationRef.set(verificationData);
+        // Save to Firestore using a transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            transaction.set(verificationRef, verificationData);
 
-        // 4. Update User Profile
-        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-        const accountType = formData.get("accountType") as string;
-        const isBuyerOnly = accountType === "buyer";
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const accountType = formData.get("accountType") as string;
+            const isBuyerOnly = accountType === "buyer";
 
-        const userUpdate: any = {
-            phone: formData.get("phone") as string,
-            location: `${location.address}, ${location.lga}, ${location.state}`, // Simplified location string
-            updatedAt: FieldValue.serverTimestamp(),
-        };
-
-        if (isBuyerOnly) {
-            userUpdate["serviceRegistrations.marketplace"] = {
-                status: "active",
-                accountType: "buyer",
-                sellerCategory: "retail",
-                submittedAt: FieldValue.serverTimestamp(),
+            const userUpdate: any = {
+                phone: formData.get("phone") as string,
+                location: `${location.address}, ${location.lga}, ${location.state}`,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             };
-            // Also append marketplace_buyer role if we want them to bypass future checks easily
-            const existingRoles = userDoc.data()?.roles || ["general_user"];
-            if (!existingRoles.includes("marketplace_buyer")) {
-                userUpdate.roles = [...existingRoles, "marketplace_buyer"];
+
+            if (isBuyerOnly) {
+                userUpdate["serviceRegistrations.marketplace"] = {
+                    status: "active",
+                    paymentStatus: "completed",
+                    accountType: "buyer",
+                    sellerCategory: "retail",
+                    submittedAt: FieldValue.serverTimestamp(),
+                };
+                const existingRoles = userDoc.data()?.roles || ["general_user"];
+                if (!existingRoles.includes("marketplace_buyer")) {
+                    userUpdate.roles = [...existingRoles, "marketplace_buyer"];
+                }
+            } else {
+                userUpdate.isSeller = true;
+                userUpdate.sellerVerificationStatus = "pending";
+                userUpdate.sellerVerificationId = verificationId;
+                userUpdate.sellerCategory = formData.get("sellerCategory") as string || "retail";
+                userUpdate["serviceRegistrations.marketplace"] = {
+                    status: "pending",
+                    paymentStatus: "completed",
+                    verificationId,
+                    accountType: accountType,
+                    sellerCategory: formData.get("sellerCategory") as string || "retail",
+                    submittedAt: FieldValue.serverTimestamp(),
+                };
             }
-        } else {
-            userUpdate.isSeller = true;
-            userUpdate.sellerVerificationStatus = "pending";
-            userUpdate.sellerVerificationId = verificationId;
-            userUpdate.sellerCategory = formData.get("sellerCategory") as string || "retail";
-            userUpdate["serviceRegistrations.marketplace"] = {
-                status: "pending",
-                verificationId,
-                accountType: accountType,
-                sellerCategory: formData.get("sellerCategory") as string || "retail",
-                submittedAt: FieldValue.serverTimestamp(),
-            };
-        }
 
-        await userRef.update(userUpdate);
+            transaction.update(userRef, userUpdate);
+        });
 
         try {
             await invalidateUserCache(userId);
         } catch (err) {
-            logger.error("Failed to invalidate cache after Marketplace Onboarding:", err);
+            logger.error("Failed to invalidate cache after Marketplace Onboarding:", { userId, error: err });
         }
 
         return { success: true, data: { verificationId } };
-
-    } catch (error: any) {
-        logger.error("Marketplace onboarding error:", error);
-        return { success: false, error: error.message || "Failed to submit application" };
+    } catch (error) {
+        logger.error("Marketplace onboarding error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to submit application" };
     }
 }
+export const submitMarketplaceOnboardingAction = withFlexibleSafeAction("submitMarketplaceOnboardingAction", _submitMarketplaceOnboardingAction);
+
 
 // ============================================================================
 // PRODUCT MANAGEMENT
@@ -515,24 +536,23 @@ export interface ProductFormData {
 export interface ProductActionState {
     success: boolean;
     error?: string;
-    productId?: string;
+    data?: {
+        productId: string;
+    };
 }
 
 /**
  * Create new product listing
  */
-export async function createProductAction(
+async function _createProductAction(
     prevState: ProductActionState,
     formData: FormData
 ): Promise<ProductActionState> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
 
         const userId = session.user.id;
 
@@ -553,7 +573,7 @@ export async function createProductAction(
         let certifications = [];
         try {
             certifications = JSON.parse(formData.get("certifications") as string || "[]");
-        } catch (e) { logger.warn("Failed to parse certifications JSON, using defaults"); }
+        } catch (e) { logger.warn("Failed to parse certifications JSON, using defaults", { userId }); }
 
         const rawData = {
             title: formData.get("title"),
@@ -578,8 +598,7 @@ export async function createProductAction(
         };
 
         // Validate with Zod
-        const { productSchema } = await import("@/lib/validations/marketplace");
-        const validation = productSchema.safeParse(rawData);
+        const validation = ProductSchema.safeParse(rawData);
 
         if (!validation.success) {
             return {
@@ -588,19 +607,19 @@ export async function createProductAction(
             };
         }
 
-        const validatedData = validation.data;
+        const validatedData: any = { ...rawData, ...validation.data };
         const productId = `product_${userId}_${Date.now()}`;
 
-        // 1. Handle Image Uploads (Admin SDK Storage)
+        // 1. Handle Image Uploads
         const uploadFile = async (file: File) => {
             const extension = file.name.split('.').pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
             const destination = `products/${userId}/${productId}/${fileName}`;
+            const { uploadFileToStorage } = await import("@/lib/storage-admin");
             return await uploadFileToStorage(file, destination, false);
         };
 
         const imageUrls: string[] = [];
-        // Process uploaded files
         for (const key of Array.from(formData.keys())) {
             if (key.startsWith("productImages_")) {
                 const file = formData.get(key) as File;
@@ -611,10 +630,22 @@ export async function createProductAction(
             }
         }
 
+        // Fetch Seller Info
+        const [vendorDoc, verificationSnap] = await Promise.all([
+            db.collection(COLLECTIONS.VENDOR_PROFILES).doc(userId).get(),
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("userId", "==", userId).get()
+        ]);
+
+        const vendorData = vendorDoc.data();
+        const verificationData = verificationSnap.empty ? null : verificationSnap.docs[0].data();
+
+        const sellerName = vendorData?.storeInfo?.name || session.user.name || "Easy Sales Seller";
+        const sellerVerified = verificationData?.isVerifiedBadge || false;
+        const sellerCategory = verificationData?.sellerCategory || "retail";
+
         // Create product
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
 
-        // Construct Pricing Tiers
         const pricingTiers = [];
         pricingTiers.push({ type: "retail" as const, price: validatedData.retailPrice, minQuantity: 1 });
 
@@ -650,36 +681,219 @@ export async function createProductAction(
                 state: validatedData.state,
                 lga: validatedData.lga,
             },
-            deliveryMethod: validatedData.deliveryMethod as DeliveryMethod,
+            deliveryMethod: validatedData.deliveryMethod as "delivery" | "pickup" | "both",
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
-            certifications: validatedData.certifications,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
             status: "active",
+            sellerName,
+            sellerVerified,
+            sellerCategory,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
             views: 0,
             orders: 0,
             rating: 0,
             reviewCount: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
         };
 
         await productRef.set(productData);
 
-        return { success: true, productId };
-    } catch (error: any) {
-        logger.error("Create product error:", error);
-        return {
-            success: false,
-            error: error.message || "Failed to create product"
-        };
+        return { success: true, data: { productId } };
+    } catch (error) {
+        logger.error("Create product error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to create product" };
     }
 }
+export const createProductAction = withFlexibleSafeAction("createProductAction", _createProductAction);
+
+
+/**
+ * Get Marketplace Products
+ */
+async function _getMarketplaceProductsAction(params: {
+    category?: string;
+    search?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    location?: string;
+    sortBy?: string;
+    limit?: number;
+}) {
+    try {
+        const { category, search, location, sortBy, limit: limitCount = 20 } = params;
+
+        let query: any = db.collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active");
+
+        if (category && category !== "all") {
+            query = query.where("category", "==", category);
+        }
+
+        if (location) {
+            query = query.where("location.state", "==", location);
+        }
+
+        // Apply sorting
+        switch (sortBy) {
+            case "newest":
+                query = query.orderBy("createdAt", "desc");
+                break;
+            case "price_low":
+                query = query.orderBy("pricingTiers", "asc"); 
+                break;
+            case "price_high":
+                query = query.orderBy("pricingTiers", "desc");
+                break;
+            case "popular":
+                query = query.orderBy("views", "desc");
+                break;
+            default:
+                query = query.orderBy("createdAt", "desc");
+        }
+
+        const snapshot = await query.limit(limitCount).get();
+        
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        let products = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            const parsed = ProductSchema.parse({ id: doc.id, ...data });
+            return serializeValue(parsed);
+        });
+
+        if (search) {
+            const searchLower = search.toLowerCase();
+            products = products.filter((p: any) => 
+                p.title.toLowerCase().includes(searchLower) || 
+                p.description.toLowerCase().includes(searchLower)
+            );
+        }
+
+        return { success: true, data: { products } };
+    } catch (error) {
+        logger.error("Get products error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch products" };
+    }
+}
+export const getMarketplaceProductsAction = withFlexibleSafeAction("getMarketplaceProductsAction", _getMarketplaceProductsAction);
+
+
+/**
+ * Get single product by ID
+ */
+async function _getProductByIdAction(productId: string) {
+    try {
+        const doc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
+
+        if (!doc.exists) {
+            return { success: false, error: "Product not found" };
+        }
+
+        const data = doc.data();
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const product = serializeValue(ProductSchema.parse({ id: doc.id, ...data }));
+
+        return { success: true, data: { product } };
+    } catch (error) {
+        logger.error("Get product by id error:", {
+            productId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch product" };
+    }
+}
+export const getProductByIdAction = withFlexibleSafeAction("getProductByIdAction", _getProductByIdAction);
+export const getProductAction = getProductByIdAction;
+
+
+/**
+ * Delete a product listing
+ */
+async function _deleteProductAction(productId: string) {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        const { session } = sessionResult;
+        const userId = session.user.id;
+
+        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
+            return { success: false, error: "Product not found" };
+        }
+
+        const productData = productDoc.data();
+        
+        // Ensure ownership
+        if (productData?.sellerId !== userId) {
+            // Check if admin
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const roles = userDoc.data()?.roles || [];
+            if (!roles.some((r: string) => r === "admin" || r === "super_admin" || r === "marketplace_admin")) {
+                return { success: false, error: "Unauthorized: You do not own this product" };
+            }
+        }
+
+        // Delete the product
+        await productRef.delete();
+
+        // Optional: Delete images from storage if needed
+        // For now, we'll just delete the Firestore record to be safe and fast
+
+        return { success: true, data: { message: "Product deleted successfully" } };
+    } catch (error) {
+        logger.error("Delete product error:", {
+            productId,
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to delete product" };
+    }
+}
+export const deleteProductAction = withFlexibleSafeAction("deleteProductAction", _deleteProductAction);
+
+
+/**
+ * Get Recommended Products for landing pages
+ */
+async function _getRecommendedProductsAction(limitCount: number = 3) {
+    try {
+        const query = db.collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active")
+            .orderBy("createdAt", "desc")
+            .limit(limitCount);
+
+        const snapshot = await query.get();
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const products = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            const parsed = ProductSchema.parse({ id: doc.id, ...data });
+            return serializeValue(parsed);
+        });
+
+        return { success: true, data: { products } };
+    } catch (error) {
+        logger.error("Get recommended products error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch recommended products" };
+    }
+}
+export const getRecommendedProductsAction = withFlexibleSafeAction("getRecommendedProductsAction", _getRecommendedProductsAction);
+
 
 /**
  * Get seller's products
  */
-export async function getSellerProductsAction(options: {
+async function _getSellerProductsAction(options: {
     limit?: number;
     lastId?: string;
     status?: string;
@@ -687,14 +901,11 @@ export async function getSellerProductsAction(options: {
     sortBy?: "createdAt" | "title" | "price" | "orders" | "views" | "rating" | "availableQuantity";
     sortDir?: "asc" | "desc";
 } = {}) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
 
         const userId = session.user.id;
         const {
@@ -714,19 +925,17 @@ export async function getSellerProductsAction(options: {
             query = query.where("status", "==", status);
         }
 
-        // Handle Low Stock Filter (virtual status)
+        // Handle Low Stock Filter
         if (status === "low_stock") {
             query = query.where("availableQuantity", "<", 50)
                 .where("availableQuantity", ">", 0);
         }
 
         // Apply Sorting
-        // Note: Firestore requires an index for each combination of where+orderBy
         try {
             query = query.orderBy(sortBy, sortDir);
         } catch (e) {
-            // Fallback if index missing or incompatible sort
-            logger.warn("Sorting failed, likely missing index. Falling back to default sort.", { error: e });
+            logger.warn("Sorting failed, likely missing index. Falling back to default sort.", { userId, error: e });
         }
 
         // Apply Pagination
@@ -740,13 +949,17 @@ export async function getSellerProductsAction(options: {
         query = query.limit(limit);
 
         const snapshot = await query.get();
-        let products = serializeDocs<Product>(snapshot.docs);
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        let products = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            const parsed = ProductSchema.parse({ id: doc.id, ...data });
+            return serializeValue(parsed);
+        });
 
         // Client-side Text Search (Temporary Fallback)
-        // Ideally use a dedicated search service for full-text search
         if (search) {
             const searchLower = search.toLowerCase();
-            products = products.filter(p =>
+            products = products.filter((p: any) =>
                 p.title?.toLowerCase()?.includes(searchLower) ||
                 p.category?.toLowerCase()?.includes(searchLower)
             );
@@ -758,49 +971,46 @@ export async function getSellerProductsAction(options: {
 
         const lastProduct = products[products.length - 1];
         if (lastProduct && snapshot.docs.length === limit) {
-            hasMore = true; // Optimistic check
-            newLastId = lastProduct.id;
+            hasMore = true;
+            newLastId = (lastProduct as any).id;
         }
 
         return { success: true, data: { products, lastId: newLastId, hasMore } };
-    } catch (error: any) {
-        logger.error("Get seller products error:", { error });
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Get seller products error:", {
+            userId: sessionResult?.session?.user?.id,
+            options,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
+export const getSellerProductsAction = withFlexibleSafeAction("getSellerProductsAction", _getSellerProductsAction);
 
 /**
  * Get seller's orders
  */
-export async function getSellerOrdersAction(options: {
+async function _getSellerOrdersAction(options: {
     limit?: number;
     lastId?: string;
     status?: string;
     search?: string;
 } = {}) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
 
         const userId = session.user.id;
         const { limit = 20, lastId, status, search } = options;
 
-        // When searching, fetch a broader page so we can filter client-side
-        // (Firestore does not support full-text search natively)
         const fetchLimit = search ? Math.min(limit * 5, 100) : limit;
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
-        // ✅ FIX: status filter must be applied BEFORE orderBy, so rebuild from scratch.
-        // Previously appended .where("orderStatus") after .orderBy(), causing Firestore 400.
-        // Also fixed wrong field name: orders store 'status', not 'orderStatus'.
         if (status && status !== "all") {
             query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
                 .where("sellerIds", "array-contains", userId)
@@ -818,18 +1028,22 @@ export async function getSellerOrdersAction(options: {
         query = query.limit(fetchLimit);
 
         const snapshot = await query.get();
-        let orders = serializeDocs<Order>(snapshot.docs);
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        let orders = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            const parsed = OrderSchema.parse({ id: doc.id, ...data });
+            return serializeValue(parsed);
+        });
 
-        // Server-assisted search: filter by order ID, buyer name, or product references
+        // Server-assisted search
         if (search) {
             const q = search.toLowerCase();
-            orders = orders.filter(o => {
-                const anyOrderData = o as any;
+            orders = orders.filter((o: any) => {
                 return (
                     o.id?.toLowerCase().includes(q) ||
-                    anyOrderData.buyerName?.toLowerCase().includes(q) ||
-                    anyOrderData.buyerEmail?.toLowerCase().includes(q) ||
-                    anyOrderData.items?.some((item: any) => item.title?.toLowerCase().includes(q))
+                    o.buyerName?.toLowerCase().includes(q) ||
+                    o.buyerEmail?.toLowerCase().includes(q) ||
+                    o.items?.some((item: any) => item.title?.toLowerCase().includes(q))
                 );
             }).slice(0, limit);
         }
@@ -843,142 +1057,149 @@ export async function getSellerOrdersAction(options: {
         }
 
         return { success: true, data: { orders, lastId: newLastId, hasMore } };
-    } catch (error: any) {
-        logger.error("Get seller orders error:", { error });
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Get seller orders error:", {
+            userId: sessionResult?.session?.user?.id,
+            options,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
+export const getSellerOrdersAction = withFlexibleSafeAction("getSellerOrdersAction", _getSellerOrdersAction);
 
 /**
  * Get seller analytics
  */
-export async function getSellerAnalyticsAction() {
+async function _getSellerAnalyticsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
-
         const userId = session.user.id;
 
-        // Fetch Orders
-        // ✅ FIX: Orders store 'sellerIds' (array), not 'sellerId' (string).
-        // Previously returned zero orders, making all seller analytics show ₦0.
-        const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("sellerIds", "array-contains", userId)
-            .get();
-        const orders = ordersSnapshot.docs.map(doc => doc.data() as Order);
+        const ordersRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+            .where("sellerIds", "array-contains", userId);
+        
+        const productsRef = db.collection(COLLECTIONS.PRODUCTS)
+            .where("sellerId", "==", userId);
 
-        // Fetch Products
-        const productsSnapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", userId)
-            .get();
-        const products = productsSnapshot.docs.map(doc => doc.data() as Product);
-
-        // Calculate Stats
-        const totalSales = orders
-            .filter(o => o.status !== "cancelled" && o.status !== "disputed")
-            .reduce((sum, o) => sum + o.totalAmount, 0);
-
-        const pendingOrders = orders.filter(o => o.status === "pending_payment" || o.status === "processing").length;
-
-        // Calculate monthly revenue (simple approximation for now)
-        const currentMonth = new Date().getMonth();
-        const monthlyRevenue = orders
-            .filter(o => {
-                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as unknown as import('firebase-admin/firestore').Timestamp).toDate();
-                return date.getMonth() === currentMonth && o.status !== "cancelled";
+        const totalSalesSnapshot = await ordersRef
+            .where("status", "not-in", ["cancelled", "disputed"])
+            .aggregate({
+                totalAmount: AggregateField.sum("totalAmount"),
+                count: AggregateField.count()
             })
-            .reduce((sum, o) => sum + o.totalAmount, 0);
+            .get();
+        
+        const totalSales = totalSalesSnapshot.data().totalAmount || 0;
+        const totalOrdersCount = totalSalesSnapshot.data().count || 0;
 
-        const activeListings = products.filter(p => p.status === "active").length;
+        const pendingOrdersSnapshot = await ordersRef
+            .where("status", "in", ["pending_payment", "processing"])
+            .aggregate({
+                count: AggregateField.count()
+            })
+            .get();
+        const pendingOrders = pendingOrdersSnapshot.data().count || 0;
 
-        // Conversion rate: completed orders ÷ total product views × 100
-        // Both `views` and `orders` are incremented fields on Product documents.
-        const totalProductViews = products.reduce((sum, p) => sum + (p.views || 0), 0);
-        const completedOrderCount = orders.filter(o => o.status !== "cancelled" && o.status !== "disputed").length;
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const monthlyRevenueSnapshot = await ordersRef
+            .where("status", "not-in", ["cancelled", "disputed"])
+            .where("createdAt", ">=", startOfMonth)
+            .aggregate({
+                totalAmount: AggregateField.sum("totalAmount")
+            })
+            .get();
+        const monthlyRevenue = monthlyRevenueSnapshot.data().totalAmount || 0;
+
+        const startOfPrevMonth = new Date(startOfMonth);
+        startOfPrevMonth.setMonth(startOfPrevMonth.getMonth() - 1);
+        const endOfPrevMonth = new Date(startOfMonth);
+
+        const prevMonthRevenueSnapshot = await ordersRef
+            .where("status", "not-in", ["cancelled", "disputed"])
+            .where("createdAt", ">=", startOfPrevMonth)
+            .where("createdAt", "<", endOfPrevMonth)
+            .aggregate({
+                totalAmount: AggregateField.sum("totalAmount")
+            })
+            .get();
+        const prevMonthRevenue = prevMonthRevenueSnapshot.data().totalAmount || 0;
+
+        const activeListingsSnapshot = await productsRef
+            .where("status", "==", "active")
+            .count()
+            .get();
+        const activeListings = activeListingsSnapshot.data().count || 0;
+
+        const productStatsSnapshot = await productsRef
+            .aggregate({
+                totalViews: AggregateField.sum("views"),
+                avgRating: AggregateField.average("rating")
+            })
+            .get();
+        
+        const totalProductViews = productStatsSnapshot.data().totalViews || 0;
+        const averageRating = productStatsSnapshot.data().avgRating || 0;
+
         const conversionRate = totalProductViews > 0
-            ? parseFloat(((completedOrderCount / totalProductViews) * 100).toFixed(1))
+            ? parseFloat(((totalOrdersCount / totalProductViews) * 100).toFixed(1))
             : 0;
 
-        // Average Rating
-        const averageRating = products.length > 0
-            ? products.reduce((sum, p) => sum + (p.rating || 0), 0) / products.length
-            : 0;
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const analytics = SellerAnalyticsSchema.parse({
+            totalSales,
+            activeListings,
+            pendingOrders,
+            monthlyRevenue,
+            conversionRate,
+            averageRating,
+            prevMonthRevenue,
+            prevTotalSales: totalSales - monthlyRevenue,
+            prevActiveListings: 0,
+        });
 
-        // Calculate prev-month revenue for trend badges
-        const prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-        const prevYear = currentMonth === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear();
-        const prevMonthRevenue = orders
-            .filter(o => {
-                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as unknown as import('firebase-admin/firestore').Timestamp).toDate();
-                return date.getMonth() === prevMonth && date.getFullYear() === prevYear && o.status !== "cancelled";
-            })
-            .reduce((sum, o) => sum + o.totalAmount, 0);
-
-        // Prev total sales = all orders before the current month
-        const prevTotalSales = orders
-            .filter(o => {
-                const date = o.createdAt instanceof Date ? o.createdAt : (o.createdAt as unknown as import('firebase-admin/firestore').Timestamp).toDate();
-                return date.getMonth() !== currentMonth && o.status !== "cancelled" && o.status !== "disputed";
-            })
-            .reduce((sum, o) => sum + o.totalAmount, 0);
-
-        // For active listings trend, compare current to 30 days ago snapshot is not feasible without history;
-        // we return 0 so badge is hidden rather than fabricated.
-        const prevActiveListings = 0;
-
-        return { success: true, data: { analytics: {
-                totalSales,
-                activeListings,
-                pendingOrders,
-                monthlyRevenue,
-                conversionRate,
-                averageRating,
-                prevMonthRevenue,
-                prevTotalSales,
-                prevActiveListings, } }
-        };
+        return { success: true, data: serializeValue({ analytics }) };
     } catch (error: any) {
-        logger.error("Get seller analytics error:", error);
-        return { success: false, error: error.message };
+        logger.error("Get seller analytics error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to fetch analytics" };
     }
 }
+export const getSellerAnalyticsAction = withFlexibleSafeAction("getSellerAnalyticsAction", _getSellerAnalyticsAction);
 
 
 /**
  * Get buyer's orders
  */
-export async function getBuyerOrdersAction(options: {
+async function _getBuyerOrdersAction(options: {
     limit?: number;
     lastId?: string;
     status?: string;
 } = {}) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
-
-        const userId = session.user.id;
         const { limit = 20, lastId, status } = options;
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", userId)
+            .where("buyerId", "==", session.user.id)
             .orderBy("createdAt", "desc");
 
-        // ✅ FIX: status filter must be applied BEFORE orderBy, so rebuild from scratch.
-        // Previously appended .where("orderStatus") after .orderBy(), causing Firestore 400.
-        // Also fixed wrong field name: orders store 'status', not 'orderStatus'.
         if (status && status !== "all") {
             query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-                .where("buyerId", "==", userId)
+                .where("buyerId", "==", session.user.id)
                 .where("status", "==", status)
                 .orderBy("createdAt", "desc");
         }
@@ -993,7 +1214,12 @@ export async function getBuyerOrdersAction(options: {
         query = query.limit(limit);
 
         const snapshot = await query.get();
-        const orders = serializeDocs<Order>(snapshot.docs);
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const orders = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            const parsed = OrderSchema.parse({ id: doc.id, ...data });
+            return serializeValue(parsed);
+        });
 
         let newLastId = undefined;
         let hasMore = false;
@@ -1005,283 +1231,106 @@ export async function getBuyerOrdersAction(options: {
 
         return { success: true, data: { orders, lastId: newLastId, hasMore } };
     } catch (error: any) {
-        logger.error("Get buyer orders error:", { error });
-        return { success: false, error: error.message };
+        logger.error("Get buyer orders error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch orders" };
     }
 }
+export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
 
 /**
  * Get buyer dashboard stats
  */
-export async function getBuyerStatsAction() {
+async function _getBuyerStatsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
-
-        const userId = session.user.id;
         const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", userId)
+            .where("buyerId", "==", session.user.id)
             .get();
 
-        const orders = snapshot.docs.map(doc => doc.data() as Order);
+        const orders = snapshot.docs.map((doc: any) => doc.data() as Order);
 
         const activeOrders = orders.filter(o => o.status !== "delivered" && o.status !== "cancelled" && o.status !== "completed").length;
         const completedOrders = orders.filter(o => o.status === "delivered" || o.status === "completed").length;
         const totalSpent = orders.reduce((sum, o) => sum + o.totalAmount, 0);
 
-        // Read saved sellers count from user profile (incremented when user bookmarks a seller)
         const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;
 
-        return { success: true, data: { stats: {
-                activeOrders,
-                completedOrders,
-                totalSpent,
-                savedSellers } }
+        return { 
+            success: true, 
+            data: { 
+                stats: {
+                    activeOrders,
+                    completedOrders,
+                    totalSpent,
+                    savedSellers 
+                } 
+            }
         };
     } catch (error: any) {
-        logger.error("Get buyer stats error:", error);
+        logger.error("Get buyer stats error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
-/**
- * Get single product by ID
- */
-const getCachedProduct = (productId: string) => unstable_cache(
-    async () => {
-        try {
-            const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
-            const productSnap = await productRef.get();
-
-            if (!productSnap.exists) {
-                return { success: false, error: "Product not found" };
-            }
-
-            const product = productSnap.data() as Product;
-
-            // Optionally fetch seller name
-            let sellerName = "Unknown Seller";
-            if (product.sellerId) {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
-                const userSnap = await userRef.get();
-                if (userSnap.exists) {
-                    const userData = userSnap.data();
-                    sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
-                }
-            }
-
-            return { success: true, data: { product: { ...product, sellerName } } };
-        } catch (error: any) {
-            logger.error("Get product error:", error);
-            return { success: false, error: error.message };
-        }
-    },
-    [`product-${productId}`],
-    { revalidate: 3600, tags: [`product-${productId}`] }
-)();
-
-export async function getProductAction(productId: string) {
-    return getCachedProduct(productId);
-}
+export const getBuyerStatsAction = withFlexibleSafeAction("getBuyerStatsAction", _getBuyerStatsAction);
 
 /**
- * Get recommended products for buyers
+ * Get related products based on category and location
  */
-
-// Internal cache
-const getCachedRecommendedProducts = unstable_cache(
-    async (limit: number) => {
-        try {
-            const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-                .where("status", "==", "active")
-                .where("availableQuantity", ">", 0)
-                .get();
-
-            let products = snapshot.docs.map(doc => doc.data() as Product);
-
-            // Sort by rating and views to get best products
-            products = products
-                .sort((a, b) => {
-                    // Prioritize products with ratings, then views
-                    const scoreA = (a.rating || 0) * 10 + (a.views || 0);
-                    const scoreB = (b.rating || 0) * 10 + (b.views || 0);
-                    return scoreB - scoreA;
-                })
-                .slice(0, limit);
-
-            // Fetch seller names for each product
-            const productsWithSellers = await Promise.all(
-                products.map(async (product) => {
-                    let sellerName = "Unknown Seller";
-                    if (product.sellerId) {
-                        const userRef = db.collection(COLLECTIONS.USERS).doc(product.sellerId);
-                        const userSnap = await userRef.get();
-                        if (userSnap.exists) {
-                            const userData = userSnap.data();
-                            sellerName = userData?.businessName || userData?.displayName || "Unknown Seller";
-                        }
-                    }
-                    return {
-                        ...product,
-                        sellerName,
-                    };
-                })
-            );
-
-            return { success: true, data: { products: productsWithSellers } };
-        } catch (error: any) {
-            logger.error("Get recommended products error:", error);
-            return { success: false, error: error.message, products: [] };
-        }
-    },
-    ["recommended-products"],
-    { revalidate: 3600, tags: ["recommended-products"] }
-);
-
-/**
- * Get recommended products for buyers
- */
-export async function getRecommendedProductsAction(limit: number = 3) {
-    return getCachedRecommendedProducts(limit);
-}
-
-
-/**
- * Delete a product listing
- */
-export async function deleteProductAction(productId: string) {
+async function _getRelatedProductsAction(productId: string, limit: number = 4) {
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-        const { session } = sessionResult;
-
-        if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
-        }
-
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
-        const productDoc = await productRef.get();
+        const productSnap = await productRef.get();
 
-        if (!productDoc.exists) {
-            return { success: false, error: "Product not found" };
+        if (!productSnap.exists) {
+            return { success: false, error: "Product not found", data: { products: [] } };
         }
 
-        const product = productDoc.data() as Product;
+        const product = productSnap.data() as Product;
 
-        // Verify user owns this product
-        if (product.sellerId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
-        }
-
-        // ✅ FIX: Check correct field name 'status' (not 'orderStatus' which doesn't exist on orders).
-        // Previously this guard never fired, allowing soft-delete of products with active orders.
-        const activeOrders = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("productIds", "array-contains", productId)
-            .where("status", "in", ["confirmed", "processing", "shipped"])
+        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("category", "==", product.category)
+            .where("status", "==", "active")
+            .limit(limit + 1)
             .get();
 
-        if (!activeOrders.empty) {
-            return {
-                success: false,
-                error: "Cannot delete product with active orders",
-            };
-        }
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const products = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }))
+            .filter((p: any) => p.id !== productId);
 
-        // Soft delete
-        await productRef.update({
-            status: "deleted",
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        return {
-            success: true,
-            message: "Product deleted successfully",
+        return { 
+            success: true, 
+            data: { 
+                products: serializeValue(products.slice(0, limit)) 
+            } 
         };
     } catch (error: any) {
-        logger.error("Delete product error:", error);
-        return { success: false, error: error.message };
+        logger.error("Get related products error:", error);
+        return { success: false, error: error.message, data: { products: [] } };
     }
 }
+export const getRelatedProductsAction = withFlexibleSafeAction("getRelatedProductsAction", _getRelatedProductsAction);
 
 /**
- * Get related products based on category and location
+ * Search Products
  */
-
-// Internal cache
-const getCachedRelatedProducts = (productId: string, limit: number) => unstable_cache(
-    async () => {
-        try {
-            const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
-            const productSnap = await productRef.get();
-
-            if (!productSnap.exists) {
-                return { success: false, error: "Product not found", products: [] };
-            }
-
-            const product = productSnap.data() as Product;
-
-            // Query by same category
-            const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-                .where("category", "==", product.category)
-                .where("status", "==", "active")
-                .limit(limit + 1)
-                .get();
-
-            let products = snapshot.docs
-                .map(doc => doc.data() as Product)
-                .filter(p => p.id !== productId);
-
-            // If not enough, add random active products
-            if (products.length < limit) {
-                const randomSnapshot = await db.collection(COLLECTIONS.PRODUCTS)
-                    .where("status", "==", "active")
-                    .limit(limit * 2)
-                    .get();
-
-                const randomProducts = randomSnapshot.docs
-                    .map(doc => doc.data() as Product)
-                    .filter(p => p.id !== productId && !products.find(existing => existing.id === p.id));
-
-                products = [...products, ...randomProducts].slice(0, limit);
-            }
-
-            return { success: true, data: { products: products.slice(0, limit) } };
-        } catch (error: any) {
-            logger.error("Get related products error:", error);
-            return { success: false, error: error.message, products: [] };
-        }
-    },
-    [`related-products-${productId}`],
-    { revalidate: 3600, tags: [`related-products-${productId}`] }
-)();
-
-/**
- * Get related products based on category and location
- */
-/**
- * Get related products based on category and location
- */
-export async function getRelatedProductsAction(productId: string, limit: number = 4) {
-    return getCachedRelatedProducts(productId, limit);
-}
-
-/**
- * Search Products with Pagination and Filters
- */
-export async function searchProductsAction(params: {
+async function _searchProductsAction(params: {
     query?: string;
     category?: string;
     state?: string;
-    minPrice?: number;
-    maxPrice?: number;
-    sortBy?: "newest" | "price_asc" | "price_desc" | "rating";
+    sortBy?: string;
     limit?: number;
-    lastId?: string; // Cursor for pagination
+    lastId?: string;
 }) {
     try {
         const limit = params.limit || 12;
@@ -1289,7 +1338,6 @@ export async function searchProductsAction(params: {
             .where("status", "==", "active")
             .where("availableQuantity", ">", 0);
 
-        // Filters
         if (params.category && params.category !== "All Categories") {
             query = query.where("category", "==", params.category);
         }
@@ -1298,12 +1346,6 @@ export async function searchProductsAction(params: {
             query = query.where("location.state", "==", params.state);
         }
 
-        // Note: Firestore limitation - cannot filter by range on multiple fields easily
-        // We will prioritize client-side price filtering if complex, or simple range here
-        // For now, let's keep price filtering client-side or separate index if needed.
-        // We'll focus on Category + Sort + Pagination which is the most common path.
-
-        // Sorting
         if (params.sortBy === "price_asc") {
             query = query.orderBy("pricingTiers.0.price", "asc");
         } else if (params.sortBy === "price_desc") {
@@ -1311,11 +1353,9 @@ export async function searchProductsAction(params: {
         } else if (params.sortBy === "rating") {
             query = query.orderBy("rating", "desc");
         } else {
-            // Default: Newest
             query = query.orderBy("createdAt", "desc");
         }
 
-        // Cursor Pagination
         if (params.lastId) {
             const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(params.lastId).get();
             if (lastDoc.exists) {
@@ -1326,7 +1366,10 @@ export async function searchProductsAction(params: {
         query = query.limit(limit);
 
         const snapshot = await query.get();
-        const products = snapshot.docs.map(doc => doc.data() as Product);
+        const products = snapshot.docs.map((doc: any) => {
+            const data = doc.data();
+            return ProductSchema.parse({ id: doc.id, ...data });
+        });
         const lastVisible = snapshot.docs[snapshot.docs.length - 1];
 
         // Fetch seller names (optimize this with a separate user index/cache later)
@@ -1367,15 +1410,25 @@ export async function searchProductsAction(params: {
             );
         }
 
-        return { success: true, data: { products: finalProducts,
-            lastId: lastVisible ? lastVisible.id : undefined,
-            hasMore: snapshot.docs.length === limit } };
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        return { 
+            success: true, 
+            data: serializeValue({ 
+                products: finalProducts,
+                lastId: lastVisible ? lastVisible.id : undefined,
+                hasMore: snapshot.docs.length === limit 
+            })
+        };
 
     } catch (error: any) {
-        logger.error("Search products error:", error);
-        return { success: false, error: error.message, products: [] };
+        logger.error("Search products error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error.message, data: { products: [] } };
     }
 }
+export const searchProductsAction = withFlexibleSafeAction("searchProductsAction", _searchProductsAction);
+
 
 // ============================================================================
 // USER RESUBMIT — Seller Verification
@@ -1384,7 +1437,7 @@ export async function searchProductsAction(params: {
 /**
  * Resubmit a rejected or suspended seller verification with corrected information.
  */
-export async function resubmitSellerVerificationAction(
+async function _resubmitSellerVerificationAction(
     fields: {
         businessName?: string;
         phone?: string;
@@ -1392,46 +1445,56 @@ export async function resubmitSellerVerificationAction(
         bankAccount?: { bankName: string; accountNumber: string; accountName: string; bankCode: string };
         [key: string]: any;
     }
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false, error: 'Unauthorized' };
 
         const userId = session.user.id;
 
-        const snap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where('userId', '==', userId)
-            .get();
+        // Save to Firestore using a transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            const snap = await transaction.get(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where('userId', '==', userId));
 
-        if (snap.empty) return { success: false, error: 'No existing verification found' };
+            if (snap.empty) throw new Error('No existing verification found');
 
-        const sortedDocs = snap.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
+            const sortedDocs = snap.docs.sort((a, b) => {
+                const aData = a.data();
+                const bData = b.data();
+                const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
+                const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
 
-        const latestDocRef = sortedDocs[0];
-        const existing = latestDocRef.data();
-        const allowedStatuses = ['pending', 'rejected', 'suspended'];
-        if (!allowedStatuses.includes(existing.status)) {
-            return { success: false, error: 'Your verification cannot be resubmitted at this time.' };
-        }
+            const latestDoc = sortedDocs[0];
+            const existing = latestDoc.data();
+            const allowedStatuses = ['pending', 'rejected', 'suspended'];
+            if (!allowedStatuses.includes(existing.status)) {
+                throw new Error('Your verification cannot be resubmitted at this time.');
+            }
 
-        await latestDocRef.ref.update({
-            ...fields,
-            status: 'pending',
-            rejectionReason: null,
-            resubmittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            // 1. Update verification doc
+            transaction.update(latestDoc.ref, {
+                ...fields,
+                status: 'pending',
+                rejectionReason: null,
+                resubmittedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
-            sellerVerificationStatus: 'pending',
-            'serviceRegistrations.marketplace.status': 'pending',
-            updatedAt: FieldValue.serverTimestamp(),
+            // 2. Update User Profile
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            transaction.update(userRef, {
+                sellerVerificationStatus: 'pending',
+                'serviceRegistrations.marketplace.status': 'pending',
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
         try {
@@ -1440,12 +1503,17 @@ export async function resubmitSellerVerificationAction(
             logger.error("Failed to invalidate cache after Seller resubmission:", err);
         }
 
-        return { success: true };
+        return { success: true, data: { message: "Seller verification resubmitted successfully" } };
     } catch (error: any) {
-        logger.error('resubmitSellerVerificationAction error:', error);
-        return { success: false, error: 'Failed to resubmit seller verification' };
+        logger.error('resubmitSellerVerificationAction error:', {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error.message || 'Failed to resubmit seller verification' };
     }
 }
+export const resubmitSellerVerificationAction = withFlexibleSafeAction("resubmitSellerVerificationAction", _resubmitSellerVerificationAction);
+
 
 // ============================================================================
 // VERIFIED BADGE — Admin Actions
@@ -1459,9 +1527,8 @@ async function _updateSellerBadge(
     adminUserId: string,
     sellerId: string,
     grant: boolean
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
     try {
-        // Role check
         const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
         const adminRoles: string[] = adminDoc.data()?.roles || [];
         const hasMarketplaceAdminAccess = adminRoles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
@@ -1471,72 +1538,96 @@ async function _updateSellerBadge(
 
         const now = FieldValue.serverTimestamp();
 
-        // Update seller_verifications doc
-        const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", sellerId)
-            .get();
+        await db.runTransaction(async (transaction) => {
+            const verSnap = await transaction.get(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("userId", "==", sellerId));
 
-        if (!verSnap.empty) {
-            const sortedDocs = verSnap.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-                return bTime - aTime;
-            });
-            await sortedDocs[0].ref.update({
+            if (!verSnap.empty) {
+                const sortedDocs = verSnap.docs.sort((a, b) => {
+                    const aData = a.data();
+                    const bData = b.data();
+                    const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
+                    const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                transaction.update(sortedDocs[0].ref, {
+                    isVerifiedBadge: grant,
+                    verifiedBadgeGrantedAt: grant ? now : null,
+                    verifiedBadgeGrantedBy: grant ? adminUserId : null,
+                    updatedAt: now,
+                });
+            }
+
+            const userRef = db.collection(COLLECTIONS.USERS).doc(sellerId);
+            transaction.update(userRef, {
                 isVerifiedBadge: grant,
                 verifiedBadgeGrantedAt: grant ? now : null,
-                verifiedBadgeGrantedBy: grant ? adminUserId : null,
                 updatedAt: now,
+                _version: FieldValue.increment(1),
             });
-        }
 
-        // Sync on user document
-        await db.collection(COLLECTIONS.USERS).doc(sellerId).update({
-            isVerifiedBadge: grant,
-            verifiedBadgeGrantedAt: grant ? now : null,
-            updatedAt: now,
+            const productsSnap = await transaction.get(db.collection(COLLECTIONS.PRODUCTS)
+                .where("sellerId", "==", sellerId)
+                .where("status", "==", "active"));
+
+            if (!productsSnap.empty) {
+                productsSnap.docs.forEach((doc) => {
+                    transaction.update(doc.ref, { 
+                        sellerVerified: grant, 
+                        updatedAt: now,
+                        _version: FieldValue.increment(1),
+                    });
+                });
+            }
         });
 
-        // Denormalize onto all active products by this seller
-        const productsSnap = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", sellerId)
-            .where("status", "==", "active")
-            .get();
-
-        if (!productsSnap.empty) {
-            const batch = db.batch();
-            productsSnap.docs.forEach((doc) => {
-                batch.update(doc.ref, { sellerVerified: grant, updatedAt: now });
-            });
-            await batch.commit();
-        }
-
-        // Notify the seller
         const { notifyBadgeUpdated } = await import("@/lib/marketplace-notifications");
         await notifyBadgeUpdated({ sellerId, granted: grant });
 
-        return { success: true };
+        return { success: true, data: { message: `Seller badge ${grant ? "granted" : "revoked"} successfully` } };
     } catch (error: any) {
-        logger.error(`Badge ${grant ? "grant" : "revoke"} error:`, error);
-        return { success: false, error: error.message || "Failed to update badge" };
+        logger.error(`Badge ${grant ? "grant" : "revoke"} error:`, {
+            adminUserId,
+            sellerId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: undefined, error: error instanceof Error ? error.message : "Failed to update badge" };
     }
 }
 
-export async function grantSellerVerifiedBadgeAction(
-    sellerId: string
-): Promise<{ success: boolean; error?: string }> {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: "Unauthorized" };
-    return _updateSellerBadge(sessionResult.session.user.id, sellerId, true);
+async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        return _updateSellerBadge(sessionResult.session.user.id, sellerId, true);
+    } catch (error) {
+        logger.error("grantSellerVerifiedBadgeAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            sellerId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: undefined, error: "Failed to grant badge" };
+    }
 }
+export const grantSellerVerifiedBadgeAction = withFlexibleSafeAction("grantSellerVerifiedBadgeAction", _grantSellerVerifiedBadgeAction);
 
-export async function revokeSellerVerifiedBadgeAction(
-    sellerId: string
-): Promise<{ success: boolean; error?: string }> {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: "Unauthorized" };
-    return _updateSellerBadge(sessionResult.session.user.id, sellerId, false);
+async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        return _updateSellerBadge(sessionResult.session.user.id, sellerId, false);
+    } catch (error) {
+        logger.error("revokeSellerVerifiedBadgeAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            sellerId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: undefined, error: "Failed to revoke badge" };
+    }
 }
+export const revokeSellerVerifiedBadgeAction = withFlexibleSafeAction("revokeSellerVerifiedBadgeAction", _revokeSellerVerifiedBadgeAction);
 
 // ============================================================================
 // SELLER CATEGORY — Update action for admin
@@ -1546,12 +1637,13 @@ export async function revokeSellerVerifiedBadgeAction(
  * Update the seller category (wholesale/retail) for an existing approved seller.
  * Admin or the seller themselves can update this.
  */
-export async function updateSellerCategoryAction(
+async function _updateSellerCategoryAction(
     sellerId: string,
     category: "wholesale" | "retail"
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: "Unauthorized" };
         const actorId = sessionResult.session.user.id;
 
@@ -1567,36 +1659,58 @@ export async function updateSellerCategoryAction(
 
         const now = FieldValue.serverTimestamp();
 
-        await db.collection(COLLECTIONS.USERS).doc(sellerId).update({
-            sellerCategory: category,
-            updatedAt: now,
+        // Perform updates in a single transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            // 1. Update User Document
+            const userRef = db.collection(COLLECTIONS.USERS).doc(sellerId);
+            transaction.update(userRef, {
+                sellerCategory: category,
+                updatedAt: now,
+                _version: FieldValue.increment(1),
+            });
+
+            // 2. Update Verification Document
+            const verSnap = await transaction.get(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("userId", "==", sellerId));
+                
+            if (!verSnap.empty) {
+                const sortedDocs = verSnap.docs.sort((a, b) => {
+                    const aData = a.data();
+                    const bData = b.data();
+                    const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
+                    const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                transaction.update(sortedDocs[0].ref, { 
+                    sellerCategory: category, 
+                    updatedAt: now,
+                    _version: FieldValue.increment(1),
+                });
+            }
+
+            // 3. Denormalize onto all products
+            const productsSnap = await transaction.get(db.collection(COLLECTIONS.PRODUCTS)
+                .where("sellerId", "==", sellerId));
+            
+            if (!productsSnap.empty) {
+                productsSnap.docs.forEach((doc) => {
+                    transaction.update(doc.ref, { 
+                        sellerCategory: category, 
+                        updatedAt: now,
+                        _version: FieldValue.increment(1),
+                    });
+                });
+            }
         });
 
-        const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", sellerId)
-            .get();
-        if (!verSnap.empty) {
-            const sortedDocs = verSnap.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-                return bTime - aTime;
-            });
-            await sortedDocs[0].ref.update({ sellerCategory: category, updatedAt: now });
-        }
-
-        // Denormalize onto all products
-        const productsSnap = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("sellerId", "==", sellerId)
-            .get();
-        if (!productsSnap.empty) {
-            const batch = db.batch();
-            productsSnap.docs.forEach((doc) => batch.update(doc.ref, { sellerCategory: category }));
-            await batch.commit();
-        }
-
-        return { success: true };
-    } catch (error: any) {
-        logger.error("updateSellerCategoryAction error:", error);
-        return { success: false, error: error.message || "Failed to update seller category" };
+        return { success: true, data: { message: "Seller category updated successfully" } };
+    } catch (error) {
+        logger.error("updateSellerCategoryAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            sellerId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: undefined, error: error instanceof Error ? error.message : "Failed to update seller category" };
     }
 }
+export const updateSellerCategoryAction = withFlexibleSafeAction("updateSellerCategoryAction", _updateSellerCategoryAction);

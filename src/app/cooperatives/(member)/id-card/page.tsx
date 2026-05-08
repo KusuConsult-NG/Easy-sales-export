@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getCooperativeMemberIdCardAction, updatePassportPhotoAction, type MemberIdCardData } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
+import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -218,7 +219,7 @@ function PaymentRequiredGate() {
             </div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">Payment Required</h2>
             <p className="text-slate-500 text-sm mb-6">
-                Your membership ID card is generated after your ₦10,000 membership fee is verified on Paystack.
+                Your membership ID card is generated after your {CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()} membership fee is verified on Paystack.
             </p>
             <Link
                 href="/cooperatives/onboarding"

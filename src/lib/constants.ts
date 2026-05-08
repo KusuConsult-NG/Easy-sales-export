@@ -49,4 +49,9 @@ export const COMPANY_INFO = {
     copyright: `© ${new Date().getFullYear()} EASY SALES EXPORT & AGRICULTURE. All rights reserved.`,
 } as const;
 
+// Cooperative Configuration
+export const COOPERATIVE_CONFIG = {
+    registrationFee: 10000,
+} as const;
+
 

@@ -9,6 +9,7 @@ import { getCourseByIdAction, updateCourseAction, updateCourseModulesAction, typ
 import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
 import { uploadFile, type UploadProgress } from "@/lib/storage-upload";
+import MasterUploader from "@/components/shared/MasterUploader";
 
 
 // Local interface for UI state
@@ -518,71 +519,21 @@ export default function CourseManagerPage() {
                             </div>
                         </div>
 
-                        {/* Upload Field */}
-                        <div className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 space-y-3">
-                            <p className="text-sm font-semibold text-slate-700">
-                                {newModuleForm.contentType === 'video' ? 'Upload Video' : newModuleForm.contentType === 'excel' ? 'Upload Excel File' : 'Upload Document / PDF'}
-                                <span className="text-slate-400 font-normal ml-1">(optional — you can add content later)</span>
-                            </p>
-
-                            {newModuleForm.contentType === 'video' ? (
-                                newModuleForm.videoUrl ? (
-                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
-                                        <span className="text-sm">✓ Video uploaded and ready</span>
-                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setNewModuleForm(p => ({ ...p, videoUrl: undefined }))}>Remove</button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input type="file" accept="video/*" onChange={(e) => handleFileUpload(e, 'video')} className="hidden" id="new-module-video-upload" />
-                                        <label htmlFor="new-module-video-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
-                                            <UploadCloud className="w-5 h-5" />
-                                            Choose Video File
-                                        </label>
-                                    </>
-                                )
-                            ) : newModuleForm.contentType === 'excel' ? (
-                                newModuleForm.excelUrl ? (
-                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
-                                        <span className="text-sm">✓ Excel file uploaded and ready</span>
-                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setNewModuleForm(p => ({ ...p, excelUrl: undefined }))}>Remove</button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => handleFileUpload(e, 'excel')} className="hidden" id="new-module-excel-upload" />
-                                        <label htmlFor="new-module-excel-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
-                                            <UploadCloud className="w-5 h-5" />
-                                            Choose Excel File
-                                        </label>
-                                    </>
-                                )
-                            ) : (
-                                newModuleForm.documentUrl ? (
-                                    <div className="flex items-center justify-between bg-blue-50 text-blue-700 p-3 rounded-lg border border-blue-200">
-                                        <span className="text-sm">✓ Document uploaded and ready</span>
-                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setNewModuleForm(p => ({ ...p, documentUrl: undefined }))}>Remove</button>
-                                    </div>
-                                ) : (
-                                    <>
-                                        <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => handleFileUpload(e, 'document')} className="hidden" id="new-module-doc-upload" />
-                                        <label htmlFor="new-module-doc-upload" className="w-full py-2.5 border border-slate-300 rounded-lg text-slate-600 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer text-sm">
-                                            <UploadCloud className="w-5 h-5" />
-                                            Choose PDF / Document
-                                        </label>
-                                    </>
-                                )
-                            )}
-
-                            {uploadProgress && (
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-xs font-medium text-slate-500">
-                                        <span>Uploading...</span>
-                                        <span>{Math.round(uploadProgress.progress)}%</span>
-                                    </div>
-                                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress.progress}%` }} />
-                                    </div>
-                                </div>
-                            )}
+                        {/* Master Uploader Integration */}
+                        <div className="border rounded-xl p-4 bg-slate-50">
+                            <MasterUploader 
+                                label={newModuleForm.contentType === 'video' ? 'Course Video' : newModuleForm.contentType === 'excel' ? 'Excel Spreadsheet' : 'PDF Document'}
+                                folder="academy/courses"
+                                moduleId="academy"
+                                accept={newModuleForm.contentType === 'video' ? 'video/*' : newModuleForm.contentType === 'excel' ? '.xlsx,.xls,.csv' : '.pdf,.doc,.docx'}
+                                onComplete={(data) => {
+                                    setNewModuleForm(prev => ({
+                                        ...prev,
+                                        ...(newModuleForm.contentType === 'video' ? { videoUrl: data.url } : newModuleForm.contentType === 'excel' ? { excelUrl: data.url } : { documentUrl: data.url }),
+                                    }));
+                                }}
+                                description={`Upload the ${newModuleForm.contentType} content for the first lesson in this module.`}
+                            />
                         </div>
 
                         <div className="pt-2 flex justify-end gap-3 border-t">
@@ -654,92 +605,28 @@ export default function CourseManagerPage() {
                                 />
                             </div>
 
-                            {/* Video Upload */}
-                            <div className="border p-4 rounded-xl space-y-3 bg-slate-50">
-                                <label className="block text-sm font-bold text-slate-700">Video Content</label>
-                                {editingLesson.lesson.videoUrl ? (
-                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
-                                        <span className="text-sm">Video uploaded and attached</span>
-                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, videoUrl: undefined } } : null)}>Remove</button>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <input
-                                            type="file"
-                                            accept="video/*"
-                                            onChange={(e) => handleFileUpload(e, 'video')}
-                                            className="hidden"
-                                            id="video-upload"
-                                        />
-                                        <label htmlFor="video-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
-                                            <UploadCloud className="w-5 h-5" />
-                                            Upload Video
-                                        </label>
-                                    </div>
-                                )}
+                            {/* Master Uploader for Lesson Content */}
+                            <div className="p-4 rounded-xl space-y-3 bg-slate-50 border border-slate-200">
+                                <MasterUploader 
+                                    label="Lesson Content File"
+                                    folder="academy/materials"
+                                    moduleId="academy"
+                                    accept={editingLesson.lesson.type === 'video' ? 'video/*' : editingLesson.lesson.type === 'excel' ? '.xlsx,.xls,.csv' : '.pdf,.doc,.docx'}
+                                    onComplete={(data) => {
+                                        setEditingLesson(prev => {
+                                            if (!prev) return prev;
+                                            return {
+                                                ...prev,
+                                                lesson: {
+                                                    ...prev.lesson,
+                                                    ...(editingLesson.lesson.type === 'video' ? { videoUrl: data.url } : editingLesson.lesson.type === 'excel' ? { excelUrl: data.url, content: data.url } : { documentUrl: data.url, content: data.url })
+                                                }
+                                            };
+                                        });
+                                    }}
+                                    description={`Upload the file content for this ${editingLesson.lesson.type || 'lesson'}.`}
+                                />
                             </div>
-
-                            {/* Document Upload */}
-                            <div className="border p-4 rounded-xl space-y-3 bg-slate-50">
-                                <label className="block text-sm font-bold text-slate-700">Document/PDF Content</label>
-                                {editingLesson.lesson.documentUrl ? (
-                                    <div className="flex items-center justify-between bg-blue-50 text-blue-700 p-3 rounded-lg border border-blue-200">
-                                        <span className="text-sm truncate mr-2" title={editingLesson.lesson.documentUrl}>Document uploaded</span>
-                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, documentUrl: undefined } } : null)}>Remove</button>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <input
-                                            type="file"
-                                            accept=".pdf,.doc,.docx"
-                                            onChange={(e) => handleFileUpload(e, 'document')}
-                                            className="hidden"
-                                            id="document-upload"
-                                        />
-                                        <label htmlFor="document-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
-                                            <UploadCloud className="w-5 h-5" />
-                                            Upload Document
-                                        </label>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Excel Upload */}
-                            <div className="border p-4 rounded-xl space-y-3 bg-slate-50">
-                                <label className="block text-sm font-bold text-slate-700">Excel/Spreadsheet Content</label>
-                                {editingLesson.lesson.excelUrl ? (
-                                    <div className="flex items-center justify-between bg-green-50 text-green-700 p-3 rounded-lg border border-green-200">
-                                        <span className="text-sm truncate mr-2" title={editingLesson.lesson.excelUrl}>Excel file uploaded</span>
-                                        <button className="text-red-500 hover:text-red-700 text-sm font-medium" onClick={() => setEditingLesson(prev => prev ? { ...prev, lesson: { ...prev.lesson, excelUrl: undefined } } : null)}>Remove</button>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <input
-                                            type="file"
-                                            accept=".xlsx,.xls,.csv"
-                                            onChange={(e) => handleFileUpload(e, 'excel')}
-                                            className="hidden"
-                                            id="excel-upload"
-                                        />
-                                        <label htmlFor="excel-upload" className="w-full py-2 border border-slate-300 rounded-lg text-slate-700 hover:border-primary hover:text-primary transition flex items-center justify-center gap-2 font-medium cursor-pointer">
-                                            <UploadCloud className="w-5 h-5" />
-                                            Upload Excel File
-                                        </label>
-                                    </div>
-                                )}
-                            </div>
-
-                            {uploadProgress && (
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-xs font-medium text-slate-500">
-                                        <span>Uploading...</span>
-                                        <span>{Math.round(uploadProgress.progress)}%</span>
-                                    </div>
-                                    <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                                        <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadProgress.progress}%` }} />
-                                    </div>
-                                </div>
-                            )}
 
                             <div className="pt-4 flex justify-end gap-3">
                                 <button

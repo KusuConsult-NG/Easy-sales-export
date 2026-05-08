@@ -13,6 +13,8 @@ import { z } from "zod";
 import { strictEmailSchema, strictPhoneSchema } from "@/lib/schemas";
 import { withSafeAction } from "@/lib/safe-action";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { versionedUpdate } from "@/lib/optimistic-locking";
+import { FieldValue } from "firebase-admin/firestore";
 
 // Validation schemas
 const profileUpdateSchema = z.object({
@@ -24,6 +26,7 @@ const profileUpdateSchema = z.object({
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
     identityDocument: z.string().optional(),
+    version: z.number().optional(),
 });
 
 const notificationPreferencesSchema = z.object({
@@ -73,7 +76,10 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
             notifications: userData.notifications || {
                 email: true,
                 push: false,
-                sms: true, } },
+                sms: true,
+            },
+            version: userData._version || 0,
+        },
         },
     };
 });
@@ -95,17 +101,15 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     location?: string;
     bio?: string;
     identityDocument?: string;
+    version?: number;
 }) => {
     const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
-    // Validate input. ZodError will be beautifully handled by withSafeAction!
     const validated = profileUpdateSchema.parse(data);
-
     const userId = session.user.id;
 
-    // If email is changing, update Firebase Auth as well (not just Firestore)
     if (validated.email && validated.email !== session.user.email) {
         try {
             await adminAuth.updateUser(userId, { email: validated.email });
@@ -118,26 +122,29 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         }
     }
 
-    // Update Firestore — also compute fullName from parts
-    const updatePayload: Record<string, any> = {
-        ...validated,
-        // Mark profile as explicitly completed. The hub-guard checks this flag
-        // as a fast-exit on every page load. Once set, the user NEVER sees the
-        // profile completion screen again on future logins.
-        profileComplete: true,
-        updatedAt: new Date(),
-    };
-    if (validated.firstName || validated.lastName || validated.otherName) {
-        const existingDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const existing = existingDoc.data() || {};
-        const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
-        const last = validated.lastName ?? existing.lastName ?? existing.fullName?.split(' ').slice(1).join(' ') ?? "";
-        const other = validated.otherName ?? existing.otherName ?? "";
-        updatePayload.fullName = [first, other, last].filter(Boolean).join(' ').trim();
-    }
-    await db.collection(COLLECTIONS.USERS).doc(userId).update(updatePayload);
+    const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-    // Invalidate Redis cache so hub-guard reads the fresh profileComplete flag
+    await db.runTransaction(async (transaction) => {
+        const existingDoc = await transaction.get(userRef);
+        const existing = existingDoc.data() || {};
+
+        const updatePayload: Record<string, any> = {
+            ...validated,
+            profileComplete: true,
+        };
+        // Remove version from payload as it's handled by versionedUpdate
+        delete updatePayload.version;
+
+        if (validated.firstName || validated.lastName || validated.otherName) {
+            const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
+            const last = validated.lastName ?? existing.lastName ?? existing.fullName?.split(' ').slice(1).join(' ') ?? "";
+            const other = validated.otherName ?? existing.otherName ?? "";
+            updatePayload.fullName = [first, other, last].filter(Boolean).join(' ').trim();
+        }
+
+        await versionedUpdate(transaction, userRef, validated.version, updatePayload);
+    });
+
     await invalidateUserCache(userId);
 
     return { success: true };

@@ -11,30 +11,31 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import type { Dispute, Order, DisputeReason, DisputeResolution } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 /**
  * Create a new dispute for an order
  */
-export async function createDisputeAction(params: {
+async function _createDisputeAction(params: {
     orderId: string;
     reason: DisputeReason;
     description: string;
     evidenceUrls?: string[];
 }) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const { orderId, reason, description, evidenceUrls = [] } = params;
 
-        // Validate description length
         if (description.length < 50) {
             return { success: false, error: "Description must be at least 50 characters" };
         }
 
-        // Get order and verify ownership
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
         if (!orderDoc.exists) {
             return { success: false, error: "Order not found" };
@@ -45,7 +46,6 @@ export async function createDisputeAction(params: {
             return { success: false, error: "Not authorized" };
         }
 
-        // Check order is eligible for dispute
         if (order.status === "completed" || order.status === "cancelled") {
             return { success: false, error: "Cannot dispute completed or cancelled orders" };
         }
@@ -58,7 +58,6 @@ export async function createDisputeAction(params: {
             return { success: false, error: "Order already has an active dispute" };
         }
 
-        // Check if dispute already exists for this order
         const existingDisputes = await db.collection(COLLECTIONS.DISPUTES)
             .where("orderId", "==", orderId)
             .where("status", "in", ["open", "under_review"])
@@ -68,14 +67,10 @@ export async function createDisputeAction(params: {
             return { success: false, error: "Active dispute already exists for this order" };
         }
 
-        // Atomically create dispute AND update order status in a single transaction.
-        // Previously two separate writes could leave the order in 'disputed' status
-        // with no corresponding dispute document if the second write failed.
-        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(); // pre-allocate ID
+        const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
         await db.runTransaction(async (tx) => {
-            // Re-read order inside transaction to prevent TOCTOU
             const freshOrderDoc = await tx.get(orderRef);
             if (!freshOrderDoc.exists) throw new Error("Order not found");
 
@@ -95,6 +90,7 @@ export async function createDisputeAction(params: {
                 description,
                 evidenceUrls,
                 status: "open",
+                _version: 0,
                 createdAt: FieldValue.serverTimestamp() as any,
                 updatedAt: FieldValue.serverTimestamp() as any,
             };
@@ -104,22 +100,29 @@ export async function createDisputeAction(params: {
                 status: "disputed",
                 disputeId: disputeRef.id,
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
         });
 
-        return { success: true, disputeId: disputeRef.id };
-    } catch (error: any) {
-        logger.error("Create dispute error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { disputeId: disputeRef.id } };
+    } catch (error) {
+        logger.error("Create dispute error:", {
+            userId: sessionResult?.session?.user?.id,
+            orderId: params.orderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to create dispute" };
     }
 }
+export const createDisputeAction = withFlexibleSafeAction("createDisputeAction", _createDisputeAction);
 
 /**
  * Get buyer's disputes
  */
-export async function getBuyerDisputesAction() {
+async function _getBuyerDisputesAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
@@ -140,19 +143,24 @@ export async function getBuyerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true, disputes };
-    } catch (error: any) {
-        logger.error("Get buyer disputes error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { disputes } };
+    } catch (error) {
+        logger.error("Get buyer disputes error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch disputes" };
     }
 }
+export const getBuyerDisputesAction = withFlexibleSafeAction("getBuyerDisputesAction", _getBuyerDisputesAction);
 
 /**
  * Get seller's disputes
  */
-export async function getSellerDisputesAction() {
+async function _getSellerDisputesAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
@@ -173,17 +181,21 @@ export async function getSellerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true, disputes };
-    } catch (error: any) {
-        logger.error("Get seller disputes error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { disputes } };
+    } catch (error) {
+        logger.error("Get seller disputes error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch disputes" };
     }
 }
+export const getSellerDisputesAction = withFlexibleSafeAction("getSellerDisputesAction", _getSellerDisputesAction);
 
 /**
  * Get all disputes (Admin only)
  */
-export async function getAdminDisputesAction(options: {
+async function _getAdminDisputesAction(options: {
     status?: "open" | "under_review" | "resolved" | "closed" | "all";
     escalated?: boolean;
     limit?: number;
@@ -191,13 +203,13 @@ export async function getAdminDisputesAction(options: {
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
 } = {}) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        // Verify admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
@@ -215,8 +227,6 @@ export async function getAdminDisputesAction(options: {
         }
 
         if (options.escalated !== undefined) {
-            // Note: firestore requires composite index for escalated + status. 
-            // In case of error, we can catch it or we might need index.
             queryRef = db.collection(COLLECTIONS.DISPUTES)
                 .where("escalated", "==", options.escalated)
                 .orderBy("createdAt", sortDirection);
@@ -255,22 +265,29 @@ export async function getAdminDisputesAction(options: {
 
         return { 
             success: true, 
-            disputes,
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor
+            data: {
+                disputes,
+                lastDocId: nextCursor,
+                hasMore: !!nextCursor
+            }
         };
-    } catch (error: any) {
-        logger.error("Get admin disputes error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Get admin disputes error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch disputes for admin" };
     }
 }
+export const getAdminDisputesAction = withFlexibleSafeAction("getAdminDisputesAction", _getAdminDisputesAction);
 
 /**
  * Get single dispute by ID
  */
-export async function getDisputeByIdAction(disputeId: string) {
+async function _getDisputeByIdAction(disputeId: string) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
@@ -282,7 +299,6 @@ export async function getDisputeByIdAction(disputeId: string) {
 
         const dispute = disputeDoc.data() as Dispute;
 
-        // Check authorization
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         const isAdmin = hasRole(userData?.roles || [], "admin");
@@ -301,36 +317,40 @@ export async function getDisputeByIdAction(disputeId: string) {
             resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt,
         } as Dispute;
 
-        return { success: true, dispute: disputeData };
-    } catch (error: any) {
-        logger.error("Get dispute error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { dispute: disputeData } };
+    } catch (error) {
+        logger.error("Get dispute error:", {
+            disputeId,
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch dispute details" };
     }
 }
+export const getDisputeByIdAction = withFlexibleSafeAction("getDisputeByIdAction", _getDisputeByIdAction);
 
 /**
  * Update dispute status and resolve (Admin only)
  */
-export async function updateDisputeStatusAction(
+async function _updateDisputeStatusAction(
     disputeId: string,
     resolution: DisputeResolution,
     adminNotes: string,
     refundAmount?: number
 ) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        // Verify admin role
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
             return { success: false, error: "Not authorized as admin" };
         }
 
-        // Get dispute
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
         if (!disputeDoc.exists) {
             return { success: false, error: "Dispute not found" };
@@ -342,9 +362,6 @@ export async function updateDisputeStatusAction(
             return { success: false, error: `Dispute is already '${dispute.status}'` };
         }
 
-        // Atomically update dispute + order in a single transaction.
-        // Previously two separate writes could leave the dispute as 'resolved'
-        // while the order remained stuck in 'disputed' status.
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
 
         await db.runTransaction(async (tx) => {
@@ -363,6 +380,7 @@ export async function updateDisputeStatusAction(
                 adminNotes,
                 resolvedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             };
 
             if (refundAmount !== undefined) {
@@ -371,7 +389,6 @@ export async function updateDisputeStatusAction(
 
             tx.update(disputeRef, updateData);
 
-            // Update linked order status
             if (freshDispute.orderId) {
                 const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(freshDispute.orderId);
                 let newOrderStatus: string;
@@ -381,19 +398,32 @@ export async function updateDisputeStatusAction(
                 } else if (resolution === "release_seller") {
                     newOrderStatus = "completed";
                 } else {
-                    newOrderStatus = "completed"; // partial_refund still closes the order
+                    newOrderStatus = "completed";
                 }
 
                 tx.update(orderRef, {
                     status: newOrderStatus,
                     updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
                 });
             }
         });
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Update dispute error:", error);
-        return { success: false, error: error.message };
+        // Invalidate Cache
+        try {
+            await invalidateAdminGlobalStats();
+        } catch (err) {
+            logger.error("Cache invalidation failed after dispute resolution", err);
+        }
+
+        return { success: true, data: { message: "Dispute status updated successfully" } };
+    } catch (error) {
+        logger.error("Update dispute error:", {
+            disputeId,
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to update dispute status" };
     }
 }
+export const updateDisputeStatusAction = withFlexibleSafeAction("updateDisputeStatusAction", _updateDisputeStatusAction);

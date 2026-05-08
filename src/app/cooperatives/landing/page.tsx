@@ -10,7 +10,7 @@ import {
     Mail, Phone, MapPin, Clock, Send, Sparkles, Zap, Globe, Home
 } from 'lucide-react';
 import { checkCooperativeStatusAction } from '@/app/actions/cooperative';
-import { COMPANY_INFO } from '@/lib/constants';
+import { COMPANY_INFO, COOPERATIVE_CONFIG, CURRENCY_CONFIG } from '@/lib/constants';
 import { toast } from 'sonner';
 
 export default function CooperativeLandingPage() {
@@ -567,7 +567,7 @@ export default function CooperativeLandingPage() {
                                 Join Today. Move from registration to real participation.
                             </p>
                             <p className="text-xl text-purple-600 font-bold">
-                                One-time registration fee: ₦10,000
+                                One-time registration fee: {CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()}
                             </p>
                         </div>
                         <Link

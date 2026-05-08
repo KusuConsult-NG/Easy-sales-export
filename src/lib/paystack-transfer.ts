@@ -19,11 +19,9 @@ function getPaystackSecret(): string {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface BankAccount {
-    accountNumber: string;
-    bankCode: string; // Paystack bank code e.g. "058" for GTBank
-    accountName?: string;
-}
+import { bankAccountSchema } from "./validations/shared";
+
+export type BankAccount = import("zod").infer<typeof bankAccountSchema>;
 
 export interface TransferResult {
     success: boolean;
@@ -31,6 +29,7 @@ export interface TransferResult {
     reference?: string;
     error?: string;
 }
+
 
 // ─── Step 1: Resolve account number (verify it exists) ───────────────────────
 

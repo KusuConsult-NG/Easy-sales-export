@@ -1,17 +1,20 @@
 "use server";
 
+import { versionedUpdate } from "@/lib/optimistic-locking";
+import { z, ZodError } from "zod";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
-import { ZodError } from "zod";
-
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { deleteCache, CacheKeys } from "@/lib/redis";
+import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-invalidation";
+import crypto from 'crypto';
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
-import crypto from 'crypto';
 import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { logAuditAction } from "./audit";
+import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import {
@@ -40,254 +43,7 @@ type ActionState =
     | { error: string; success: false }
     | { error: null; success: true; message: string };
 
-// ============================================
-// Approve/Reject WAVE Application
-// ============================================
 
-async function _approveWaveApplicationAction(
-    applicationId: string
-): Promise<ActionState> {
-    try {
-        // Live role re-validation — bypasses stale JWT
-        const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { error: adminCheck.error, success: false };
-
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-        const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
-            return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
-        }
-
-        const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
-        if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
-        }
-
-        // Get application first to identify user
-        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
-
-        if (!appDoc.exists) {
-            return { error: "Application not found", success: false };
-        }
-
-        const appData = appDoc.data()!;
-        const userId = appData.userId;
-        const userEmail = appData.userEmail; // Ensure we have this from submission
-
-        if (!userId) {
-            return { error: "Application missing user ID", success: false };
-        }
-
-        // 1. Update Application Status
-        await appRef.update({
-            status: "approved",
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
-            approvedBy: session.user.id,
-            approvalTimestamp: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // 2. Verify User & Assign Role (WAVE Participant)
-        // We auto-verify them because the WAVE application is the verification process
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
-            isVerified: true,
-            verifiedBy: session.user.id,
-            verifiedAt: FieldValue.serverTimestamp(),
-            roles: FieldValue.arrayUnion("wave_participant"),
-            "serviceRegistrations.wave.status": "approved",
-            "serviceRegistrations.wave.approvedAt": FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // 3. Create/Update Wave Member Record (Enrolled)
-        await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userId).set({
-            active: true,
-            enrolledAt: FieldValue.serverTimestamp(),
-            applicationId: applicationId,
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-
-        // 4. CLEAR CACHE - User now has Wave access
-        try {
-            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
-            await invalidateServiceCache(userId, 'wave');
-            logger.info(`[Wave Approval] Cache cleared for user: ${userId}`);
-        } catch (cacheError) {
-            logger.error('[Wave Approval] Cache clear error:', cacheError);
-        }
-
-        // 4. Send Approval Email
-        if (userEmail && process.env.RESEND_API_KEY) {
-            try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-
-                const { data, error } = await resend.emails.send({
-                    from: "WAVE Program <noreply@easysalesexport.com>",
-                    to: userEmail,
-                    subject: "Welcome to WAVE - Application Approved!",
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #059669;">Congratulations!</h2>
-                            <p>We are thrilled to inform you that your application for the <strong>Women Agro-Value Expansion (WAVE)</strong> program has been approved.</p>
-                            
-                            <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
-                                <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
-                                <p style="margin: 5px 0 0; color: #065f46;"><strong>Role:</strong> WAVE Participant</p>
-                            </div>
-
-                            <p>You now have full access to:</p>
-                            <ul>
-                                <li>Exclusive WAVE training resources and guides</li>
-                                <li>Cooperative funding opportunities</li>
-                                <li>Marketplace features</li>
-                            </ul>
-
-                            <p><strong>Next Steps:</strong></p>
-                            <p>Log in to your dashboard to start exploring the resources available to you.</p>
-
-                            <div style="text-align: center; margin-top: 30px;">
-                                <a href="https://easysalesexport.com/wave/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to WAVE Dashboard</a>
-                            </div>
-                        </div>
-                    `
-                });
-                if (error) {
-                    logger.error("Resend API Error (WAVE approval email):", error);
-                }
-            } catch (emailError) {
-                logger.error("Failed to send WAVE approval email:", emailError);
-                // Don't block success on email failure
-            }
-        }
-
-        // Log audit
-        await logAuditAction("wave_approve", applicationId, "application", {
-            adminId: session.user.id,
-            userId: userId,
-        });
-
-        return {
-            error: null,
-            success: true,
-            message: "WAVE application approved and user verified successfully",
-        };
-    } catch (error: any) {
-        logger.error("Approve WAVE application error:", error);
-        return { error: "Failed to approve application", success: false };
-    }
-}
-
-async function _rejectWaveApplicationAction(
-    applicationId: string,
-    reason: string
-): Promise<ActionState> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-        const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
-            return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
-        }
-
-        const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
-        if (!valid.success) {
-            return { error: (valid.error as ZodError).issues[0].message, success: false };
-        }
-
-        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
-            status: "rejected",
-            rejectionReason: reason,
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
-            rejectedBy: session.user.id,
-            rejectedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // Get application first to identify user
-        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
-        const appData = appDoc.data();
-        const userId = appData?.userId;
-
-        if (userId) {
-            // Update User Profile (Mark as rejected)
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
-                "serviceRegistrations.wave.status": "rejected",
-                "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
-            // CLEAR CACHE
-            try {
-                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
-                await invalidateServiceCache(userId, 'wave');
-                logger.info(`[Wave Rejection] Cache cleared for user: ${userId}`);
-            } catch (cacheError) {
-                logger.error('[Wave Rejection] Cache clear error:', cacheError);
-            }
-        }
-
-        // Send Rejection Email
-        if (process.env.RESEND_API_KEY && appData?.userEmail) {
-            try {
-                const { Resend } = await import("resend");
-                const resend = new Resend(process.env.RESEND_API_KEY);
-
-                const { data, error } = await resend.emails.send({
-                    from: "WAVE Program <noreply@easysalesexport.com>",
-                    to: appData.userEmail,
-                    subject: "WAVE Application Update",
-                    html: `
-                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                            <h2 style="color: #dc2626;">WAVE Application Update</h2>
-                            <p>Thank you for your interest in the Women Agro-Value Expansion (WAVE) program.</p>
-                            
-                            <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                <p>Unfortunately, we are unable to approve your application at this time.</p>
-                                <p><strong>Reason provided:</strong></p>
-                                <p style="font-style: italic;">"${reason}"</p>
-                            </div>
-
-                            <p><strong>What You Can Do:</strong></p>
-                            <ul>
-                                <li>Review the feedback provided</li>
-                                <li>Address the concerns mentioned</li>
-                                <li>Re-apply when you have made the necessary adjustments</li>
-                            </ul>
-
-                            <p>If you have any questions or need clarification, please contact our support team.</p>
-                        </div>
-                    `
-                });
-                if (error) {
-                    logger.error("Resend API Error (WAVE rejection email):", error);
-                }
-            } catch (emailError) {
-                logger.error("Failed to send WAVE rejection email:", emailError);
-            }
-        }
-
-        // Log audit
-        await logAuditAction("wave_reject", applicationId, "application", {
-            reason,
-            adminId: session.user.id,
-        });
-
-        return {
-            error: null,
-            success: true,
-            message: "WAVE application rejected",
-        };
-    } catch (error: any) {
-        logger.error("Reject WAVE application error:", error);
-        return { error: "Failed to reject application", success: false };
-    }
-}
 
 // ============================================
 // Process Withdrawal Request
@@ -325,6 +81,11 @@ async function _processWithdrawalAction(
         }
 
         if (!withdrawalDoc.exists) {
+            withdrawalRef = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId);
+            withdrawalDoc = await withdrawalRef.get();
+        }
+
+        if (!withdrawalDoc.exists) {
             return { error: "Withdrawal request not found", success: false };
         }
 
@@ -332,7 +93,27 @@ async function _processWithdrawalAction(
 
         if (action === "approve") {
             // ══════════════════════════════════════════════
-            // PAYOUT — Trigger Paystack Transfer immediately
+            // 1. STATE LOCK — Mark as payout_initiated
+            // ══════════════════════════════════════════════
+            await db.runTransaction(async (transaction) => {
+                const freshDoc = await transaction.get(withdrawalRef);
+                if (!freshDoc.exists) throw new Error("Withdrawal request not found");
+                
+                const currentStatus = freshDoc.data()?.status;
+                if (currentStatus !== "pending") {
+                    throw new Error(`Withdrawal is already ${currentStatus}`);
+                }
+
+                transaction.update(withdrawalRef, {
+                    status: "payout_initiated",
+                    processedBy: session.user.id,
+                    processedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            });
+
+            // ══════════════════════════════════════════════
+            // 2. PAYOUT — Trigger Paystack Transfer
             // ══════════════════════════════════════════════
             let payoutSuccess = false;
             let payoutError: string | undefined;
@@ -366,23 +147,49 @@ async function _processWithdrawalAction(
                 logger.error(`Payout error for withdrawal ${withdrawalId}:`, payoutErr);
             }
 
-            await withdrawalRef.update({
-                status: payoutSuccess ? "completed" : "approved_pending_payout",
-                processedBy: session.user.id,
-                processedAt: FieldValue.serverTimestamp(),
-                adminNotes: reasoning || "",
-                updatedAt: FieldValue.serverTimestamp(),
-                ...(transferCode ? { paystackTransferCode: transferCode } : {}),
-                ...(payoutError && !payoutSuccess ? { payoutError, pendingManualPayout: true } : {}),
+            // ══════════════════════════════════════════════
+            // 3. FINAL UPDATE & LEDGER RECORD
+            // ══════════════════════════════════════════════
+            await db.runTransaction(async (transaction) => {
+                transaction.update(withdrawalRef, {
+                    status: payoutSuccess ? "completed" : "approved_pending_payout",
+                    adminNotes: reasoning || "",
+                    updatedAt: FieldValue.serverTimestamp(),
+                    ...(transferCode ? { paystackTransferCode: transferCode } : {}),
+                    ...(payoutError && !payoutSuccess ? { payoutError, pendingManualPayout: true } : {}),
+                });
+
+                if (payoutSuccess) {
+                    // Global Ledger Record (Unified Tracking)
+                    const reference = transferCode || `WITHDRAW-${withdrawalId}`;
+                    const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+                    transaction.set(globalTxRef, {
+                        id: reference,
+                        userId: withdrawalData.userId,
+                        type: "withdrawal",
+                        module: withdrawalRef.path.includes('cooperative') ? "cooperative" : "wallet",
+                        amount: withdrawalData.amount,
+                        currency: "NGN",
+                        status: "completed",
+                        date: FieldValue.serverTimestamp(),
+                        reference,
+                        description: `Withdrawal payout - ${withdrawalId}`
+                    });
+                }
             });
         } else {
-            // Rejection — just update status
-            await withdrawalRef.update({
-                status: "rejected",
-                processedBy: session.user.id,
-                processedAt: FieldValue.serverTimestamp(),
-                adminNotes: reasoning || "",
-                updatedAt: FieldValue.serverTimestamp(),
+            // Rejection — just update status atomically
+            await db.runTransaction(async (transaction) => {
+                const freshDoc = await transaction.get(withdrawalRef);
+                if (!freshDoc.exists) throw new Error("Withdrawal request not found");
+                
+                transaction.update(withdrawalRef, {
+                    status: "rejected",
+                    processedBy: session.user.id,
+                    processedAt: FieldValue.serverTimestamp(),
+                    adminNotes: reasoning || "",
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
             });
         }
 
@@ -399,12 +206,13 @@ async function _processWithdrawalAction(
         });
 
         // Log audit
-        await logAuditAction(
-            action === "approve" ? "withdrawal_approve" : "withdrawal_reject",
-            withdrawalId,
-            "withdrawal",
-            { notes: reasoning, adminId: session.user.id }
-        );
+        await createAdminAuditLog({
+            action: action === "approve" ? "withdrawal_approve" : "withdrawal_reject",
+            userId: session.user.id,
+            targetId: withdrawalId,
+            targetType: "withdrawal",
+            metadata: { notes: reasoning },
+        });
 
         return {
             error: null,
@@ -448,11 +256,11 @@ async function _toggleUserVerificationAction(
         const currentData = userDoc.data()!;
         const newVerificationStatus = !currentData.isVerified;
 
-        await userRef.update({
+        const { safeUpdate } = await import("@/lib/firestore-utils");
+        await safeUpdate(COLLECTIONS.USERS, userId, {
             isVerified: newVerificationStatus,
             verifiedBy: session.user.id,
             verifiedAt: newVerificationStatus ? FieldValue.serverTimestamp() : null,
-            updatedAt: FieldValue.serverTimestamp(),
         });
 
         // CLEAR CACHE - User verification status changed
@@ -465,12 +273,12 @@ async function _toggleUserVerificationAction(
         }
 
         // Log audit
-        await logAuditAction(
-            newVerificationStatus ? "user_verify" : "user_unverify",
-            userId,
-            "user",
-            { adminId: session.user.id }
-        );
+        await createAdminAuditLog({
+            action: newVerificationStatus ? "user_verify" : "user_unverify",
+            userId: session.user.id,
+            targetId: userId,
+            targetType: "user",
+        });
 
         return {
             error: null,
@@ -560,12 +368,12 @@ async function _toggleUserKycVerificationAction(
         }
 
         // Log audit
-        await logAuditAction(
-            newVerificationStatus ? `user_kyc_verify_${field}` : `user_kyc_unverify_${field}`,
-            userId,
-            "user",
-            { adminId: session.user.id }
-        );
+        await createAdminAuditLog({
+            action: newVerificationStatus ? `user_kyc_verify_${field}` : `user_kyc_unverify_${field}`,
+            userId: session.user.id,
+            targetId: userId,
+            targetType: "user",
+        });
 
         return {
             error: null,
@@ -617,9 +425,12 @@ async function _toggleUserKycVerificationAction(
          }
  
          // Log audit
-         await logAuditAction("user_gender_update", userId, "user", {
-             adminId: session.user.id,
-             newGender: gender,
+         await createAdminAuditLog({
+             action: "user_gender_update",
+             userId: session.user.id,
+             targetId: userId,
+             targetType: "user",
+             metadata: { newGender: gender },
          });
  
          return {
@@ -633,59 +444,6 @@ async function _toggleUserKycVerificationAction(
      }
  }
 
-// ============================================
-// Get WAVE Applications (Admin)
-// ============================================
-
-async function _getWaveApplicationsAction(
-    statusFilter?: "pending" | "approved" | "rejected",
-    limit = 50,
-    lastCreatedAt?: Date | string
-): Promise<{
-    error: string | null;
-    success: boolean;
-    data?: any[];
-    hasMore?: boolean; // simple indicator
-}> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-        const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "wave:approve_applications")) {
-            return { error: "Unauthorized: Permission required - wave:approve_applications", success: false };
-        }
-
-        let query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-            .orderBy("createdAt", "desc")
-            .limit(limit);
-
-        if (statusFilter) {
-            query = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("status", "==", statusFilter)
-                .limit(limit);
-        }
-
-        // Apply Cursor if provided
-        if (lastCreatedAt) {
-            const cursorDate = typeof lastCreatedAt === 'string' ? new Date(lastCreatedAt) : lastCreatedAt;
-            query = query.startAfter(Timestamp.fromDate(cursorDate));
-        }
-
-        const snapshot = await query.get();
-        const applications = serializeDocs(snapshot.docs)
-            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-        return {
-            error: null,
-            success: true,
-            data: applications,
-            hasMore: applications.length === limit
-        };
-    } catch (error: any) {
-        logger.error("Get WAVE applications error:", error);
-        return { error: "Failed to fetch applications", success: false };
-    }
-}
 
 // ============================================
 // Get Pending Withdrawals (Admin)
@@ -889,12 +647,13 @@ async function _verifyLandListing(
         }
 
         // Log audit
-        await logAuditAction(
-            decision === "approved" ? "land_approve" : "land_reject",
-            listingId,
-            "land_listing",
-            { adminId: session.user.id, reason: decision === "rejected" ? reason : null }
-        );
+        await createAdminAuditLog({
+            action: decision === "approved" ? "land_approve" : "land_reject",
+            userId: session.user.id,
+            targetId: listingId,
+            targetType: "land_listing",
+            metadata: { reason: decision === "rejected" ? reason : null },
+        });
 
         return {
             error: null,
@@ -1039,7 +798,8 @@ async function _getAllExportRequestsAction(
 }
 
 async function _approveLoanApplication(
-    applicationId: string
+    applicationId: string,
+    version?: number
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
@@ -1054,95 +814,89 @@ async function _approveLoanApplication(
             return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
-        // Get loan data for validation
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const loanDoc = await loanRef.get();
 
-        if (!loanDoc.exists) {
-            return { error: "Loan application not found", success: false };
-        }
-
-        const loanData = loanDoc.data()!;
-
-        // Validate tier eligibility
-        const tierMultiplier = 2.0; // Member tier multiplier
-        const maxLoanAmount = loanData.contributionAmount * tierMultiplier;
-
-        if (loanData.amount > maxLoanAmount) {
-            return {
-                error: `Loan amount exceeds maximum for Member tier (₦${maxLoanAmount.toLocaleString()})`,
-                success: false,
-            };
-        }
-
-        // 🔒 SECURITY FIX: Maker-Checker for High Value Loans (> 1M)
-        const MAKER_CHECKER_THRESHOLD = 1000000;
-
-        if (loanData.amount >= MAKER_CHECKER_THRESHOLD) {
-            const approvalChain = loanData.approvalChain || {};
-
-            // Check if this is the First or Second approval
-            if (!approvalChain.firstApprover) {
-                // First Approval (Maker)
-                await loanRef.update({
-                    approvalChain: {
-                        firstApprover: session.user.id,
-                        firstApprovalAt: FieldValue.serverTimestamp(),
-                        firstApproverName: session.user.name || session.user.email
-                    },
-                    status: "partially_approved", // Intermediate status
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-
-                await logAuditAction(
-                    "loan_partially_approved",
-                    applicationId,
-                    "application",
-                    { adminId: session.user.id, amount: loanData.amount, role: "Maker" }
-                );
-
-                return {
-                    success: true,
-                    message: "First approval recorded. A second admin is required to finalize.",
-                    error: null
-                };
-            } else {
-                // Second Approval (Checker)
-                if (approvalChain.firstApprover === session.user.id) {
-                    return {
-                        error: "Security Violation: You cannot verify your own approval. Another admin is required.",
-                        success: false
-                    };
-                }
-
-                // Record Second Approver and Proceed to Final Approval
-                await loanRef.update({
-                    "approvalChain.secondApprover": session.user.id,
-                    "approvalChain.secondApprovalAt": FieldValue.serverTimestamp(),
-                    "approvalChain.secondApproverName": session.user.name || session.user.email,
-                });
-
-                // Fall through to standard approval logic below...
+        // ATOMIC TRANSACTION: State Verification and Transition
+        const txResult = await db.runTransaction(async (transaction) => {
+            const loanSnap = await transaction.get(loanRef);
+            if (!loanSnap.exists) {
+                throw new Error("Loan application not found");
             }
-        }
+            const loanData = loanSnap.data()!;
+            
+            // Prevent double-processing
+            if (loanData.status === "approved" || loanData.status === "disbursed") {
+                return { success: true, alreadyProcessed: true, loanData };
+            }
 
-        // Standard Approval Logic (Final)
-        await loanRef.update({
-            status: "approved",
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            // Validate tier eligibility
+            const tierMultiplier = 2.0; 
+            const maxLoanAmount = (loanData.contributionAmount || 0) * tierMultiplier;
+
+            if (loanData.amount > maxLoanAmount) {
+                throw new Error(`Loan amount exceeds maximum for Member tier (₦${maxLoanAmount.toLocaleString()})`);
+            }
+
+            // Maker-Checker Logic (High Value)
+            const MAKER_CHECKER_THRESHOLD = 1000000;
+            if (loanData.amount >= MAKER_CHECKER_THRESHOLD) {
+                const approvalChain = loanData.approvalChain || {};
+
+                if (!approvalChain.firstApprover) {
+                    // First Approval (Maker)
+                    transaction.update(loanRef, {
+                        approvalChain: {
+                            firstApprover: session.user.id,
+                            firstApprovalAt: FieldValue.serverTimestamp(),
+                            firstApproverName: session.user.name || session.user.email
+                        },
+                        status: "partially_approved",
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+
+                    return { success: true, makerApproval: true, loanData };
+                } else {
+                    // Second Approval (Checker)
+                    if (approvalChain.firstApprover === session.user.id) {
+                        throw new Error("Security Violation: You cannot verify your own approval. Another admin is required.");
+                    }
+                    transaction.update(loanRef, {
+                        "approvalChain.secondApprover": session.user.id,
+                        "approvalChain.secondApprovalAt": FieldValue.serverTimestamp(),
+                        "approvalChain.secondApproverName": session.user.name || session.user.email,
+                    });
+                }
+            }
+
+            // Final Approval Logic
+            await versionedUpdate(transaction, loanRef, version, {
+                status: "approved",
+                reviewedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+            });
+
+            return { success: true, finalApproval: true, loanData };
         });
 
-        // ══════════════════════════════════════════════════
-        // LOAN DISBURSEMENT — Trigger Paystack Transfer now
-        // ══════════════════════════════════════════════════
+        if (txResult.alreadyProcessed) {
+            return { success: true, message: "Loan application already processed", error: null };
+        }
+
+            await createAdminAuditLog({
+                action: "loan_partially_approved",
+                userId: session.user.id,
+                targetId: applicationId,
+                targetType: "application",
+                metadata: { amount: txResult.loanData.amount, role: "Maker" },
+            });
+
+        // --- DISBURSEMENT (Outside Transaction) ---
+        const { loanData } = txResult;
         let disbursementTransferCode: string | undefined;
         let disbursementError: string | undefined;
+
         try {
             const { paystackPayout } = await import("@/lib/paystack-transfer");
-
-            // Get borrower's bank details
             const borrowerDoc = await db.collection(COLLECTIONS.USERS).doc(loanData.userId).get();
             const borrowerData = borrowerDoc.data();
 
@@ -1165,7 +919,6 @@ async function _approveLoanApplication(
                         disbursementTransferCode: disbResult.transferCode,
                         status: "disbursed",
                     });
-                    logger.info(`Loan ${applicationId} disbursed: ₦${loanData.amount} to ${loanData.userId}`);
                 } else {
                     disbursementError = disbResult.error;
                     await loanRef.update({
@@ -1173,48 +926,34 @@ async function _approveLoanApplication(
                         disbursementError: disbResult.error,
                         pendingManualDisbursement: true,
                     });
-                    logger.error(`Loan disbursement FAILED for ${applicationId}: ${disbResult.error}`);
                 }
             } else {
                 disbursementError = "Borrower bank details not configured";
-                await loanRef.update({
-                    pendingManualDisbursement: true,
-                    disbursementNote: disbursementError,
-                });
+                await loanRef.update({ pendingManualDisbursement: true, disbursementNote: disbursementError });
             }
         } catch (disbErr: any) {
             disbursementError = disbErr.message;
-            logger.error(`Loan disbursement error for ${applicationId}:`, disbErr);
-            await loanRef.update({ pendingManualDisbursement: true });
+            await loanRef.update({ pendingManualDisbursement: true, disbursementError: disbErr.message });
         }
 
-        // CLEAR CACHE - User's cooperative status changed
+        // --- SIDE EFFECTS (Email, Notifications, Cache) ---
         try {
             const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
             await invalidateCooperativeCache(loanData.userId);
-            logger.info(`[Loan Approval] Cache cleared for user: ${loanData.userId}`);
-        } catch (cacheError) {
-            logger.error('[Loan Approval] Cache clear error:', cacheError);
-        }
+        } catch (e) {}
 
-        // Send approval email
-        if (process.env.RESEND_API_KEY) {
-            const { Resend } = await import("resend");
-            const resend = new Resend(process.env.RESEND_API_KEY);
-
-            // Security: Don't send if email is missing
-            if (!loanData.userEmail) {
-                logger.error(`Missing userEmail for loan application ${applicationId}`);
-            } else {
-                try {
-                    const { error } = await resend.emails.send({
-                        from: "Easy Sales Export <noreply@easysalesexport.com>",
-                        to: loanData.userEmail,
-                        subject: "Loan Application Approved!",
-                        html: `
-                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
-                                <p>Great news! Your loan application has been approved by our admin team.</p>
+        if (process.env.RESEND_API_KEY && loanData.userEmail) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: loanData.userEmail,
+                    subject: "Loan Application Approved!",
+                    html: `
+                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #10b981;">Congratulations! Your Loan is Approved</h2>
+                            <p>Great news! Your loan application has been approved by our admin team.</p>
                             
                             <div style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin: 20px 0;">
                                 <h3 style="color: #059669; margin-top: 0;">Loan Details:</h3>
@@ -1232,20 +971,13 @@ async function _approveLoanApplication(
                                 <li>You can track your repayment schedule in your dashboard</li>
                             </ul>
     
-                                <p>Thank you for being a valued member of our cooperative!</p>
-                            </div>
-                        `,
-                    });
-                    if (error) {
-                        logger.error(`Resend API Error (Loan approval email):`, error);
-                    }
-                } catch (emailError) {
-                    logger.error("Failed to send loan approval email:", emailError);
-                }
-            }
+                            <p>Thank you for being a valued member of our cooperative!</p>
+                        </div>
+                    `,
+                });
+            } catch (e) {}
         }
 
-        // Create notification for user
         await createNotificationAction({
             userId: loanData.userId,
             type: "success",
@@ -1257,30 +989,29 @@ async function _approveLoanApplication(
             linkText: "View Loans",
         });
 
-        // Log audit
-        await logAuditAction(
-            "loan_approved",
-            applicationId,
-            "application",
-            { adminId: session.user.id, amount: loanData.amount, role: "Checker/Final", disbursed: !!disbursementTransferCode }
-        );
+        await createAdminAuditLog({
+            action: "loan_approved",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "application",
+            metadata: { amount: loanData.amount, role: "Checker/Final", disbursed: !!disbursementTransferCode },
+        });
 
         return {
             error: null,
             success: true,
-            message: disbursementTransferCode
-                ? "Loan approved and disbursed successfully"
-                : `Loan approved. ${disbursementError ? `Disbursement pending: ${disbursementError}` : "Disbursement pending."}`,
+            message: disbursementTransferCode ? "Loan approved and disbursed successfully" : `Loan approved. ${disbursementError ? `Disbursement pending: ${disbursementError}` : "Disbursement pending."}`,
         };
     } catch (error: any) {
         logger.error("Approve loan application error:", error);
-        return { error: "Failed to approve loan application", success: false };
+        return { error: error.message || "Failed to approve loan application", success: false };
     }
 }
 
 async function _rejectLoanApplication(
     applicationId: string,
-    reason: string
+    reason: string,
+    version?: number
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
@@ -1295,98 +1026,69 @@ async function _rejectLoanApplication(
             return { error: (valid.error as ZodError).issues[0].message, success: false };
         }
 
-        // Get loan data for email
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-        const loanDoc = await loanRef.get();
 
-        if (!loanDoc.exists) {
-            return { error: "Loan application not found", success: false };
-        }
+        // ATOMIC TRANSACTION: Update loan status
+        const txResult = await db.runTransaction(async (transaction) => {
+            const loanSnap = await transaction.get(loanRef);
+            if (!loanSnap.exists) {
+                throw new Error("Loan application not found");
+            }
+            const loanData = loanSnap.data()!;
 
-        const loanData = loanDoc.data()!;
+            await versionedUpdate(transaction, loanRef, version, {
+                status: "rejected",
+                rejectionReason: reason,
+                reviewedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+            });
 
-        // Update loan status
-        await loanRef.update({
-            status: "rejected",
-            rejectionReason: reason,
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            return { loanData };
         });
 
-        // Send rejection email
-        if (process.env.RESEND_API_KEY) {
-            const { Resend } = await import("resend");
-            const resend = new Resend(process.env.RESEND_API_KEY);
+        const { loanData } = txResult;
 
-            // Security: Don't send if email is missing
-            if (!loanData.userEmail) {
-                logger.error(`Missing userEmail for loan rejection ${applicationId}`);
-            } else {
-                try {
-                    const { error } = await resend.emails.send({
-                        from: "Easy Sales Export <noreply@easysalesexport.com>",
-                        to: loanData.userEmail,
-                        subject: "Loan Application Update",
-                        html: `
-                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                <h2 style="color: #dc2626;">Loan Application Update</h2>
-                                <p>Thank you for applying for a loan with Easy Sales Export.</p>
-                                
-                                <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
-                                    <p>Unfortunately, we are unable to approve your loan application at this time.</p>
-                                    <p><strong>Reason:</strong> ${reason}</p>
-                                </div>
-    
-                                <p><strong>What You Can Do:</strong></p>
-                                <ul>
-                                    <li>Review the rejection reason carefully</li>
-                                    <li>Address the issues mentioned</li>
-                                    <li>Consider increasing your cooperative contributions for a higher tier</li>
-                                    <li>Reapply after making the necessary adjustments</li>
-                                </ul>
-    
-                                <p>If you have any questions or need clarification, please don't hesitate to contact our support team.</p>
-                                
-                                <p>We look forward to supporting your financial growth in the future.</p>
-                            </div>
-                        `,
-                    });
-                    if (error) {
-                        logger.error(`Resend API Error (Loan rejection email):`, error);
-                    }
-                } catch (emailError) {
-                    logger.error("Failed to send loan rejection email:", emailError);
-                }
-            }
+        // SIDE EFFECTS (Post-Commit)
+        if (process.env.RESEND_API_KEY && loanData.userEmail) {
+            try {
+                const { Resend } = await import("resend");
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                await resend.emails.send({
+                    from: "Easy Sales Export <noreply@easysalesexport.com>",
+                    to: loanData.userEmail,
+                    subject: "Loan Application Update",
+                    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+                        <h2 style="color:#dc2626">Loan Application Update</h2>
+                        <div style="background:#fef2f2;padding:16px;border-radius:8px;margin:20px 0">
+                            <p>Unfortunately, we are unable to approve your loan application at this time.</p>
+                            <p><strong>Reason:</strong> ${reason}</p>
+                        </div>
+                    </div>`
+                });
+            } catch (e) {}
         }
 
-        // Create notification for user
         await createNotificationAction({
             userId: loanData.userId,
             type: "warning",
             title: "Loan Application Declined",
-            message: `Your loan application for ₦${loanData.amount.toLocaleString()} was not approved. Reason: ${reason}`,
+            message: `Your loan application for ₦${loanData.amount.toLocaleString()} was not approved.`,
             link: "/loans",
             linkText: "View Details",
         });
 
-        // Log audit
-        await logAuditAction(
-            "loan_rejected",
-            applicationId,
-            "application",
-            { adminId: session.user.id, reason }
-        );
+        await createAdminAuditLog({
+            action: "loan_rejected",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "application",
+            metadata: { reason },
+        });
 
-        return {
-            error: null,
-            success: true,
-            message: "Loan application rejected",
-        };
+        return { error: null, success: true, message: "Loan application rejected" };
     } catch (error: any) {
         logger.error("Reject loan application error:", error);
-        return { error: "Failed to reject loan application", success: false };
+        return { error: error.message || "Failed to reject loan application", success: false };
     }
 }
 
@@ -1416,12 +1118,13 @@ async function _unlockUserAccount(email: string): Promise<ActionState> {
         await resetLoginAttempts(email);
 
         // Log audit
-        await logAuditAction(
-            "user_verify", // Reusing existing action type as closest match
-            email,
-            "user",
-            { adminId: session.user.id, action: "account_unlock", email }
-        );
+        await createAdminAuditLog({
+            action: "account_unlock",
+            userId: session.user.id,
+            targetId: email,
+            targetType: "user",
+            metadata: { email },
+        });
 
         return {
             error: null,
@@ -1611,8 +1314,8 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
                 user.name?.toLowerCase()?.includes(searchLower) ||
                 user.email?.toLowerCase()?.includes(searchLower) ||
                 (user.phone && user.phone.includes(searchLower)) ||
-                (user.state && user.state?.toLowerCase()?.includes(searchLower)) ||
-                (user.lga && user.lga?.toLowerCase()?.includes(searchLower))
+                (user.state && user.state?.toLowerCase()?.includes(searchLower) && user.state !== "") ||
+                (user.lga && user.lga?.toLowerCase()?.includes(searchLower) && user.lga !== "")
             );
         }
         // In-memory status filter — using the defensive chain already computed in mapping:
@@ -1711,6 +1414,7 @@ async function _updateUserRolesAction(
         for (const mapping of MODULE_ROLE_REGS) {
             if (mapping.roles.some(r => roles.includes(r))) {
                 serviceUpdates[`${mapping.key}.status`] = mapping.status;
+                serviceUpdates[`${mapping.key}.paymentStatus`] = "completed";
                 serviceUpdates[`${mapping.key}.enrolledAt`] = FieldValue.serverTimestamp();
                 serviceUpdates[`${mapping.key}.enrolledBy`] = session.user.id;
                 serviceUpdates[`${mapping.key}.note`] = "Manual admin role assignment";
@@ -1723,10 +1427,15 @@ async function _updateUserRolesAction(
             ...serviceUpdates,
         });
 
-        await logAuditAction("user_role_change", userId, "user", {
-            roles,
-            adminId: session.user.id,
-            serviceRegistrationsUpdated: Object.keys(serviceUpdates).length > 0,
+        await createAdminAuditLog({
+            action: "user_role_change",
+            userId: session.user.id,
+            targetId: userId,
+            targetType: "user",
+            metadata: {
+                roles,
+                serviceRegistrationsUpdated: Object.keys(serviceUpdates).length > 0,
+            },
         });
 
         return { success: true, error: null, message: "User roles updated" };
@@ -1768,29 +1477,33 @@ async function _approveSellerVerificationAction(
             return { error: "Invalid verification request: Missing User ID", success: false };
         }
 
-        // 2. Update Verification Status
-        await verificationRef.update({
-            status: "approved",
-            verifiedBy: session.user.id,
-            verifiedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        // Perform updates in a single transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            // 1. Update Verification Status
+            transaction.update(verificationRef, {
+                status: "approved",
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
 
-        // 3. Update User Profile (Verify & Add Role)
-        await atomicUpdateUser(userId, {
-            isVerified: true,
-            sellerVerificationStatus: "approved",
-            sellerVerificationId: verificationId,
-            verifiedBy: session.user.id, // Track who verified the user
-            verifiedAt: FieldValue.serverTimestamp(),
-            roles: FieldValue.arrayUnion("seller"),
-            // SYNC serviceRegistrations so module access check (Layer 2) gates work immediately
-            "serviceRegistrations.marketplace.status": "active",
-            "serviceRegistrations.marketplace.accountType": verificationData.accountType || "seller",
-            "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
-            "serviceRegistrations.marketplace.approvedBy": session.user.id,
-            // SYNC CONTACT INFO: Update phone with verified number to prevent data drift
-            phone: verificationData.phoneNumber,
+            // 2. Update User Profile (Verify & Add Role)
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            transaction.update(userRef, {
+                isVerified: true,
+                sellerVerificationStatus: "approved",
+                sellerVerificationId: verificationId,
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp(),
+                roles: FieldValue.arrayUnion("seller"),
+                "serviceRegistrations.marketplace.status": "active",
+                "serviceRegistrations.marketplace.accountType": verificationData.accountType || "seller",
+                "serviceRegistrations.marketplace.paymentStatus": "completed",
+                "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
+                "serviceRegistrations.marketplace.approvedBy": session.user.id,
+                phone: verificationData.phoneNumber,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         // CLEAR CACHE - User now has seller role and verification
@@ -1850,11 +1563,18 @@ async function _approveSellerVerificationAction(
             }
         }
 
-        // Log audit
-        await logAuditAction("seller_approve", verificationId, "seller_verification", {
-            adminId: session.user.id,
-            userId: userId,
+        await createAdminAuditLog({
+            action: "seller_approve",
+            userId: session.user.id,
+            targetId: verificationId,
+            targetType: "seller_verification",
+            metadata: { userId: userId },
         });
+
+        // Revalidate
+        revalidatePath("/marketplace", "page");
+        revalidatePath("/dashboard", "page");
+        revalidateTag(`user-status-${userId}`, "page");
 
         return {
             error: null,
@@ -1879,8 +1599,8 @@ async function updateExportStatsAtomic(decrementStatus?: 'pending' | 'approved' 
         if (incrementStatus) updates[incrementStatus] = FieldValue.increment(1);
         
         if (Object.keys(updates).length > 0) {
-            // Fire and forget without blocking
-            statsRef.set(updates, { merge: true }).catch(e => logger.error("Background stat update failed", e));
+            // FIX: No more fire-and-forget. Must await to ensure data integrity during process recycles.
+            await statsRef.set(updates, { merge: true });
         }
     } catch (e) {
         logger.error("Failed to prepare export stats atomically", e);
@@ -1929,6 +1649,7 @@ async function _approveExportOnboardingAction(
         await atomicUpdateUser(userId, {
             isVerified: true,
             "serviceRegistrations.export.status": "approved",
+            "serviceRegistrations.export.paymentStatus": "completed",
             "serviceRegistrations.export.approvedAt": FieldValue.serverTimestamp(),
             verifiedBy: session.user.id,
             verifiedAt: FieldValue.serverTimestamp(),
@@ -1980,14 +1701,21 @@ async function _approveExportOnboardingAction(
             }
         }
 
-        // Log audit
-        await logAuditAction("export_approve", applicationId, "export_onboarding_applications", {
-            adminId: session.user.id,
-            userId: userId,
+        await createAdminAuditLog({
+            action: "export_approve",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "export_onboarding_applications",
+            metadata: { userId: userId },
         });
 
         // FAST STATS UPDATER (Non-blocking fallback safe)
         updateExportStatsAtomic('pending', 'approved');
+
+        // Revalidate
+        revalidatePath("/export", "page");
+        revalidatePath("/dashboard", "page");
+        revalidateTag(`user-status-${userId}`, "page");
 
         return {
             error: null,
@@ -2415,15 +2143,21 @@ async function _rejectExportApplicationAction(
             }
         }
 
-        // Log audit
-        await logAuditAction("export_reject", applicationId, "export_onboarding_applications", {
-            adminId: session.user.id,
-            userId: userId,
-            reason: reason
+        await createAdminAuditLog({
+            action: "export_reject",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "export_onboarding_applications",
+            metadata: { userId: userId, reason: reason },
         });
 
         // FAST STATS UPDATER (Non-blocking fallback safe)
         updateExportStatsAtomic('pending', 'rejected');
+
+        // Revalidate
+        revalidatePath("/export", "page");
+        revalidatePath("/dashboard", "page");
+        revalidateTag(`user-status-${userId}`, "page");
 
         return {
             error: null,
@@ -2555,6 +2289,7 @@ async function _approveAcademyApplicationAction(
         // 2. Update User Service Registration & Role
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.academy.status": "approved",
+            "serviceRegistrations.academy.paymentStatus": "completed",
             "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
             roles: FieldValue.arrayUnion("academy_participant"),
             updatedAt: FieldValue.serverTimestamp(),
@@ -2562,8 +2297,8 @@ async function _approveAcademyApplicationAction(
 
         // 3. Clear Cache
         try {
-            const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'academy');
+            await invalidateAdminGlobalStats();
         } catch (cacheError) {
             logger.error('[Academy Approval] Cache clear error:', cacheError);
         }
@@ -2606,10 +2341,18 @@ async function _approveAcademyApplicationAction(
         }
 
         // 5. Audit
-        await logAuditAction("academy_approve", applicationId, "application", {
-            adminId: session.user.id,
-            userId: userId,
+        await createAdminAuditLog({
+            action: "academy_approve",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "application",
+            metadata: { userId: userId },
         });
+
+        // Revalidate
+        revalidatePath("/academy", "page");
+        revalidatePath("/dashboard", "page");
+        revalidateTag(`user-status-${userId}`, "page");
 
         return {
             error: null,
@@ -2636,33 +2379,48 @@ async function _rejectAcademyApplicationAction(
             return { error: "Unauthorized", success: false };
         }
 
-        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).update({
-            status: "rejected",
-            rejectionReason: reason,
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        let userId: string | undefined;
 
-        const appDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).get();
-        if (appDoc.exists) {
-            const userId = appDoc.data()?.userId;
+        // Perform updates in a single transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            const appDocRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
+            const appDoc = await transaction.get(appDocRef);
+            if (!appDoc.exists) throw new Error("Application not found");
+
+            const appData = appDoc.data();
+            userId = appData?.userId;
+
+            // 1. Update application status
+            transaction.update(appDocRef, {
+                status: "rejected",
+                rejectionReason: reason,
+                reviewedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. Update user status
             if (userId) {
-                await db.collection(COLLECTIONS.USERS).doc(userId).set({
-                    serviceRegistrations: {
-                        academy: {
-                            status: "rejected",
-                        }
-                    },
+                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+                transaction.update(userRef, {
+                    "serviceRegistrations.academy.status": "rejected",
                     updatedAt: FieldValue.serverTimestamp(),
-                }, { merge: true });
+                });
             }
-        }
-
-        await logAuditAction("academy_reject", applicationId, "application", {
-            reason,
-            adminId: session.user.id,
         });
+
+        await createAdminAuditLog({
+            action: "academy_reject",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "application",
+            metadata: { reason },
+        });
+
+        // Revalidate
+        revalidatePath("/academy", "page");
+        revalidatePath("/dashboard", "page");
+        if (userId) revalidateTag(`user-status-${userId}`, "page");
 
         return {
             error: null,
@@ -2697,8 +2455,11 @@ async function _markAcademyApplicationUnderReviewAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        await logAuditAction("academy_under_review", applicationId, "application", {
-            adminId: session.user.id,
+        await createAdminAuditLog({
+            action: "academy_under_review",
+            userId: session.user.id,
+            targetId: applicationId,
+            targetType: "application",
         });
 
         return {
@@ -2739,9 +2500,12 @@ async function _savePlatformSettingsAction(
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        await logAuditAction("export_create", "general", "export", {
-            adminId: session!.user.id,
-            changes: settings,
+        await createAdminAuditLog({
+            action: "config_updated",
+            userId: session!.user.id,
+            targetId: "general",
+            targetType: "platform_settings",
+            metadata: { changes: settings },
         });
 
         return { error: null, success: true, message: "Platform settings saved successfully" };
@@ -2897,18 +2661,18 @@ async function _editApplicationAction(params: {
         });
 
         // Write full audit trail
-        await logAuditAction(
-            "admin_edit_application",
-            docId,
-            collectionName,
-            {
-                adminId: session.user.id,
+        await createAdminAuditLog({
+            action: "admin_edit_application",
+            userId: session.user.id,
+            targetId: docId,
+            targetType: collectionName,
+            metadata: {
                 adminName: session.user.name || session.user.email,
                 before,
                 after: sanitized,
                 editNote: editNote || null,
-            }
-        );
+            },
+        });
 
         return {
             success: true,
@@ -2950,20 +2714,24 @@ async function _toggleVerifiedBadgeAction(
         const data = snap.data()!;
         const newBadgeState = !data.isVerifiedBadge;
 
-        await ref.update({
-            isVerifiedBadge: newBadgeState,
-            badgeGrantedBy: session.user.id,
-            badgeGrantedAt: newBadgeState ? FieldValue.serverTimestamp() : null,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // Also sync badge onto the user's profile document for storefronts to read
-        if (data.userId) {
-            await db.collection(COLLECTIONS.USERS).doc(data.userId).update({
+        // Perform updates in a single transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            transaction.update(ref, {
                 isVerifiedBadge: newBadgeState,
+                badgeGrantedBy: session.user.id,
+                badgeGrantedAt: newBadgeState ? FieldValue.serverTimestamp() : null,
                 updatedAt: FieldValue.serverTimestamp(),
             });
-        }
+
+            // Also sync badge onto the user's profile document
+            if (data.userId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(data.userId);
+                transaction.update(userRef, {
+                    isVerifiedBadge: newBadgeState,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+        });
 
         // Optional email notification to seller
         if (newBadgeState && data.email && process.env.RESEND_API_KEY) {
@@ -2996,12 +2764,12 @@ async function _toggleVerifiedBadgeAction(
         }
 
         // Audit log
-        await logAuditAction(
-            newBadgeState ? "seller_badge_grant" : "seller_badge_revoke",
-            verificationId,
-            "seller_verification",
-            { adminId: session.user.id }
-        );
+        await createAdminAuditLog({
+            action: newBadgeState ? "seller_badge_grant" : "seller_badge_revoke",
+            userId: session.user.id,
+            targetId: verificationId,
+            targetType: "seller_verification",
+        });
 
         return {
             error: null,
@@ -3044,6 +2812,7 @@ async function _manualAcademyEnrollmentAction(
         await userRef.update({
             "serviceRegistrations.academy.status": "active",
             "serviceRegistrations.academy.plan": plan,
+            "serviceRegistrations.academy.paymentStatus": "completed",
             "serviceRegistrations.academy.enrolledAt": FieldValue.serverTimestamp(),
             // Ensure they have the academy role
             roles: FieldValue.arrayUnion("academy_participant"),
@@ -3078,12 +2847,13 @@ async function _manualAcademyEnrollmentAction(
         }
 
         // Log audit
-        await logAuditAction(
-            "academy_manual_enroll",
-            userId,
-            "user",
-            { adminId: session.user.id, plan }
-        );
+        await createAdminAuditLog({
+            action: "academy_manual_enroll",
+            userId: session.user.id,
+            targetId: userId,
+            targetType: "user",
+            metadata: { plan },
+        });
 
         return {
             error: null,
@@ -3100,7 +2870,6 @@ async function _manualAcademyEnrollmentAction(
 // Import Legacy Cooperative Member
 // ============================================
 
-import { z } from "zod";
 import { strictEmailSchema } from "@/lib/schemas";
 const InviteLegacyMemberSchema = z.object({
     email: strictEmailSchema,
@@ -3217,9 +2986,12 @@ async function _inviteLegacyMemberAction(
         }
 
         // 7. Audit Log
-        await logAuditAction("legacy_member_invited", token, "cooperative_member", {
-            adminId: session.user.id,
-            email: email
+        await createAdminAuditLog({
+            action: "legacy_member_invited",
+            userId: session.user.id,
+            targetId: token,
+            targetType: "cooperative_member",
+            metadata: { email: email },
         });
 
         return { error: null, success: true };
@@ -3435,12 +3207,9 @@ async function _getMarketplaceUsersAction(options: {
 
 
 // --- SAFE ACTION WRAPPERS ---
-export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveApplicationAction", _approveWaveApplicationAction);
-export const rejectWaveApplicationAction = withFlexibleSafeAction("rejectWaveApplicationAction", _rejectWaveApplicationAction);
 export const processWithdrawalAction = withFlexibleSafeAction("processWithdrawalAction", _processWithdrawalAction);
 export const toggleUserVerificationAction = withFlexibleSafeAction("toggleUserVerificationAction", _toggleUserVerificationAction);
 export const toggleUserKycVerificationAction = withFlexibleSafeAction("toggleUserKycVerificationAction", _toggleUserKycVerificationAction);
-export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicationsAction", _getWaveApplicationsAction);
 export const getPendingWithdrawalsAction = withFlexibleSafeAction("getPendingWithdrawalsAction", _getPendingWithdrawalsAction);
 export const getPendingLandListings = withFlexibleSafeAction("getPendingLandListings", _getPendingLandListings);
 export const verifyLandListing = withFlexibleSafeAction("verifyLandListing", _verifyLandListing);
@@ -3470,6 +3239,14 @@ export const inviteLegacyMemberAction = withFlexibleSafeAction("inviteLegacyMemb
 export const getStandardSellerVerificationsAction = withFlexibleSafeAction("getStandardSellerVerificationsAction", _getStandardSellerVerificationsAction);
 export const getMarketplaceUsersAction = withFlexibleSafeAction("getMarketplaceUsersAction", _getMarketplaceUsersAction);
 export const updateUserGenderAction = withFlexibleSafeAction("updateUserGenderAction", _updateUserGenderAction);
+
+import { 
+    approveWaveApplicationAction as _approveWaveApplicationAction, 
+    rejectWaveApplicationAction as _rejectWaveApplicationAction 
+} from "./wave-admin";
+
+export const approveWaveApplicationAction = _approveWaveApplicationAction;
+export const rejectWaveApplicationAction = _rejectWaveApplicationAction;
 
 /**
  * Admin: Server-side COUNT aggregations for the seller verifications dashboard.
@@ -3521,7 +3298,7 @@ export async function getAdminSellerStatsAction(): Promise<{
  * Allows admins to pre-register existing members and pre-fill their profile data.
  * Sends a welcome email with a temporary password.
  */
-export async function onboardLegacyMemberAction(
+async function _onboardLegacyMemberAction(
     formData: any
 ): Promise<ActionState> {
     try {
@@ -3632,6 +3409,7 @@ export async function onboardLegacyMemberAction(
             serviceRegistrations.academy = { 
                 status: "approved", 
                 accountType: "learner",
+                plan: data.academyPlan || "foundation", // Dynamic tier selection
                 paymentStatus: "completed",
                 onboardingCompleted: true,
                 enrolledAt: now 
@@ -3701,6 +3479,7 @@ export async function onboardLegacyMemberAction(
             updatedAt: FieldValue.serverTimestamp(),
             legacyOnboardedBy: session.user.id,
             legacyOnboardedAt: FieldValue.serverTimestamp(),
+            _system_safe_write: true, // Mark as hardened
         };
 
         const batch = db.batch();
@@ -3788,17 +3567,17 @@ export async function onboardLegacyMemberAction(
         await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
 
         // 8. Audit Log
-        await logAuditAction(
-            "legacy_member_invited",
-            userRecord.uid,
-            "user",
-            {
-                adminId: session.user.id,
+        await createAdminAuditLog({
+            action: "legacy_member_invited",
+            userId: session.user.id,
+            targetId: userRecord.uid,
+            targetType: "user",
+            metadata: {
                 targetEmail: data.email,
                 roles: data.roles,
-                services: data.services
-            }
-        );
+                services: data.services,
+            },
+        });
 
         return { 
             success: true, 
@@ -3811,3 +3590,4 @@ export async function onboardLegacyMemberAction(
         return { success: false, error: error.message || "Failed to onboard legacy member" };
     }
 }
+export const onboardLegacyMemberAction = withFlexibleSafeAction("onboardLegacyMemberAction", _onboardLegacyMemberAction);

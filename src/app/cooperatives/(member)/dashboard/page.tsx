@@ -27,6 +27,8 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { getDashboardDataAction } from "@/app/actions/cooperative-dashboard";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
 import { useRouter } from "next/navigation";
+import { useMembershipStatus } from "@/hooks/useMembershipStatus";
+import { useSession } from "next-auth/react";
 
 export default function CooperativeDashboardPage() {
     const router = useRouter();
@@ -35,30 +37,20 @@ export default function CooperativeDashboardPage() {
     const [membership, setMembership] = useState<CooperativeMembership | null>(null);
     const [transactions, setTransactions] = useState<CooperativeTransaction[]>([]);
 
+    const { data: sessionData } = useSession();
+    const userId = (sessionData?.user as any)?.id;
+    const { status: membershipStatus } = useMembershipStatus(userId, "cooperative");
+
     useEffect(() => {
-        async function loadData() {
-            try {
-                // Single optimized call instead of two separate calls
-                const result = await getDashboardDataAction();
-
-                if (result.success && result.data?.membership) {
-                    setMembership(result.data.membership);
-                    setTransactions(result.data.transactions || []);
-                } else {
-                    setError(result.error || "Unknown error");
-                    if (result.error?.includes("No cooperative")) {
-                        setMembership(null);
-                    }
-                }
-            } catch (error) {
-
-                logger.error("Failed to load dashboard data:", error);
-            } finally {
-                setLoading(false);
-            }
+        if (membershipStatus === "approved" || membershipStatus === "active") {
+            loadData();
+        } else if (membershipStatus === "not_found") {
+            setMembership(null);
+            setLoading(false);
         }
-        loadData();
-    }, []);
+    }, [membershipStatus]);
+
+    async function loadData() {
 
 
     const getActivityIcon = (type: string) => {
@@ -85,34 +77,30 @@ export default function CooperativeDashboardPage() {
         );
     }
 
-    if (!membership) {
+    if (!membership && !loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
                 <h1 className="text-2xl font-bold text-slate-900">
-                    {loading ? "Loading..." : "Account Access Issue"}
+                    Account Access Issue
                 </h1>
                 <p className="text-slate-600 text-center max-w-md">
-                    {loading ? "Please wait..." : "We couldn't load your cooperative profile. This usually happens if your registration is still being processed or there was a system error."}
+                    We couldn't load your cooperative profile. This usually happens if your registration is still being processed or there was a system error.
                 </p>
                 
-                {!loading && (
-                    <div className="flex flex-col items-center gap-4">
-                        <Link
-                            href="/cooperatives/onboarding"
-                            className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
-                        >
-                            Complete Registration
-                        </Link>
-                        <button 
-                            onClick={() => window.location.reload()}
-                            className="text-sm text-purple-600 hover:underline"
-                        >
-                            Retry Loading
-                        </button>
-                    </div>
-                )}
-
-
+                <div className="flex flex-col items-center gap-4">
+                    <Link
+                        href="/cooperatives/onboarding"
+                        className="px-6 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-all"
+                    >
+                        Complete Registration
+                    </Link>
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="text-sm text-purple-600 hover:underline"
+                    >
+                        Retry Loading
+                    </button>
+                </div>
             </div>
         );
     }

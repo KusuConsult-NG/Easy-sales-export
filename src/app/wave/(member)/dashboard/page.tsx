@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave-member";
 import { getWaveResourcesAction, getWaveTrainingEventsAction } from "@/app/actions/wave";
+import { useMembershipStatus } from "@/hooks/useMembershipStatus";
+import { useSession } from "next-auth/react";
 import type { WaveResource, WaveTrainingEvent } from "@/app/actions/wave";
 
 export default function WaveDashboardPage() {
@@ -31,20 +33,25 @@ export default function WaveDashboardPage() {
     const [recentResources, setRecentResources] = useState<WaveResource[]>([]);
     const [upcomingEvents, setUpcomingEvents] = useState<WaveTrainingEvent[]>([]);
 
+    const { data: sessionData } = useSession();
+    const userId = (sessionData?.user as any)?.id;
+    const { status: membershipStatus } = useMembershipStatus(userId, "wave");
+
     useEffect(() => {
-        loadDashboard();
+        if (membershipStatus === "not_found") {
+            router.push("/wave");
+            return;
+        }
+        if (membershipStatus === "approved" || membershipStatus === "active") {
+            loadDashboard();
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [membershipStatus]);
 
     async function loadDashboard() {
         setLoading(true);
         try {
-            // Check membership
-            const membership = await checkWaveMembershipAction();
-            if (!membership.data?.enrolled) {
-                router.push("/wave");
-                return;
-            }
+            // Membership check handled by useMembershipStatus hook
 
             // Load stats
             const statsResult = await getWaveMemberStatsAction();

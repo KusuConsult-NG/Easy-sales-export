@@ -64,9 +64,11 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
 
     const loadMessages = useCallback(async () => {
         try {
-            const fetchedMessages = await getEscrowMessagesAction(escrowId);
+            const result = await getEscrowMessagesAction(escrowId);
             setTimeout(() => {
-                setMessages(fetchedMessages);
+                if (result.success && result.data) {
+                    setMessages(result.data);
+                }
                 setLoading(false);
             }, 0);
         } catch (error) {

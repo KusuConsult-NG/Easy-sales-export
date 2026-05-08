@@ -30,7 +30,7 @@ export default function SellerDashboardPage() {
         try {
             const result = await deleteProductAction(productId);
             if (result.success) {
-                showToast(result.message || "Product deleted successfully", "success");
+                showToast(result.data?.message || "Product deleted successfully", "success");
                 loadSellerData();
             } else {
                 showToast(result.error || "Failed to delete product", "error");

@@ -220,6 +220,21 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
                 reference,
             });
 
+            // Global Ledger Record
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+            tx.set(globalTxRef, {
+                id: reference,
+                userId: session.user.id,
+                type: "property_purchase",
+                module: "farm_nation",
+                amount: amountInNaira,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: `Property Purchase - ${metadata.propertyTitle}`
+            });
+
             // Update purchase record
             const purchaseQuery = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
                 .where("paymentReference", "==", reference)

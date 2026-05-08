@@ -13,6 +13,7 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/lib/admin-action-response";
 import {
     sendWithdrawalApprovedEmail,
@@ -20,6 +21,8 @@ import {
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { Resend } from "resend";
+import { revalidateTag } from "next/cache";
+import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 // ============================================================================
 // ============================================================================
@@ -52,7 +55,7 @@ async function getAdminScope(userId: string, userRoles: string[]): Promise<strin
 // ADMIN DASHBOARD STATS
 // ============================================================================
 
-export async function getCooperativeStatsAction(): Promise<{
+async function _getCooperativeStatsAction(): Promise<{
     success: boolean;
     meta?: any;
     data?: {
@@ -78,16 +81,15 @@ export async function getCooperativeStatsAction(): Promise<{
     };
     error?: string;
 }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role directly from session (Performance Optimization)
-        // Allow cooperative_admin role in addition to platform-level admin roles
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
@@ -102,9 +104,6 @@ export async function getCooperativeStatsAction(): Promise<{
             if (cached) return cached;
         } catch (e) {}
 
-        // ── PAID MEMBERS COUNT (Paystack-authoritative) ──────────────────────
-        // We fetch BOTH the membership profiles AND the authoritative payments.
-        // This ensures the "Paid" count matches reality even if profiles are stale.
         const [membersSnapR, paymentsSnapR] = await Promise.allSettled([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .limit(5000)
@@ -119,33 +118,25 @@ export async function getCooperativeStatsAction(): Promise<{
             ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
             : [];
             
-        // Unique set of user IDs who have successfully paid
         const paidUserIds = paymentsSnapR.status === "fulfilled"
             ? new Set(paymentsSnapR.value.docs.map(doc => doc.data().userId))
             : new Set();
 
         const totalMembersCount = allMembers.length;
-        
-        // A member is "Paid" if their ID is in the authoritative paidUserIds set
         const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.id));
-        
-        // Authoritative count is the total unique successful payments
         const paidMembersCount = paidUserIds.size;
 
-        // Count approved members (those who paid AND were reviewed by admin)
         const activeMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "active" || m.membershipStatus === "approved" ||
             m.status === "active" || m.status === "approved"
         ).length;
 
-        // Pending are those who have PAID but are not yet "Active"
         const pendingMembers = paidMembersCount - activeMembers;
 
         const suspendedMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "suspended" || m.status === "suspended"
         ).length;
 
-        // Get transactions (Scoped)
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         if (adminScope) {
             txnQuery = txnQuery.where("cooperativeId", "==", adminScope);
@@ -198,9 +189,6 @@ export async function getCooperativeStatsAction(): Promise<{
             }
         }
 
-        // Get loans (Scoped via memberId mapping is hard without joins, assuming loans have coopId or we filter by member list)
-        // Ideally loans should have cooperativeId. Checking Schema...
-        // If not, we filter in memory against the 'members' list we already fetched.
         const loansStream = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status").get();
         let totalLoans = 0;
         let activeLoans = 0;
@@ -256,16 +244,20 @@ export async function getCooperativeStatsAction(): Promise<{
 
         return payload;
     } catch (error) {
-        logger.error("Get cooperative stats error:", error);
+        logger.error("Get cooperative stats error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch statistics" };
     }
 }
+export const getCooperativeStatsAction = withFlexibleSafeAction("getCooperativeStatsAction", _getCooperativeStatsAction);
 
 // ============================================================================
 // MEMBER MANAGEMENT
 // ============================================================================
 
-export async function getAllMembersAction(options?: {
+async function _getAllMembersAction(options?: {
     status?: "all" | "active" | "pending" | "suspended" | string;
     limit?: number;
     search?: string;
@@ -275,15 +267,15 @@ export async function getAllMembersAction(options?: {
     data?: { members: any[] };
     error?: string;
 }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role directly from session (Performance Optimization)
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
@@ -292,7 +284,6 @@ export async function getAllMembersAction(options?: {
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        // 🔒 SECURITY FIX: Content Scoping — where() MUST come before orderBy()
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
         }
@@ -301,21 +292,16 @@ export async function getAllMembersAction(options?: {
             q = q.where("membershipStatus", "==", options.status);
         }
 
-        // 🐛 FIX: Only return paid members in the list by querying at DB level if possible, 
-        // or increasing the fetch limit before filtering. Since paymentStatus is not always indexed 
-        // cleanly with createdAt, we fetch more documents to ensure we get enough paid members.
         const fetchLimit = options?.search ? 2000 : (options?.limit ? options.limit * 10 : 500);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
         const snapshot = await q.get();
         const allMembers = serializeDocs(snapshot.docs);
 
-        // Fetch authoritative payments for these users to ensure consistency
         const userIds = allMembers.map(m => m.id);
         let paidUserIds = new Set();
         
         if (userIds.length > 0) {
-            // Fetch payments for these specific users (up to 30 at a time for IN query or just fetch all coop payments)
             const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "cooperative_membership_registration")
                 .where("status", "==", "completed")
@@ -325,7 +311,6 @@ export async function getAllMembersAction(options?: {
 
         let members = allMembers.filter((m: any) => m.paymentStatus === "completed" || paidUserIds.has(m.id));
         
-        // If limit was specified without search, apply limit after filter
         if (!options?.search && options?.limit) {
             members = members.slice(0, options.limit);
         }
@@ -353,94 +338,132 @@ export async function getAllMembersAction(options?: {
 
         return { success: true, data: { members }, meta: { hasMore: false, cursor: null } };
     } catch (error) {
-        logger.error("Get all members error:", error);
+        logger.error("Get all members error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch members" };
     }
 }
+export const getAllMembersAction = withFlexibleSafeAction("getAllMembersAction", _getAllMembersAction);
 
-export async function updateMemberStatusAction(
+async function _updateMemberStatusAction(
     memberId: string,
     status: "active" | "suspended"
 ): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role directly from session (Performance Optimization)
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
-        const batch = db.batch();
-        batch.update(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId), {
-            membershipStatus: status,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        const emailData = await db.runTransaction(async (transaction) => {
+            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
+            const memberDoc = await transaction.get(memberRef);
+            
+            if (!memberDoc.exists) throw new Error("Member not found");
 
-        // Verify user and assign role if activating
-        if (status === "active") {
-            // Fetch user data so we can send an approval email
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(memberId).get();
-            const userData = userDoc.data();
-
-            batch.update(db.collection(COLLECTIONS.USERS).doc(memberId), {
-                isVerified: true,
-                roles: FieldValue.arrayUnion("cooperative_member"),
-                "serviceRegistrations.cooperatives.status": "active",
-                "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+            transaction.update(memberRef, {
+                membershipStatus: status,
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
 
-            // 📧 Send approval notification email (non-blocking)
+            let notificationInfo: { email: string; fullName: string } | null = null;
+
+            if (status === "active") {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(memberId);
+                const userDoc = await transaction.get(userRef);
+                const userData = userDoc.data();
+                
+                if (userData?.email) {
+                    notificationInfo = {
+                        email: userData.email,
+                        fullName: userData.fullName || 'Member'
+                    };
+                }
+
+                transaction.update(userRef, {
+                    isVerified: true,
+                    roles: FieldValue.arrayUnion("cooperative_member"),
+                    "serviceRegistrations.cooperatives.status": "active",
+                    "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                });
+            }
+            
+            return notificationInfo;
+        });
+
+        if (status === "active" && emailData) {
+            // 4. Invalidate Caches (Kill the "State vs. Truth" bug)
+            try {
+                await invalidateCooperativeCache(memberId);
+                await invalidateAdminGlobalStats();
+                
+                // Clear scoped coop stats
+                const adminScope = await getAdminScope(session.user.id, session.user.roles);
+                if (adminScope) {
+                    await deleteCache(`admin:coop-stats:${adminScope}`);
+                    await deleteCache(`admin:coop-reports:${adminScope}`);
+                }
+            } catch (cacheErr) {
+                logger.error("Cache invalidation failed after member approval", cacheErr);
+            }
+
             try {
                 const resend = new Resend(process.env.RESEND_API_KEY);
-                if (userData?.email) {
-                    const { error } = await resend.emails.send({
-                        from: 'Easy Sales Export <noreply@easysalesexport.com>',
-                        to: userData.email,
-                        subject: '✅ Your Cooperative Membership Has Been Approved!',
-                        html: `
-                            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
-                                <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
-                                    <h1 style="color:white;margin:0;">Welcome to the Cooperative!</h1>
-                                </div>
-                                <h2 style="color:#7c3aed;">Membership Approved ✅</h2>
-                                <p>Dear <strong>${userData.fullName || 'Member'}</strong>,</p>
-                                <p>Congratulations! Your cooperative membership application has been <strong>approved</strong>. You now have full access to cooperative benefits including loans, fixed savings, and member forums.</p>
-                                <div style="text-align:center;margin:24px 0;">
-                                    <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/cooperatives/dashboard" style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Your Dashboard</a>
-                                </div>
-                                <p style="color:#6b7280;font-size:14px;">Easy Sales Export Cooperative Team</p>
+                const { error } = await resend.emails.send({
+                    from: 'Easy Sales Export <noreply@easysalesexport.com>',
+                    to: emailData.email,
+                    subject: '✅ Your Cooperative Membership Has Been Approved!',
+                    html: `
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+                            <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);padding:32px;border-radius:12px;text-align:center;margin-bottom:24px;">
+                                <h1 style="color:white;margin:0;">Welcome to the Cooperative!</h1>
                             </div>
-                        `,
-                    });
-                    if (error) {
-                        logger.error("Resend API Error (Cooperative approval email):", error);
-                    }
+                            <h2 style="color:#7c3aed;">Membership Approved ✅</h2>
+                            <p>Dear <strong>${emailData.fullName}</strong>,</p>
+                            <p>Congratulations! Your cooperative membership application has been <strong>approved</strong>. You now have full access to cooperative benefits including loans, fixed savings, and member forums.</p>
+                            <div style="text-align:center;margin:24px 0;">
+                                <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/cooperatives/dashboard" style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Your Dashboard</a>
+                            </div>
+                            <p style="color:#6b7280;font-size:14px;">Easy Sales Export Cooperative Team</p>
+                        </div>
+                    `,
+                });
+                if (error) {
+                    logger.error("Resend API Error (Cooperative approval email):", error);
                 }
             } catch (emailError) {
                 logger.error('Cooperative approval email failed (non-blocking):', emailError);
             }
         }
-
-        await batch.commit();
         
         return { success: true, data: { message: "Member status updated" }, meta: null };
     } catch (error) {
-        logger.error("Update member status error:", error);
+        logger.error("Update member status error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to update member status" };
     }
 }
+export const updateMemberStatusAction = withFlexibleSafeAction("updateMemberStatusAction", _updateMemberStatusAction);
 
 // ============================================================================
 // TRANSACTION MONITORING
 // ============================================================================
 
-export async function getAllTransactionsAction(options?: {
+async function _getAllTransactionsAction(options?: {
     type?: "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
     status?: "all" | "pending" | "completed" | "failed";
     limit?: number;
@@ -462,25 +485,23 @@ export async function getAllTransactionsAction(options?: {
     }> };
     error?: string;
 }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        // Check admin role directly from session (Performance Optimization)
         if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
-        // Build query: where() MUST precede orderBy() in Firestore Admin SDK
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
 
-        // 🔒 SECURITY FIX: Content Scoping
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
         }
@@ -493,7 +514,6 @@ export async function getAllTransactionsAction(options?: {
             q = q.where("status", "==", options.status);
         }
 
-        // orderBy LAST — after all where() filters
         q = q.orderBy("date", "desc");
 
         const fetchLimit = options?.limit || 100;
@@ -515,11 +535,9 @@ export async function getAllTransactionsAction(options?: {
             ...doc.data(),
         }));
 
-        // Batch-resolve user names
         const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(Boolean))];
         const userNameMap = new Map<string, string>();
         
-        // Firestore getAll supports up to 100 refs at a time
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 100) {
             const batch = userIds.slice(i, i + 100);
@@ -537,7 +555,6 @@ export async function getAllTransactionsAction(options?: {
         }
         await Promise.all(userPromises);
 
-        // Serialize: convert Firestore Timestamps to ISO strings
         const transactions = rawDocs.map((raw: any) => {
             const dateVal = raw.date?.toDate ? raw.date.toDate() : (raw.date ? new Date(raw.date) : new Date());
             return {
@@ -554,7 +571,6 @@ export async function getAllTransactionsAction(options?: {
             };
         });
 
-        // Sanitize metadata timestamps
         for (const tx of transactions) {
             if (tx.metadata) {
                 tx.metadata = JSON.parse(JSON.stringify(tx.metadata, (_key, value) => {
@@ -573,10 +589,14 @@ export async function getAllTransactionsAction(options?: {
 
         return { success: true, data: { transactions }, meta: { hasMore, lastDocId: nextCursor } };
     } catch (error) {
-        logger.error("Get all transactions error:", error);
+        logger.error("Get all transactions error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch transactions" };
     }
 }
+export const getAllTransactionsAction = withFlexibleSafeAction("getAllTransactionsAction", _getAllTransactionsAction);
 
 // ============================================================================
 // CONTRIBUTION REPORTS
@@ -653,7 +673,7 @@ export async function getContributionReportsAction(options?: {
 
         const stream = q.select("type", "amount", "userId", "date", "paidAt").get();
         // Track the FIRST (earliest) transaction per user only.
-        // This is a fixed ₦10,000 one-time registration fee — if Paystack shows
+        // This is a one-time registration fee — if Paystack shows
         // multiple charges for the same userId those are accidental repeat payments,
         // not additional contributions. We count each member exactly once.
         const seenUserIds = new Set<string>();
@@ -671,7 +691,7 @@ export async function getContributionReportsAction(options?: {
                     transactionCount++;
                     if (uid) {
                         seenUserIds.add(uid);
-                        contributorMap.set(uid, amount); // always ₦10,000 for registration
+                        contributorMap.set(uid, amount); // for registration
                     }
                 }
 
@@ -735,7 +755,7 @@ export async function getRecentActivityAction(): Promise<{
     data?: { activities: Array<{
         type: string;
         description: string;
-        timestamp: Date;
+        timestamp: string;
         userId?: string;
     }> };
     error?: string;
@@ -768,10 +788,11 @@ export async function getRecentActivityAction(): Promise<{
 
         const activities = transactionsSnap.docs.map((doc) => {
             const data = doc.data();
+            const dateVal = data.date?.toDate ? data.date.toDate() : (data.date ? new Date(data.date) : new Date());
             return {
                 type: data.type,
                 description: `${data.type} of ₦${data.amount?.toLocaleString()}`,
-                timestamp: data.date?.toDate ? data.date.toDate() : new Date(data.date),
+                timestamp: dateVal.toISOString(),
                 userId: data.userId,
             };
         });
@@ -877,23 +898,26 @@ export async function approveWithdrawalAction(
             return { email, name, amount, userId };
         });
 
-        // 📜 Audit Log & Notification
-        if (notificationData) {
-            await logAuditAction({
-                userId: adminId,
-                action: "APPROVE_WITHDRAWAL",
-                details: `Approved withdrawal of ₦${notificationData.amount} for user ${notificationData.email}`,
-                metadata: { withdrawalId, amount: notificationData.amount }
-            });
-
-            if (notificationData.email) {
-                await sendWithdrawalApprovedEmail(
-                    notificationData.email,
-                    notificationData.name,
-                    notificationData.amount,
-                    withdrawalId
-                );
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            if (notificationData) {
+                await Promise.allSettled([
+                    logAuditAction({
+                        userId: adminId,
+                        action: "APPROVE_WITHDRAWAL",
+                        details: `Approved withdrawal of ₦${notificationData.amount} for user ${notificationData.email}`,
+                        metadata: { withdrawalId, amount: notificationData.amount }
+                    }),
+                    notificationData.email ? sendWithdrawalApprovedEmail(
+                        notificationData.email,
+                        notificationData.name,
+                        notificationData.amount,
+                        withdrawalId
+                    ) : Promise.resolve()
+                ]);
             }
+        } catch (sideEffectError) {
+            logger.error("[approveWithdrawalAction] Post-commit side effects failed:", sideEffectError);
         }
 
         return { success: true, data: { message: "Withdrawal approved" }, meta: null };
@@ -996,23 +1020,26 @@ export async function rejectWithdrawalAction(
             return { email, name, amount, userId };
         });
 
-        // 📜 Audit Log & Notification
-        if (notificationData) {
-            await logAuditAction({
-                userId: adminId,
-                action: "REJECT_WITHDRAWAL",
-                details: `Rejected withdrawal of ₦${notificationData.amount} for user ${notificationData.userId}. Reason: ${reason}`,
-                metadata: { withdrawalId, amount: notificationData.amount, reason }
-            });
-
-            if (notificationData.email) {
-                await sendWithdrawalRejectedEmail(
-                    notificationData.email,
-                    notificationData.name,
-                    notificationData.amount,
-                    reason
-                );
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            if (notificationData) {
+                await Promise.allSettled([
+                    logAuditAction({
+                        userId: adminId,
+                        action: "REJECT_WITHDRAWAL",
+                        details: `Rejected withdrawal of ₦${notificationData.amount} for user ${notificationData.userId}. Reason: ${reason}`,
+                        metadata: { withdrawalId, amount: notificationData.amount, reason }
+                    }),
+                    notificationData.email ? sendWithdrawalRejectedEmail(
+                        notificationData.email,
+                        notificationData.name,
+                        notificationData.amount,
+                        reason
+                    ) : Promise.resolve()
+                ]);
             }
+        } catch (sideEffectError) {
+            logger.error("[rejectWithdrawalAction] Post-commit side effects failed:", sideEffectError);
         }
 
         return { success: true, data: { message: "Withdrawal rejected" }, meta: null };
@@ -1042,45 +1069,49 @@ export async function requestCooperativeRevisionAction(
             return { success: false, error: 'Admin access required' };
         }
 
-        // Fetch member doc to get userId and email
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
-        const memberDoc = await memberRef.get();
-        if (!memberDoc.exists) return { success: false, error: 'Member not found' };
+        
+        // Execute transaction for atomic updates to application and user registration
+        const notificationData = await db.runTransaction(async (t) => {
+            const memberDoc = await t.get(memberRef);
+            if (!memberDoc.exists) throw new Error('Member not found');
 
-        const memberData = memberDoc.data();
-        const userId = memberData?.userId;
+            const memberData = memberDoc.data();
+            const userId = memberData?.userId;
 
-        const batch = db.batch();
-        batch.update(memberRef, {
-            membershipStatus: 'revision_required',
-            revisionNote: reason,
-            revisionRequestedAt: FieldValue.serverTimestamp(),
-            revisionRequestedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        if (userId) {
-            batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
-                'serviceRegistrations.cooperatives.status': 'revision_required',
+            t.update(memberRef, {
+                membershipStatus: 'revision_required',
+                revisionNote: reason,
+                revisionRequestedAt: FieldValue.serverTimestamp(),
+                revisionRequestedBy: session.user.id,
                 updatedAt: FieldValue.serverTimestamp(),
             });
-        }
-        await batch.commit();
 
-        // Send revision requested email (non-blocking)
+            if (userId) {
+                t.update(db.collection(COLLECTIONS.USERS).doc(userId), {
+                    'serviceRegistrations.cooperatives.status': 'revision_required',
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            return {
+                email: memberData?.email,
+                name: memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member'
+            };
+        });
+
+        // Send revision requested email (non-blocking post-commit)
         try {
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const email = memberData?.email;
-            const name = memberData?.firstName ? `${memberData.firstName} ${memberData.lastName || ''}`.trim() : 'Member';
-            if (email) {
+            if (notificationData?.email) {
+                const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({
                     from: 'Easy Sales Export <noreply@easysalesexport.com>',
-                    to: email,
+                    to: notificationData.email,
                     subject: '⚠️ Action Required: Update Your Cooperative Application',
                     html: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
                             <h2 style="color:#d97706;">Application Update Requested</h2>
-                            <p>Dear <strong>${name}</strong>,</p>
+                            <p>Dear <strong>${notificationData.name}</strong>,</p>
                             <p>Our team has reviewed your cooperative membership application and requires some updates before it can be approved.</p>
                             <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
                                 <p style="margin:0;color:#92400e;"><strong>Note from Admin:</strong><br/>${reason}</p>
@@ -1101,9 +1132,9 @@ export async function requestCooperativeRevisionAction(
         }
 
         return { success: true, data: { message: "Revision requested" }, meta: null };
-    } catch (error) {
+    } catch (error: any) {
         logger.error('requestCooperativeRevisionAction error:', error);
-        return { success: false, error: 'Failed to request revision' };
+        return { success: false, error: error.message || 'Failed to request revision' };
     }
 }
 

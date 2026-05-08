@@ -1,16 +1,17 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { logger } from "@/lib/logger";
 
 /**
  * VENDOR SETTINGS ACTIONS
  */
 
-export async function updateVendorProfileAction(profileData: {
+async function _updateVendorProfileAction(profileData: {
     storeName: string;
     description: string;
     category: string;
@@ -18,11 +19,12 @@ export async function updateVendorProfileAction(profileData: {
     phone: string;
     logo?: string;
     banner?: string;
-}) {
+}, expectedVersion?: number) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -30,139 +32,193 @@ export async function updateVendorProfileAction(profileData: {
         const vendorId = session.user.id;
         const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
 
-        await vendorRef.set({
-            storeInfo: {
-                name: profileData.storeName,
-                description: profileData.description,
-                category: profileData.category,
-                contactEmail: profileData.contactEmail,
-                phone: profileData.phone,
-                logo: profileData.logo || null,
-                banner: profileData.banner || null,
-            },
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        const { versionedUpdate } = await import("@/lib/optimistic-locking");
 
-        // Sync Vendor Phone back to central User document for Communication Hub
-        if (profileData.phone) {
-            await db.collection(COLLECTIONS.USERS).doc(vendorId).update({
-                phone: profileData.phone,
+        await db.runTransaction(async (transaction) => {
+            await versionedUpdate(transaction, vendorRef, expectedVersion, {
+                storeInfo: {
+                    name: profileData.storeName,
+                    description: profileData.description,
+                    category: profileData.category,
+                    contactEmail: profileData.contactEmail,
+                    phone: profileData.phone,
+                    logo: profileData.logo || null,
+                    banner: profileData.banner || null,
+                },
                 updatedAt: FieldValue.serverTimestamp(),
             });
+
+            // 2. Sync Vendor Phone back to central User document for Communication Hub
+            if (profileData.phone) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(vendorId);
+                transaction.update(userRef, {
+                    phone: profileData.phone,
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                });
+            }
+        });
+
+        // 3. Denormalize Store Name to all products (Outside transaction to avoid large-batch transaction overhead)
+        const productsSnap = await db.collection(COLLECTIONS.PRODUCTS)
+            .where("sellerId", "==", vendorId)
+            .get();
+
+        if (!productsSnap.empty) {
+            const batch = db.batch();
+            productsSnap.docs.forEach((doc) => {
+                batch.update(doc.ref, {
+                    sellerName: profileData.storeName,
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                });
+            });
+            await batch.commit();
         }
 
-        return { success: true, message: "Profile updated successfully" };
+        return { success: true, data: { message: "Profile updated successfully" } };
     } catch (error: any) {
+        logger.error("updateVendorProfileAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const updateVendorProfileAction = withFlexibleSafeAction("updateVendorProfileAction", _updateVendorProfileAction);
 
-export async function updateVendorPaymentConfigAction(paymentData: {
+async function _updateVendorPaymentConfigAction(paymentData: {
     bankName: string;
     accountNumber: string;
     accountName: string;
     paymentSchedule: "weekly" | "monthly";
     minPayoutThreshold: number;
     taxId?: string;
-}) {
+}, expectedVersion?: number) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
         const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
+        const { versionedUpdate } = await import("@/lib/optimistic-locking");
 
-        await vendorRef.set({
-            paymentConfig: {
-                bankName: paymentData.bankName,
-                accountNumber: paymentData.accountNumber,
-                accountName: paymentData.accountName,
-                paymentSchedule: paymentData.paymentSchedule,
-                minPayoutThreshold: paymentData.minPayoutThreshold,
-                taxId: paymentData.taxId || null,
-            },
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await db.runTransaction(async (transaction) => {
+            await versionedUpdate(transaction, vendorRef, expectedVersion, {
+                paymentConfig: {
+                    bankName: paymentData.bankName,
+                    accountNumber: paymentData.accountNumber,
+                    accountName: paymentData.accountName,
+                    paymentSchedule: paymentData.paymentSchedule,
+                    minPayoutThreshold: paymentData.minPayoutThreshold,
+                    taxId: paymentData.taxId || null,
+                },
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
 
-        return { success: true, message: "Payment configuration updated" };
+        return { success: true, data: { message: "Payment configuration updated" } };
     } catch (error: any) {
+        logger.error("updateVendorPaymentConfigAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const updateVendorPaymentConfigAction = withFlexibleSafeAction("updateVendorPaymentConfigAction", _updateVendorPaymentConfigAction);
 
-export async function updateVendorNotificationPrefsAction(prefs: {
+async function _updateVendorNotificationPrefsAction(prefs: {
     newOrders: boolean;
     lowStock: boolean;
     payments: boolean;
     reviews: boolean;
     marketing: boolean;
-}) {
+}, expectedVersion?: number) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
         const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
+        const { versionedUpdate } = await import("@/lib/optimistic-locking");
 
-        await vendorRef.set({
-            notifications: prefs,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await db.runTransaction(async (transaction) => {
+            await versionedUpdate(transaction, vendorRef, expectedVersion, {
+                notifications: prefs,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
 
-        return { success: true, message: "Notification preferences updated" };
+        return { success: true, data: { message: "Notification preferences updated" } };
     } catch (error: any) {
+        logger.error("updateVendorNotificationPrefsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const updateVendorNotificationPrefsAction = withFlexibleSafeAction("updateVendorNotificationPrefsAction", _updateVendorNotificationPrefsAction);
 
-export async function updateVendorShippingConfigAction(shippingData: {
+async function _updateVendorShippingConfigAction(shippingData: {
     locations: string[];
     processingDays: number;
     returnPolicy: string;
     rates?: Record<string, number>;
-}) {
+}, expectedVersion?: number) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
         const vendorRef = db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId);
+        const { versionedUpdate } = await import("@/lib/optimistic-locking");
 
-        await vendorRef.set({
-            shipping: {
-                locations: shippingData.locations,
-                processingDays: shippingData.processingDays,
-                returnPolicy: shippingData.returnPolicy,
-                rates: shippingData.rates || {},
-            },
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await db.runTransaction(async (transaction) => {
+            await versionedUpdate(transaction, vendorRef, expectedVersion, {
+                shipping: {
+                    locations: shippingData.locations,
+                    processingDays: shippingData.processingDays,
+                    returnPolicy: shippingData.returnPolicy,
+                    rates: shippingData.rates || {},
+                },
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
 
-        return { success: true, message: "Shipping configuration updated" };
+        return { success: true, data: { message: "Shipping configuration updated" } };
     } catch (error: any) {
+        logger.error("updateVendorShippingConfigAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const updateVendorShippingConfigAction = withFlexibleSafeAction("updateVendorShippingConfigAction", _updateVendorShippingConfigAction);
 
-export async function getVendorSettingsAction() {
+async function _getVendorSettingsAction() {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -179,14 +235,22 @@ export async function getVendorSettingsAction() {
                         lowStock: true,
                         payments: true,
                         reviews: true,
-                        marketing: false, } },
+                        marketing: false, 
+                    },
                     shipping: null,
-                },
+                } }
             };
         }
 
-        return { success: true, data: { settings: vendorDoc.data() } };
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        return { success: true, data: { settings: serializeValue(vendorDoc.data()) } };
     } catch (error: any) {
+        logger.error("getVendorSettingsAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorSettingsAction = withFlexibleSafeAction("getVendorSettingsAction", _getVendorSettingsAction);
+

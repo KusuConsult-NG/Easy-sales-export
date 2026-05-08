@@ -12,6 +12,12 @@ export const metadata: Metadata = {
     },
 };
 
+import { GlobalResilienceBoundary } from "@/components/shared/GlobalResilienceBoundary";
+
 export default function FarmNationLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
+    return (
+        <GlobalResilienceBoundary moduleName="Farm Nation" dashboardUrl="/farm-nation/dashboard">
+            {children}
+        </GlobalResilienceBoundary>
+    );
 }

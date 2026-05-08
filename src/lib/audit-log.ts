@@ -94,6 +94,9 @@ export type AuditAction =
     | 'wave_application_rejected'
     | 'wave_approve'
     | 'wave_reject'
+    | 'wave_withdrawal_approve'
+    | 'wave_withdrawal_reject'
+    | 'wave_withdrawal_complete'
     | 'training_registration'
     // LMS Actions
     | 'course_created'

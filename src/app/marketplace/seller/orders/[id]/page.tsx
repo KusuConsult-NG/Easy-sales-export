@@ -32,11 +32,11 @@ export default function SellerOrderDetailPage() {
     useEffect(() => {
         if (!id) return;
         getOrderByIdForSellerAction(id as string).then((res) => {
-            if (res.success && (res as any).order) {
-                setOrder((res as any).order);
-                setTrackingNumber((res as any).order.trackingNumber || "");
+            if (res.success && res.data?.order) {
+                setOrder(res.data.order);
+                setTrackingNumber(res.data.order.trackingNumber || "");
             } else {
-                setError((res as any).error || "Order not found");
+                setError(res.error || "Order not found");
             }
             setLoading(false);
         });
@@ -54,10 +54,10 @@ export default function SellerOrderDetailPage() {
         try {
             const result = await updateOrderStatusAction(order.id, newStatus, trackingNumber || undefined);
             if (result.success) {
-                showToast(`Order status updated to ${newStatus.replace(/_/g, " ")}`, "success");
+                showToast(result.data?.message || `Order status updated to ${newStatus.replace(/_/g, " ")}`, "success");
                 setOrder(prev => prev ? { ...prev, status: newStatus, trackingNumber: trackingNumber || prev.trackingNumber } : prev);
             } else {
-                showToast((result as any).error || "Failed to update status", "error");
+                showToast(result.error || "Failed to update status", "error");
             }
         } catch {
             showToast("An error occurred", "error");
@@ -70,6 +70,7 @@ export default function SellerOrderDetailPage() {
         const configs: Record<OrderStatus, { bg: string; text: string; border: string; label: string; icon: any }> = {
             pending_payment:  { bg: "bg-yellow-50",  text: "text-yellow-700",  border: "border-yellow-200",  label: "Pending Payment",  icon: Clock },
             payment_received: { bg: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-200",    label: "Payment Received", icon: CheckCircle },
+            confirmed:        { bg: "bg-indigo-50",  text: "text-indigo-700",  border: "border-indigo-200",  label: "Confirmed",        icon: CheckCircle },
             processing:       { bg: "bg-orange-50",  text: "text-orange-700",  border: "border-orange-200",  label: "Processing",       icon: Clock },
             shipped:          { bg: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-200",    label: "Shipped",          icon: Truck },
             delivered:        { bg: "bg-teal-50",    text: "text-teal-700",    border: "border-teal-200",    label: "Delivered",        icon: CheckCircle },

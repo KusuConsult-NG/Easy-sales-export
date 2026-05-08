@@ -1,12 +1,13 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { withOptimisticLock } from "@/lib/data-integrity";
 
 /**
  * VENDOR ACTIONS
@@ -54,6 +55,7 @@ export interface VendorProduct {
     unit: string;
     images: string[];
     status: "active" | "inactive" | "out_of_stock";
+    vendorId: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -61,13 +63,15 @@ export interface VendorProduct {
 /**
  * Get all orders for vendor
  */
-export async function getVendorOrdersAction(filters?: {
+async function _getVendorOrdersAction(filters?: {
     status?: VendorOrder["status"];
-}): Promise<{ success: boolean; orders?: VendorOrder[]; error?: string }> {
+}) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -89,41 +93,51 @@ export async function getVendorOrdersAction(filters?: {
             };
         }) as VendorOrder[];
 
-        return { success: true, orders };
+        return { success: true, data: { orders } };
     } catch (error: any) {
-        logger.error("Get vendor orders error:", error);
+        logger.error("Get vendor orders error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorOrdersAction = withFlexibleSafeAction("getVendorOrdersAction", _getVendorOrdersAction);
 
 /**
  * Update vendor order status
  */
-export async function updateVendorOrderStatusAction(
+async function _updateVendorOrderStatusAction(
     orderId: string,
     status: VendorOrder["status"],
-    trackingNumber?: string
-): Promise<{ success: boolean; error?: string }> {
+    trackingNumber?: string,
+    _version?: number
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        const updateData: any = {
-            status,
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+        await withOptimisticLock<VendorOrder>(orderRef, _version, (transaction) => {
+            const updateData: any = {
+                status,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            };
 
-        if (trackingNumber) {
-            updateData.trackingNumber = trackingNumber;
-        }
+            if (trackingNumber) {
+                updateData.trackingNumber = trackingNumber;
+            }
 
-        await orderRef.update(updateData);
+            transaction.update(orderRef, updateData);
+        });
 
         await createAdminAuditLog({
             action: "user_update",
@@ -133,24 +147,31 @@ export async function updateVendorOrderStatusAction(
             metadata: { status, trackingNumber },
         });
 
-        return { success: true };
+        return { success: true, data: { message: "Order status updated successfully" } };
     } catch (error: any) {
-        logger.error("Update vendor order error:", error);
+        logger.error("Update vendor order error:", {
+            userId: sessionResult?.session?.user?.id,
+            orderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const updateVendorOrderStatusAction = withFlexibleSafeAction("updateVendorOrderStatusAction", _updateVendorOrderStatusAction);
 
 /**
  * Get vendor products (catalog)
  */
-export async function getVendorProductsAction(filters?: {
+async function _getVendorProductsAction(filters?: {
     status?: VendorProduct["status"];
     category?: string;
-}): Promise<{ success: boolean; products?: VendorProduct[]; error?: string }> {
+}) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
@@ -176,58 +197,69 @@ export async function getVendorProductsAction(filters?: {
             };
         }) as VendorProduct[];
 
-        return { success: true, products };
+        return { success: true, data: { products } };
     } catch (error: any) {
-        logger.error("Get vendor products error:", error);
+        logger.error("Get vendor products error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const getVendorProductsAction = withFlexibleSafeAction("getVendorProductsAction", _getVendorProductsAction);
 
 /**
  * Update vendor product inventory
+ * 
+ * @param productId Product to update
+ * @param stockChange Amount to change
+ * @param operation Action to perform
+ * @param _version Current version for optimistic locking
  */
-export async function updateVendorProductInventoryAction(
+async function _updateVendorProductInventoryAction(
     productId: string,
     stockChange: number,
-    operation: "add" | "subtract" | "set"
-): Promise<{ success: boolean; newStock?: number; error?: string }> {
+    operation: "add" | "subtract" | "set",
+    _version?: number
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
-        const productDoc = await productRef.get();
+        let updatedStock = 0;
 
-        if (!productDoc.exists) {
-            return { success: false, error: "Product not found" };
-        }
+        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, currentData) => {
+            const currentStock = currentData.stock || 0;
+            let newStock = currentStock;
 
-        const currentStock = productDoc.data()?.stock || 0;
-        let newStock = currentStock;
+            switch (operation) {
+                case "add":
+                    newStock = currentStock + stockChange;
+                    break;
+                case "subtract":
+                    newStock = Math.max(0, currentStock - stockChange);
+                    break;
+                case "set":
+                    newStock = stockChange;
+                    break;
+            }
 
-        switch (operation) {
-            case "add":
-                newStock = currentStock + stockChange;
-                break;
-            case "subtract":
-                newStock = Math.max(0, currentStock - stockChange);
-                break;
-            case "set":
-                newStock = stockChange;
-                break;
-        }
+            updatedStock = newStock;
+            const status = newStock === 0 ? "out_of_stock" : "active";
 
-        // Check if out of stock
-        const status = newStock === 0 ? "out_of_stock" : "active";
-
-        await productRef.update({
-            stock: newStock,
-            status,
-            updatedAt: FieldValue.serverTimestamp(),
+            transaction.update(productRef, {
+                stock: newStock,
+                status,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
         await createAdminAuditLog({
@@ -235,84 +267,102 @@ export async function updateVendorProductInventoryAction(
             userId: session.user.id,
             targetId: productId,
             targetType: "vendor_product",
-            metadata: { operation, stockChange, newStock },
+            metadata: { operation, stockChange, newStock: updatedStock },
         });
 
-        return { success: true, newStock };
+        return { success: true, data: { newStock: updatedStock } };
     } catch (error: any) {
-        logger.error("Update inventory error:", error);
-        return { success: false, error: error.message };
+        logger.error("Update inventory error:", {
+            userId: sessionResult?.session?.user?.id,
+            productId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { 
+            success: false, 
+            error: error.message.includes("STALE_DATA") 
+                ? "Inventory was modified by another process. Please refresh and try again."
+                : error.message || "Failed to update inventory" 
+        };
     }
 }
+export const updateVendorProductInventoryAction = withFlexibleSafeAction("updateVendorProductInventoryAction", _updateVendorProductInventoryAction);
 
 /**
  * Toggle vendor product status
  */
-export async function toggleVendorProductStatusAction(
-    productId: string
-): Promise<{ success: boolean; newStatus?: VendorProduct["status"]; error?: string }> {
+async function _toggleVendorProductStatusAction(
+    productId: string,
+    _version?: number
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
-        const productDoc = await productRef.get();
 
-        if (!productDoc.exists) {
-            return { success: false, error: "Product not found" };
-        }
+        let newStatus: VendorProduct["status"] = "active";
 
-        const currentStatus = productDoc.data()?.status;
-        const newStatus = currentStatus === "active" ? "inactive" : "active";
+        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, currentData) => {
+            const currentStatus = currentData.status;
+            newStatus = currentStatus === "active" ? "inactive" : "active";
 
-        await productRef.update({
-            status: newStatus,
-            updatedAt: FieldValue.serverTimestamp(),
+            transaction.update(productRef, {
+                status: newStatus,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
-        return { success: true, newStatus };
+        return { success: true, data: { newStatus } };
     } catch (error: any) {
-        logger.error("Toggle product status error:", error);
+        logger.error("Toggle product status error:", {
+            userId: sessionResult?.session?.user?.id,
+            productId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const toggleVendorProductStatusAction = withFlexibleSafeAction("toggleVendorProductStatusAction", _toggleVendorProductStatusAction);
+
 /**
  * Delete a vendor product
  */
-export async function deleteVendorProductAction(
-    productId: string
-): Promise<{ success: boolean; message?: string; error?: string }> {
+async function _deleteVendorProductAction(
+    productId: string,
+    _version?: number
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
         if (!session?.user?.id) {
             return { success: false, error: "Unauthorized" };
         }
 
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
-        const productDoc = await productRef.get();
 
-        if (!productDoc.exists) {
-            return { success: false, error: "Product not found" };
-        }
+        await withOptimisticLock<VendorProduct>(productRef, _version, (transaction, productData) => {
+            // Verify ownership
+            if (productData?.vendorId !== session.user.id) {
+                throw new Error("Unauthorized");
+            }
 
-        const productData = productDoc.data();
-
-        // Verify ownership
-        if (productData?.vendorId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
-        }
-
-        // Soft delete
-        await productRef.update({
-            status: "inactive",
-            deletedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            // Soft delete
+            transaction.update(productRef, {
+                status: "inactive",
+                deletedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
 
         await createAdminAuditLog({
@@ -320,15 +370,21 @@ export async function deleteVendorProductAction(
             userId: session.user.id,
             targetId: productId,
             targetType: "vendor_product",
-            metadata: { name: productData?.name },
+            metadata: { name: productId }, // productData name is not accessible here easily without returning it from callback
         });
 
         return {
             success: true,
-            message: "Product deleted successfully",
+            data: { message: "Product deleted successfully" },
         };
     } catch (error: any) {
-        logger.error("Delete vendor product error:", error);
+        logger.error("Delete vendor product error:", {
+            userId: sessionResult?.session?.user?.id,
+            productId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: error.message };
     }
 }
+export const deleteVendorProductAction = withFlexibleSafeAction("deleteVendorProductAction", _deleteVendorProductAction);
+

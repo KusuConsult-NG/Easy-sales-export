@@ -98,14 +98,6 @@ export async function bulkSuspendUsersAction(
                     suspendedUntil: suspendedUntil,
                 });
 
-                // 🛡️ SECURITY: Set Redis Key for Immediate Session Revocation
-                // TTL: Duration or 30 days (max session length)
-                const ttlSeconds = duration ? duration * 24 * 60 * 60 : 30 * 24 * 60 * 60;
-                await redis.setex(`user:suspended:${userId}`, ttlSeconds, "true");
-
-                // Clear other caches
-                await invalidateUserCache(userId);
-
                 suspendedCount++;
             } catch (error) {
                 failedIds.push(userId);
@@ -114,19 +106,33 @@ export async function bulkSuspendUsersAction(
 
         await batch.commit();
 
-        await logAuditAction(
-            "user_suspend",
-            "bulk_operation",
-            "users",
-            {
-                adminId: session.user.id,
-                reason,
-                duration,
-                suspendedUntil: suspendedUntil?.toISOString(),
-                suspendedCount,
-                userIds: userIds.filter(id => !failedIds.includes(id)),
-            }
-        );
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            const successfulIds = userIds.filter(id => !failedIds.includes(id));
+            const ttlSeconds = duration ? duration * 24 * 60 * 60 : 30 * 24 * 60 * 60;
+
+            await Promise.allSettled([
+                ...successfulIds.flatMap(userId => [
+                    redis.setex(`user:suspended:${userId}`, ttlSeconds, "true"),
+                    invalidateUserCache(userId)
+                ]),
+                logAuditAction(
+                    "user_suspend",
+                    "bulk_operation",
+                    "users",
+                    {
+                        adminId: session.user.id,
+                        reason,
+                        duration,
+                        suspendedUntil: suspendedUntil?.toISOString(),
+                        suspendedCount,
+                        userIds: successfulIds,
+                    }
+                )
+            ]);
+        } catch (sideEffectError) {
+            logger.error("[bulkSuspendUsersAction] Post-commit side effects failed:", sideEffectError);
+        }
 
         return { success: true, suspended: suspendedCount,
             failed: failedIds };
@@ -203,10 +209,6 @@ export async function bulkActivateUsersAction(
                     reactivatedAt: FieldValue.serverTimestamp(),
                 });
 
-                // 🛡️ SECURITY: Remove Redis Suspension Key
-                await redis.del(`user:suspended:${userId}`);
-                await invalidateUserCache(userId);
-
                 activatedCount++;
             } catch (error) {
                 failedIds.push(userId);
@@ -215,16 +217,29 @@ export async function bulkActivateUsersAction(
 
         await batch.commit();
 
-        await logAuditAction(
-            "user_activate",
-            "bulk_operation",
-            "users",
-            {
-                adminId: session.user.id,
-                activatedCount,
-                userIds: userIds.filter(id => !failedIds.includes(id)),
-            }
-        );
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            const successfulIds = userIds.filter(id => !failedIds.includes(id));
+
+            await Promise.allSettled([
+                ...successfulIds.flatMap(userId => [
+                    redis.del(`user:suspended:${userId}`),
+                    invalidateUserCache(userId)
+                ]),
+                logAuditAction(
+                    "user_activate",
+                    "bulk_operation",
+                    "users",
+                    {
+                        adminId: session.user.id,
+                        activatedCount,
+                        userIds: successfulIds,
+                    }
+                )
+            ]);
+        } catch (sideEffectError) {
+            logger.error("[bulkActivateUsersAction] Post-commit side effects failed:", sideEffectError);
+        }
 
         return { success: true, activated: activatedCount,
             failed: failedIds };
@@ -411,6 +426,7 @@ export async function bulkDeleteUsersAction(
 
         let deletedCount = 0;
         const failedIds: string[] = [];
+        const batch = db.batch();
 
         for (const userId of userIds) {
             try {
@@ -432,7 +448,7 @@ export async function bulkDeleteUsersAction(
                 }
 
                 // Soft delete: mark as deleted instead of removing document
-                await userRef.update({
+                batch.update(userRef, {
                     deleted: true,
                     deletedAt: FieldValue.serverTimestamp(),
                     deletedBy: session.user.id,
@@ -440,28 +456,38 @@ export async function bulkDeleteUsersAction(
                     suspended: true,
                 });
 
-                // 🛡️ SECURITY: Ban user in Redis to kill session immediately
-                // Set for 30 days (max session)
-                await redis.setex(`user:suspended:${userId}`, 30 * 24 * 60 * 60, "true");
-                await invalidateUserCache(userId);
-
                 deletedCount++;
             } catch (error) {
                 failedIds.push(userId);
             }
         }
 
-        await logAuditAction(
-            "user_delete",
-            "bulk_operation",
-            "users",
-            {
-                adminId: session.user.id,
-                reason,
-                deletedCount,
-                userIds: userIds.filter(id => !failedIds.includes(id)),
-            }
-        );
+        await batch.commit();
+
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            const successfulIds = userIds.filter(id => !failedIds.includes(id));
+
+            await Promise.allSettled([
+                ...successfulIds.flatMap(userId => [
+                    redis.setex(`user:suspended:${userId}`, 30 * 24 * 60 * 60, "true"),
+                    invalidateUserCache(userId)
+                ]),
+                logAuditAction(
+                    "user_delete",
+                    "bulk_operation",
+                    "users",
+                    {
+                        adminId: session.user.id,
+                        reason,
+                        deletedCount,
+                        userIds: successfulIds,
+                    }
+                )
+            ]);
+        } catch (sideEffectError) {
+            logger.error("[bulkDeleteUsersAction] Post-commit side effects failed:", sideEffectError);
+        }
 
         return { success: true, deleted: deletedCount,
             failed: failedIds };

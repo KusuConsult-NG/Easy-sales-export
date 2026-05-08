@@ -1,4 +1,7 @@
 import { deleteCache, CacheKeys } from './redis';
+import { revalidateTag } from 'next/cache';
+
+export { deleteCache };
 
 /**
  * Cache Invalidation Functions
@@ -20,6 +23,10 @@ export async function invalidateUserCache(userId: string): Promise<void> {
             deleteCache(`seller:status:${userId}`),
             deleteCache(`cooperative:member:${userId}`),
         ]);
+        
+        // Trigger Next.js revalidation
+        revalidatePath("/", "layout"); 
+        
         console.log(`[Cache Invalidation] Cleared all cache for user: ${userId}`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing cache for ${userId}:`, error);
@@ -36,6 +43,10 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
             deleteCache(`seller:status:${userId}`),
             deleteCache(CacheKeys.userProfile(userId)), // Also clear profile
         ]);
+
+        revalidatePath("/admin/marketplace", "page");
+        revalidatePath("/", "layout");
+
         console.log(`[Cache Invalidation] Cleared seller cache for: ${userId}`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing seller cache:`, error);
@@ -52,6 +63,10 @@ export async function invalidateCooperativeCache(userId: string): Promise<void> 
             deleteCache(`cooperative:member:${userId}`),
             deleteCache(CacheKeys.userProfile(userId)),
         ]);
+
+        revalidatePath("/admin/cooperatives", "page");
+        revalidatePath("/", "layout");
+
         console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing cooperative cache:`, error);
@@ -66,9 +81,36 @@ export async function invalidateServiceCache(userId: string, service?: string): 
     try {
         // Always clear user profile (contains serviceRegistrations)
         await deleteCache(CacheKeys.userProfile(userId));
+
+        revalidatePath("/", "layout");
+        if (service) {
+            revalidatePath(`/admin/${service}`, "page");
+            revalidateTag(`module-${service}-stats`);
+        }
+
         console.log(`[Cache Invalidation] Cleared ${service || 'service'} cache for: ${userId}`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing service cache:`, error);
+    }
+}
+
+/**
+ * Invalidate Global Admin Dashboard Stats
+ * Call after any action that affects platform-wide metrics (approvals, new registrations)
+ */
+export async function invalidateAdminGlobalStats(): Promise<void> {
+    try {
+        await Promise.all([
+            deleteCache("admin:dashboard-stats:global"),
+            deleteCache("admin:finance-overview:global"),
+            deleteCache("admin:coop-stats:global"),
+            deleteCache("admin:coop-reports:global"),
+        ]);
+        // Also trigger Next.js tag revalidation
+        revalidateTag("module-registration-stats", "page");
+        console.log(`[Cache Invalidation] Cleared global admin stats and tags`);
+    } catch (error) {
+        console.error(`[Cache Invalidation] Error clearing global admin stats:`, error);
     }
 }
 

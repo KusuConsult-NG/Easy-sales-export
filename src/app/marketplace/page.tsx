@@ -28,7 +28,7 @@ export default async function MarketplaceLandingPage() {
     let products: any[] = [];
     try {
         const result = await getRecommendedProductsAction(3);
-        products = result.data?.products || result.products || [];
+        products = result.success ? (result.data?.products || []) : [];
     } catch (error) {
         logger.error("Failed to fetch recommended products:", error);
         // Products will remain empty array, component will handle gracefully

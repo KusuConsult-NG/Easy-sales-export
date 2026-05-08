@@ -9,25 +9,23 @@ import type { Order, OrderStatus } from "@/lib/types/marketplace";
 import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { paystackPayout } from "@/lib/paystack-transfer";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 /**
  * Get all orders for a seller
  */
-export async function getSellerOrdersAction(filters?: {
+async function _getSellerOrdersAction(filters?: {
     status?: OrderStatus;
 }) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const userId = session.user.id;
 
-        // Verify user is a seller
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
 
@@ -35,9 +33,6 @@ export async function getSellerOrdersAction(filters?: {
             return { success: false, error: "Not authorized as seller" };
         }
 
-        // ✅ FIX: Orders are written with 'sellerIds' (array), not 'sellerId' (string).
-        // The old .where("sellerId", "==") returned zero results for every seller.
-        // Also: status filter must rebuild from scratch before orderBy to avoid Firestore 400.
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
@@ -50,142 +45,107 @@ export async function getSellerOrdersAction(filters?: {
         }
 
         const snapshot = await query.get();
-        const orders: Order[] = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as Order[];
+        const orders = serializeDocs<Order>(snapshot.docs);
 
         return { success: true, data: { orders } };
-    } catch (error: any) {
-        logger.error("Get seller orders error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Get seller orders error:", { 
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error) 
+        });
+        return { success: false, error: "Failed to fetch orders" };
     }
 }
+export const getSellerOrdersAction = withFlexibleSafeAction("getSellerOrdersAction", _getSellerOrdersAction);
 
 /**
  * Update order status (seller only)
  */
-export async function updateOrderStatusAction(
+async function _updateOrderStatusAction(
     orderId: string,
     newStatus: OrderStatus,
     trackingNumber?: string
 ) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const userId = session.user.id;
-
-        // Get order
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
-        const orderDoc = await orderRef.get();
 
-        if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
-        }
+        await db.runTransaction(async (transaction) => {
+            const currentOrderDoc = await transaction.get(orderRef);
+            if (!currentOrderDoc.exists) throw new Error("Order not found");
+            const currentOrder = currentOrderDoc.data() as Order;
 
-        const order = orderDoc.data() as Order;
+            if (currentOrder.sellerId !== userId) {
+                throw new Error("Not authorized to update this order");
+            }
 
-        // Verify seller owns this order
-        if (order.sellerId !== userId) {
-            return { success: false, error: "Not authorized to update this order" };
-        }
+            const allowedStatuses: OrderStatus[] = ["processing", "shipped", "delivered", "cancelled"];
+            if (!allowedStatuses.includes(newStatus)) {
+                throw new Error(`Sellers cannot set status to '${newStatus}'`);
+            }
 
-        // 🔒 SECURITY FIX: Restrict Allowed Statuses for Sellers
-        // Sellers cannot mark order as 'completed' (Buyer only) or 'disputed' (System)
-        const allowedStatuses: OrderStatus[] = ["processing", "shipped", "delivered", "cancelled"];
-        if (!allowedStatuses.includes(newStatus)) {
-            return { success: false, error: `Sellers cannot set status to '${newStatus}'. Authorized statuses: ${allowedStatuses.join(", ")}` };
-        }
+            if (newStatus === "shipped" && !trackingNumber) {
+                throw new Error("Tracking number is required when marking order as shipped.");
+            }
 
-        // 🔒 SECURITY FIX: Enforce Tracking Number for Shipments
-        if (newStatus === "shipped" && !trackingNumber) {
-            return { success: false, error: "Tracking number is required when marking order as shipped." };
-        }
+            const updateData: any = {
+                status: newStatus,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            };
 
-        // Update order
-        const updateData: any = {
-            status: newStatus,
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+            if (trackingNumber) updateData.trackingNumber = trackingNumber;
+            if (newStatus === "shipped") {
+                const estimatedDate = new Date();
+                estimatedDate.setDate(estimatedDate.getDate() + 7);
+                updateData.estimatedDeliveryDate = estimatedDate;
+            }
+            if (newStatus === "delivered") updateData.deliveredAt = FieldValue.serverTimestamp();
 
-        if (trackingNumber) {
-            updateData.trackingNumber = trackingNumber;
-        }
-
-        if (newStatus === "shipped") {
-            // Estimated delivery: 7 days from now
-            const estimatedDate = new Date();
-            estimatedDate.setDate(estimatedDate.getDate() + 7);
-            updateData.estimatedDeliveryDate = estimatedDate;
-        }
-
-        if (newStatus === "delivered") {
-            updateData.deliveredAt = FieldValue.serverTimestamp();
-        }
-
-        // 🔒 RESTORE INVENTORY IF CANCELLED
-        if (newStatus === "cancelled" && order.status !== "cancelled") {
-            await db.runTransaction(async (transaction) => {
-                // Ensure order hasn't changed flag in the meantime
-                const currentOrder = await transaction.get(orderRef);
-                if (!currentOrder.exists || currentOrder.data()?.status === "cancelled") {
-                    return; // Already cancelled or deleted
-                }
-
-                const items = order.items || [];
-                
-                // Read all product docs first to avoid write-before-read lock issues
-                const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
-                await Promise.all(productRefs.map(ref => transaction.get(ref)));
-
-                // Restore quantities
+            if (newStatus === "cancelled" && currentOrder.status !== "cancelled") {
+                const items = currentOrder.items || [];
                 for (const item of items) {
                     const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                     transaction.update(productRef, {
                         availableQuantity: FieldValue.increment(item.quantity),
-                        orders: FieldValue.increment(-1)
+                        orders: FieldValue.increment(-1),
+                        _version: FieldValue.increment(1),
                     });
                 }
+            }
 
-                // Finally update order status
-                transaction.update(orderRef, updateData);
-            });
-        } else {
-            await orderRef.update(updateData);
-        }
+            transaction.update(orderRef, updateData);
+        });
 
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Update order status error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { message: "Order status updated" } };
+    } catch (error) {
+        logger.error("Update order status error:", { 
+            orderId, 
+            newStatus, 
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error) 
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to update order status" };
     }
 }
+export const updateOrderStatusAction = withFlexibleSafeAction("updateOrderStatusAction", _updateOrderStatusAction);
 
 /**
  * Get all orders for a buyer
  */
-export async function getBuyerOrdersAction(filters?: {
+async function _getBuyerOrdersAction(filters?: {
     status?: OrderStatus;
 }) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const userId = session.user.id;
 
@@ -199,140 +159,110 @@ export async function getBuyerOrdersAction(filters?: {
         }
 
         const snapshot = await query.get();
-        const orders: Order[] = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                ...data,
-                id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            };
-        }) as Order[];
+        const orders = serializeDocs<Order>(snapshot.docs);
 
         return { success: true, data: { orders } };
-    } catch (error: any) {
-        logger.error("Get buyer orders error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Get buyer orders error:", { 
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error) 
+        });
+        return { success: false, error: "Failed to fetch orders" };
     }
 }
+export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
 
 /**
  * Confirm delivery (buyer only)
  */
-export async function confirmDeliveryAction(orderId: string) {
+async function _confirmDeliveryAction(orderId: string) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
-        }
-
-        const userId = session.user.id;
-
-        // Get order
-        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
-        const orderDoc = await orderRef.get();
-
-        if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
-        }
-
-        const order = orderDoc.data() as Order;
-
-        // Verify buyer owns this order
-        if (order.buyerId !== userId) {
-            return { success: false, error: "Not authorized" };
-        }
-
-        // Verify order is delivered
-        if (order.status !== "delivered") {
-            return { success: false, error: "Order must be delivered first" };
-        }
-
-        // Update order
-        await orderRef.update({
-            buyerConfirmed: true,
-            buyerConfirmedAt: FieldValue.serverTimestamp(),
-            status: "completed",
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // ══════════════════════════════════════════
-        // ESCROW RELEASE — Trigger Paystack Transfer
-        // ══════════════════════════════════════════
-        try {
-            // Get seller's bank details from Firestore
-            const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(order.sellerId).get();
-            const sellerData = sellerDoc.data();
-
-            if (sellerData?.bankAccountNumber && sellerData?.bankCode) {
-                // Platform takes 2.5% commission; seller receives 97.5%
-                const platformCommissionRate = 0.025;
-                const sellerAmount = Math.floor(order.totalAmount * (1 - platformCommissionRate));
-
-                const payoutResult = await paystackPayout(
-                    {
-                        accountNumber: sellerData.bankAccountNumber,
-                        bankCode: sellerData.bankCode,
-                        accountName: sellerData.bankAccountName || sellerData.name,
-                    },
-                    sellerAmount, // in Naira (paystackPayout converts to kobo internally)
-                    `Escrow release for order ${orderId}`
-                );
-
-                if (payoutResult.success) {
-                    await orderRef.update({
-                        escrowReleased: true,
-                        escrowReleasedAt: FieldValue.serverTimestamp(),
-                        paystackTransferCode: payoutResult.transferCode,
-                        sellerAmountPaid: sellerAmount,
-                    });
-                    logger.info(`Escrow released for order ${orderId}: ₦${sellerAmount} to ${order.sellerId}`);
-                } else {
-                    // Log failure and flag for manual processing
-                    await orderRef.update({
-                        escrowReleased: false,
-                        escrowReleaseError: payoutResult.error,
-                        escrowPendingManualRelease: true,
-                    });
-                    logger.error(`Escrow release FAILED for order ${orderId}: ${payoutResult.error}`);
-                }
-            } else {
-                // Seller hasn't set up bank details — flag for manual release
-                await orderRef.update({
-                    escrowPendingManualRelease: true,
-                    escrowReleaseNote: "Seller bank details not configured",
-                });
-                logger.warn(`Escrow release PENDING for order ${orderId}: seller ${order.sellerId} has no bank details`);
-            }
-        } catch (payoutError: any) {
-            // Never block the order completion due to payout failure
-            logger.error(`Escrow payout error for order ${orderId}:`, payoutError);
-            await orderRef.update({ escrowPendingManualRelease: true });
-        }
-
-        return { success: true };
-    } catch (error: any) {
-        logger.error("Confirm delivery error:", error);
-        return { success: false, error: error.message };
-    }
-}
-
-/**
- * Get a single order by ID — seller view
- * Verifies the caller is either the seller on the order or an admin.
- */
-export async function getOrderByIdForSellerAction(orderId: string) {
-    try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { success: false, error: "Not authenticated" };
+        const userId = session.user.id;
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
+
+        const result = await db.runTransaction(async (transaction) => {
+            const currentOrderDoc = await transaction.get(orderRef);
+            if (!currentOrderDoc.exists) throw new Error("Order not found");
+            const currentOrder = currentOrderDoc.data() as Order;
+
+            if (currentOrder.buyerId !== userId) throw new Error("Unauthorized");
+            if (currentOrder.status !== "delivered") throw new Error("Order must be delivered first");
+
+            transaction.update(orderRef, {
+                buyerConfirmed: true,
+                buyerConfirmedAt: FieldValue.serverTimestamp(),
+                status: "completed",
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
+
+            const sellerRef = db.collection(COLLECTIONS.USERS).doc(currentOrder.sellerId);
+            const sellerDoc = await transaction.get(sellerRef);
+            const sellerData = sellerDoc.data();
+
+            let sellerAmount = 0;
+
+            if (sellerData?.bankAccountNumber && sellerData?.bankCode) {
+                const platformCommissionRate = 0.025;
+                sellerAmount = Math.floor(currentOrder.totalAmount * (1 - platformCommissionRate));
+            }
+
+            return { sellerAmount, sellerData, currentOrder };
+        });
+
+        if (result.sellerAmount > 0) {
+            try {
+                const res = await paystackPayout(
+                    {
+                        accountNumber: result.sellerData!.bankAccountNumber,
+                        bankCode: result.sellerData!.bankCode,
+                        accountName: result.sellerData!.bankAccountName || result.sellerData!.name,
+                    },
+                    result.sellerAmount,
+                    `Escrow release for order ${orderId}`
+                );
+
+                await orderRef.update({
+                    escrowReleased: res.success,
+                    escrowReleasedAt: res.success ? FieldValue.serverTimestamp() : null,
+                    paystackTransferCode: res.transferCode || null,
+                    sellerAmountPaid: result.sellerAmount,
+                    escrowReleaseError: res.success ? null : res.error,
+                    escrowPendingManualRelease: !res.success,
+                    _version: FieldValue.increment(1),
+                });
+            } catch (err) {
+                logger.error("Payout side effect failed:", { userId, error: err });
+                await orderRef.update({ escrowPendingManualRelease: true, _version: FieldValue.increment(1) });
+            }
         }
+
+        return { success: true, data: { message: "Delivery confirmed" } };
+    } catch (error) {
+        logger.error("Confirm delivery error:", { 
+            orderId, 
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error) 
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to confirm delivery" };
+    }
+}
+export const confirmDeliveryAction = withFlexibleSafeAction("confirmDeliveryAction", _confirmDeliveryAction);
+
+/**
+ * Get a single order by ID — seller view
+ */
+async function _getOrderDetailsAction(orderId: string) {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
@@ -347,18 +277,15 @@ export async function getOrderByIdForSellerAction(orderId: string) {
             return { success: false, error: "Unauthorized" };
         }
 
-        const order: Order = {
-            ...data,
-            id: orderDoc.id,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-        } as Order;
-
-        return { success: true, data: { order } };
-    } catch (error: any) {
-        logger.error("Get seller order by ID error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { order: serializeDoc<Order>(orderDoc.id, data) } };
+    } catch (error) {
+        logger.error("Get order details error:", { 
+            orderId, 
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error) 
+        });
+        return { success: false, error: "Failed to fetch order details" };
     }
 }
-
-
+export const getOrderDetailsAction = withFlexibleSafeAction("getOrderDetailsAction", _getOrderDetailsAction);
+export const getOrderByIdForSellerAction = getOrderDetailsAction;

@@ -12,6 +12,12 @@ export const metadata: Metadata = {
     },
 };
 
+import { GlobalResilienceBoundary } from "@/components/shared/GlobalResilienceBoundary";
+
 export default function AcademyLayout({ children }: { children: React.ReactNode }) {
-    return <>{children}</>;
+    return (
+        <GlobalResilienceBoundary moduleName="Academy" dashboardUrl="/academy/dashboard">
+            {children}
+        </GlobalResilienceBoundary>
+    );
 }

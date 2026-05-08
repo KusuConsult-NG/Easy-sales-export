@@ -225,32 +225,70 @@ export async function sendWaveApplicationEmail(
 ) {
     const isApproved = status === 'approved';
 
+    const message = isApproved ? `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #059669;">Congratulations!</h2>
+            <p>Hi ${userName},</p>
+            <p>We are thrilled to inform you that your application for the <strong>Women Agro-Value Expansion (WAVE)</strong> program has been approved.</p>
+            
+            <div style="background: #ecfdf5; padding: 16px; border-radius: 8px; margin: 20px 0; border: 1px solid #a7f3d0;">
+                <p style="margin: 0; color: #065f46;"><strong>Status:</strong> Approved</p>
+                <p style="margin: 5px 0 0; color: #065f46;"><strong>Role:</strong> WAVE Participant</p>
+            </div>
+
+            <p>You now have full access to:</p>
+            <ul>
+                <li>Exclusive WAVE training resources and guides</li>
+                <li>Cooperative funding opportunities</li>
+                <li>Marketplace features</li>
+            </ul>
+
+            <p><strong>Next Steps:</strong></p>
+            <p>Log in to your dashboard to start exploring the resources available to you.</p>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="https://easysalesexport.com/wave/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to WAVE Dashboard</a>
+            </div>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="color: #666; font-size: 12px; text-align: center;">
+                Easy Sales Export - Women Agripreneurs Visibility and Empowerment
+            </p>
+        </div>
+    ` : `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #dc2626;">WAVE Application Update</h2>
+            <p>Hi ${userName},</p>
+            <p>Thank you for your interest in the Women Agro-Value Expansion (WAVE) program.</p>
+            
+            <div style="background: #fef2f2; padding: 16px; border-radius: 8px; margin: 20px 0;">
+                <p>Unfortunately, we are unable to approve your application at this time.</p>
+                ${reason ? `
+                <p><strong>Reason provided:</strong></p>
+                <p style="font-style: italic;">"${reason}"</p>
+                ` : ''}
+            </div>
+
+            <p><strong>What You Can Do:</strong></p>
+            <ul>
+                <li>Review any feedback provided</li>
+                <li>Ensure all your profile details are accurate</li>
+                <li>Re-apply when you have made the necessary adjustments</li>
+            </ul>
+
+            <p>If you have any questions or need clarification, please contact our support team.</p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+            <p style="color: #666; font-size: 12px; text-align: center;">
+                Easy Sales Export - Women Agripreneurs Visibility and Empowerment
+            </p>
+        </div>
+    `;
+
     return sendEmailNotification({
         to: userEmail,
         subject: `WAVE Application ${isApproved ? 'Approved' : 'Update'} - Easy Sales Export`,
-        message: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: ${isApproved ? '#16a34a' : '#333'};">
-                    ${isApproved ? '🎉 Congratulations!' : 'WAVE Application Update'}
-                </h2>
-                <p>Hi ${userName},</p>
-                ${isApproved ? `
-                    <p>Your WAVE (Women Agripreneurs Visibility and Empowerment) program application has been <strong>approved</strong>!</p>
-                    <p>You will receive further information about the program schedule and next steps via email.</p>
-                    <p>Thank you for your commitment to agricultural entrepreneurship.</p>
-                ` : `
-                    <p>Thank you for your interest in the WAVE program.</p>
-                    <p>We regret to inform you that we are unable to accept your application at this time.</p>
-                    ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
-                    <p>You may reapply in the next application cycle. For questions, please contact our support team.</p>
-                `}
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="color: #666; font-size: 12px;">
-                    Easy Sales Export - Agricultural Export Platform<br/>
-                    Nigeria's Premier Platform for Women in Agriculture
-                </p>
-            </div>
-        `,
+        message,
         metadata: { type: 'wave_application', status },
     });
 }

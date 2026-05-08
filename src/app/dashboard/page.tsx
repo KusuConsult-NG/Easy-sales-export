@@ -99,13 +99,18 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
     ];
 
     return modulesDef.map(mod => {
-        // farm_nation legacy compat check
         const registrationStatus = serviceRegistrations[mod.id]?.status 
             || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.status : null);
+        const paymentStatus = serviceRegistrations[mod.id]?.paymentStatus 
+            || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.paymentStatus : null);
             
-        let status: 'unapplied' | 'pending' | 'approved' = 'unapplied';
-        if (registrationStatus === 'approved' || registrationStatus === 'active') status = 'approved';
-        else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review') status = 'pending';
+        let status: 'unapplied' | 'pending' | 'approved' | 'payment_required' = 'unapplied';
+        if (registrationStatus === 'approved' || registrationStatus === 'active') {
+            status = (paymentStatus === 'completed' || registrationStatus === 'active') ? 'approved' : 'payment_required';
+        }
+        else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review' || registrationStatus === 'paid') {
+            status = 'pending';
+        }
         
         // Override approved based on roles for safety (in case admin bypassed standard flow)
         if (mod.id === 'academy' && roles.includes('academy_participant')) status = 'approved';
@@ -117,6 +122,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
         
         const href = 
             status === 'approved' ? mod.dashboardUrl : 
+            status === 'payment_required' ? mod.onboardingUrl :
             status === 'pending' ? mod.pendingUrl : 
             mod.onboardingUrl;
             
@@ -327,6 +333,9 @@ function DashboardHomeContent() {
                                     {card.status === 'pending' && (
                                         <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 rounded-lg">Pending Review</span>
                                     )}
+                                    {card.status === 'payment_required' && (
+                                        <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-100 rounded-lg italic animate-pulse">Payment Required</span>
+                                    )}
                                 </div>
                                 
                                 <h3 className={`font-bold text-slate-900 mb-1 ${card.status !== 'approved' ? 'text-slate-700' : ''}`}>{card.label}</h3>
@@ -334,10 +343,12 @@ function DashboardHomeContent() {
                                 
                                 <div className={`mt-4 flex items-center text-sm font-semibold gap-1 group-hover:gap-2 transition-all ${
                                     card.status === 'approved' ? 'text-emerald-600' :
+                                    card.status === 'payment_required' ? 'text-rose-600' :
                                     card.status === 'pending' ? 'text-amber-600' :
                                     'text-blue-600'
                                 }`}>
                                     {card.status === 'approved' ? 'Go to Dashboard' :
+                                     card.status === 'payment_required' ? 'Complete Payment' :
                                      card.status === 'pending' ? 'Check Status' :
                                      'Apply Now'} <ChevronRight className="w-4 h-4" />
                                 </div>

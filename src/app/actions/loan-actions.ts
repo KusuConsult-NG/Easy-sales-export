@@ -14,6 +14,7 @@ import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/stric
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 /**
  * Submit a new loan application
@@ -28,33 +29,42 @@ export async function submitLoanApplication(
     try {
         const validated = loanApplicationSchema.parse(data);
 
-        // Create loan application in Firestore
-        const loanRef = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).add({
-            ...validated,
-            userId: session.user.id,
-            status: LoanStatus.PENDING,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            approvedBy: null,
-            approvedAt: null,
-            rejectionReason: null,
+        // Create loan application in Firestore via transaction to ensure side-effects are atomic
+        const result = await db.runTransaction(async (transaction) => {
+            const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
+            transaction.set(loanRef, {
+                ...validated,
+                userId: session.user.id,
+                status: LoanStatus.PENDING,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                approvedBy: null,
+                approvedAt: null,
+                rejectionReason: null,
+            });
+            return { loanId: loanRef.id };
         });
 
-        // Audit log
-        await createAdminAuditLog({
-            userId: session.user.id,
-            action: 'loan_approved', // Will add LOAN_CREATE to enum if needed
-            targetId: loanRef.id,
-            targetType: 'loan_application',
-            metadata: {
-                amount: validated.amount,
-                purpose: validated.purpose,
-                repaymentPeriod: validated.repaymentPeriod,
-            },
-        });
+        const { loanId } = result;
 
-        return { success: true, data: { loanId: loanRef.id,
-            userId: session.user.id, } };
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            await createAdminAuditLog({
+                userId: session.user.id,
+                action: 'loan_approved', // Using existing enum or mapping
+                targetId: loanId,
+                targetType: 'loan_application',
+                metadata: {
+                    amount: validated.amount,
+                    purpose: validated.purpose,
+                    repaymentPeriod: validated.repaymentPeriod,
+                },
+            });
+        } catch (auditError) {
+            console.error("Failed to log loan creation audit:", auditError);
+        }
+
+        return { success: true, data: { loanId, userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
@@ -76,20 +86,12 @@ export async function getUserLoanApplications() {
     const { session } = sessionResult;
 
     try {
-        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS).where('userId', '==', session.user.id).orderBy('createdAt', 'desc');
+        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+            .where('userId', '==', session.user.id)
+            .orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
-
-        const loans = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                approvedAt: data.approvedAt ? (data.approvedAt as Timestamp).toDate() : null,
-            } as LoanApplication;
-        });
+        const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
         return { success: true, data: { loans, } };
     } catch (error) {
@@ -120,13 +122,7 @@ export async function getLoanApplication(loanId: string) {
             return { success: false, error: "Unauthorized to view this loan", loan: null };
         }
 
-        const loan: LoanApplication = {
-            id: loanDoc.id,
-            ...data,
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            approvedAt: data.approvedAt ? (data.approvedAt as Timestamp).toDate() : null,
-        } as LoanApplication;
+        const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
 
         return { success: true, data: { loan, } };
     } catch (error) {
@@ -146,20 +142,12 @@ export async function getPendingLoanApplications() {
     }
 
     try {
-        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS).where('status', '==', LoanStatus.PENDING).orderBy('createdAt', 'desc');
+        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+            .where('status', '==', LoanStatus.PENDING)
+            .orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
-
-        const loans = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                approvedAt: data.approvedAt ? (data.approvedAt as Timestamp).toDate() : null,
-            } as LoanApplication;
-        });
+        const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
         return { success: true, data: { loans, } };
     } catch (error) {
@@ -183,35 +171,51 @@ export async function approveLoanApplication(
     try {
         const validated = loanApprovalSchema.parse(data);
 
-        const updateData: Record<string, unknown> = {
-            status: validated.approved ? LoanStatus.APPROVED : LoanStatus.REJECTED,
-            approvedBy: session.user.id,
-            approvedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(validated.loanId);
 
-        if (validated.notes) {
-            updateData.approvalNotes = validated.notes;
-        }
+        await db.runTransaction(async (transaction) => {
+            const loanDoc = await transaction.get(loanRef);
+            if (!loanDoc.exists) throw new Error("Loan application not found");
+            
+            const currentStatus = loanDoc.data()?.status;
+            if (currentStatus !== LoanStatus.PENDING) {
+                throw new Error(`Loan application is already ${currentStatus}`);
+            }
 
-        if (!validated.approved && validated.rejectionReason) {
-            updateData.rejectionReason = validated.rejectionReason;
-        }
+            const updateData: Record<string, unknown> = {
+                status: validated.approved ? LoanStatus.APPROVED : LoanStatus.REJECTED,
+                approvedBy: session.user.id,
+                approvedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            };
 
-        await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(validated.loanId).update(updateData);
+            if (validated.notes) {
+                updateData.approvalNotes = validated.notes;
+            }
 
-        // Audit log
-        await createAdminAuditLog({
-            userId: session.user.id,
-            action: validated.approved ? 'loan_approved' : 'loan_rejected',
-            targetId: validated.loanId,
-            targetType: 'loan_application',
-            metadata: {
-                approved: validated.approved,
-                notes: validated.notes,
-                rejectionReason: validated.rejectionReason,
-            },
+            if (!validated.approved && validated.rejectionReason) {
+                updateData.rejectionReason = validated.rejectionReason;
+            }
+
+            transaction.update(loanRef, updateData);
         });
+
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            await createAdminAuditLog({
+                userId: session.user.id,
+                action: validated.approved ? 'loan_approved' : 'loan_rejected',
+                targetId: validated.loanId,
+                targetType: 'loan_application',
+                metadata: {
+                    approved: validated.approved,
+                    notes: validated.notes,
+                    rejectionReason: validated.rejectionReason,
+                },
+            });
+        } catch (auditError) {
+            console.error("Failed to log loan approval/rejection audit:", auditError);
+        }
 
         return { success: true, data: { userId: session.user.id } };
     } catch (error) {
@@ -238,25 +242,41 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     }
 
     try {
-        await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId).update({
-            status: LoanStatus.DISBURSED,
-            disbursedAt: FieldValue.serverTimestamp(),
-            disbursedBy: session.user.id,
-            disbursementNotes,
-            updatedAt: FieldValue.serverTimestamp(),
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
+
+        await db.runTransaction(async (transaction) => {
+            const loanDoc = await transaction.get(loanRef);
+            if (!loanDoc.exists) throw new Error("Loan application not found");
+
+            const currentStatus = loanDoc.data()?.status;
+            if (currentStatus !== LoanStatus.APPROVED) {
+                throw new Error(`Loan must be APPROVED before disbursement. Current status: ${currentStatus}`);
+            }
+
+            transaction.update(loanRef, {
+                status: LoanStatus.DISBURSED,
+                disbursedAt: FieldValue.serverTimestamp(),
+                disbursedBy: session.user.id,
+                disbursementNotes,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
-        // Audit log
-        await createAdminAuditLog({
-            userId: session.user.id,
-            action: 'loan_approved', // Can add LOAN_DISBURSE to enum
-            targetId: loanId,
-            targetType: 'loan_application',
-            metadata: {
-                status: 'disbursed',
-                notes: disbursementNotes,
-            },
-        });
+        // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
+        try {
+            await createAdminAuditLog({
+                userId: session.user.id,
+                action: 'loan_approved', // Using existing mapping
+                targetId: loanId,
+                targetType: 'loan_application',
+                metadata: {
+                    status: 'disbursed',
+                    notes: disbursementNotes,
+                },
+            });
+        } catch (auditError) {
+            console.error("Failed to log loan disbursement audit:", auditError);
+        }
 
         return { success: true, data: { userId: session.user.id } };
     } catch (error) {

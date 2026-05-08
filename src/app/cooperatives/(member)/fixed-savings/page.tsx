@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -164,7 +165,7 @@ export default function FixedSavingsPage() {
                             },
                             {
                                 title: "Pay Membership Fee",
-                                description: "Complete your one-time registration fee (₦10,000) via Paystack.",
+                                description: `Complete your one-time registration fee (${CURRENCY_CONFIG.symbol}${COOPERATIVE_CONFIG.registrationFee.toLocaleString()}) via Paystack.`,
                                 completed: membershipStatus === "pending",
                                 action: undefined
                             },

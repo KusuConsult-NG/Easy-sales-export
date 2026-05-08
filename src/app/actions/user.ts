@@ -6,6 +6,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import type { ActionResponse } from "@/lib/safe-action";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 /**
  * NDPR Compliant "Right to be Forgotten" Account Deletion.
@@ -13,7 +15,7 @@ import type { ActionResponse } from "@/lib/safe-action";
  * but permanently scrubs all Personally Identifiable Information (PII).
  * NOTE: Declared as async function (not const) so Next.js "use server" validator accepts it.
  */
-export async function deleteUserAccountAction(): Promise<ActionResponse<void>> {
+async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -50,6 +52,15 @@ export async function deleteUserAccountAction(): Promise<ActionResponse<void>> {
         });
 
         logger.info(`[NDPR Compliance] User PII successfully scrubbed for UID: ${userId}`);
+
+        // Invalidate Cache
+        try {
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (err) {
+            logger.error("Cache invalidation failed after account deletion", err);
+        }
+
         return { success: true };
     } catch (error: any) {
         logger.error("[NDPR Compliance] Account deletion error:", error);
@@ -57,3 +68,6 @@ export async function deleteUserAccountAction(): Promise<ActionResponse<void>> {
         return { success: false, error: msg };
     }
 }
+
+export const deleteUserAccountAction = withFlexibleSafeAction("deleteUserAccountAction", _deleteUserAccountAction);
+

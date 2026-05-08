@@ -11,6 +11,8 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { unstable_cache } from "next/cache";
 import { isAdmin } from "@/lib/admin-permissions";
+import { revalidateTag } from "next/cache";
+import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 /**
  * Farm Nation - Land Listings & Verification
@@ -159,6 +161,10 @@ export async function verifyLandListingAction(
             "land_listing"
         );
 
+        revalidateTag("land-listings", "page");
+        revalidateTag(`property-${listingId}`, "page");
+        await invalidateAdminGlobalStats();
+
         return { success: true };
     } catch (error) {
         logger.error("Land verification error:", error);
@@ -206,6 +212,10 @@ export async function rejectLandListingAction(
             "land_listing",
             reason
         );
+
+        revalidateTag("land-listings", "page");
+        revalidateTag(`property-${listingId}`, "page");
+        await invalidateAdminGlobalStats();
 
         return { success: true };
     } catch (error) {
@@ -545,6 +555,10 @@ export async function deleteLandListingAction(
             "land_listing",
             "Listing was permanently deleted"
         );
+
+        revalidateTag("land-listings", "page");
+        revalidateTag(`property-${listingId}`, "page");
+        await invalidateAdminGlobalStats();
 
         return { success: true };
     } catch (error) {

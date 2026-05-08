@@ -4,7 +4,10 @@ import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { COLLECTIONS } from "@/lib/types/firestore";
-import type { Product } from "@/lib/types/marketplace";
+import type { Product, Order } from "@/lib/types/marketplace";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { FieldValue } from "firebase-admin/firestore";
+import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 
 // ============================================================================
 // PRODUCT BROWSING
@@ -21,9 +24,13 @@ export interface ProductFilters {
     searchTerm?: string;
 }
 
-export async function getProductsAction(filters?: ProductFilters) {
+async function _getProductsAction(filters?: ProductFilters) {
+    let sessionResult;
     try {
-        let query = db.collection(COLLECTIONS.PRODUCTS)
+        // This action is public but we wrap it for consistency and telemetry
+        sessionResult = await requireSession().catch(() => ({ session: null }));
+
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active");
 
         // Apply filters
@@ -44,7 +51,7 @@ export async function getProductsAction(filters?: ProductFilters) {
         }
 
         const snapshot = await query.get();
-        let products = snapshot.docs.map(doc => doc.data() as Product);
+        let products = serializeDocs<Product>(snapshot.docs);
 
         // Client-side filters (Firestore limitations)
         if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) {
@@ -72,18 +79,26 @@ export async function getProductsAction(filters?: ProductFilters) {
             products = products.filter(product => product.category === filters.category);
         }
 
-        return { success: true, data: { products } };
-    } catch (error: any) {
-        logger.error("Get products error:", error);
-        return { success: false, error: error.message, products: [] };
+        return { success: true, data: { products: serializeValue(products) } };
+    } catch (error) {
+        logger.error("Get products error:", {
+            userId: sessionResult?.session?.user?.id,
+            filters,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch products", data: { products: [] } };
     }
 }
+export const getProductsAction = withFlexibleSafeAction("getProductsAction", _getProductsAction);
 
 /**
  * Get single product by ID
  */
-export async function getProductByIdAction(productId: string) {
+async function _getProductByIdAction(productId: string) {
+    let sessionResult;
     try {
+        sessionResult = await requireSession().catch(() => ({ session: null }));
+
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
         const productDoc = await productRef.get();
 
@@ -91,103 +106,103 @@ export async function getProductByIdAction(productId: string) {
             return { success: false, error: "Product not found" };
         }
 
-        const product = productDoc.data() as Product;
-
-        return { success: true, data: { product } };
-    } catch (error: any) {
-        logger.error("Get product error:", error);
-        return { success: false, error: error.message };
+        return { success: true, data: { product: serializeDoc<Product>(productDoc.id, productDoc.data()!) } };
+    } catch (error) {
+        logger.error("Get product error:", {
+            userId: sessionResult?.session?.user?.id,
+            productId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch product" };
     }
 }
+export const getProductByIdAction = withFlexibleSafeAction("getProductByIdAction", _getProductByIdAction);
 
 /**
  * Get featured products
  */
-export async function getFeaturedProductsAction() {
+async function _getFeaturedProductsAction() {
+    let sessionResult;
     try {
+        sessionResult = await requireSession().catch(() => ({ session: null }));
+
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
             .orderBy("orders", "desc")
             .limit(8)
             .get();
 
-        const products = snapshot.docs.map(doc => doc.data() as Product);
-
-        return { success: true, data: { products } };
-    } catch (error: any) {
-        logger.error("Get featured products error:", error);
-        return { success: false, error: error.message, products: [] };
+        return { success: true, data: { products: serializeDocs<Product>(snapshot.docs) } };
+    } catch (error) {
+        logger.error("Get featured products error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch featured products", data: { products: [] } };
     }
 }
+export const getFeaturedProductsAction = withFlexibleSafeAction("getFeaturedProductsAction", _getFeaturedProductsAction);
 
 /**
  * Get products by category
  */
-export async function getProductsByCategoryAction(category: string) {
+async function _getProductsByCategoryAction(category: string) {
+    let sessionResult;
     try {
+        sessionResult = await requireSession().catch(() => ({ session: null }));
+
         const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
             .where("category", "==", category)
             .get();
 
-        const products = snapshot.docs.map(doc => doc.data() as Product);
-
-        return { success: true, data: { products } };
-    } catch (error: any) {
-        logger.error("Get products by category error:", error);
-        return { success: false, error: error.message, products: [] };
+        return { success: true, data: { products: serializeDocs<Product>(snapshot.docs) } };
+    } catch (error) {
+        logger.error("Get products by category error:", {
+            userId: sessionResult?.session?.user?.id,
+            category,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch products by category", data: { products: [] } };
     }
 }
+export const getProductsByCategoryAction = withFlexibleSafeAction("getProductsByCategoryAction", _getProductsByCategoryAction);
 
 // ============================================================================
 // ORDER MANAGEMENT
 // ============================================================================
 
-export async function getBuyerOrdersAction() {
+async function _getBuyerOrdersAction() {
+    let sessionResult;
     try {
-        const { auth } = await import("@/lib/auth");
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { success: false, error: "Authentication required" };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("buyerId", "==", session.user.id)
             .orderBy("createdAt", "desc")
             .get();
 
-        const orders = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                ...data,
-                // Format dates for client
-                date: data.createdAt?.toDate().toLocaleDateString() || "N/A",
-                estimatedDelivery: data.estimatedDelivery?.toDate().toLocaleDateString() || "Pending",
-                deliveredDate: data.deliveredAt?.toDate().toLocaleDateString(),
-            };
+        return { success: true, data: { orders: serializeDocs<Order>(snapshot.docs) } };
+    } catch (error) {
+        logger.error("Get buyer orders error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
         });
-
-        return { success: true, data: { orders } };
-    } catch (error: any) {
-        logger.error("Get buyer orders error:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: "Failed to fetch orders" };
     }
 }
+export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
 
-export async function confirmOrderReceiptAction(orderId: string) {
+async function _confirmOrderReceiptAction(orderId: string) {
+    let sessionResult;
     try {
-        const { auth } = await import("@/lib/auth");
-        const { FieldValue } = await import("firebase-admin/firestore");
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { success: false, error: "Authentication required" };
-        }
+        const userId = session.user.id;
 
         // 1. Get Order
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
@@ -200,13 +215,10 @@ export async function confirmOrderReceiptAction(orderId: string) {
         const orderData = orderDoc.data();
 
         // 2. Verify Buyer
-        if (orderData?.buyerId !== session.user.id) {
+        if (orderData?.buyerId !== userId) {
             return { success: false, error: "Unauthorized" };
         }
 
-        // ✅ FIX: Orders use field 'status', not 'orderStatus'.
-        // The old check was dead code — it never triggered, so buyers could confirm
-        // any order regardless of actual state. Now enforced correctly.
         if (orderData?.status !== "in_transit" && orderData?.status !== "processing" && orderData?.status !== "shipped") {
             return { success: false, error: "Order is not yet in transit or processing" };
         }
@@ -214,31 +226,37 @@ export async function confirmOrderReceiptAction(orderId: string) {
         await db.runTransaction(async (transaction) => {
             // 3. Update Order Status
             transaction.update(orderRef, {
-                // ✅ FIX: Write to 'status', not 'orderStatus' (non-existent field).
-                // Previously the order status was never actually updated to 'delivered'.
                 status: "delivered",
                 paymentStatus: "paid_to_seller",
                 deliveredAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
 
             // 4. Release Escrow Funds
-            const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
-                .where("orderId", "==", orderId)
-                .get();
+            const escrowQuery = await transaction.get(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("orderId", "==", orderId));
 
             escrowQuery.docs.forEach(doc => {
                 transaction.update(doc.ref, {
                     status: "released",
                     releasedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
                 });
             });
         });
 
-        return { success: true, message: "Order confirmed and funds released to seller(s)." };
+        return { success: true, data: { message: "Order confirmed and funds released to seller(s)." } };
 
-    } catch (error: any) {
-        logger.error("Confirm receipt error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Confirm receipt error:", {
+            userId: sessionResult?.session?.user?.id,
+            orderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to confirm receipt" };
     }
 }
+export const confirmOrderReceiptAction = withFlexibleSafeAction("confirmOrderReceiptAction", _confirmOrderReceiptAction);
+

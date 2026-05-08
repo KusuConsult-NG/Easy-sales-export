@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { DollarSign, CheckCircle, XCircle, Loader2, AlertCircle, Clock, User } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getStandardWaveWithdrawalsAction } from "@/app/actions/wave-admin";
+import { getStandardWaveWithdrawalsAction, processWaveWithdrawalAction } from "@/app/actions/wave-admin";
 import { formatDateTime } from "@/lib/utils";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
@@ -58,11 +58,13 @@ export default function AdminWaveWithdrawalsPage() {
                 dateFrom: dateRange.from || undefined,
                 dateTo: dateRange.to || undefined,
             });
+            if (!result.success) {
+                return { success: false, error: result.error };
+            }
             return {
-                success: result.success,
+                success: true,
                 data: result.data as any,
                 meta: { ...result.meta, lastDocId: result.lastDocId, hasMore: result.hasMore },
-                error: result.error
             };
         },
         limit: 25,
@@ -82,26 +84,21 @@ export default function AdminWaveWithdrawalsPage() {
 
         setProcessingId(withdrawalId);
         try {
-            const res = await fetch("/api/admin/wave/withdrawals", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    withdrawalId,
-                    action,
-                    adminNotes: notes || undefined,
-                    transactionReference: (action === "approve" || action === "complete") ? notes || undefined : undefined,
-                }),
+            const result = await processWaveWithdrawalAction({
+                withdrawalId,
+                action,
+                adminNotes: notes || undefined,
+                transactionReference: (action === "approve" || action === "complete") ? notes || undefined : undefined,
             });
 
-            const data = await res.json();
-            if (data.success) {
+            if (result.success) {
                 showToast(`Withdrawal ${action === "complete" ? "marked as completed" : action + "d"} successfully`, "success");
                 fetchWithdrawals();
             } else {
-                showToast(data.error || `Failed to ${action} withdrawal`, "error");
+                showToast(result.error || `Failed to ${action} withdrawal`, "error");
             }
-        } catch {
-            showToast(`Failed to ${action} withdrawal`, "error");
+        } catch (err: any) {
+            showToast(err.message || `Failed to ${action} withdrawal`, "error");
         } finally {
             setProcessingId(null);
         }

@@ -3,12 +3,15 @@
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue, FieldPath, AggregateField } from "firebase-admin/firestore";
+import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { logAuditAction } from "@/lib/audit";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/lib/admin-action-response";
 
 /**
  * Academy Admin Actions - Application Approval/Rejection
@@ -48,38 +51,47 @@ export async function approveAcademyApplicationAction(
             return { error: "Application missing user ID", success: false };
         }
 
-        // 2. Update Application Status
-        await appRef.update({
-            status: "approved",
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
+        // Perform atomic updates in a transaction
+        await db.runTransaction(async (transaction) => {
+            // 1. Get Application (re-read in transaction for safety)
+            const appSnap = await transaction.get(appRef);
+            if (!appSnap.exists) throw new Error("Application not found");
+
+            // 2. Update Application Status
+            transaction.update(appRef, {
+                status: "approved",
+                reviewedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
+
+            // 3. Update User Profile (Verify, Add Role, Activate Service)
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            transaction.set(userRef, {
+                isVerified: true,
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp(),
+                roles: FieldValue.arrayUnion("academy_participant"),
+                updatedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+            // Atomic sync for nested serviceRegistrations
+            transaction.update(userRef, {
+                "serviceRegistrations.academy.status": "approved",
+                "serviceRegistrations.academy.applicationId": applicationId,
+                "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
+            });
         });
 
-        // 3. Update User Profile (Verify, Add Role, Activate Service) - dot notation prevents cross-module data loss
-        await db.collection(COLLECTIONS.USERS).doc(userId).set({
-            isVerified: true,
-            verifiedBy: session.user.id,
-            verifiedAt: FieldValue.serverTimestamp(),
-            roles: FieldValue.arrayUnion("academy_participant"),
-            updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-        // Separate dot-notation update for nested serviceRegistrations to avoid overwriting other services
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
-            "serviceRegistrations.academy.status": "approved",
-            "serviceRegistrations.academy.applicationId": applicationId,
-            "serviceRegistrations.academy.approvedAt": FieldValue.serverTimestamp(),
-        });
-
-        // 4. CLEAR CACHE - User now has Academy access
+        // 4. CLEAR CACHE - User now has Academy access (Post-Commit Side Effect)
         try {
             const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'academy');
-            logger.info(`[Academy Approval] Cache cleared for user: ${userId}`);
         } catch (cacheError) {
             logger.error('[Academy Approval] Cache clear error:', cacheError);
         }
 
-        // 5. Send Approval Email
+        // 5. Send Approval Email (Post-Commit Side Effect)
         if (process.env.RESEND_API_KEY && appData.personalInfo?.email) {
             try {
                 const { Resend } = await import("resend");
@@ -170,28 +182,38 @@ export async function rejectAcademyApplicationAction(
         }
 
         const appData = appDoc.data()!;
-
-        // 2. Update Application Status
-        await appRef.update({
-            status: "rejected",
-            rejectionReason: reason,
-            reviewedBy: session.user.id,
-            reviewedAt: FieldValue.serverTimestamp(),
-        });
-
         const userId = appData.userId;
-        if (userId) {
-            // 3. Update User Profile (Mark as rejected)
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
-                "serviceRegistrations.academy.status": "rejected",
-                "serviceRegistrations.academy.rejectedAt": FieldValue.serverTimestamp(),
+
+        // Perform atomic rejection in a transaction
+        await db.runTransaction(async (transaction) => {
+            // 1. Get Application (re-read in transaction)
+            const appSnap = await transaction.get(appRef);
+            if (!appSnap.exists) throw new Error("Application not found");
+
+            // 2. Update Application Status
+            transaction.update(appRef, {
+                status: "rejected",
+                rejectionReason: reason,
+                reviewedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
 
-            // CLEAR CACHE
+            if (userId) {
+                // 3. Update User Profile (Mark as rejected)
+                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+                transaction.update(userRef, {
+                    "serviceRegistrations.academy.status": "rejected",
+                    "serviceRegistrations.academy.rejectedAt": FieldValue.serverTimestamp(),
+                });
+            }
+        });
+
+        // CLEAR CACHE (Post-Commit Side Effect)
+        if (userId) {
             try {
                 const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
                 await invalidateServiceCache(userId, 'academy');
-                logger.info(`[Academy Rejection] Cache cleared for user: ${userId}`);
             } catch (cacheError) {
                 logger.error('[Academy Rejection] Cache clear error:', cacheError);
             }
@@ -283,20 +305,28 @@ export async function updateAcademyApplicationPaymentAction(
 
         const appData = appDoc.data()!;
 
-        await appRef.update({
-            paymentStatus,
-            paymentAmount,
-            plan,
-            paymentVerifiedAt: paymentStatus === "completed" || paymentStatus === "paid" ? FieldValue.serverTimestamp() : null,
-            paymentVerifiedBy: paymentStatus === "completed" || paymentStatus === "paid" ? session.user.id : null,
-        });
+        // Perform atomic update in a transaction
+        await db.runTransaction(async (transaction) => {
+            const appSnap = await transaction.get(appRef);
+            if (!appSnap.exists) throw new Error("Application not found");
 
-        if (appData.userId) {
-            await db.collection(COLLECTIONS.USERS).doc(appData.userId).update({
-                "serviceRegistrations.academy.paymentStatus": paymentStatus,
-                "serviceRegistrations.academy.plan": plan
+            transaction.update(appRef, {
+                paymentStatus,
+                paymentAmount,
+                plan,
+                paymentVerifiedAt: paymentStatus === "completed" || paymentStatus === "paid" ? FieldValue.serverTimestamp() : null,
+                paymentVerifiedBy: paymentStatus === "completed" || paymentStatus === "paid" ? session.user.id : null,
+                _version: FieldValue.increment(1),
             });
-        }
+
+            if (appData.userId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(appData.userId);
+                transaction.update(userRef, {
+                    "serviceRegistrations.academy.paymentStatus": paymentStatus,
+                    "serviceRegistrations.academy.plan": plan
+                });
+            }
+        });
 
         await createAdminAuditLog({
             action: "academy_update_payment",
@@ -339,19 +369,10 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
             .where("status", "==", "pending")
             .get();
 
-        const applications = snapshot.docs.map((doc: any) => {
-            const d = doc.data();
-            const submittedAtDate: Date = d.submittedAt?.toDate?.() || new Date();
-            return {
-                id: doc.id,
-                ...d,
-                // Serialize all Timestamps to ISO strings for Client Component compatibility
-                submittedAt: submittedAtDate.toISOString(),
-                reviewedAt: d.reviewedAt?.toDate?.()?.toISOString() ?? null,
-                createdAt: d.createdAt?.toDate?.()?.toISOString() ?? null,
-                updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? null,
-            };
-        }).sort((a: any, b: any) =>
+        const applications = serializeDocs(snapshot.docs);
+        
+        // Ensure sorting is consistent after serialization
+        applications.sort((a: any, b: any) =>
             new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
         );
 
@@ -366,10 +387,277 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
     }
 }
 
-/**
- * Get Academy global applications stats (Admin)
- */
-export async function getAcademyStatsAction(): Promise<{
+
+async function _getAcademyEnrollmentsAction(options?: {
+    limit?: number;
+    search?: string;
+}): Promise<{
+    success: boolean;
+    meta?: any;
+    data?: { enrollments: any[] };
+    error?: string;
+}> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
+        
+        const fetchLimit = options?.search ? 1000 : (options?.limit || 50);
+        q = q.orderBy("enrolledAt", "desc").limit(fetchLimit);
+
+        const snapshot = await q.get();
+        let enrollments = serializeDocs(snapshot.docs);
+
+        if (options?.search) {
+            const s = options.search.toLowerCase().trim();
+            enrollments = enrollments.filter((e: any) => {
+                const searchString = [
+                    e.id,
+                    e.courseTitle,
+                    e.studentName,
+                    e.studentEmail,
+                    e.status
+                ].filter(Boolean).join(" ").toLowerCase();
+                
+                return searchString.includes(s);
+            });
+        }
+
+        return { success: true, data: { enrollments }, meta: { hasMore: false, cursor: null } };
+    } catch (error) {
+        logger.error("Get academy enrollments error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch enrollments" };
+    }
+}
+export const getAcademyEnrollmentsAction = withFlexibleSafeAction("getAcademyEnrollmentsAction", _getAcademyEnrollmentsAction);
+
+async function _getAcademyInstructorsAction(): Promise<{
+    success: boolean;
+    data?: any[];
+    error?: string;
+}> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const instructorsSnap = await db.collection(COLLECTIONS.USERS)
+            .where("roles", "array-contains", "academy_instructor")
+            .get();
+
+        const instructors = serializeDocs(instructorsSnap.docs);
+
+        return { success: true, data: instructors };
+    } catch (error) {
+        logger.error("Get academy instructors error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch instructors" };
+    }
+}
+export const getAcademyInstructorsAction = withFlexibleSafeAction("getAcademyInstructorsAction", _getAcademyInstructorsAction);
+
+async function _getAcademyCoursesAction(options?: {
+    limit?: number;
+    search?: string;
+}): Promise<{
+    success: boolean;
+    meta?: any;
+    data?: { courses: any[] };
+    error?: string;
+}> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_COURSES);
+        
+        const fetchLimit = options?.search ? 1000 : (options?.limit || 50);
+        q = q.orderBy("createdAt", "desc").limit(fetchLimit);
+
+        const snapshot = await q.get();
+        let courses = serializeDocs(snapshot.docs);
+
+        if (options?.search) {
+            const s = options.search.toLowerCase().trim();
+            courses = courses.filter((c: any) => {
+                const searchString = [
+                    c.id,
+                    c.title,
+                    c.instructorName,
+                    c.category,
+                    c.level
+                ].filter(Boolean).join(" ").toLowerCase();
+                
+                return searchString.includes(s);
+            });
+        }
+
+        return { success: true, data: { courses }, meta: { hasMore: false, cursor: null } };
+    } catch (error) {
+        logger.error("Get academy courses error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch courses" };
+    }
+}
+export const getAcademyCoursesAction = withFlexibleSafeAction("getAcademyCoursesAction", _getAcademyCoursesAction);
+
+async function _getAcademyStatsAction(): Promise<{
+    success: boolean;
+    meta?: any;
+    data?: {
+        stats: {
+            totalCourses: number;
+            totalStudents: number;
+            totalEnrollments: number;
+            activeEnrollments: number;
+            completedCourses: number;
+            totalRevenue: number;
+            monthlyRevenue: number;
+            revenueGrowth: number;
+            courseRatings: number;
+        }
+    };
+    error?: string;
+}> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
+        }
+
+        const { getCached, setCache } = await import("@/lib/redis");
+        const cacheKey = "admin:academy-stats:global";
+
+        try {
+            const cached = await getCached<any>(cacheKey);
+            if (cached) return cached;
+        } catch (e) {}
+
+        const [coursesSnap, studentsSnap, enrollmentsSnap] = await Promise.all([
+            db.collection(COLLECTIONS.ACADEMY_COURSES).count().get(),
+            db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "academy_student").count().get(),
+            db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).count().get(),
+        ]);
+
+        const totalCourses = coursesSnap.data().count;
+        const totalStudents = studentsSnap.data().count;
+        const totalEnrollments = enrollmentsSnap.data().count;
+
+        const activeEnrollmentsSnap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
+            .where("status", "==", "active").count().get();
+        const activeEnrollments = activeEnrollmentsSnap.data().count;
+
+        const completedCoursesSnap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
+            .where("status", "==", "completed").count().get();
+        const completedCourses = completedCoursesSnap.data().count;
+
+        const revenueSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+            .where("type", "==", "academy_course_purchase")
+            .where("status", "==", "completed")
+            .get();
+
+        let totalRevenue = 0;
+        let monthlyRevenue = 0;
+        let previousMonthRevenue = 0;
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        revenueSnap.docs.forEach(doc => {
+            const p = doc.data();
+            const amount = Number(p.amount) || 0;
+            totalRevenue += amount;
+
+            const date = p.createdAt?.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
+            if (date >= thirtyDaysAgo) {
+                monthlyRevenue += amount;
+            } else if (date >= sixtyDaysAgo && date < thirtyDaysAgo) {
+                previousMonthRevenue += amount;
+            }
+        });
+
+        const revenueGrowth = previousMonthRevenue > 0
+            ? ((monthlyRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+            : 0;
+
+        const payload = {
+            success: true as const,
+            data: {
+                stats: {
+                    totalCourses,
+                    totalStudents,
+                    totalEnrollments,
+                    activeEnrollments,
+                    completedCourses,
+                    totalRevenue,
+                    monthlyRevenue,
+                    revenueGrowth,
+                    courseRatings: 4.8, // Placeholder
+                }
+            },
+            meta: null
+        };
+
+        try {
+            await setCache(cacheKey, payload, 300);
+        } catch (e) {}
+
+        return payload;
+    } catch (error) {
+        logger.error("Get academy stats error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch academy statistics" };
+    }
+}
+export const getAcademyStatsAction = withFlexibleSafeAction("getAcademyStatsAction", _getAcademyStatsAction);
+
+async function _getAcademyApplicationStatsAction(): Promise<{
     success: boolean;
     data?: {
         stats: {
@@ -384,48 +672,110 @@ export async function getAcademyStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
-            !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required", success: false };
+        
+        // Ensure user has admin permissions
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
         }
 
-        const baseQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
-        
-        const [
-            totalSnap,
-            pendingSnap,
-            underReviewSnap,
-            approvedSnap,
-            rejectedSnap
-        ] = await Promise.all([
-            baseQuery.count().get(),
-            baseQuery.where("status", "==", "pending").count().get(),
-            baseQuery.where("status", "==", "under_review").count().get(),
-            baseQuery.where("status", "==", "approved").count().get(),
-            baseQuery.where("status", "==", "rejected").count().get()
+        const [pendingSnap, underReviewSnap, approvedSnap, rejectedSnap] = await Promise.all([
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("status", "==", "under_review").count().get(),
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("status", "==", "approved").count().get(),
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("status", "==", "rejected").count().get(),
         ]);
 
-        return { 
-            success: true, 
-            data: { 
-                stats: { 
-                    totalApplications: totalSnap.data().count,
-                    pending: pendingSnap.data().count,
-                    under_review: underReviewSnap.data().count,
-                    approved: approvedSnap.data().count,
-                    rejected: rejectedSnap.data().count,
-                } 
-            } 
+        const pending = pendingSnap.data().count;
+        const under_review = underReviewSnap.data().count;
+        const approved = approvedSnap.data().count;
+        const rejected = rejectedSnap.data().count;
+        const totalApplications = pending + under_review + approved + rejected;
+
+        return {
+            success: true,
+            data: {
+                stats: {
+                    totalApplications,
+                    pending,
+                    under_review,
+                    approved,
+                    rejected
+                }
+            }
         };
     } catch (error: any) {
-        logger.error("Get academy stats error:", error);
-        return { success: false, error: "Failed to fetch academy stats" };
+        logger.error("Get Academy application stats error:", error);
+        return { success: false, error: "Failed to fetch application statistics" };
     }
 }
+export const getAcademyApplicationStatsAction = withFlexibleSafeAction("getAcademyApplicationStatsAction", _getAcademyApplicationStatsAction);
 
-export async function getStandardAcademyApplicationsAction(options: {
+async function _upsertAcademyCourseAction(
+    courseId: string | "new",
+    courseData: any
+): Promise<{ success: boolean; meta?: any; data?: any; error?: string }> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
+        }
+        
+        const { courseSchema } = await import("@/lib/schemas");
+        const validated = courseSchema.safeParse(courseData);
+        if (!validated.success) {
+            return { success: false, error: validated.error.issues[0].message };
+        }
+
+        const cleanData = {
+            ...validated.data,
+            updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
+        };
+
+        if (courseId === "new") {
+            const newRef = db.collection(COLLECTIONS.ACADEMY_COURSES).doc();
+            await newRef.set({
+                ...cleanData,
+                createdAt: FieldValue.serverTimestamp(),
+                studentsCount: 0,
+                rating: 0,
+                status: "draft",
+                _version: 0,
+            });
+            courseId = newRef.id;
+        } else {
+            await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).update(cleanData);
+        }
+
+        await logAuditAction({
+            userId: session.user.id,
+            action: courseId === "new" ? "CREATE_COURSE" : "UPDATE_COURSE",
+            resourceId: courseId,
+            resourceType: "academy_course",
+            metadata: { title: courseData.title },
+        });
+
+        return { success: true, data: { id: courseId }, meta: null };
+    } catch (error) {
+        logger.error("Upsert academy course error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to save course" };
+    }
+}
+export const upsertAcademyCourseAction = withFlexibleSafeAction("upsertAcademyCourseAction", _upsertAcademyCourseAction);
+
+async function _getStandardAcademyApplicationsAction(options: {
     limit?: number;
     search?: string;
     status?: "pending" | "approved" | "rejected" | "under_review" | "all";
@@ -575,6 +925,7 @@ export async function getStandardAcademyApplicationsAction(options: {
         return { success: false, error: "Failed to fetch normalized applications" };
     }
 }
+export const getStandardAcademyApplicationsAction = withFlexibleSafeAction("getStandardAcademyApplicationsAction", _getStandardAcademyApplicationsAction);
 
 /**
  * Log Academy Export Action

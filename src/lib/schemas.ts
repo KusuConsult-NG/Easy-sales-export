@@ -258,12 +258,12 @@ export const LegacyOnboardingSchema = z.object({
     fullName: strictNameSchema,
     email: strictEmailSchema,
     phone: strictPhoneSchema,
-    gender: z.enum(["male", "female"]),
+    gender: z.enum(["male", "female"]).optional(),
     roles: z.array(UserRoleSchema).min(1, "At least one role is required"),
-    state: z.string().min(2, "State is required"),
-    lga: z.string().min(2, "LGA is required"),
+    state: z.string().min(2, "State is required").optional(),
+    lga: z.string().min(2, "LGA is required").optional(),
     city: z.string().min(2, "City is required").optional(),
-    address: z.string().min(5, "Complete address is required"),
+    address: z.string().min(5, "Complete address is required").optional(),
     // Financial Details
     bankName: z.string().optional(),
     accountNumber: z.string().regex(/^\d{10}$/, "Account number must be 10 digits").optional(),
@@ -272,6 +272,8 @@ export const LegacyOnboardingSchema = z.object({
     // KYC Details
     nin: z.string().length(11, "NIN must be 11 digits").optional(),
     bvn: z.string().length(11, "BVN must be 11 digits").optional(),
+    // Academy Plan selection
+    academyPlan: z.enum(["foundation", "standard", "elite"]).optional(),
     // Optional service-specific pre-approvals
     services: z.object({
         marketplace: z.boolean().default(false),
@@ -286,3 +288,67 @@ export const LegacyOnboardingSchema = z.object({
 export type LegacyOnboardingFormData = z.infer<typeof LegacyOnboardingSchema>;
 
 
+// ============================================
+// ACADEMY SCHEMAS
+// ============================================
+
+export const quizQuestionSchema = z.object({
+    id: z.string(),
+    question: z.string().min(5, "Question must be at least 5 characters"),
+    options: z.array(z.string()).min(2, "At least 2 options are required"),
+    correctAnswer: z.number().int().min(0),
+});
+
+export const quizSchema = z.object({
+    id: z.string(),
+    questions: z.array(quizQuestionSchema).min(1, "At least one question is required"),
+    passingScore: z.number().min(0).max(100),
+});
+
+export const lessonSchema = z.object({
+    id: z.string(),
+    title: z.string().min(3, "Lesson title must be at least 3 characters"),
+    content: z.string().min(1, "Lesson content is required"),
+    videoUrl: z.string().url().optional().or(z.literal("")).or(z.null()),
+    documentUrl: z.string().url().optional().or(z.literal("")).or(z.null()),
+    excelUrl: z.string().url().optional().or(z.literal("")).or(z.null()),
+    duration: z.string().min(1, "Duration is required"),
+    order: z.number().int().min(0),
+});
+
+export const courseModuleSchema = z.object({
+    id: z.string(),
+    title: z.string().min(3, "Module title must be at least 3 characters"),
+    description: z.string().min(1, "Module description is required"),
+    lessons: z.array(lessonSchema).min(1, "At least one lesson is required"),
+    quiz: quizSchema.optional().or(z.null()),
+    order: z.number().int().min(0),
+});
+
+export const courseSchema = z.object({
+    id: z.string().optional(),
+    title: z.string().min(5, "Course title must be at least 5 characters"),
+    description: z.string().min(20, "Course description must be at least 20 characters"),
+    instructor: z.string().min(3, "Instructor name must be at least 3 characters"),
+    duration: z.string().min(1, "Duration is required"),
+    level: z.enum(["beginner", "intermediate", "advanced"]),
+    tier: z.enum(["free", "foundation", "standard", "elite"]).optional().default("free"),
+    moduleId: z.string().min(1, "Module ID is required"),
+    price: z.number().min(0),
+    modules: z.array(courseModuleSchema).min(1, "At least one module is required"),
+    thumbnail: z.string().url().optional().or(z.literal("")).or(z.null()),
+});
+
+export const AcademyContentSchema = z.object({
+    title: z.string().min(5),
+    fileUrl: z.string().url(),
+    moduleId: z.string(),
+    contentType: z.enum(['video', 'pdf', 'quiz']),
+    createdAt: z.date().default(() => new Date()),
+});
+
+export type QuizQuestionFormData = z.infer<typeof quizQuestionSchema>;
+export type QuizFormData = z.infer<typeof quizSchema>;
+export type LessonFormData = z.infer<typeof lessonSchema>;
+export type CourseModuleFormData = z.infer<typeof courseModuleSchema>;
+export type CourseFormData = z.infer<typeof courseSchema>;

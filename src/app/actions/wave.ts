@@ -350,44 +350,49 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
             applicationId = `WAVE-${Date.now()}-${Math.random().toString(36).substring(2, 11).toUpperCase()}`;
         }
 
-        // Save to Firestore
-        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).set({
-            ...validatedData,
-            age: calculatedAge, // Enforce truth: Save calculated age, not user input
-            userId: session.user.id,
-            userEmail: session.user.email || validatedData.email,
-            status: "pending", // pending | approved | rejected
-            applicationDate: FieldValue.serverTimestamp(),
-            reviewedAt: null,
-            reviewedBy: null,
-            rejectionReason: null,
-            updatedAt: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
+        // Save to Firestore using a transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            // 1. Create WAVE Application
+            transaction.set(db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId), {
+                ...validatedData,
+                age: calculatedAge, // Enforce truth: Save calculated age, not user input
+                userId: session.user.id,
+                userEmail: session.user.email || validatedData.email,
+                status: "pending", // pending | approved | rejected
+                applicationDate: FieldValue.serverTimestamp(),
+                reviewedAt: null,
+                reviewedBy: null,
+                rejectionReason: null,
+                updatedAt: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. Update user.serviceRegistrations
+            transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
+                "serviceRegistrations.wave.status": "pending",
+                "serviceRegistrations.wave.paymentStatus": "completed",
+                "serviceRegistrations.wave.applicationId": applicationId,
+                "serviceRegistrations.wave.submittedAt": FieldValue.serverTimestamp(),
+                // Sync KYC name fields for Admin Communication Hub & admin portal
+                firstName: validatedData.firstName,
+                lastName: validatedData.surname,
+                otherName: validatedData.otherNames || null,
+                fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                    .filter(Boolean).join(" ").trim(),
+                // Sync other PII for Communication Hub
+                phone: applicantPhone,
+                gender: "female", // WAVE is exclusive to females
+                stateOfOrigin: validatedData.stateOfOrigin,
+                residentialState: validatedData.stateOfResidence,
+                lga: validatedData.lgaOfOrigin,
+                residentialAddress: validatedData.residentialAddress,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
-        // CRITICAL: Update user.serviceRegistrations using dot notation to prevent cross-module data loss
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            "serviceRegistrations.wave.status": "pending",
-            "serviceRegistrations.wave.applicationId": applicationId,
-            "serviceRegistrations.wave.submittedAt": FieldValue.serverTimestamp(),
-            // Sync KYC name fields for Admin Communication Hub & admin portal
-            firstName: validatedData.firstName,
-            lastName: validatedData.surname,
-            otherName: validatedData.otherNames || null,
-            fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
-                .filter(Boolean).join(" ").trim(),
-            // Sync other PII for Communication Hub
-            phone: applicantPhone,
-            gender: "female", // WAVE is exclusive to females
-            stateOfOrigin: validatedData.stateOfOrigin,       // ← correct: origin state
-            residentialState: validatedData.stateOfResidence, // ← separate residence field
-            lga: validatedData.lgaOfOrigin,
-            residentialAddress: validatedData.residentialAddress,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        // Audit log
-        await createAdminAuditLog({
+        // 5. Post-Commit Side Effects (Secondary Integrations)
+        // Audit log (Deferred)
+        createAdminAuditLog({
             action: "user_update",
             userId: session.user.id,
             targetId: applicationId,
@@ -398,7 +403,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
                 stateOfResidence: validatedData.stateOfResidence,
                 ageVerification: `Verified 18+ (Auto-calculated: ${calculatedAge})`
             },
-        });
+        }).catch(err => logger.error("Deferred audit log failed (WAVE):", err));
 
         // Send email notifications (non-blocking — don't fail submission if email fails)
         try {
@@ -884,7 +889,7 @@ export async function calculateEarningsAction(userId: string): Promise<{ success
 
         const availableBalance = Math.max(0, paidAmount - withdrawnAmount);
 
-        return { success: true, data: {
+        const result: MemberEarnings = {
             memberId: userId,
             totalSales,
             totalEarnings,
@@ -892,8 +897,16 @@ export async function calculateEarningsAction(userId: string): Promise<{ success
             pendingAmount,
             paidAmount: availableBalance, // Actually available to withdraw
             totalWithdrawn: withdrawnAmount, // newly added for clarity
-            transactions: transactions.sort((a: any, b: any) => b.date.getTime() - a.date.getTime()),
-        } };
+            transactions: transactions
+                .sort((a: any, b: any) => b.date.getTime() - a.date.getTime())
+                .map(t => ({
+                    ...t,
+                    date: t.date.toISOString() as any // Cast for DTO compatibility
+                })),
+        };
+
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        return { success: true, data: serializeValue(result) as any };
     } catch (error) {
         logger.error("Calculate earnings error:", error);
         return { success: false, error: "Failed to calculate earnings" };
@@ -990,7 +1003,7 @@ export async function getMemberCertificatesAction(userId: string): Promise<{ suc
             .where("memberId", "==", userId)
             .get();
 
-        return { success: true, data: snapshot.docs.map(doc => doc.data()) as WaveCertificate[] };
+        return { success: true, data: serializeDocs<WaveCertificate>(snapshot.docs) };
     } catch (error) {
         logger.error("Get certificates error:", error);
         return { success: false, error: "Failed to load certificates" };
@@ -1233,11 +1246,13 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
             return bTime - aTime;
         });
         const data = sortedDocs[0];
+        
+        const { serializeValue } = await import("@/lib/firestore-serialize");
         return {
             success: true,
             data: {
                 status: data.status || null,
-                submittedAt: data.createdAt || data.submittedAt || null,
+                submittedAt: serializeValue(data.createdAt || data.submittedAt || null),
             }
         };
     } catch (error) {
@@ -1297,20 +1312,24 @@ export async function requestWaveRevisionAction(
 
         const userId = appDoc.data()?.userId;
 
-        await appRef.update({
-            status: 'revision_required',
-            revisionNote: reason,
-            revisionRequestedAt: FieldValue.serverTimestamp(),
-            revisionRequestedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        if (userId) {
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
-                'serviceRegistrations.wave.status': 'revision_required',
+        // Perform updates in a single transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            transaction.update(appRef, {
+                status: 'revision_required',
+                revisionNote: reason,
+                revisionRequestedAt: FieldValue.serverTimestamp(),
+                revisionRequestedBy: session.user.id,
                 updatedAt: FieldValue.serverTimestamp(),
             });
-        }
+
+            if (userId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+                transaction.update(userRef, {
+                    'serviceRegistrations.wave.status': 'revision_required',
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+        });
 
         await createAdminAuditLog({
             action: 'user_update',
@@ -1355,17 +1374,23 @@ export async function resubmitWaveApplicationAction(
 
         const validatedData = validation.data;
 
-        await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).update({
-            ...validatedData,
-            status: 'pending',
-            revisionNote: null,
-            resubmittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        // Perform updates in a single transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
+            const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
 
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            'serviceRegistrations.wave.status': 'pending',
-            updatedAt: FieldValue.serverTimestamp(),
+            transaction.update(appRef, {
+                ...validatedData,
+                status: 'pending',
+                revisionNote: null,
+                resubmittedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            transaction.update(userRef, {
+                'serviceRegistrations.wave.status': 'pending',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         await createAdminAuditLog({

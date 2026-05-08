@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { checkAcademyPaymentStatusAction } from "@/app/actions/academy";
+import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 
 type CourseProgress = {
     courseId: string;
@@ -44,32 +45,31 @@ export default function AcademyDashboardPage() {
     });
     const [isUnpaid, setIsUnpaid] = useState(false);
 
+    const { data: sessionData, update: updateSession } = useSession();
+    const userId = (sessionData?.user as any)?.id;
+    const { status: membershipStatus } = useMembershipStatus(userId, "academy");
+
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/auth/login?callbackUrl=/academy/dashboard");
             return;
         }
-        if (status === "authenticated") {
-            verifyAccessAndFetchData();
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, router]);
-
-    async function verifyAccessAndFetchData() {
-        setIsLoading(true);
-        try {
-            const payStatus = await checkAcademyPaymentStatusAction();
-            if (payStatus.data === "unpaid") {
+        
+        if (status === "authenticated" && membershipStatus !== "loading") {
+            if (membershipStatus === "approved" || membershipStatus === "active") {
+                // SILENT REFRESH: If local session is stale, refresh it
+                if ((sessionData?.user as any)?.serviceRegistrations?.academy?.status !== "approved") {
+                    updateSession();
+                }
+                setIsUnpaid(false);
+                fetchDashboardData();
+            } else if (membershipStatus === "not_found" || membershipStatus === "pending") {
                 setIsUnpaid(true);
                 setIsLoading(false);
-                return;
             }
-            await fetchDashboardData();
-        } catch (error) {
-            logger.error("Failed to verify access:", error);
-            setIsLoading(false);
         }
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status, router, membershipStatus]);
 
     async function fetchDashboardData() {
         try {

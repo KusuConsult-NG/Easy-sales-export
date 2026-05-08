@@ -1,43 +1,152 @@
 import { z } from "zod";
 
 /**
- * Product Creation Schema
+ * Marketplace Zod Schemas
+ * Used for data-scrubbing and ensuring data integrity across the platform.
+ * These schemas "heal" corrupted legacy data by providing sensible defaults.
  */
-export const productSchema = z.object({
-    title: z.string().min(3, "Title must be at least 3 characters").max(100, "Title too long"),
-    description: z.string().min(10, "Description must be at least 10 characters"),
-    category: z.string().min(1, "Category is required"),
 
-    // Pricing
-    retailPrice: z.number().positive("Retail price must be positive"),
-    bulkPrice: z.number().positive("Bulk price must be positive").optional(),
-    exportPrice: z.number().positive("Export price must be positive").optional(),
+// Helper for Firestore Timestamps / Dates
+const dateSchema = z.preprocess((arg) => {
+    if (arg instanceof Date) return arg;
+    if (typeof arg === 'object' && arg !== null && 'seconds' in arg) {
+        return new Date((arg as any).seconds * 1000);
+    }
+    if (typeof arg === 'string') return new Date(arg);
+    return new Date(); // Default to now if missing
+}, z.date());
 
-    // Quantities & Unit
-    availableQuantity: z.number().int().nonnegative("Available quantity cannot be negative"),
-    minimumOrderQuantity: z.number().int().positive("Minimum order quantity must be at least 1"),
-    bulkMinQuantity: z.number().int().positive().optional(),
-    exportMinQuantity: z.number().int().positive().optional(),
-    unit: z.string().min(1, "Unit is required (e.g. kg, bags)"),
-
-    // Location
-    state: z.string().min(2, "State is required"),
-    lga: z.string().min(2, "LGA is required"),
-
-    // Delivery
-    deliveryMethod: z.string().min(1, "Delivery method required"), // "pickup" | "delivery" | "both"
-    estimatedDeliveryDays: z.number().int().nonnegative().optional(),
-
-    // Verification
-    certifications: z.array(z.string()).optional(),
-
-    // Flags
-    bulkAvailable: z.boolean().optional(),
-    exportReady: z.boolean().optional(),
-
-    // Media (URLs handled by uploader, but we validate existence here if passed as string array, 
-    // though the action handles files. This schema validates the METADATA).
-    videoUrl: z.string().url("Invalid video URL").optional().or(z.literal("")),
+export const PricingTierSchema = z.object({
+    type: z.enum(["retail", "bulk", "export"]),
+    price: z.number().default(0),
+    minQuantity: z.number().default(1),
 });
 
-export type ProductInput = z.infer<typeof productSchema>;
+export const ProductCategorySchema = z.enum([
+    "poultry",
+    "sea_foods",
+    "horticultural",
+    "natural_oils",
+    "spices_herbs_seasonings",
+    "beverages",
+    "dairy",
+    "organics",
+    "gmos",
+    "health_wellness",
+    "grains",
+    "vegetables",
+    "fruits",
+    "livestock",
+    "fishery",
+    "processed",
+    "equipment",
+    "other",
+]);
+
+export const ProductSchema = z.object({
+    id: z.string(),
+    sellerId: z.string(),
+    title: z.string().default("Untitled Product"),
+    description: z.string().default("No description provided"),
+    category: ProductCategorySchema.default("other"),
+    images: z.array(z.string()).default([]),
+    videoUrl: z.string().optional(),
+    pricingTiers: z.array(PricingTierSchema).default([{ type: "retail", price: 0, minQuantity: 1 }]),
+    availableQuantity: z.number().default(0),
+    minimumOrderQuantity: z.number().default(1),
+    unit: z.string().default("units"),
+    location: z.object({
+        state: z.string().default("Lagos"),
+        lga: z.string().default("Unknown"),
+    }).default({ state: "Lagos", lga: "Unknown" }),
+    deliveryMethod: z.enum(["pickup", "delivery", "both"]).default("delivery"),
+    estimatedDeliveryDays: z.number().optional(),
+    status: z.enum(["draft", "active", "suspended", "out_of_stock", "deleted"]).default("draft"),
+    bulkAvailable: z.boolean().default(false),
+    exportReady: z.boolean().default(false),
+    views: z.number().default(0),
+    orders: z.number().default(0),
+    rating: z.number().default(0),
+    reviewCount: z.number().default(0),
+    sellerName: z.string().default("Easy Sales Seller"),
+    sellerVerified: z.boolean().default(false),
+    sellerCategory: z.enum(["wholesale", "retail"]).default("retail"),
+    createdAt: dateSchema,
+    updatedAt: dateSchema,
+    _version: z.number().default(0),
+});
+
+export const OrderItemSchema = z.object({
+    productId: z.string(),
+    productTitle: z.string().default("Product"),
+    quantity: z.number().default(1),
+    unitPrice: z.number().default(0),
+    totalPrice: z.number().default(0),
+    tier: z.enum(["retail", "bulk", "export"]).default("retail"),
+});
+
+export const OrderSchema = z.object({
+    id: z.string(),
+    orderNumber: z.string().default("ORDER-UNKNOWN"),
+    buyerId: z.string(),
+    sellerId: z.string(),
+    productIds: z.array(z.string()).default([]),
+    items: z.array(OrderItemSchema).default([]),
+    subtotal: z.number().default(0),
+    deliveryFee: z.number().default(0),
+    serviceFee: z.number().default(0),
+    totalAmount: z.number().default(0),
+    paymentMethod: z.enum(["escrow", "wallet", "payment_on_delivery"]).default("escrow"),
+    status: z.enum([
+        "pending_payment",
+        "payment_received",
+        "processing",
+        "shipped",
+        "delivered",
+        "completed",
+        "cancelled",
+        "disputed",
+    ]).default("pending_payment"),
+    deliveryAddress: z.object({
+        recipientName: z.string().default("Guest"),
+        recipientPhone: z.string().default(""),
+        street: z.string().default(""),
+        city: z.string().default(""),
+        state: z.string().default(""),
+        lga: z.string().default(""),
+    }),
+    createdAt: dateSchema,
+    updatedAt: dateSchema,
+    _version: z.number().default(0),
+});
+
+export const SellerAnalyticsSchema = z.object({
+    totalSales: z.number().default(0),
+    activeListings: z.number().default(0),
+    pendingOrders: z.number().default(0),
+    monthlyRevenue: z.number().default(0),
+    conversionRate: z.number().default(0),
+    averageRating: z.number().default(0),
+    prevMonthRevenue: z.number().default(0),
+    prevTotalSales: z.number().default(0),
+    prevActiveListings: z.number().default(0),
+});
+
+export const MarketplaceOnboardingSchema = z.object({
+    shopName: z.string().min(3, "Shop name must be at least 3 characters"),
+    shopDescription: z.string().min(10, "Description must be at least 10 characters"),
+    category: z.string(),
+    accountType: z.enum(["seller", "both"]),
+    allowsPaymentOnDelivery: z.boolean().default(false),
+    state: z.string(),
+    lga: z.string(),
+    address: z.string(),
+});
+
+export const SellerVerificationSchema = z.object({
+    idType: z.enum(["nin", "passport", "voters_card", "drivers_license"]),
+    idNumber: z.string().min(5, "Invalid ID number"),
+    idImage: z.string().url("Invalid ID image URL"),
+    selfieImage: z.string().url("Invalid selfie image URL"),
+    businessRegNumber: z.string().optional(),
+});

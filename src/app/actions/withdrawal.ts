@@ -27,23 +27,20 @@ interface ActionState {
     message?: string;
 }
 
-export async function submitWithdrawalRequestAction(
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+
+async function _submitWithdrawalRequestAction(
     data: WithdrawalRequestData
 ): Promise<ActionState> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
-
-        if (!session?.user) {
-            return { error: 'Authentication required', success: false };
-        }
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
 
         const userId = session.user.id;
         const userEmail = session.user.email || "";
 
-        // Validate Input with Zod
-        // We omit cooperativeId because this action infers it from the user's membership record
         const { withdrawalSchema } = await import("@/lib/schemas");
         const submissionSchema = withdrawalSchema.omit({ cooperativeId: true });
 
@@ -58,7 +55,6 @@ export async function submitWithdrawalRequestAction(
 
         const validatedData = validation.data;
 
-        // Transactional execution for Financial Integrity
         await db.runTransaction(async (transaction) => {
             const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
             const membershipDoc = await transaction.get(membershipRef);
@@ -70,22 +66,17 @@ export async function submitWithdrawalRequestAction(
             const membership = membershipDoc.data()!;
             const availableBalance = membership.savingsBalance || 0;
 
-            // Validate balance
             if (validatedData.amount > availableBalance) {
                 throw new Error(`Insufficient balance. Available: ₦${availableBalance.toLocaleString()}`);
             }
 
-            // 1. Decrement Savings Balance (Lock funds)
             transaction.update(membershipRef, {
                 savingsBalance: FieldValue.increment(-validatedData.amount),
-                lockedBalance: FieldValue.increment(validatedData.amount), // Track locked funds
+                lockedBalance: FieldValue.increment(validatedData.amount),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
 
-            // 2. Create withdrawal request in COOPERATIVE_WITHDRAWALS
-            // ✅ FIX: was COLLECTIONS.WITHDRAWALS — admin approval/rejection
-            //         reads from COLLECTIONS.COOPERATIVE_WITHDRAWALS.
-            //         Using the wrong collection meant requests were invisible to admins.
             const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
             transaction.set(withdrawalRef, {
                 userId,
@@ -98,13 +89,13 @@ export async function submitWithdrawalRequestAction(
                 accountName: validatedData.accountName,
                 reason: validatedData.reason || 'Personal withdrawal',
                 status: 'pending',
+                _version: 0,
                 requestedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
         });
 
-        // Create audit log (After successful transaction)
         await createAdminAuditLog({
             action: 'payment_initiated',
             userId,
@@ -119,7 +110,6 @@ export async function submitWithdrawalRequestAction(
             details: `Withdrawal request of ₦${validatedData.amount.toLocaleString()} submitted`,
         });
 
-        // Send confirmation email
         try {
             const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
             if (sendWithdrawalConfirmationEmail) {
@@ -143,10 +133,14 @@ export async function submitWithdrawalRequestAction(
             message: `Withdrawal request for ₦${validatedData.amount.toLocaleString()} submitted successfully`,
         };
     } catch (error: any) {
-        logger.error('Withdrawal request error:', error);
+        logger.error('Withdrawal request error:', {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return {
             error: error.message || 'Failed to submit withdrawal request',
             success: false,
         };
     }
 }
+export const submitWithdrawalRequestAction = withFlexibleSafeAction("submitWithdrawalRequestAction", _submitWithdrawalRequestAction);

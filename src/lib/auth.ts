@@ -170,6 +170,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         image: null,
                         roles: userData.roles || [],
                         verified: userData.verified ?? true,
+                        serviceRegistrations: userData.serviceRegistrations || {},
                     };
                 } catch (error: any) {
                     // ── CRITICAL: Log the REAL error BEFORE mapping it ────────
@@ -247,6 +248,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                          token.verified = userData.isVerified ?? userData.verified ?? true;
                          token.onboardingCompleted = userData.onboardingCompleted;
                          token.sellerVerificationStatus = userData.sellerVerificationStatus;
+                         token.serviceRegistrations = userData.serviceRegistrations || {};
                      }
                  } catch (e) {
                      console.error("[NextAuth JWT] Failed to sync session from database", e);
@@ -362,6 +364,7 @@ declare module "next-auth" {
             verified: boolean;
             onboardingCompleted?: boolean;
             sellerVerificationStatus?: string;
+            serviceRegistrations?: Record<string, any>;
         };
         firebaseToken?: string;
     }
@@ -375,5 +378,6 @@ declare module "next-auth" {
         verified: boolean;
         onboardingCompleted?: boolean;
         sellerVerificationStatus?: string;
+        serviceRegistrations?: Record<string, any>;
     }
 }

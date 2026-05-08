@@ -15,6 +15,25 @@ export type ActionResponse<T = any> = {
 };
 
 /**
+ * Utility to redact sensitive fields from log payloads
+ */
+function redactSensitiveData(data: any): any {
+    if (!data || typeof data !== 'object') return data;
+    
+    const sensitiveFields = ['password', 'confirmPassword', 'pin', 'cvv', 'token', 'secret', 'authCode'];
+    const redacted = Array.isArray(data) ? [...data] : { ...data };
+    
+    for (const key in redacted) {
+        if (sensitiveFields.includes(key.toLowerCase())) {
+            redacted[key] = '[REDACTED]';
+        } else if (typeof redacted[key] === 'object') {
+            redacted[key] = redactSensitiveData(redacted[key]);
+        }
+    }
+    return redacted;
+}
+
+/**
  * A higher-order function that wraps Server Actions to catch any unhandled exceptions
  * and return them safely as structured { success: false, error: string } objects.
  * Prevents Node.js runtime crashes and 500 Server Errors in Next.js 16.
@@ -42,9 +61,12 @@ export function withSafeAction<TArgs extends any[], TReturn>(
                 return { success: false, error: errorMessage };
             }
 
-            // Log full stack trace securely via our new Telemetry
+            // Log full stack trace and redacted input securely via our new Telemetry
             const errorMessage = error instanceof Error ? error.message : "An unexpected server error occurred";
-            logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { stack: error?.stack });
+            logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { 
+                stack: error?.stack,
+                input: redactSensitiveData(args)
+            });
 
             // Return safe string to client boundaries
             return {
@@ -82,9 +104,12 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
                 return { success: false, error: errorMessage };
             }
 
-            // Log full stack trace securely via our new Telemetry
+            // Log full stack trace and redacted input securely via our new Telemetry
             const errorMessage = error instanceof Error ? error.message : "An unexpected server error occurred";
-            logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { stack: error?.stack });
+            logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { 
+                stack: error?.stack,
+                input: redactSensitiveData(args)
+            });
 
             // Return safe string to client boundaries
             return {

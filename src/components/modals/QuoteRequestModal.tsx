@@ -53,7 +53,7 @@ export default function QuoteRequestModal({ isOpen, item, onClose, theme = "mark
             });
 
             if (result.success) {
-                showToast(result.message || "Quote request submitted successfully", "success");
+                showToast(result.data?.message || "Quote request submitted successfully", "success");
                 onClose();
             } else {
                 showToast(result.error || "Failed to submit quote request", "error");

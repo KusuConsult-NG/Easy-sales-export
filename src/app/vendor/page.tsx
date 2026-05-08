@@ -44,11 +44,11 @@ export default function VendorDashboardPage() {
             getVendorActivityFeedAction(5),
         ])
             .then(([sales, inv, feed]) => {
-                if (sales.success) setSalesStats((sales as any).stats);
-                if (inv.success)   setInventory((inv as any).stats);
-                if (feed.success)  setActivities((feed as any).activities ?? []);
+                if (sales.success) setSalesStats(sales.data?.stats);
+                if (inv.success)   setInventory(inv.data?.stats);
+                if (feed.success)  setActivities(feed.data?.activities ?? []);
                 if (!sales.success && !inv.success) {
-                    setError((sales as any).error ?? "Failed to load stats");
+                    setError(sales.error ?? inv.error ?? "Failed to load stats");
                 }
             })
             .catch((e) => setError(e.message))

@@ -9,8 +9,9 @@
 
 import { useState } from "react";
 import { Upload, FileText, Image, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { useToast } from "@/contexts/ToastContext";
 import { IdInput } from "@/components/ui/IdInput";
+import MasterUploader from "@/components/shared/MasterUploader";
+import { useToast } from "@/contexts/ToastContext";
 
 interface DocumentUploadStepProps {
     data: {
@@ -34,56 +35,6 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
     const { showToast } = useToast();
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [torAgreed, setTorAgreed] = useState(false);
-    const [uploadStates, setUploadStates] = useState<Record<string, UploadState>>({
-        validId: { uploading: false, progress: 0 },
-        passportPhoto: { uploading: false, progress: 0 },
-        proofOfAddress: { uploading: false, progress: 0 },
-    });
-
-    const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-
-    async function handleFileUpload(field: string, file: File | null) {
-        if (!file) return;
-
-        if (!ALLOWED_TYPES.includes(file.type)) {
-            setErrors(prev => ({ ...prev, [field]: 'Invalid file type. Only JPG, PNG, PDF allowed.' }));
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            setErrors(prev => ({ ...prev, [field]: 'File too large. Max 5MB.' }));
-            return;
-        }
-
-        setErrors(prev => ({ ...prev, [field]: '' }));
-        setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 10 } }));
-
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("folder", "documents");
-            formData.append("documentType", field);
-
-            setUploadStates(prev => ({ ...prev, [field]: { uploading: true, progress: 40 } }));
-
-            const res = await fetch("/api/upload", { method: "POST", body: formData });
-            const result = await res.json();
-
-            if (!res.ok || !result.success || !result.url) {
-                throw new Error(result.error || 'Upload failed');
-            }
-
-            onChange({ ...data, [field]: { name: file.name, url: result.url } });
-            setUploadStates(prev => ({ ...prev, [field]: { uploading: false, progress: 100 } }));
-            showToast('File uploaded successfully', 'success');
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-            setErrors(prev => ({ ...prev, [field]: errorMessage }));
-            setUploadStates(prev => ({ ...prev, [field]: { uploading: false, progress: 0, error: errorMessage } }));
-            showToast(errorMessage, 'error');
-        }
-    };
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
@@ -150,136 +101,39 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
             {/* Form */}
             <div className="max-w-2xl mx-auto space-y-6">
                 {/* Valid ID */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Valid ID <span className="text-red-500">*</span>
-                    </label>
-                    <p className="text-sm text-slate-600 mb-3">
-                        Government-issued ID (NIN slip, Driver's License, International Passport)
-                    </p>
-                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${errors.validId ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
-                        {uploadStates.validId.uploading ? (
-                            <div className="flex flex-col items-center gap-3">
-                                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-900 font-medium">Uploading... {Math.round(uploadStates.validId.progress)}%</p>
-                                <div className="w-full bg-slate-200 rounded-full h-2">
-                                    <div className="bg-purple-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadStates.validId.progress}%` }} />
-                                </div>
-                            </div>
-                        ) : data.validId ? (
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="w-6 h-6 text-green-600" />
-                                    <span className="text-slate-900 font-medium">{data.validId.name}</span>
-                                </div>
-                                <button onClick={() => onChange({ ...data, validId: undefined })} className="text-red-600 hover:text-red-700 text-sm font-semibold">
-                                    Remove
-                                </button>
-                            </div>
-                        ) : (
-                            <label className="cursor-pointer">
-                                <input
-                                    type="file"
-                                    accept="image/*,.pdf"
-                                    onChange={(e) => handleFileUpload("validId", e.target.files?.[0] || null)}
-                                    className="hidden"
-                                />
-                                <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                                <p className="text-slate-600 font-medium">Click to upload ID document</p>
-                                <p className="text-sm text-slate-500 mt-1">JPG, PNG, PDF (Max 5MB)</p>
-                            </label>
-                        )}
-                    </div>
-                    {data.validId && (
-                        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-sm text-green-700">✓ ID uploaded — our team will verify it within 24-48 hours.</p>
-                        </div>
-                    )}
-                    {errors.validId && <p className="text-sm text-red-600 mt-1">{errors.validId}</p>}
-                </div>
+                <MasterUploader 
+                    label="Valid ID"
+                    folder="cooperative/documents"
+                    moduleId="cooperative"
+                    required
+                    accept="image/*,application/pdf"
+                    maxSize={5}
+                    onComplete={(res) => onChange({ ...data, validId: { name: "ID Document", url: res.url } })}
+                    description="Government-issued ID (NIN slip, Driver's License, International Passport)"
+                />
 
                 {/* Passport Photo */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Passport Photo <span className="text-red-500">*</span>
-                    </label>
-                    <p className="text-sm text-slate-600 mb-3">Recent passport-sized photograph</p>
-                    <div className={`border-2 border-dashed rounded-lg p-6 text-center ${errors.passportPhoto ? "border-red-500 bg-red-50" : "border-slate-300 bg-slate-50"}`}>
-                        {uploadStates.passportPhoto.uploading ? (
-                            <div className="flex flex-col items-center gap-3">
-                                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-900 font-medium">Uploading... {Math.round(uploadStates.passportPhoto.progress)}%</p>
-                                <div className="w-full bg-slate-200 rounded-full h-2">
-                                    <div className="bg-purple-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadStates.passportPhoto.progress}%` }} />
-                                </div>
-                            </div>
-                        ) : data.passportPhoto ? (
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="w-6 h-6 text-green-600" />
-                                    <span className="text-slate-900 font-medium">{data.passportPhoto.name}</span>
-                                </div>
-                                <button onClick={() => onChange({ ...data, passportPhoto: undefined })} className="text-red-600 hover:text-red-700 text-sm font-semibold">
-                                    Remove
-                                </button>
-                            </div>
-                        ) : (
-                            <label className="cursor-pointer">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={(e) => handleFileUpload("passportPhoto", e.target.files?.[0] || null)}
-                                    className="hidden"
-                                />
-                                <Image className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                                <p className="text-slate-600 font-medium">Click to upload passport photo</p>
-                                <p className="text-sm text-slate-500 mt-1">JPG, PNG (Max 5MB)</p>
-                            </label>
-                        )}
-                    </div>
-                    {errors.passportPhoto && <p className="text-sm text-red-600 mt-1">{errors.passportPhoto}</p>}
-                </div>
+                <MasterUploader 
+                    label="Passport Photo"
+                    folder="cooperative/documents"
+                    moduleId="cooperative"
+                    required
+                    accept="image/*"
+                    maxSize={5}
+                    onComplete={(res) => onChange({ ...data, passportPhoto: { name: "Passport Photo", url: res.url } })}
+                    description="Recent passport-sized photograph"
+                />
 
                 {/* Proof of Address (Optional) */}
-                <div>
-                    <label className="block text-sm font-semibold text-slate-900 mb-2">
-                        Proof of Address <span className="text-slate-500">(Optional)</span>
-                    </label>
-                    <p className="text-sm text-slate-600 mb-3">Utility bill, bank statement, or tenancy agreement</p>
-                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center bg-slate-50">
-                        {uploadStates.proofOfAddress.uploading ? (
-                            <div className="flex flex-col items-center gap-3">
-                                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                                <p className="text-slate-900 font-medium">Uploading... {Math.round(uploadStates.proofOfAddress.progress)}%</p>
-                                <div className="w-full bg-slate-200 rounded-full h-2">
-                                    <div className="bg-purple-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadStates.proofOfAddress.progress}%` }} />
-                                </div>
-                            </div>
-                        ) : data.proofOfAddress ? (
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="w-6 h-6 text-green-600" />
-                                    <span className="text-slate-900 font-medium">{data.proofOfAddress.name}</span>
-                                </div>
-                                <button onClick={() => onChange({ ...data, proofOfAddress: undefined })} className="text-red-600 hover:text-red-700 text-sm font-semibold">
-                                    Remove
-                                </button>
-                            </div>
-                        ) : (
-                            <label className="cursor-pointer">
-                                <input
-                                    type="file"
-                                    accept="image/*,.pdf"
-                                    onChange={(e) => handleFileUpload("proofOfAddress", e.target.files?.[0] || null)}
-                                    className="hidden"
-                                />
-                                <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                                <p className="text-slate-600 font-medium">Click to upload proof of address</p>
-                                <p className="text-sm text-slate-500 mt-1">JPG, PNG, PDF (Max 5MB)</p>
-                            </label>
-                        )}
-                    </div>
-                </div>
+                <MasterUploader 
+                    label="Proof of Address (Optional)"
+                    folder="cooperative/documents"
+                    moduleId="cooperative"
+                    accept="image/*,application/pdf"
+                    maxSize={5}
+                    onComplete={(res) => onChange({ ...data, proofOfAddress: { name: "Proof of Address", url: res.url } })}
+                    description="Utility bill, bank statement, or tenancy agreement"
+                />
 
                 {/* BVN — required via IdInput standardize */}
                 <div className="pt-4 border-t border-slate-100">

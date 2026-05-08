@@ -155,6 +155,7 @@ export async function approveFarmNationSellerAction(userId: string) {
         // Update user
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.farmNation.status": "approved",
+            "serviceRegistrations.farmNation.paymentStatus": "completed",
             "serviceRegistrations.farmNation.approvedAt": FieldValue.serverTimestamp(),
             "serviceRegistrations.farmNation.approvedBy": session.user.id,
             roles: FieldValue.arrayUnion("farmer")
@@ -848,6 +849,7 @@ export async function submitFarmNationOnboardingAction(data: FarmNationOnboardin
         // Dot notation update for serviceRegistrations to prevent wiping other modules
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             "serviceRegistrations.farmNation.status": "pending",
+            "serviceRegistrations.farmNation.paymentStatus": "completed",
             "serviceRegistrations.farmNation.role": data.role,
             "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
             "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
@@ -932,9 +934,11 @@ export async function checkFarmNationStatusAction(): Promise<string | null> {
                 if (appData.status === "approved" || appData.status === "approved_admin") {
                     status = "approved";
                     // Proactively backfill for performance in future logins
-                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-                        serviceRegistrations: { farmNation: { status: "approved", syncedAt: new Date().toISOString() } }
-                    }, { merge: true });
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                        "serviceRegistrations.farmNation.status": "approved",
+                        "serviceRegistrations.farmNation.paymentStatus": "completed",
+                        "serviceRegistrations.farmNation.syncedAt": FieldValue.serverTimestamp()
+                    });
                 } else if (appData.status) {
                     status = appData.status;
                 }
@@ -1163,6 +1167,7 @@ export async function resubmitFarmNationApplicationAction(
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({
             'serviceRegistrations.farmNation.status': 'pending',
+            'serviceRegistrations.farmNation.paymentStatus': 'completed',
             'serviceRegistrations.farmNation.role': data.role,
             'serviceRegistrations.farmNation.rejectionReason': null,
             'serviceRegistrations.farmNation.resubmittedAt': FieldValue.serverTimestamp(),

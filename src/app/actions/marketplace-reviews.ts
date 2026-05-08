@@ -1,46 +1,41 @@
 /**
  * Marketplace Reviews — Server Actions
- *
- * Buyers can submit:
- *   1. A product review (post-delivery)
- *   2. A seller review (post-delivery)
- *
- * Reviews are pendingmoderation until approved by admin.
- * Product average ratings are denormalized onto the product document.
  */
 
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 import type { ProductReview, SellerReview } from "@/lib/types/marketplace";
 
 // ---------------------------------------------------------------------------
 // SUBMIT: Product Review (buyer, post-delivery)
 // ---------------------------------------------------------------------------
 
-export async function submitProductReviewAction(data: {
+async function _submitProductReviewAction(data: {
     productId: string;
     orderId: string;
     rating: number; // 1–5
     comment?: string;
     imageUrls?: string[];
-}): Promise<{ success: boolean; reviewId?: string; error?: string }> {
+}) {
+    let sessionResult;
     try {
         if (data.rating < 1 || data.rating > 5) {
             return { success: false, error: "Rating must be between 1 and 5" };
         }
 
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
-        const buyerId = sessionResult.session.user.id;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        const buyerId = session.user.id;
 
-        // Verify the order exists, belongs to this buyer, and is delivered
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(data.orderId).get();
         if (!orderDoc.exists) return { success: false, error: "Order not found" };
 
@@ -52,7 +47,6 @@ export async function submitProductReviewAction(data: {
             return { success: false, error: "You can only review orders that have been delivered" };
         }
 
-        // Prevent duplicate product reviews for same order
         const existingSnap = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
             .where("buyerId", "==", buyerId)
             .where("orderId", "==", data.orderId)
@@ -64,7 +58,6 @@ export async function submitProductReviewAction(data: {
             return { success: false, error: "You have already reviewed this product for this order" };
         }
 
-        // Create review document
         const reviewRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc();
         await reviewRef.set({
             productId: data.productId,
@@ -78,45 +71,50 @@ export async function submitProductReviewAction(data: {
             status: "pending",
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
         });
 
-        // Mark order as reviewed
         await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(data.orderId).update({
             reviewSubmitted: true,
             reviewId: reviewRef.id,
             updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
         });
 
-        // Recalculate and denormalize product rating
         await _recalculateProductRating(data.productId);
 
-        return { success: true, reviewId: reviewRef.id };
+        return { success: true, data: { reviewId: reviewRef.id } };
     } catch (err: any) {
-        logger.error("submitProductReviewAction error:", err);
-        return { success: false, error: err.message || "Failed to submit review" };
+        logger.error("submitProductReviewAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: err instanceof Error ? err.message : String(err)
+        });
+        return { success: false, error: err instanceof Error ? err.message : "Failed to submit review" };
     }
 }
+export const submitProductReviewAction = withFlexibleSafeAction("submitProductReviewAction", _submitProductReviewAction);
 
 // ---------------------------------------------------------------------------
 // SUBMIT: Seller Review (buyer, post-delivery)
 // ---------------------------------------------------------------------------
 
-export async function submitSellerReviewAction(data: {
+async function _submitSellerReviewAction(data: {
     sellerId: string;
     orderId: string;
     rating: number; // 1–5
     comment?: string;
-}): Promise<{ success: boolean; reviewId?: string; error?: string }> {
+}) {
+    let sessionResult;
     try {
         if (data.rating < 1 || data.rating > 5) {
             return { success: false, error: "Rating must be between 1 and 5" };
         }
 
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
-        const buyerId = sessionResult.session.user.id;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+        const buyerId = session.user.id;
 
-        // Verify the order
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(data.orderId).get();
         if (!orderDoc.exists) return { success: false, error: "Order not found" };
 
@@ -127,14 +125,16 @@ export async function submitSellerReviewAction(data: {
         if (orderData.status !== "delivered" && orderData.status !== "completed") {
             return { success: false, error: "You can only review orders that have been delivered" };
         }
-        if (orderData.sellerId !== data.sellerId) {
+        
+        const sellerIds = orderData.sellerIds || [];
+        if (!sellerIds.includes(data.sellerId)) {
             return { success: false, error: "Seller does not match this order" };
         }
 
-        // Prevent duplicate seller review for same order
         const existingSnap = await db.collection(COLLECTIONS.SELLER_REVIEWS)
             .where("buyerId", "==", buyerId)
             .where("orderId", "==", data.orderId)
+            .where("sellerId", "==", data.sellerId)
             .limit(1)
             .get();
 
@@ -153,24 +153,33 @@ export async function submitSellerReviewAction(data: {
             status: "pending",
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
         });
 
-        return { success: true, reviewId: reviewRef.id };
+        return { success: true, data: { reviewId: reviewRef.id } };
     } catch (err: any) {
-        logger.error("submitSellerReviewAction error:", err);
-        return { success: false, error: err.message || "Failed to submit seller review" };
+        logger.error("submitSellerReviewAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: err instanceof Error ? err.message : String(err)
+        });
+        return { success: false, error: err instanceof Error ? err.message : "Failed to submit seller review" };
     }
 }
+export const submitSellerReviewAction = withFlexibleSafeAction("submitSellerReviewAction", _submitSellerReviewAction);
 
 // ---------------------------------------------------------------------------
 // GET: Product Reviews (public)
 // ---------------------------------------------------------------------------
 
-export async function getProductReviewsAction(
+async function _getProductReviewsAction(
     productId: string,
     options?: { limit?: number; status?: "approved" | "pending" | "rejected" }
-): Promise<ProductReview[]> {
+) {
+    let sessionResult;
     try {
+        // Public action, session is optional
+        sessionResult = await requireSession().catch(() => ({ session: null }));
+        
         const status = options?.status || "approved";
         const pageSize = options?.limit || 20;
 
@@ -181,30 +190,34 @@ export async function getProductReviewsAction(
             .limit(pageSize)
             .get();
 
-        return serializeDocs(snap.docs) as unknown as ProductReview[];
-    } catch (err) {
-        logger.error("getProductReviewsAction error:", err);
-        return [];
+        return { success: true, data: { reviews: serializeDocs(snap.docs) } };
+    } catch (err: any) {
+        logger.error("getProductReviewsAction error:", { 
+            productId, 
+            userId: sessionResult?.session?.user?.id,
+            error: err instanceof Error ? err.message : String(err) 
+        });
+        return { success: false, data: { reviews: [] } };
     }
 }
+export const getProductReviewsAction = withFlexibleSafeAction("getProductReviewsAction", _getProductReviewsAction);
 
 // ---------------------------------------------------------------------------
 // GET: Seller Review Summary (public)
 // ---------------------------------------------------------------------------
 
-export async function getSellerReviewSummaryAction(sellerId: string): Promise<{
-    averageRating: number;
-    totalReviews: number;
-    distribution: Record<string, number>; // "1"..5 → count
-}> {
+async function _getSellerReviewSummaryAction(sellerId: string) {
+    let sessionResult;
     try {
+        sessionResult = await requireSession().catch(() => ({ session: null }));
+
         const snap = await db.collection(COLLECTIONS.SELLER_REVIEWS)
             .where("sellerId", "==", sellerId)
             .where("status", "==", "approved")
             .get();
 
         if (snap.empty) {
-            return { averageRating: 0, totalReviews: 0, distribution: {} };
+            return { success: true, summary: { averageRating: 0, totalReviews: 0, distribution: {} } };
         }
 
         const distribution: Record<string, number> = { "1": 0, "2": 0, "3": 0, "4": 0, "5": 0 };
@@ -218,26 +231,32 @@ export async function getSellerReviewSummaryAction(sellerId: string): Promise<{
         });
 
         const averageRating = Math.round((total / snap.size) * 10) / 10;
-        return { averageRating, totalReviews: snap.size, distribution };
-    } catch (err) {
-        logger.error("getSellerReviewSummaryAction error:", err);
-        return { averageRating: 0, totalReviews: 0, distribution: {} };
+        return { success: true, data: { summary: { averageRating, totalReviews: snap.size, distribution } } };
+    } catch (err: any) {
+        logger.error("getSellerReviewSummaryAction error:", { 
+            sellerId, 
+            userId: sessionResult?.session?.user?.id,
+            error: err instanceof Error ? err.message : String(err) 
+        });
+        return { success: false, data: { summary: { averageRating: 0, totalReviews: 0, distribution: {} } } };
     }
 }
+export const getSellerReviewSummaryAction = withFlexibleSafeAction("getSellerReviewSummaryAction", _getSellerReviewSummaryAction);
 
 // ---------------------------------------------------------------------------
 // ADMIN: Moderate a review (approve / reject)
 // ---------------------------------------------------------------------------
 
-export async function moderateReviewAction(
+async function _moderateReviewAction(
     reviewId: string,
     collection: "product_reviews" | "seller_reviews",
     action: "approved" | "rejected",
     note?: string
-): Promise<{ success: boolean; error?: string }> {
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const adminId = sessionResult.session.user.id;
 
         if (!isAdmin(sessionResult.session.user.roles)) {
@@ -258,6 +277,7 @@ export async function moderateReviewAction(
             moderatedAt: FieldValue.serverTimestamp(),
             adminNote: note || null,
             updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
         });
 
         // If approving a product review, recalculate rating
@@ -266,24 +286,33 @@ export async function moderateReviewAction(
             if (productId) await _recalculateProductRating(productId);
         }
 
-        return { success: true };
+        return { success: true, data: { message: "Review moderated successfully" } };
     } catch (err: any) {
-        logger.error("moderateReviewAction error:", err);
-        return { success: false, error: err.message || "Failed to moderate review" };
+        logger.error("moderateReviewAction error:", {
+            reviewId,
+            collection,
+            action,
+            userId: sessionResult?.session?.user?.id,
+            error: err instanceof Error ? err.message : String(err)
+        });
+        return { success: false, error: err instanceof Error ? err.message : "Failed to moderate review" };
     }
 }
+export const moderateReviewAction = withFlexibleSafeAction("moderateReviewAction", _moderateReviewAction);
 
 // ---------------------------------------------------------------------------
 // ADMIN: Get pending reviews for moderation
 // ---------------------------------------------------------------------------
 
-export async function getPendingReviewsAction(options?: {
+async function _getPendingReviewsAction(options?: {
     limit?: number;
-}): Promise<{
-    productReviews: ProductReview[];
-    sellerReviews: SellerReview[];
-}> {
+}) {
+    let sessionResult;
     try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!isAdmin(sessionResult.session.user.roles)) return { success: false, error: "Unauthorized" };
+
         const pageSize = options?.limit || 30;
 
         const [prodSnap, sellerSnap] = await Promise.all([
@@ -300,14 +329,21 @@ export async function getPendingReviewsAction(options?: {
         ]);
 
         return {
-            productReviews: serializeDocs(prodSnap.docs) as unknown as ProductReview[],
-            sellerReviews: serializeDocs(sellerSnap.docs) as unknown as SellerReview[],
+            success: true,
+            data: {
+                productReviews: serializeDocs(prodSnap.docs),
+                sellerReviews: serializeDocs(sellerSnap.docs),
+            }
         };
-    } catch (err) {
-        logger.error("getPendingReviewsAction error:", err);
-        return { productReviews: [], sellerReviews: [] };
+    } catch (err: any) {
+        logger.error("getPendingReviewsAction error:", { 
+            userId: sessionResult?.session?.user?.id,
+            error: err instanceof Error ? err.message : String(err) 
+        });
+        return { success: false, data: { productReviews: [], sellerReviews: [] } };
     }
 }
+export const getPendingReviewsAction = withFlexibleSafeAction("getPendingReviewsAction", _getPendingReviewsAction);
 
 // ---------------------------------------------------------------------------
 // Internal: Recalculate and denormalize product average rating
@@ -330,6 +366,7 @@ async function _recalculateProductRating(productId: string): Promise<void> {
             rating: avg,
             reviewCount: count,
             updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
         });
     } catch (err) {
         logger.error("_recalculateProductRating error:", err);

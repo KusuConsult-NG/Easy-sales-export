@@ -10,9 +10,19 @@ import {
     updateVendorShippingConfigAction,
 } from "@/app/actions/vendor-settings";
 
+import { GlobalResilienceBoundary } from "@/components/shared/GlobalResilienceBoundary";
+
 type Tab = "profile" | "payment" | "notifications" | "shipping";
 
 export default function VendorSettingsPage() {
+    return (
+        <GlobalResilienceBoundary moduleName="Vendor Settings" dashboardUrl="/vendor/dashboard">
+            <VendorSettingsContent />
+        </GlobalResilienceBoundary>
+    );
+}
+
+function VendorSettingsContent() {
     const [activeTab, setActiveTab] = useState<Tab>("profile");
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -27,6 +37,7 @@ export default function VendorSettingsPage() {
         contactEmail: "",
         phone: "",
     });
+
 
     // Payment form state
     const [paymentForm, setPaymentForm] = useState({
@@ -104,11 +115,12 @@ export default function VendorSettingsPage() {
     async function handleSaveProfile() {
         setIsSaving(true);
         setMessage(null);
-        const result = await updateVendorProfileAction(profileForm);
+        const result = await updateVendorProfileAction(profileForm, settings?._version);
         setIsSaving(false);
 
         if (result.success) {
             setMessage({ type: "success", text: "Profile updated successfully!" });
+            loadSettings(); // Reload to get new version
         } else {
             setMessage({ type: "error", text: result.error || "Failed to update profile" });
         }
@@ -117,11 +129,12 @@ export default function VendorSettingsPage() {
     async function handleSavePayment() {
         setIsSaving(true);
         setMessage(null);
-        const result = await updateVendorPaymentConfigAction(paymentForm);
+        const result = await updateVendorPaymentConfigAction(paymentForm, settings?._version);
         setIsSaving(false);
 
         if (result.success) {
             setMessage({ type: "success", text: "Payment configuration updated!" });
+            loadSettings();
         } else {
             setMessage({ type: "error", text: result.error || "Failed to update payment config" });
         }
@@ -130,11 +143,12 @@ export default function VendorSettingsPage() {
     async function handleSaveNotifications() {
         setIsSaving(true);
         setMessage(null);
-        const result = await updateVendorNotificationPrefsAction(notifPrefs);
+        const result = await updateVendorNotificationPrefsAction(notifPrefs, settings?._version);
         setIsSaving(false);
 
         if (result.success) {
             setMessage({ type: "success", text: "Notification preferences updated!" });
+            loadSettings();
         } else {
             setMessage({ type: "error", text: result.error || "Failed to update preferences" });
         }
@@ -143,11 +157,12 @@ export default function VendorSettingsPage() {
     async function handleSaveShipping() {
         setIsSaving(true);
         setMessage(null);
-        const result = await updateVendorShippingConfigAction(shippingForm);
+        const result = await updateVendorShippingConfigAction(shippingForm, settings?._version);
         setIsSaving(false);
 
         if (result.success) {
             setMessage({ type: "success", text: "Shipping configuration updated!" });
+            loadSettings();
         } else {
             setMessage({ type: "error", text: result.error || "Failed to update shipping" });
         }

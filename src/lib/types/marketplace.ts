@@ -70,6 +70,7 @@ export interface SellerVerification {
 
     createdAt: any;
     updatedAt: any;
+    _version?: number;
 }
 
 // ============================================================================
@@ -158,6 +159,7 @@ export interface Product {
 
     createdAt: any;
     updatedAt: any;
+    _version?: number;
 }
 
 // ============================================================================
@@ -165,9 +167,15 @@ export interface Product {
 // ============================================================================
 
 export interface CartItem {
-    productId: string;
+    id: string;        // matches productId
+    productId?: string; // legacy alias
+    title: string;
+    productTitle?: string;
+    productImage?: string;
     sellerId: string;
+    vendorName?: string;
     quantity: number;
+    unit: string;
     selectedTier: "retail" | "bulk" | "export";
     price: number;
     addedAt: any;
@@ -187,6 +195,7 @@ export interface ShoppingCart {
 export type OrderStatus =
     | "pending_payment"
     | "payment_received"
+    | "confirmed"
     | "processing"
     | "shipped"
     | "delivered"
@@ -236,6 +245,8 @@ export interface Order {
 
     // Status
     status: OrderStatus;
+    paymentStatus?: string;
+    paymentReference?: string;
 
     // Escrow
     escrowTransactionId?: string;
@@ -264,6 +275,7 @@ export interface Order {
 
     createdAt: any;
     updatedAt: any;
+    _version?: number;
 }
 
 // ============================================================================
@@ -351,6 +363,7 @@ export interface Dispute {
 
     createdAt: any;
     updatedAt?: any;
+    _version?: number;
 }
 
 // ============================================================================

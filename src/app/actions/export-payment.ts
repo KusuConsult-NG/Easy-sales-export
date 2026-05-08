@@ -214,6 +214,21 @@ export async function verifyExportOrderPaymentAction(reference: string) {
                 type: "export_buyer_order",
                 reference,
             });
+
+            // Global Ledger Record
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+            transaction.set(globalTxRef, {
+                id: reference,
+                userId: session.user.id,
+                type: "export_order",
+                module: "export",
+                amount: amountInNaira,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: `Export Order #${orderData.orderId}`
+            });
             
             // TODO: In a production setting, we would decrement the global catalog stock here
             // using `transaction.update(productRef, { availableQuantity: FieldValue.increment(-quantity) })`
@@ -520,6 +535,21 @@ export async function verifyInvestmentPaymentAction(reference: string) {
                 amount: amountInNaira,
                 type: "export_investment",
                 reference,
+            });
+
+            // Global Ledger Record
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+            transaction.set(globalTxRef, {
+                id: reference,
+                userId: session.user.id,
+                type: "export_investment",
+                module: "export",
+                amount: amountInNaira,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: `Export Investment - ${metadata.windowTitle}`
             });
         });
 

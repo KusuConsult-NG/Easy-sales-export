@@ -93,8 +93,10 @@ export default function MarketplaceOnboarding() {
             try {
                 const { checkMarketplaceStatusAction, getSellerVerificationAction } = await import("@/app/actions/marketplace");
                 const result = await checkMarketplaceStatusAction();
+                const marketplaceStatus = (result.success && result.data) ? result.data.status : null;
+                const accountType = (result.success && result.data) ? result.data.accountType : null;
 
-                if (result?.status === "pending" || result?.status === "under_review") {
+                if (marketplaceStatus === "pending" || marketplaceStatus === "under_review") {
                     const params = new URLSearchParams(window.location.search);
                     const isEditParam = params.get("edit") === "true";
 
@@ -115,13 +117,13 @@ export default function MarketplaceOnboarding() {
                         // Stay on page — do NOT auto-redirect pending users
                         // No-op: form stays as-is
                     }
-                } else if (result?.status === "approved" || result?.status === "active") {
-                    if (result.accountType === "seller" || result.accountType === "both") {
+                } else if (marketplaceStatus === "approved" || marketplaceStatus === "active") {
+                    if (accountType === "seller" || accountType === "both") {
                         router.replace("/marketplace/seller/dashboard");
                     } else {
                         router.replace("/marketplace/buyer/dashboard");
                     }
-                } else if (result?.status === "rejected" || result?.status === "suspended") {
+                } else if (marketplaceStatus === "rejected" || marketplaceStatus === "suspended") {
                     // Prefill form from Firestore for rejected / suspended users
                     const verif = await getSellerVerificationAction();
                     if (verif.success && verif.data?.verification) {

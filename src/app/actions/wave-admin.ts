@@ -1,51 +1,53 @@
-/**
- * Admin Server Actions for WAVE Management
- */
-
 "use server";
 
-import { auth } from "@/lib/auth";
-import { requireSession } from "@/lib/session-guard";
-import { logger } from '@/lib/logger';
-import { serializeDocs } from "@/lib/firestore-serialize";
 import { db } from "@/lib/firebase-admin";
+import { logger } from "@/lib/logger";
+import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { isAdmin } from "@/lib/admin-permissions";
-import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
+import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
+import { serializeDocs } from "@/lib/firestore-serialize";
+import { FieldValue, FieldPath, Query } from "firebase-admin/firestore";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { WaveApplicationReviewSchema } from "@/lib/schemas";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { getCached, setCache } from "@/lib/redis";
+import { sendWaveApplicationEmail } from "@/lib/email-notifications";
+import { paystackPayout } from "@/lib/paystack-transfer";
+import { z } from "zod";
 
 // ============================================================================
 // RESOURCES MANAGEMENT
 // ============================================================================
 
-export async function createResourceAction(data: {
+async function _createResourceAction(data: {
     title: string;
     description: string;
     category: "document" | "video" | "template" | "guide";
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const resourceRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add({
+            ...data,
             downloads: 0,
             uploadedAt: FieldValue.serverTimestamp(),
             uploadedBy: session.user.id,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
         });
 
         await createAdminAuditLog({
@@ -57,12 +59,16 @@ export async function createResourceAction(data: {
 
         return { success: true, data: { resourceId: resourceRef.id } };
     } catch (error) {
-        logger.error("Create resource error:", error);
+        logger.error("Create resource error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to create resource" };
     }
 }
+export const createResourceAction = withFlexibleSafeAction("createResourceAction", _createResourceAction);
 
-export async function updateResourceAction(
+async function _updateResourceAction(
     resourceId: string,
     data: Partial<{
         title: string;
@@ -72,23 +78,24 @@ export async function updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
         });
 
         await createAdminAuditLog({
@@ -100,24 +107,28 @@ export async function updateResourceAction(
 
         return { success: true };
     } catch (error) {
-        logger.error("Update resource error:", error);
+        logger.error("Update resource error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to update resource" };
     }
 }
+export const updateResourceAction = withFlexibleSafeAction("updateResourceAction", _updateResourceAction);
 
-export async function deleteResourceAction(
+async function _deleteResourceAction(
     resourceId: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -125,6 +136,8 @@ export async function deleteResourceAction(
             deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
         });
 
         await createAdminAuditLog({
@@ -136,16 +149,20 @@ export async function deleteResourceAction(
 
         return { success: true };
     } catch (error) {
-        logger.error("Delete resource error:", error);
+        logger.error("Delete resource error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to delete resource" };
     }
 }
+export const deleteResourceAction = withFlexibleSafeAction("deleteResourceAction", _deleteResourceAction);
 
 // ============================================================================
 // TRAINING EVENTS MANAGEMENT
 // ============================================================================
 
-export async function createTrainingEventAction(data: {
+async function _createTrainingEventAction(data: {
     title: string;
     description: string;
     instructor: string;
@@ -153,26 +170,28 @@ export async function createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         const eventRef = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).add({
+            ...data,
             currentParticipants: 0,
             status: "upcoming",
             createdAt: FieldValue.serverTimestamp(),
             createdBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
         });
 
         await createAdminAuditLog({
@@ -184,12 +203,16 @@ export async function createTrainingEventAction(data: {
 
         return { success: true, data: { eventId: eventRef.id } };
     } catch (error) {
-        logger.error("Create event error:", error);
+        logger.error("Create event error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to create event" };
     }
 }
+export const createTrainingEventAction = withFlexibleSafeAction("createTrainingEventAction", _createTrainingEventAction);
 
-export async function updateTrainingEventAction(
+async function _updateTrainingEventAction(
     eventId: string,
     data: Partial<{
         title: string;
@@ -201,23 +224,24 @@ export async function updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
         await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
             ...data,
             updatedAt: FieldValue.serverTimestamp(),
+            _version: FieldValue.increment(1),
         });
 
         await createAdminAuditLog({
@@ -229,18 +253,27 @@ export async function updateTrainingEventAction(
 
         return { success: true };
     } catch (error) {
-        logger.error("Update event error:", error);
+        logger.error("Update event error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to update event" };
     }
 }
+export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
-export async function getEventParticipantsAction(eventId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+async function _getEventParticipantsAction(eventId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized" };
         }
 
         const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
@@ -251,26 +284,30 @@ export async function getEventParticipantsAction(eventId: string): Promise<{ suc
 
         return { success: true, data: { participants } };
     } catch (error) {
-        logger.error("Get participants error:", error);
+        logger.error("Get participants error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch participants" };
     }
 }
+export const getEventParticipantsAction = withFlexibleSafeAction("getEventParticipantsAction", _getEventParticipantsAction);
 
 // ============================================================================
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-export async function getWaveApplicationsAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+async function _getWaveApplicationsAction(): Promise<{ success: boolean; data?: any; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -279,195 +316,248 @@ export async function getWaveApplicationsAction(): Promise<{ success: boolean; d
 
         return { success: true, data: { applications } };
     } catch (error) {
-        logger.error("Get applications error:", error);
+        logger.error("Get applications error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch applications" };
     }
 }
+export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicationsAction", _getWaveApplicationsAction);
 
-export async function approveWaveApplicationAction(
+async function _approveWaveApplicationAction(
     applicationId: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
+        if (!valid.success) {
+            return { success: false, error: "Invalid application data" };
+        }
+
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
-        // Get application
-        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
-        if (!appDoc.exists) {
-            return { success: false, error: "Application not found" };
-        }
+        let targetUserId: string | undefined;
 
-        const appData = appDoc.data();
+        await db.runTransaction(async (transaction) => {
+            const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
+            const appDoc = await transaction.get(appRef);
 
-        // ✅ FIX: Use a batch — application status + member enrollment must be atomic.
-        // Previously two separate writes: a crash between them leaves applicant stuck
-        // in 'approved' state but not enrolled, locking them out of resources forever.
-        const batch = db.batch();
+            if (!appDoc.exists) throw new Error("Application not found");
+            const appData = appDoc.data();
+            if (appData?.status !== "pending" && appData?.status !== "under_review") {
+                throw new Error("Application is not in a reviewable state");
+            }
+            
+            targetUserId = appData?.userId;
 
-        // 1. Mark application approved
-        batch.update(appRef, {
-            status: "approved",
-            approvedAt: FieldValue.serverTimestamp(),
-            approvedBy: session.user.id,
+            transaction.update(appRef, {
+                status: "approved",
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+                reviewedBy: session.user.id,
+                approvalTimestamp: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
+
+            // If user exists, update their profile and roles
+            if (targetUserId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
+                transaction.update(userRef, {
+                    isVerified: true,
+                    verifiedBy: session.user.id,
+                    verifiedAt: FieldValue.serverTimestamp(),
+                    roles: FieldValue.arrayUnion("wave_participant"),
+                    "serviceRegistrations.wave.status": "approved",
+                    "serviceRegistrations.wave.paymentStatus": "completed",
+                    "serviceRegistrations.wave.approvedAt": FieldValue.serverTimestamp(),
+                    waveStatus: "active",
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                });
+
+                // Create/Update Wave Member Record
+                const memberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(targetUserId);
+                transaction.set(memberRef, {
+                    active: true,
+                    enrolledAt: FieldValue.serverTimestamp(),
+                    applicationId: applicationId,
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                }, { merge: true });
+            }
         });
 
-        // 2. Enroll user in WAVE_MEMBERS (if userId exists)
-        if (appData?.userId) {
-            const memberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(appData.userId);
-            batch.set(memberRef, {
-                userId: appData.userId,
-                enrolledAt: FieldValue.serverTimestamp(),
-                active: true,
-                createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            }, { merge: true });
-
-            // 3. Sync user role + serviceRegistrations
-            batch.update(db.collection(COLLECTIONS.USERS).doc(appData.userId), {
-                "serviceRegistrations.wave.status": "approved",
-                "serviceRegistrations.wave.approvedAt": FieldValue.serverTimestamp(),
-                roles: FieldValue.arrayUnion("wave_participant"),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
-
-        await batch.commit();
-
-        // Post-commit: non-critical side effects (cache, email)
-        if (appData?.userId) {
-            try {
-                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
-                await invalidateServiceCache(appData.userId, 'wave');
-                logger.info(`[Wave Approval] Cleared cache for user: ${appData.userId}`);
-            } catch (cacheError) {
-                logger.error('[Wave Approval] Cache invalidation error:', cacheError);
-            }
-
-            const userDocData = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
-            if (userDocData.exists) {
-                const userData = userDocData.data();
-                try {
-                    const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
-                    await sendWaveApplicationEmail(
-                        userData?.email,
-                        userData?.name || 'Member',
-                        'approved'
-                    );
-                } catch (emailError) {
-                    logger.error('[Wave Approval] Email send error (non-blocking):', emailError);
-                }
-            }
-        }
-
+        // Audit Log
         await createAdminAuditLog({
             action: "wave_application_approved",
             userId: session.user.id,
             targetType: "wave_application",
             targetId: applicationId,
+            metadata: { userId: targetUserId }
         });
+
+        // Email Notification
+        if (targetUserId) {
+            try {
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(targetUserId).get();
+                const userData = userDoc.data();
+                const userEmail = userData?.email || userData?.userEmail;
+                const userName = userData?.firstName 
+                    ? `${userData.firstName} ${userData.surname || userData.lastName || ""}`.trim()
+                    : (userData?.name || "Member");
+
+                if (userEmail) {
+                    await sendWaveApplicationEmail(userEmail, userName, 'approved');
+                    logger.info(`[WAVE Admin] Approval email sent to: ${userEmail}`);
+                }
+            } catch (err) {
+                logger.error("[WAVE Admin] Failed to send approval email:", err);
+            }
+        }
+
+        // Cache invalidation (Post-Commit)
+        if (targetUserId) {
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(targetUserId, 'wave');
+                logger.info(`[WAVE Admin] Cache invalidated for user: ${targetUserId}`);
+            } catch (err) {
+                logger.error("[WAVE Admin] Cache invalidation failed:", err);
+            }
+        }
 
         return { success: true };
     } catch (error) {
-        logger.error("Approve application error:", error);
-        return { success: false, error: "Failed to approve application" };
+        logger.error("Approve application error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to approve application" };
     }
 }
+export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveApplicationAction", _approveWaveApplicationAction);
 
-export async function rejectWaveApplicationAction(
+async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: boolean; error?: string }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
-    const { session } = sessionResult;
+        const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
+        if (!valid.success) {
+            return { success: false, error: "Invalid rejection data" };
+        }
+
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
-        // Get application data
-        const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
+        let targetUserId: string | undefined;
 
-        if (!appDoc.exists) {
-            return { success: false, error: "Application not found" };
-        }
+        await db.runTransaction(async (transaction) => {
+            const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
+            const appDoc = await transaction.get(appRef);
 
-        const appData = appDoc.data();
+            if (!appDoc.exists) throw new Error("Application not found");
+            const appData = appDoc.data();
+            if (appData?.status !== "pending" && appData?.status !== "under_review") {
+                throw new Error("Application is not in a reviewable state");
+            }
+            
+            targetUserId = appData?.userId;
 
-        // ✅ FIX: Commit status changes FIRST, then send email as non-blocking side effect.
-        // Previously the email fired before status update — a throw left status unchanged.
-        // Also: USERS.serviceRegistrations.wave.status was never set to "rejected",
-        // leaving rejected users permanently showing "pending" and unable to re-apply.
-        const rejectionBatch = db.batch();
+            transaction.update(appRef, {
+                status: "rejected",
+                rejectionReason: reason,
+                rejectedAt: FieldValue.serverTimestamp(),
+                rejectedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+                reviewedBy: session.user.id,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
 
-        rejectionBatch.update(appRef, {
-            status: "rejected",
-            rejectedAt: FieldValue.serverTimestamp(),
-            rejectedBy: session.user.id,
-            rejectionReason: reason,
-            updatedAt: FieldValue.serverTimestamp(),
+            if (targetUserId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
+                transaction.update(userRef, {
+                    "serviceRegistrations.wave.status": "rejected",
+                    "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
+                    waveStatus: "rejected",
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1),
+                });
+            }
         });
 
-        if (appData?.userId) {
-            rejectionBatch.update(db.collection(COLLECTIONS.USERS).doc(appData.userId), {
-                "serviceRegistrations.wave.status": "rejected",
-                "serviceRegistrations.wave.rejectedAt": FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
-
-        await rejectionBatch.commit();
-
-        // Non-blocking email notification (after commit)
-        if (appData?.userId) {
-            try {
-                const memberUserDoc = await db.collection(COLLECTIONS.USERS).doc(appData.userId).get();
-                if (memberUserDoc.exists) {
-                    const memberData = memberUserDoc.data();
-                    const { sendWaveApplicationEmail } = await import('@/lib/email-notifications');
-                    await sendWaveApplicationEmail(
-                        memberData?.email,
-                        memberData?.name || 'Member',
-                        'rejected',
-                        reason
-                    );
-                }
-            } catch (emailError) {
-                logger.error('[Wave Rejection] Email send error (non-blocking):', emailError);
-            }
-        }
-
+        // Audit Log
         await createAdminAuditLog({
             action: "wave_application_rejected",
             userId: session.user.id,
             targetType: "wave_application",
             targetId: applicationId,
+            metadata: { reason, userId: targetUserId }
         });
+
+        // Email Notification
+        if (targetUserId) {
+            try {
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(targetUserId).get();
+                const userData = userDoc.data();
+                const userEmail = userData?.email || userData?.userEmail;
+                const userName = userData?.firstName 
+                    ? `${userData.firstName} ${userData.surname || userData.lastName || ""}`.trim()
+                    : (userData?.name || "Member");
+
+                if (userEmail) {
+                    await sendWaveApplicationEmail(userEmail, userName, 'rejected', reason);
+                    logger.info(`[WAVE Admin] Rejection email sent to: ${userEmail}`);
+                }
+            } catch (err) {
+                logger.error("[WAVE Admin] Failed to send rejection email:", err);
+            }
+        }
+
+        // Cache invalidation (Post-Commit)
+        if (targetUserId) {
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(targetUserId, 'wave');
+            } catch (err) {
+                logger.error("[WAVE Admin] Cache invalidation failed:", err);
+            }
+        }
 
         return { success: true };
     } catch (error) {
-        logger.error("Reject application error:", error);
-        return { success: false, error: "Failed to reject application" };
+        logger.error("Reject application error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to reject application" };
     }
 }
+export const rejectWaveApplicationAction = withFlexibleSafeAction("rejectWaveApplicationAction", _rejectWaveApplicationAction);
 
-export async function getStandardWaveApplicationsAction(options: {
+async function _getStandardWaveApplicationsAction(options: {
     limit?: number;
     search?: string;
     status?: "pending" | "under_review" | "approved" | "rejected" | "all";
@@ -476,14 +566,14 @@ export async function getStandardWaveApplicationsAction(options: {
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -491,7 +581,7 @@ export async function getStandardWaveApplicationsAction(options: {
         const orderDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
         
-        let countQ: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+        let countQ: Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
 
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
@@ -500,7 +590,6 @@ export async function getStandardWaveApplicationsAction(options: {
             countQ = countQ.where("status", "==", options.status);
         }
 
-        // Apply server-side date range filtering
         if (options.dateFrom) {
             const fromTs = new Date(options.dateFrom);
             q = q.where("createdAt", ">=", fromTs);
@@ -519,7 +608,6 @@ export async function getStandardWaveApplicationsAction(options: {
         
         q = q.limit(fetchLimit);
 
-        // Redis Caching for Count Query
         const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
         let totalCount = 0;
         
@@ -528,9 +616,7 @@ export async function getStandardWaveApplicationsAction(options: {
             if (cachedCount !== null) {
                 totalCount = cachedCount;
             }
-        } catch (e) {
-            // cache bypass
-        }
+        } catch (e) { }
 
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
@@ -540,16 +626,12 @@ export async function getStandardWaveApplicationsAction(options: {
             totalCount = countSnap.data().count;
             try {
                 await setCache(cacheKey, totalCount, 120);
-            } catch (e) {
-                // silent fail
-            }
+            } catch (e) { }
         }
 
-        // Fetch all connected users
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         
-        // Chunk users into blocks of 30 for 'in' queries
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
@@ -562,8 +644,6 @@ export async function getStandardWaveApplicationsAction(options: {
 
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
-            // Derive display name: prefer separate firstName+lastName on either the app doc or
-            // the users profile. Fall back to the stored full name string then email.
             const userName = uData.firstName
                 ? `${uData.firstName} ${uData.lastName || ''}`.trim()
                 : (uData.name || uData.fullName ||
@@ -601,7 +681,6 @@ export async function getStandardWaveApplicationsAction(options: {
             };
         });
 
-        // Client-side search application if specified
         let finalForms = standardForms;
         if (options.search) {
             const s = options.search.toLowerCase().trim();
@@ -623,26 +702,31 @@ export async function getStandardWaveApplicationsAction(options: {
             });
         }
 
-        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        const lastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        const hasMore = snapshot.docs.length === fetchLimit;
 
         return { 
             success: true, 
             data: finalForms,
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor,
+            lastDocId,
+            hasMore,
             meta: {
                 totalFetched: applications.length,
                 totalCount: totalCount,
-                hasMore: !!nextCursor
+                hasMore
             }
         };
     } catch (error) {
-        logger.error("Get standard WAVE applications error:", error);
+        logger.error("Get standard WAVE applications error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch normalized Wave applications" };
     }
 }
+export const getStandardWaveApplicationsAction = withFlexibleSafeAction("getStandardWaveApplicationsAction", _getStandardWaveApplicationsAction);
 
-export async function getStandardWaveWithdrawalsAction(options: {
+async function _getStandardWaveWithdrawalsAction(options: {
     status?: "pending" | "processing" | "approved" | "approved_pending_payout" | "completed" | "rejected" | "all";
     limit?: number;
     lastDocId?: string;
@@ -651,14 +735,14 @@ export async function getStandardWaveWithdrawalsAction(options: {
     dateFrom?: string;
     dateTo?: string;
 } = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated" };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized" };
         }
 
@@ -694,13 +778,7 @@ export async function getStandardWaveWithdrawalsAction(options: {
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
-        const withdrawals = docs.map((doc: any) => ({
-            withdrawalId: doc.id,
-            ...doc.data(),
-            requestedAt: doc.data().requestedAt?.toDate?.()?.toISOString() ?? null,
-            processedAt: doc.data().processedAt?.toDate?.()?.toISOString() ?? null,
-            completedAt: doc.data().completedAt?.toDate?.()?.toISOString() ?? null,
-        }));
+        const withdrawals = serializeDocs(docs);
 
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
@@ -715,7 +793,184 @@ export async function getStandardWaveWithdrawalsAction(options: {
             }
         };
     } catch (error) {
-        logger.error("Get standard WAVE withdrawals error:", error);
+        logger.error("Get standard WAVE withdrawals error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to fetch WAVE withdrawals" };
     }
 }
+export const getStandardWaveWithdrawalsAction = withFlexibleSafeAction("getStandardWaveWithdrawalsAction", _getStandardWaveWithdrawalsAction);
+
+/**
+ * processWaveWithdrawalAction
+ * Standardized hardened action for processing WAVE withdrawals.
+ * Handles approve (auto-payout via Paystack), reject, and complete actions.
+ */
+async function _processWaveWithdrawalAction(data: {
+    withdrawalId: string;
+    action: "approve" | "reject" | "complete";
+    adminNotes?: string;
+    transactionReference?: string;
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const { session } = sessionResult;
+
+        if (!isAdmin(session.user.roles) || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
+            return { success: false, error: "Unauthorized: finance:process_withdrawals permission required" };
+        }
+
+        const { withdrawalId, action, adminNotes, transactionReference } = data;
+        const ref = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId);
+
+        let withdrawalData: any = null;
+
+        // PHASE 1: ATOMIC STATE TRANSITION & LOCKING
+        await db.runTransaction(async (tx) => {
+            const snap = await tx.get(ref);
+            if (!snap.exists) throw new Error("Withdrawal not found");
+            
+            withdrawalData = snap.data();
+            const currentStatus = withdrawalData.status;
+
+            if (action === "complete") {
+                if (currentStatus !== "approved_pending_payout" && currentStatus !== "approved") {
+                    throw new Error("Can only complete approved withdrawals");
+                }
+                tx.update(ref, {
+                    status: "completed",
+                    completedBy: session.user.id,
+                    completedAt: FieldValue.serverTimestamp(),
+                    ...(adminNotes ? { adminNotes } : {}),
+                    ...(transactionReference ? { transactionReference } : {}),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else if (action === "reject") {
+                if (currentStatus !== "pending") {
+                    throw new Error("Only pending withdrawals can be rejected");
+                }
+                tx.update(ref, {
+                    status: "rejected",
+                    processedBy: session.user.id,
+                    processedAt: FieldValue.serverTimestamp(),
+                    ...(adminNotes ? { adminNotes } : {}),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else if (action === "approve") {
+                if (currentStatus !== "pending") {
+                    throw new Error("Only pending withdrawals can be approved");
+                }
+                // Lock for processing to prevent double-payouts
+                tx.update(ref, {
+                    status: "approved_processing",
+                    processedBy: session.user.id,
+                    processedAt: FieldValue.serverTimestamp(),
+                    adminNotes: (adminNotes ? adminNotes + " - " : "") + "Locking for automated payout...",
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+        });
+
+        // AUDIT LOG (First Phase)
+        await createAdminAuditLog({
+            userId: session.user.id,
+            action: `wave_withdrawal_${action}` as any,
+            targetId: withdrawalId,
+            targetType: "wave_withdrawal",
+            metadata: { action, adminNotes },
+            details: `WAVE withdrawal ${action}ed by admin ${session.user.id}`,
+        });
+
+        if (action !== "approve") {
+             // Invalidate cache for user
+             if (withdrawalData?.userId) {
+                 try {
+                     const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                     await invalidateServiceCache(withdrawalData.userId, 'wave');
+                 } catch (e) { }
+             }
+             return { success: true, data: { status: action === "reject" ? "rejected" : "completed" } };
+        }
+
+        // PHASE 2: SIDE-EFFECT (PAYOUT)
+        // If we reached here, the action is "approve" and the record is locked as 'approved_processing'
+        try {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId).get();
+            const userData = userDoc.data();
+            
+            if (!userData?.bankAccountNumber || !userData?.bankCode) {
+                // Rollback to pending
+                await ref.update({ 
+                    status: "pending", 
+                    payoutError: "User bank details not configured",
+                    adminNotes: (adminNotes ? adminNotes + " - " : "") + "Payout failed: Missing bank details.",
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                return { success: false, error: "User bank details missing" };
+            }
+
+            const payoutResult = await paystackPayout(
+                 {
+                     accountNumber: userData.bankAccountNumber,
+                     bankCode: userData.bankCode,
+                     accountName: userData.bankAccountName || userData.name,
+                 },
+                 withdrawalData.amount,
+                 `WAVE Withdrawal payout - ${withdrawalId}`
+            );
+
+            if (!payoutResult.success) {
+                // Rollback status to pending with error message
+                await ref.update({ 
+                    status: "pending", 
+                    payoutError: payoutResult.error,
+                    adminNotes: (adminNotes ? adminNotes + " - " : "") + `Payout failed: ${payoutResult.error}`,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                return { success: false, error: `Paystack payout failed: ${payoutResult.error}` };
+            }
+
+            // PHASE 3: FINAL COMMIT
+            // Payout succeeded! Mark as completed.
+            await ref.update({
+                status: "completed",
+                completedBy: session.user.id,
+                completedAt: FieldValue.serverTimestamp(),
+                transactionReference: payoutResult.reference,
+                adminNotes: (adminNotes ? adminNotes + " - " : "") + "Auto-paid via Paystack.",
+                payoutError: null,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Invalidate cache
+            if (withdrawalData?.userId) {
+                try {
+                    const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                    await invalidateServiceCache(withdrawalData.userId, 'wave');
+                } catch (e) { }
+            }
+
+            return { success: true, data: { status: "completed" } };
+
+        } catch (error: any) {
+            logger.error(`[WAVE:Payout] Critical error during payout for ${withdrawalId}:`, error);
+            // Revert to pending so it can be re-tried
+            await ref.update({ 
+                status: "pending", 
+                payoutError: "Critical error during payout side-effect",
+                updatedAt: FieldValue.serverTimestamp(),
+            }).catch(e => logger.error(`[WAVE:Rollback] Failed to rollback status for ${withdrawalId}:`, e));
+            
+            return { success: false, error: "Critical payout failure. Status reverted to pending." };
+        }
+
+    } catch (error: any) {
+        logger.error("Process WAVE withdrawal error:", error);
+        return { success: false, error: error.message || "Failed to process withdrawal" };
+    }
+}
+
+export const processWaveWithdrawalAction = withFlexibleSafeAction("processWaveWithdrawalAction", _processWaveWithdrawalAction);

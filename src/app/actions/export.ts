@@ -580,6 +580,7 @@ export async function submitExportOnboardingAction(
 
         batch.update(userRef, {
             "serviceRegistrations.export.status": "pending_approval",
+            "serviceRegistrations.export.paymentStatus": "completed",
             "serviceRegistrations.export.applicationId": applicationId,
             "serviceRegistrations.export.appliedAt": FieldValue.serverTimestamp(),
             // Mirror PII to root (dot-notation keeps all other fields intact)

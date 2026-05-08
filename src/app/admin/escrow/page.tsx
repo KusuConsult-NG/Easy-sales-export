@@ -22,8 +22,8 @@ export default function AdminEscrowDashboard() {
             const statusFilter = filterStatus === "ALL" ? undefined : filterStatus;
             const searchFilter = searchQuery.length > 2 ? searchQuery : undefined;
             const res = await getAllEscrowTransactionsAdmin({ status: statusFilter, limit: 100, search: searchFilter });
-            if (res.success && res.transactions) {
-                setTransactions(res.transactions);
+            if (res.success && res.data?.transactions) {
+                setTransactions(res.data.transactions);
             } else {
                 setError(res.error || "Failed to load ledger.");
             }

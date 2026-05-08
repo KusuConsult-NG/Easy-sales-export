@@ -118,10 +118,12 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
     );
 }
 
+import { GlobalResilienceBoundary } from "@/components/shared/GlobalResilienceBoundary";
+
 export default function CooperativeMemberLayout({ children }: { children: React.ReactNode }) {
     return (
-        <ErrorBoundary>
+        <GlobalResilienceBoundary moduleName="Cooperative" dashboardUrl="/cooperatives/dashboard">
             <CooperativeLayoutContent>{children}</CooperativeLayoutContent>
-        </ErrorBoundary>
+        </GlobalResilienceBoundary>
     );
 }

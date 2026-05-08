@@ -1,52 +1,139 @@
 "use server";
 
-import { db, getAdminAuth } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { logger } from "@/lib/logger";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { requireAdmin } from "@/lib/require-admin";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { logger } from "@/lib/logger";
 
 /**
- * Cleanup Abandoned Drafts
- * Deletes 'draft' land listings older than 30 days.
+ * 1. The Migration Script: Fixing Corrupted Transaction Records
+ * 
+ * Heals records missing createdAt or updatedAt to prevent dashboard crashes.
  */
-export async function cleanupAbandonedDraftsAction(): Promise<{ success: boolean; count?: number; error?: string }> {
+export async function repairDataAction() {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required" };
+    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+
     try {
+        const db = getAdminDb();
+        const snapshot = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).get();
+        const batch = db.batch();
+        let count = 0;
 
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - 30); // 30 days ago
+        snapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            // Check for missing timestamps noted in audit
+            if (!data.processedAt || !data.createdAt) {
+                batch.update(doc.ref, {
+                    processedAt: data.processedAt || data.createdAt || new Date(),
+                    createdAt: data.createdAt || data.processedAt || new Date(),
+                    updatedAt: new Date(),
+                    _system_healed: true 
+                });
+                count++;
+            }
+        });
 
-        const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "==", "draft")
-            .where("updatedAt", "<", Timestamp.fromDate(cutoffDate))
-            .get();
-
-        if (snapshot.empty) {
-            return { success: true, count: 0 };
+        if (count > 0) {
+            await batch.commit();
         }
 
-        const batch = db.batch();
-        snapshot.docs.forEach(doc => {
-            batch.delete(doc.ref);
+        // Also check wallet transactions if necessary
+        const walletSnap = await db.collection(COLLECTIONS.WALLET_TRANSACTIONS).get();
+        const walletBatch = db.batch();
+        let walletCount = 0;
+        
+        walletSnap.docs.forEach((doc) => {
+            const data = doc.data();
+            if (!data.createdAt || !data.updatedAt) {
+                walletBatch.update(doc.ref, {
+                    createdAt: data.createdAt || new Date(),
+                    updatedAt: new Date(),
+                    _system_healed: true
+                });
+                walletCount++;
+            }
         });
 
-        await batch.commit();
+        if (walletCount > 0) {
+            await walletBatch.commit();
+        }
 
-        await createAdminAuditLog({
-            action: "system_cleanup",
-            userId: "system",
-            targetType: "land_listings",
-            details: `Cleaned up ${snapshot.size} abandoned drafts older than 30 days`,
-        });
-
-        logger.info(`Cleaned up ${snapshot.size} abandoned draft listings.`);
-
-        return { success: true, count: snapshot.size };
+        return { 
+            success: true, 
+            message: `Healed ${count} payment records and ${walletCount} wallet records.` 
+        };
     } catch (error: any) {
-        logger.error("Cleanup drafts error:", error);
+        logger.error("[Maintenance] Repair error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * 2. The Consistency Check Script
+ * 
+ * Compares Users vs Memberships and reports discrepancies.
+ */
+export async function runConsistencyCheckAction() {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+
+    try {
+        const db = getAdminDb();
+        
+        const [usersSnap, coopSnap, waveSnap, authCountSnap] = await Promise.all([
+            db.collection(COLLECTIONS.USERS).count().get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).count().get(),
+            db.collection(COLLECTIONS.WAVE_APPLICATIONS).count().get(),
+            db.collection(COLLECTIONS.USERS).select("email").get() // For unique check
+        ]);
+
+        const totalUsers = usersSnap.data().count;
+        const totalCoop = coopSnap.data().count;
+        const totalWave = waveSnap.data().count;
+
+        const emails = new Set();
+        authCountSnap.docs.forEach(d => {
+            const email = d.data().email;
+            if (email) emails.add(email.toLowerCase().trim());
+        });
+
+        return {
+            success: true,
+            report: {
+                firestoreUserDocs: totalUsers,
+                uniqueEmailsInUsers: emails.size,
+                cooperativeMembershipDocs: totalCoop,
+                waveApplicationDocs: totalWave,
+                discrepancyPotential: (totalCoop + totalWave + totalUsers) - emails.size,
+                explanation: "If totalCoop + totalWave exceeds totalUsers, the membership multiplexer is active."
+            }
+        };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * 3. Immediate "Force Refresh" Protocol
+ * 
+ * Purges Next.js cache across the entire Hub.
+ */
+export async function hardResetCacheAction() {
+    const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+
+    try {
+        revalidatePath("/", "layout");
+        revalidateTag("module-registration-stats");
+        
+        // Clear Redis via helper
+        const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+        await invalidateAdminGlobalStats();
+
+        return { success: true, message: "Global cache purge triggered successfully." };
+    } catch (error: any) {
         return { success: false, error: error.message };
     }
 }

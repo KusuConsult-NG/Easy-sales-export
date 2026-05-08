@@ -13,7 +13,8 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { logAuditAction } from "@/lib/admin-audit-log";
+import { logAdminAction, createAdminAuditLog } from "@/lib/audit-log-admin";
+import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 export interface FlaggedReview {
     id: string;
@@ -132,15 +133,13 @@ export async function approveReviewAction(
             flagReasons: [],
         });
 
-        await logAuditAction(
-            "content:approve",
-            reviewId,
-            "review",
-            {
-                adminId: session.user.id,
-                productId: reviewDoc.data()?.productId,
-            }
-        );
+        await createAdminAuditLog({
+            action: "content:approve",
+            userId: session.user.id,
+            targetId: reviewId,
+            targetType: "review",
+            metadata: { productId: reviewDoc.data()?.productId },
+        });
 
         return { success: true };
     } catch (error: any) {
@@ -211,17 +210,17 @@ export async function deleteReviewAction(
             }
         }
 
-        await logAuditAction(
-            "content:reject",
-            reviewId,
-            "review",
-            {
-                adminId: session.user.id,
+        await createAdminAuditLog({
+            action: "content:reject",
+            userId: session.user.id,
+            targetId: reviewId,
+            targetType: "review",
+            metadata: {
                 reason,
                 reviewerId: reviewData?.userId,
                 productId: reviewData?.productId,
-            }
-        );
+            },
+        });
 
         return { success: true };
     } catch (error: any) {
@@ -272,18 +271,26 @@ export async function suspendReviewerAction(
             suspendedAt: FieldValue.serverTimestamp(),
         });
 
-        await logAuditAction(
-            "user_suspend",
-            userId,
-            "user",
-            {
-                adminId: session.user.id,
+        await createAdminAuditLog({
+            action: "user_suspend",
+            userId: session.user.id,
+            targetId: userId,
+            targetType: "user",
+            metadata: {
                 reason,
                 duration,
                 suspendedUntil: suspendedUntil.toISOString(),
                 suspensionType: "review",
-            }
-        );
+            },
+        });
+
+        // Invalidate Cache
+        try {
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (err) {
+            logger.error("Cache invalidation failed after user suspension", err);
+        }
 
         return { success: true };
     } catch (error: any) {
@@ -332,16 +339,16 @@ export async function bulkApproveReviewsAction(
 
         await batch.commit();
 
-        await logAuditAction(
-            "content:approve",
-            "bulk_operation",
-            "reviews",
-            {
-                adminId: session.user.id,
+        await createAdminAuditLog({
+            action: "content:approve",
+            userId: session.user.id,
+            targetId: "bulk_operation",
+            targetType: "reviews",
+            metadata: {
                 reviewCount: approvedCount,
                 reviewIds,
-            }
-        );
+            },
+        });
 
         return { success: true, approved: approvedCount };
     } catch (error: any) {

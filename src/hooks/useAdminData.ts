@@ -79,20 +79,40 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
             }
 
             if (result.success) {
-                const items = result.data || result.loans || result.properties || result.users || [];
+                // 1. Extract Items
+                let items: T[] = [];
+                if (Array.isArray(result.data)) {
+                    items = result.data;
+                } else if (result.data && typeof result.data === 'object') {
+                    // Check for common array keys inside the data wrapper
+                    items = result.data.transactions || result.data.loans || result.data.properties || result.data.users || [];
+                } else {
+                    // Fallback to legacy root-level array keys
+                    items = result.loans || result.properties || result.users || [];
+                }
                 setData(items);
 
                 if (result.meta) setMeta(result.meta);
 
-                // Extract cursor and hasMore from various backend response shapes (root vs meta container)
-                const extractedCursor = result.lastDocId || result.meta?.lastDocId || result.meta?.cursor || result.cursor;
+                // 2. Extract Cursor
+                const extractedCursor = result.lastDocId || 
+                                      result.data?.lastDocId || 
+                                      result.meta?.lastDocId || 
+                                      result.meta?.cursor || 
+                                      result.cursor ||
+                                      result.data?.cursor;
+
                 if (extractedCursor) {
                     const newStack = resetCursors ? [undefined] : [...cursorStack.current];
                     newStack[page + 1] = extractedCursor;
                     cursorStack.current = newStack;
                 }
 
-                const more = result.hasMore ?? result.meta?.hasMore ?? (items.length === lim);
+                // 3. Extract hasMore
+                const more = result.hasMore ?? 
+                             result.data?.hasMore ?? 
+                             result.meta?.hasMore ?? 
+                             (items.length === lim);
                 setHasMore(more);
 
                 logger.debug('[useAdminData] Page loaded', { page, count: items.length, hasMore: more });

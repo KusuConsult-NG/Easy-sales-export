@@ -46,7 +46,8 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
     };
 
     await ref.set(wallet);
-    return { id: userId, ...wallet };
+    const newSnap = await ref.get();
+    return serializeDoc<Wallet>(userId, newSnap.data());
 }
 
 // ---------------------------------------------------------------------------
@@ -300,7 +301,7 @@ export async function walletCheckoutAction(
                 userId,
                 type: "purchase",
                 module: "wallet",
-                amount: amountNGN, // We can store absolute amounts or negative. Keeping negative to show debit in ledger.
+                amount: -amountNGN, // Explicitly negative to show debit in ledger.
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -343,61 +344,70 @@ export async function withdrawFromWalletAction(
         const userId = sessionResult.session.user.id;
 
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
-        const snap = await walletRef.get();
-        const currentBalance = snap.exists ? (snap.data()?.balance || 0) : 0;
 
-        if (currentBalance < amountNGN) {
-            return { success: false, error: "Insufficient balance for withdrawal" };
+        // ATOMICITY FIX: Use transaction to prevent double-spending race conditions
+        const result = await db.runTransaction(async (t) => {
+            const snap = await t.get(walletRef);
+            const currentBalance = snap.exists ? (snap.data()?.balance || 0) : 0;
+
+            if (currentBalance < amountNGN) {
+                throw new Error("Insufficient balance for withdrawal");
+            }
+
+            // Reserve the amount immediately (debit wallet, pending admin approval)
+            const newBalance = currentBalance - amountNGN;
+
+            t.update(walletRef, { 
+                balance: newBalance, 
+                updatedAt: FieldValue.serverTimestamp() 
+            });
+
+            const txnRef = db.collection(TXN_COLLECTION).doc();
+            t.set(txnRef, {
+                walletId: userId,
+                userId,
+                type: "withdrawal",
+                amount: -amountNGN,
+                balanceBefore: currentBalance,
+                balanceAfter: newBalance,
+                description: `Withdrawal request — ₦${amountNGN.toLocaleString()} to ${bankDetails.bankName}`,
+                status: "pending",          // Pending admin processing
+                bankDetails,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            return { withdrawalId: txnRef.id };
+        });
+
+        // Notify admins of the pending withdrawal (Non-blocking post-commit)
+        try {
+            const adminSnap = await db.collection(COLLECTIONS.USERS)
+                .where("roles", "array-contains", "admin")
+                .select()
+                .get();
+            const adminIds = adminSnap.docs.map((d) => d.id);
+
+            const notifBatch = db.batch();
+            adminIds.forEach((adminId) => {
+                const nRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc();
+                notifBatch.set(nRef, {
+                    userId: adminId,
+                    type: "payment",
+                    title: "Wallet Withdrawal Request",
+                    message: `A wallet withdrawal of ₦${amountNGN.toLocaleString()} has been requested.`,
+                    link: `/admin/wallets/withdrawals`,
+                    linkText: "Process Withdrawal",
+                    read: false,
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+            });
+            if (adminIds.length > 0) await notifBatch.commit();
+        } catch (notifErr) {
+            logger.error("Withdrawal admin notification failed:", notifErr);
         }
 
-        // Reserve the amount immediately (debit wallet, pending admin approval)
-        const newBalance = currentBalance - amountNGN;
-
-        const batch = db.batch();
-
-        batch.update(walletRef, { balance: newBalance, updatedAt: FieldValue.serverTimestamp() });
-
-        const txnRef = db.collection(TXN_COLLECTION).doc();
-        batch.set(txnRef, {
-            walletId: userId,
-            userId,
-            type: "withdrawal",
-            amount: -amountNGN,
-            balanceBefore: currentBalance,
-            balanceAfter: newBalance,
-            description: `Withdrawal request — ₦${amountNGN.toLocaleString()} to ${bankDetails.bankName}`,
-            status: "pending",          // Pending admin processing
-            bankDetails,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-
-        await batch.commit();
-
-        // Notify admins of the pending withdrawal
-        const adminSnap = await db.collection(COLLECTIONS.USERS)
-            .where("roles", "array-contains", "admin")
-            .select()
-            .get();
-        const adminIds = adminSnap.docs.map((d) => d.id);
-
-        const notifBatch = db.batch();
-        adminIds.forEach((adminId) => {
-            const nRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc();
-            notifBatch.set(nRef, {
-                userId: adminId,
-                type: "payment",
-                title: "Wallet Withdrawal Request",
-                message: `A wallet withdrawal of ₦${amountNGN.toLocaleString()} has been requested.`,
-                link: `/admin/wallets/withdrawals`,
-                linkText: "Process Withdrawal",
-                read: false,
-                createdAt: FieldValue.serverTimestamp(),
-            });
-        });
-        if (adminIds.length > 0) await notifBatch.commit();
-
-        return { success: true, withdrawalId: txnRef.id };
+        return { success: true, withdrawalId: result.withdrawalId };
     } catch (err: any) {
         logger.error("withdrawFromWalletAction error:", err);
         return { success: false, error: err.message || "Withdrawal request failed" };
@@ -475,8 +485,12 @@ export async function processWalletWithdrawalAction(
         }
 
         if (action === "reject") {
-            // Reverse the debit
+            // Reverse the debit atomically
             await db.runTransaction(async (t) => {
+                const freshTxn = await t.get(txnRef);
+                if (!freshTxn.exists) throw new Error("Transaction not found");
+                if (freshTxn.data()?.status !== "pending") throw new Error("Withdrawal is no longer pending");
+
                 const walletRef = db.collection(WALLET_COLLECTION).doc(txnData.userId);
                 const walletSnap = await t.get(walletRef);
                 const currentBalance = walletSnap.data()?.balance || 0;
@@ -495,52 +509,89 @@ export async function processWalletWithdrawalAction(
                 });
             });
 
-            // Notify user
-            await db.collection(COLLECTIONS.NOTIFICATIONS).add({
-                userId: txnData.userId,
-                type: "payment",
-                title: "Withdrawal Rejected",
-                message: `Your withdrawal request of ₦${Math.abs(txnData.amount).toLocaleString()} was rejected. The amount has been returned to your wallet.${note ? ` Reason: ${note}` : ""}`,
-                link: "/dashboard/wallet",
-                linkText: "View Wallet",
-                read: false,
-                createdAt: FieldValue.serverTimestamp(),
-            });
+            // Post-commit side effects: Notifications
+            try {
+                await db.collection(COLLECTIONS.NOTIFICATIONS).add({
+                    userId: txnData.userId,
+                    type: "payment",
+                    title: "Withdrawal Rejected",
+                    message: `Your withdrawal request of ₦${Math.abs(txnData.amount).toLocaleString()} was rejected. The amount has been returned to your wallet.${note ? ` Reason: ${note}` : ""}`,
+                    link: "/dashboard/wallet",
+                    linkText: "View Wallet",
+                    read: false,
+                    createdAt: FieldValue.serverTimestamp(),
+                });
 
-            // SMS + Push (non-fatal)
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(txnData.userId).get();
-            const phone: string | undefined = userDoc.data()?.phone ?? userDoc.data()?.phoneNumber;
-            await Promise.allSettled([
-                phone ? smsWithdrawalRejected(phone, Math.abs(txnData.amount), note) : Promise.resolve(),
-                pushWithdrawalDecision(txnData.userId, false, Math.abs(txnData.amount)),
-            ]);
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(txnData.userId).get();
+                const phone: string | undefined = userDoc.data()?.phone ?? userDoc.data()?.phoneNumber;
+                await Promise.allSettled([
+                    phone ? smsWithdrawalRejected(phone, Math.abs(txnData.amount), note) : Promise.resolve(),
+                    pushWithdrawalDecision(txnData.userId, false, Math.abs(txnData.amount)),
+                ]);
+            } catch (notifyErr) {
+                logger.error("Rejection notification error:", notifyErr);
+            }
         } else {
-            // Mark as completed (Paystack payout would be triggered externally by admin)
-            await txnRef.update({
-                status: "completed",
-                adminNote: note || null,
-                processedBy: adminId,
-                updatedAt: FieldValue.serverTimestamp(),
+            // Approval Flow — 1. State Lock
+            await db.runTransaction(async (t) => {
+                const freshTxn = await t.get(txnRef);
+                if (!freshTxn.exists) throw new Error("Transaction not found");
+                if (freshTxn.data()?.status !== "pending") throw new Error("Withdrawal is no longer pending");
+
+                t.update(txnRef, {
+                    status: "payout_initiated",
+                    processedBy: adminId,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
             });
 
-            await db.collection(COLLECTIONS.NOTIFICATIONS).add({
-                userId: txnData.userId,
-                type: "payment",
-                title: "Withdrawal Processed ✅",
-                message: `Your withdrawal of ₦${Math.abs(txnData.amount).toLocaleString()} has been processed and transferred to your bank account.`,
-                link: "/dashboard/wallet",
-                linkText: "View Wallet",
-                read: false,
-                createdAt: FieldValue.serverTimestamp(),
+            // 2. Mark as completed (Final status update + Ledger)
+            await db.runTransaction(async (t) => {
+                t.update(txnRef, {
+                    status: "completed",
+                    adminNote: note || null,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+
+                // Global Ledger Record (Unified Tracking)
+                const reference = `WALLET-WITHDRAW-${transactionId}`;
+                const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+                t.set(globalTxRef, {
+                    id: reference,
+                    userId: txnData.userId,
+                    type: "withdrawal",
+                    module: "wallet",
+                    amount: Math.abs(txnData.amount), // Withdrawal is stored as negative in wallet_txns, absolute in ledger
+                    currency: "NGN",
+                    status: "completed",
+                    date: FieldValue.serverTimestamp(),
+                    reference,
+                    description: `Wallet withdrawal processed - ${transactionId}`
+                });
             });
 
-            // SMS + Push (non-fatal)
-            const userDocApprove = await db.collection(COLLECTIONS.USERS).doc(txnData.userId).get();
-            const phoneApprove: string | undefined = userDocApprove.data()?.phone ?? userDocApprove.data()?.phoneNumber;
-            await Promise.allSettled([
-                phoneApprove ? smsWithdrawalApproved(phoneApprove, Math.abs(txnData.amount)) : Promise.resolve(),
-                pushWithdrawalDecision(txnData.userId, true, Math.abs(txnData.amount)),
-            ]);
+            // Post-commit side effects: Notifications
+            try {
+                await db.collection(COLLECTIONS.NOTIFICATIONS).add({
+                    userId: txnData.userId,
+                    type: "payment",
+                    title: "Withdrawal Processed ✅",
+                    message: `Your withdrawal of ₦${Math.abs(txnData.amount).toLocaleString()} has been processed and transferred to your bank account.`,
+                    link: "/dashboard/wallet",
+                    linkText: "View Wallet",
+                    read: false,
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+
+                const userDocApprove = await db.collection(COLLECTIONS.USERS).doc(txnData.userId).get();
+                const phoneApprove: string | undefined = userDocApprove.data()?.phone ?? userDocApprove.data()?.phoneNumber;
+                await Promise.allSettled([
+                    phoneApprove ? smsWithdrawalApproved(phoneApprove, Math.abs(txnData.amount)) : Promise.resolve(),
+                    pushWithdrawalDecision(txnData.userId, true, Math.abs(txnData.amount)),
+                ]);
+            } catch (notifyErr) {
+                logger.error("Approval notification error:", notifyErr);
+            }
         }
 
         return { success: true };

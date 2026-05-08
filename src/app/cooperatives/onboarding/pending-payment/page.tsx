@@ -10,7 +10,7 @@ import { useState, useEffect, Suspense } from "react";
 import { Clock, Building2, Upload, CheckCircle, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { COMPANY_INFO } from "@/lib/constants";
+import { COMPANY_INFO, COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 function PendingPaymentContent() {
     const searchParams = useSearchParams();
@@ -18,7 +18,7 @@ function PendingPaymentContent() {
         // Use ref from URL params if available (set during checkout)
         return searchParams.get("ref") || "COOP-PAY-" + Math.random().toString(36).substr(2, 9).toUpperCase();
     });
-    const amount = parseInt(searchParams.get("amount") || "10000", 10);
+    const amount = parseInt(searchParams.get("amount") || COOPERATIVE_CONFIG.registrationFee.toString(), 10);
     const tier = "Member";
 
     return (
@@ -62,7 +62,7 @@ function PendingPaymentContent() {
                         </div>
                         <div className="flex justify-between py-2">
                             <span className="text-slate-600">Amount:</span>
-                            <span className="text-2xl font-bold text-slate-900">₦{amount.toLocaleString()}</span>
+                            <span className="text-2xl font-bold text-slate-900">{CURRENCY_CONFIG.symbol}{amount.toLocaleString()}</span>
                         </div>
                     </div>
 
@@ -122,7 +122,7 @@ function PendingPaymentContent() {
                             <div>
                                 <p className="font-semibold text-blue-900">Make Transfer</p>
                                 <p className="text-sm text-blue-800">
-                                    Transfer ₦{amount.toLocaleString()} to the account above using the reference number
+                                    Transfer {CURRENCY_CONFIG.symbol}{amount.toLocaleString()} to the account above using the reference number
                                 </p>
                             </div>
                         </div>

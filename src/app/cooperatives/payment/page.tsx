@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { initiateCooperativePaymentAction } from "@/app/actions/cooperative";
 import { Loader2, CreditCard, CheckCircle, ShieldCheck, AlertCircle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
+import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 export default function CooperativePaymentPage() {
     const { data: session, status: sessionStatus } = useSession();
@@ -58,7 +59,7 @@ export default function CooperativePaymentPage() {
     async function handlePayment() {
         setIsSubmitting(true);
         try {
-            const result = await initiateCooperativePaymentAction("basic");
+            const result = await initiateCooperativePaymentAction("Member");
 
             if (result.success && result.data?.paymentUrl) {
                 window.location.href = result.data.paymentUrl;
@@ -115,7 +116,7 @@ export default function CooperativePaymentPage() {
                         {/* One-time fee display */}
                         <div className="text-center">
                             <p className="text-sm font-semibold text-purple-600 uppercase tracking-widest mb-2">One-Time Membership Fee</p>
-                            <div className="text-6xl font-extrabold text-slate-900 mb-1">₦10,000</div>
+                            <div className="text-6xl font-extrabold text-slate-900 mb-1">{CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()}</div>
                             <p className="text-slate-500 text-sm">Pay once. Access forever.</p>
                         </div>
 
@@ -133,7 +134,7 @@ export default function CooperativePaymentPage() {
                                 ) : (
                                     <>
                                         <CreditCard className="w-5 h-5" />
-                                        Pay ₦10,000 Now
+                                        Pay {CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()} Now
                                     </>
                                 )}
                             </button>

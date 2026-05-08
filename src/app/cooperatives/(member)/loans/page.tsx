@@ -13,6 +13,7 @@ import OnboardingGuide from "@/components/onboarding/OnboardingGuide";
 import { useActionState } from "react";
 import { applyForLoanAction } from "@/app/actions/cooperative";
 import { Loader2 } from "lucide-react";
+import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 type LoanProduct = {
     id: string;
@@ -130,7 +131,7 @@ export default function LoansPage() {
                             },
                             {
                                 title: "Pay Membership Fee",
-                                description: "Complete your one-time registration fee (₦10,000) via Paystack.",
+                                description: `Complete your one-time registration fee (${CURRENCY_CONFIG.symbol}${COOPERATIVE_CONFIG.registrationFee.toLocaleString()}) via Paystack.`,
                                 completed: membershipStatus === "pending",
                                 action: undefined
                             },

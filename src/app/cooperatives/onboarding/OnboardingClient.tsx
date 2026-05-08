@@ -17,6 +17,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
 import { AlertTriangle } from "lucide-react";
 
+import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 // Steps
 import PersonalInfoStep from "./steps/PersonalInfoStep";
 import NextOfKinStep from "./steps/NextOfKinStep";
@@ -44,6 +45,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     // True for members onboarded before the platform — payment already confirmed by admin.
     const [isLegacyImport, setIsLegacyImport] = useState(false);
     const [validInviteToken, setValidInviteToken] = useState<string | null>(null);
+    const [version, setVersion] = useState<number | undefined>(undefined);
 
     const [tier] = useState<"Member">("Member");
 
@@ -152,6 +154,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                 address: d.nextOfKinAddress || prev.address,
                             }));
                         }
+                        if (d._version !== undefined) {
+                            setVersion(d._version);
+                        }
                     }
                     setIsEditMode(true);
                     setIsCheckingStatus(false);
@@ -186,6 +191,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             phone: d.nextOfKinPhone || prev.phone,
                             address: d.nextOfKinAddress || prev.address,
                         }));
+                    }
+                    if (d._version !== undefined) {
+                        setVersion(d._version);
                     }
                 }
                 if (result.data?.revisionNote) setRevisionNote(result.data.revisionNote);
@@ -312,6 +320,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             }
             if (documents.bvn) {
                 formData.append("bvn", documents.bvn);
+            }
+            if (version !== undefined) {
+                formData.append("_version", version.toString());
             }
 
             // Route to correct action based on mode
@@ -512,7 +523,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                         ) : (
                                             <>
                                                 <p className="font-semibold text-green-800">Payment Confirmed</p>
-                                                <p className="text-sm text-green-700">Your ₦10,000 membership fee has been received.</p>
+                                                <p className="text-sm text-green-700">Your {CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()} membership fee has been received.</p>
                                             </>
                                         )}
                                     </div>
@@ -550,7 +561,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             <div className="space-y-6">
                                 <div className="text-center py-6 border-2 border-dashed border-purple-200 rounded-2xl bg-purple-50">
                                     <p className="text-sm font-semibold text-purple-600 uppercase tracking-widest mb-2">One-Time Membership Fee</p>
-                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">₦10,000</div>
+                                    <div className="text-5xl font-extrabold text-slate-900 mb-1">{CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()}</div>
                                     <p className="text-slate-500 text-sm">Pay once. Access forever.</p>
                                 </div>
 
@@ -588,7 +599,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                         ) : (
                                             <>
                                                 <CreditCard className="w-5 h-5" />
-                                                Pay ₦10,000 Now
+                                                Pay {CURRENCY_CONFIG.symbol}{COOPERATIVE_CONFIG.registrationFee.toLocaleString()} Now
                                             </>
                                         )}
                                     </button>

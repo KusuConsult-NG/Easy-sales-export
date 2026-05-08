@@ -32,8 +32,8 @@ export default function BuyerOrderDetailPage() {
     useEffect(() => {
         if (!id) return;
         getOrderByIdAction(id as string).then((res) => {
-            if (res.success && (res as any).order) {
-                setOrder((res as any).order);
+            if (res.success && res.data?.order) {
+                setOrder(res.data.order as Order);
             } else {
                 setError((res as any).error || "Order not found");
             }
@@ -69,6 +69,7 @@ export default function BuyerOrderDetailPage() {
         const configs: Record<OrderStatus, { bg: string; text: string; border: string; label: string; icon: any }> = {
             pending_payment:   { bg: "bg-yellow-50",  text: "text-yellow-700",  border: "border-yellow-200",  label: "Pending Payment",   icon: Clock },
             payment_received:  { bg: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-200",    label: "Payment Received",  icon: CheckCircle },
+            confirmed:         { bg: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-200",    label: "Confirmed",         icon: CheckCircle },
             processing:        { bg: "bg-blue-50",    text: "text-blue-700",    border: "border-blue-200",    label: "Processing",        icon: Clock },
             shipped:           { bg: "bg-orange-50",  text: "text-orange-700",  border: "border-orange-200",  label: "Shipped",           icon: Truck },
             delivered:         { bg: "bg-green-50",   text: "text-green-700",   border: "border-green-200",   label: "Delivered",         icon: CheckCircle },

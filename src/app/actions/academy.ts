@@ -11,7 +11,8 @@ import { revalidatePath } from "next/cache";
 
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 /**
  * Check Academy application status for current user
@@ -70,7 +71,9 @@ export async function checkAcademyStatusAction(): Promise<{ success: boolean; da
 
         return { success: true, data: null };
     } catch (error) {
-        logger.error("Check Academy status error:", error);
+        logger.error("Check Academy status error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Check Academy status error" };
     }
 }
@@ -134,6 +137,7 @@ export interface UserProgress {
     startedAt: FieldValue | Timestamp;
     lastAccessedAt: FieldValue | Timestamp;
     completedAt?: FieldValue | Timestamp;
+    _version?: number;
 }
 
 export interface LiveSession {
@@ -141,14 +145,14 @@ export interface LiveSession {
     courseId: string;
     title: string;
     instructor: string;
-    scheduledAt: any;
+    scheduledAt: Timestamp | Date | string | null;
     duration: string;
     meetingLink: string;
     maxParticipants: number;
     currentParticipants: number;
     status: "scheduled" | "live" | "ended";
     recordingUrl?: string;
-    createdAt: any;
+    createdAt: Timestamp | Date | string | null;
 }
 
 /**
@@ -178,9 +182,11 @@ export async function getCoursesAction(
         const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
         return { success: true, data: courses, meta: { lastDocId: newLastDocId } };
-    } catch (error: any) {
-        logger.error("Failed to fetch courses:", error);
-        return { success: false, data: [], meta: { lastDocId: null }, error: error.message };
+    } catch (error) {
+        logger.error("Failed to fetch courses:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: [], meta: { lastDocId: null }, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 
@@ -204,9 +210,12 @@ export async function getCourseByIdAction(courseId: string): Promise<{ success: 
         const formattedCourse = serializeDoc<Course>(courseDoc.id, d);
         
         return { success: true, data: formattedCourse };
-    } catch (error: any) {
-        logger.error("[getCourseByIdAction] Failed to fetch course:", error);
-        return { success: false, data: null, error: error.message };
+    } catch (error) {
+        logger.error("[getCourseByIdAction] Failed to fetch course:", {
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: null, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 
@@ -242,9 +251,12 @@ export async function initializeCoursePaymentAction(courseId: string): Promise<{
         );
 
         return { success: true, data: result };
-    } catch (error: any) {
-        logger.error("Course payment init error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Course payment init error:", {
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Initialization failed" };
     }
 }
 
@@ -344,8 +356,11 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
         revalidatePath(`/academy/courses/${courseId}`);
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("Course payment verification error:", error);
+    } catch (error) {
+        logger.error("Course payment verification error:", {
+            reference,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to verify payment" };
     }
 }
@@ -374,7 +389,7 @@ function checkCourseAccess(userPlan: string, courseTier: string): boolean {
 /**
  * Enroll in course (Gated by Academy Tier)
  */
-export async function enrollInCourseAction(
+async function _enrollInCourseAction(
     userId: string,
     courseId: string
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
@@ -392,39 +407,56 @@ export async function enrollInCourseAction(
         const userData = userDoc.data();
         const userPlan = userData?.serviceRegistrations?.academy?.plan || "free";
 
-        // Check if already enrolled
         const progressRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
-        const progressDoc = await progressRef.get();
 
-        if (progressDoc.exists) {
-            return { success: false, error: "Already enrolled in this course" };
-        }
+        // Save to Firestore using a transaction for atomicity
+        await db.runTransaction(async (transaction) => {
+            // 1. Check for existing enrollment
+            const progressDoc = await transaction.get(progressRef);
+            if (progressDoc.exists) {
+                throw new Error("Already enrolled in this course");
+            }
 
-        // 🔒 SECURITY FIX: Validate package tier
-        const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId).get();
-        if (!courseDoc.exists) return { success: false, error: "Course not found" };
+            // 2. Validate package tier
+            const courseDoc = await transaction.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
+            if (!courseDoc.exists) throw new Error("Course not found");
 
-        const course = courseDoc.data() as Course;
-        const courseTier = course.tier || "free";
+            const course = courseDoc.data() as Course;
+            const courseTier = course.tier || "free";
+            const hasAccess = checkCourseAccess(userPlan, courseTier);
 
-        const hasAccess = checkCourseAccess(userPlan, courseTier);
+            if (!hasAccess) {
+                throw new Error(`Your current package (${userPlan}) does not grant access to this course. Please upgrade your package to the ${courseTier.charAt(0).toUpperCase() + courseTier.slice(1)} tier or higher.`);
+            }
 
-        if (!hasAccess) {
-            return { success: false, error: `Your current package (${userPlan}) does not grant access to this course. Please upgrade your package to the ${courseTier.charAt(0).toUpperCase() + courseTier.slice(1)} tier or higher.` };
-        }
+            const progress: UserProgress = {
+                userId,
+                courseId,
+                completedLessons: [],
+                completedModules: [],
+                quizScores: {},
+                overallProgress: 0,
+                startedAt: FieldValue.serverTimestamp(),
+                lastAccessedAt: FieldValue.serverTimestamp(),
+            };
 
-        const progress: UserProgress = {
-            userId,
-            courseId,
-            completedLessons: [],
-            completedModules: [],
-            quizScores: {},
-            overallProgress: 0,
-            startedAt: FieldValue.serverTimestamp(),
-            lastAccessedAt: FieldValue.serverTimestamp(),
-        };
+            // 3. Create enrollment record
+            transaction.set(progressRef, progress);
 
-        await progressRef.set(progress);
+            // 4. Proactively update user document if not already marked as academy_participant
+            if (!userData?.roles?.includes('academy_participant')) {
+                transaction.update(userDoc.ref, {
+                    roles: FieldValue.arrayUnion('academy_participant'),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+            
+            // 5. Increment enrolledCount if it exists in schema
+            transaction.update(courseDoc.ref, {
+                enrolledCount: FieldValue.increment(1),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+        });
 
         await createAdminAuditLog({
             action: "user_update",
@@ -437,20 +469,26 @@ export async function enrollInCourseAction(
         revalidatePath("/dashboard/academy");
         revalidatePath(`/academy/courses/${courseId}`);
 
-        return { success: true };
+        return { success: true, data: { enrollmentId: courseId } };
     } catch (error) {
-        logger.error("Enrollment error:", error);
-        return { success: false, error: "Failed to enroll in course" };
+        logger.error("Enrollment error:", {
+            userId,
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to enroll" };
     }
 }
+export const enrollInCourseAction = withFlexibleSafeAction("enrollInCourseAction", _enrollInCourseAction);
 
 /**
  * Mark lesson as complete
  */
-export async function completeLessonAction(
+async function _completeLessonAction(
     userId: string,
     courseId: string,
-    lessonId: string
+    lessonId: string,
+    expectedVersion?: number
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
@@ -517,6 +555,11 @@ export async function completeLessonAction(
             const progress = tProgressDoc.data() as UserProgress;
 
             if (!progress.completedLessons.includes(lessonId)) {
+                // Concurrency Guard: Optimistic Locking
+                if (expectedVersion !== undefined && progress._version !== undefined && progress._version !== expectedVersion) {
+                    throw new Error("STALE_DATA: Progress has been updated elsewhere.");
+                }
+
                 progress.completedLessons.push(lessonId);
                 progress.lastAccessedAt = FieldValue.serverTimestamp();
 
@@ -529,25 +572,35 @@ export async function completeLessonAction(
                     progress.completedAt = FieldValue.serverTimestamp();
                 }
 
+                // Increment version
+                progress._version = (progress._version || 0) + 1;
+
                 t.set(progressRef, progress);
             }
         });
 
         return { success: true };
     } catch (error) {
-        logger.error("Lesson completion error:", error);
+        logger.error("Lesson completion error:", {
+            userId,
+            courseId,
+            lessonId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to mark lesson as complete" };
     }
 }
+export const completeLessonAction = withFlexibleSafeAction("completeLessonAction", _completeLessonAction);
 
 /**
  * Submit quiz score
  */
-export async function submitQuizScoreAction(
+async function _submitQuizScoreAction(
     userId: string,
     courseId: string,
     moduleId: string,
-    score: number
+    score: number,
+    expectedVersion?: number
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
@@ -571,14 +624,20 @@ export async function submitQuizScoreAction(
             if (!tProgressDoc.exists) throw new Error("Not enrolled");
             
             const progress = tProgressDoc.data() as UserProgress;
+
+            // Concurrency Guard: Optimistic Locking
+            if (expectedVersion !== undefined && progress._version !== undefined && progress._version !== expectedVersion) {
+                throw new Error("STALE_DATA: Progress has been updated elsewhere.");
+            }
+
             progress.quizScores = progress.quizScores || {};
             progress.quizScores[moduleId] = score;
             progress.lastAccessedAt = FieldValue.serverTimestamp();
             
             // Check if module is complete (quiz passed)
-            const courseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
-            if (courseDoc.exists) {
-                const course = courseDoc.data() as Course;
+            const academyCourseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
+            if (academyCourseDoc.exists) {
+                const course = academyCourseDoc.data() as Course;
                 const courseModule = course.modules?.find((m) => m.id === moduleId);
 
                 if (courseModule?.quiz && score >= courseModule.quiz.passingScore) {
@@ -590,15 +649,25 @@ export async function submitQuizScoreAction(
                 }
             }
             
+            // Increment version
+            progress._version = (progress._version || 0) + 1;
+
             t.set(progressRef, progress);
         });
 
         return { success: true, data: { passed: userPassed } };
     } catch (error) {
-        logger.error("Quiz submission error:", error);
+        logger.error("Quiz submission error:", {
+            userId,
+            courseId,
+            moduleId,
+            score,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to submit quiz" };
     }
 }
+export const submitQuizScoreAction = withFlexibleSafeAction("submitQuizScoreAction", _submitQuizScoreAction);
 
 /**
  * Get user progress
@@ -606,7 +675,7 @@ export async function submitQuizScoreAction(
 export async function getUserProgressAction(
     userId: string,
     courseId: string
-): Promise<{ success: boolean; data?: UserProgress | null; meta?: any; error?: string }> {
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
         const progressDoc = await db.doc(`user_progress/${userId}/courses/${courseId}`).get();
 
@@ -614,9 +683,14 @@ export async function getUserProgressAction(
             return { success: true, data: null };
         }
 
-        return { success: true, data: progressDoc.data() as UserProgress };
+        const data = progressDoc.data();
+        return { success: true, data: serializeValue(data) };
     } catch (error) {
-        logger.error("Failed to fetch progress:", error);
+        logger.error("Failed to fetch progress:", {
+            userId,
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, data: null, error: "Fetch failed" };
     }
 }
@@ -682,24 +756,27 @@ export async function getUserAggregateProgressAction(userId: string): Promise<{ 
                 totalLessons,
                 completedLessons: totalCompletedLessons,
                 overallProgress,
-                enrolledCourses,
+                enrolledCourses: serializeValue(enrolledCourses),
             }
         };
-    } catch (error: any) {
-        logger.error("Failed to fetch aggregate progress:", error);
+    } catch (error) {
+        logger.error("Failed to fetch aggregate progress:", {
+            userId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return {
             success: false,
-            error: error.message,
+            error: error instanceof Error ? error.message : "Fetch failed",
             data: {
-            totalCourses: 0,
-            completedCourses: 0,
-            inProgressCourses: 0,
-            totalHoursLearned: 0,
-            certificatesEarned: 0,
-            totalLessons: 0,
-            completedLessons: 0,
-            overallProgress: 0,
-            enrolledCourses: [],
+                totalCourses: 0,
+                completedCourses: 0,
+                inProgressCourses: 0,
+                totalHoursLearned: 0,
+                certificatesEarned: 0,
+                totalLessons: 0,
+                completedLessons: 0,
+                overallProgress: 0,
+                enrolledCourses: [],
             }
         };
     }
@@ -725,9 +802,12 @@ export async function getLiveSessionsAction(courseId?: string): Promise<{ succes
             };
         }) as unknown as LiveSession[];
         return { success: true, data };
-    } catch (error: any) {
-        logger.error("Failed to fetch live sessions:", error);
-        return { success: false, data: [], error: error.message };
+    } catch (error) {
+        logger.error("Failed to fetch live sessions:", {
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: [], error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 
@@ -766,13 +846,13 @@ export interface AcademyApplicationData {
 
 
 
-const ACADEMY_REGISTRATION_FEE = 5000; // ₦5,000
+const ACADEMY_REGISTRATION_FEE = 0; // Registration is now free, users pay only for tiers
 
 /**
  * Initiate academy onboarding payment (must pay before submitting application)
  */
-export async function initiateAcademyPaymentAction(
-    plan?: "foundation" | "advanced" | "elite" | "registration"
+async function _initiateAcademyPaymentAction(
+    plan?: "foundation" | "standard" | "elite" | "advanced"
 ): Promise<{
     success: boolean;
     data?: { paymentUrl: string };
@@ -799,14 +879,16 @@ export async function initiateAcademyPaymentAction(
             return { error: "Payment system not configured", success: false };
         }
 
-        let amount = ACADEMY_REGISTRATION_FEE; // Default to 5000 (Registration)
+        let amount = 25000; // Default to Foundation
+        let planToStore = plan;
 
-        if (plan && plan !== "registration") {
-            if (plan === "foundation") amount = 25000;
-            else if (plan === "advanced") amount = 50000;
-            else if (plan === "elite") amount = 100000;
-        } else {
-            plan = "registration";
+        if (plan === "foundation") {
+            amount = 25000;
+        } else if (plan === "standard" || (plan as string) === "advanced") {
+            amount = 50000;
+            planToStore = "standard";
+        } else if (plan === "elite") {
+            amount = 100000;
         }
 
         const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -821,7 +903,7 @@ export async function initiateAcademyPaymentAction(
                 metadata: {
                     userId,
                     purpose: "academy_registration",
-                    plan,
+                    plan: planToStore,
                 },
                 callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
             }),
@@ -842,15 +924,19 @@ export async function initiateAcademyPaymentAction(
             data: { paymentUrl: paystackData.data.authorization_url },
         };
     } catch (error) {
-        logger.error("Academy payment init failed:", error);
+        logger.error("Academy payment init failed:", {
+            plan,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { error: "Failed to initiate payment", success: false };
     }
 }
+export const initiateAcademyPaymentAction = withFlexibleSafeAction("initiateAcademyPaymentAction", _initiateAcademyPaymentAction);
 
 /**
  * Verify academy registration payment callback
  */
-export async function verifyAcademyPaymentAction(reference: string): Promise<{
+async function _verifyAcademyPaymentAction(reference: string): Promise<{
     success: boolean;
     data?: any;
     error?: string;
@@ -871,22 +957,61 @@ export async function verifyAcademyPaymentAction(reference: string): Promise<{
             return { success: false, error: "Invalid payment type" };
         }
 
-        // Mark payment as completed for the user using dot notation to prevent overwriting
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            "serviceRegistrations.academy.paymentStatus": "completed",
-            "serviceRegistrations.academy.paymentReference": reference,
-            "serviceRegistrations.academy.paymentAmount": verify.data.amount / 100,
-            "serviceRegistrations.academy.plan": metadata.plan || "registration",
-            "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
-            "updatedAt": FieldValue.serverTimestamp(),
+        const paidAmount = verify.data.amount / 100;
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
+
+        // 🔒 ATOMIC TRANSACTION: Update user and record ledger entries
+        await db.runTransaction(async (transaction) => {
+            const tProcessedDoc = await transaction.get(processedRef);
+            if (tProcessedDoc.exists) {
+                throw new Error("Payment already processed");
+            }
+
+            // Update user registration status
+            transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
+                "serviceRegistrations.academy.paymentStatus": "completed",
+                "serviceRegistrations.academy.paymentReference": reference,
+                "serviceRegistrations.academy.paymentAmount": paidAmount,
+                "serviceRegistrations.academy.plan": metadata.plan || "registration",
+                "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
+                "updatedAt": FieldValue.serverTimestamp(),
+            });
+
+            // Mark payment as processed
+            transaction.set(processedRef, {
+                processedAt: FieldValue.serverTimestamp(),
+                userId: session.user.id,
+                amount: paidAmount,
+                type: "academy_registration",
+                reference,
+            });
+
+            // Global Ledger Record
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+            transaction.set(globalTxRef, {
+                id: reference,
+                userId: session.user.id,
+                type: "academy_registration",
+                module: "academy",
+                amount: paidAmount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: "Academy registration fee"
+            });
         });
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("Academy payment verification error:", error);
+    } catch (error) {
+        logger.error("Academy payment verification error:", {
+            reference,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to verify payment" };
     }
 }
+export const verifyAcademyPaymentAction = withFlexibleSafeAction("verifyAcademyPaymentAction", _verifyAcademyPaymentAction);
 
 /**
  * Check if user has paid for academy registration
@@ -919,7 +1044,9 @@ export async function checkAcademyPaymentStatusAction(): Promise<{ success: bool
 
         return { success: true, data: "unpaid" };
     } catch (error) {
-        logger.error("Check academy payment status error:", error);
+        logger.error("Check academy payment status error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: true, data: "unpaid" };
     }
 }
@@ -927,7 +1054,7 @@ export async function checkAcademyPaymentStatusAction(): Promise<{ success: bool
 /**
  * Submit Academy learner application
  */
-export async function submitAcademyApplicationAction(
+async function _submitAcademyApplicationAction(
     applicationData: AcademyApplicationData
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
@@ -1036,11 +1163,14 @@ export async function submitAcademyApplicationAction(
         }
 
         return { success: true, data: { applicationId: finalApplicationId } };
-    } catch (error: any) {
-        logger.error("Academy application submission error:", error);
-        return { success: false, error: error.message || "Failed to submit application. Please try again." };
+    } catch (error) {
+        logger.error("Academy application submission error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to submit application. Please try again." };
     }
 }
+export const submitAcademyApplicationAction = withFlexibleSafeAction("submitAcademyApplicationAction", _submitAcademyApplicationAction);
 
 /**
  * ADMIN ACTIONS
@@ -1087,9 +1217,11 @@ export async function createCourseAction(data: any): Promise<{ success: boolean;
         revalidatePath("/admin/academy", "page");
 
         return { success: true, data: { id: docRef.id } };
-    } catch (error: any) {
-        logger.error("Create course error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Create course error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Course creation failed" };
     }
 }
 
@@ -1118,9 +1250,12 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
         revalidatePath("/admin/academy", "page");
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("Update course error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Update course error:", {
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Update failed" };
     }
 }
 
@@ -1151,9 +1286,13 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
         revalidatePath("/admin/academy", "page");
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("Update modules error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Update modules error:", {
+            courseId,
+            moduleCount: modules?.length,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Update failed" };
     }
 }
 
@@ -1179,9 +1318,12 @@ export async function deleteCourseAction(courseId: string): Promise<{ success: b
         revalidatePath("/admin/academy", "page");
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("Delete course error:", error);
-        return { success: false, error: error.message };
+    } catch (error) {
+        logger.error("Delete course error:", {
+            courseId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Deletion failed" };
     }
 }
 
@@ -1248,8 +1390,10 @@ export async function getEnrolledCoursesWithDetailsAction(): Promise<{ success: 
         });
 
         return { success: true, data: { courses } };
-    } catch (error: any) {
-        logger.error("getEnrolledCoursesWithDetailsAction error:", error);
+    } catch (error) {
+        logger.error("getEnrolledCoursesWithDetailsAction error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, data: { courses: [] }, error: "Failed to load enrolled courses" };
     }
 }
@@ -1313,8 +1457,11 @@ export async function saveQuizAction(
         }, { merge: true });
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("saveQuizAction error:", error);
+    } catch (error) {
+        logger.error("saveQuizAction error:", {
+            quizId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to save quiz" };
     }
 }
@@ -1344,8 +1491,11 @@ export async function getQuizAction(
                 questions: data.questions || [],
             }
         };
-    } catch (error: any) {
-        logger.error("getQuizAction error:", error);
+    } catch (error) {
+        logger.error("getQuizAction error:", {
+            quizId,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false, error: "Failed to load quiz" };
     }
 }
@@ -1379,8 +1529,10 @@ export async function logLessonActivityAction(): Promise<{ success: boolean; dat
             }, { merge: true });
 
         return { success: true };
-    } catch (error: any) {
-        logger.error("logLessonActivityAction error:", error);
+    } catch (error) {
+        logger.error("logLessonActivityAction error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
         return { success: false };
     }
 }
@@ -1431,9 +1583,12 @@ export async function calculateStreakAction(userId: string): Promise<{ success: 
         }
 
         return { success: true, data: { streak } };
-    } catch (error: any) {
-        logger.error("calculateStreakAction error:", error);
-        return { success: false, data: { streak: 0 }, error: error.message };
+    } catch (error) {
+        logger.error("calculateStreakAction error:", {
+            userId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: { streak: 0 }, error: error instanceof Error ? error.message : "Streak calculation failed" };
     }
 }
 
@@ -1466,15 +1621,17 @@ export async function getAcademyApplicationAction(): Promise<{ success: boolean;
         const data = sortedDocs[0];
         return { success: true, data: { ...data, revisionNote: data?.revisionNote } };
     } catch (error) {
-        logger.error('getAcademyApplicationAction error:', error);
-        return { success: false, error: 'Failed to fetch application' };
+        logger.error("getAcademyApplicationAction error:", {
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: "Failed to fetch application" };
     }
 }
 
 /**
  * Admin: Request revision on an academy application
  */
-export async function requestAcademyRevisionAction(
+async function _requestAcademyRevisionAction(
     applicationId: string,
     reason: string
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
@@ -1508,13 +1665,14 @@ export async function requestAcademyRevisionAction(
             });
         }
 
-        try {
-            const { Resend } = await import('resend');
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            const email = userDoc.data()?.email;
-            const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Applicant';
-            if (email) {
+        if (userId) {
+            try {
+                const { Resend } = await import('resend');
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                const email = userDoc.data()?.email;
+                const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Applicant';
+                if (email) {
                 const { data, error } = await resend.emails.send({
                     from: 'Easy Sales Export Academy <noreply@easysalesexport.com>',
                     to: email,
@@ -1525,8 +1683,9 @@ export async function requestAcademyRevisionAction(
                     logger.error("Resend API Error (Academy revision email):", error);
                 }
             }
-        } catch (emailError) {
-            logger.error('Academy revision email failed (non-blocking):', emailError);
+            } catch (emailError) {
+                logger.error('Academy revision email failed (non-blocking):', emailError);
+            }
         }
 
         return { success: true };
@@ -1535,11 +1694,13 @@ export async function requestAcademyRevisionAction(
         return { success: false, error: 'Failed to request revision' };
     }
 }
+export const requestAcademyRevisionAction = withFlexibleSafeAction("requestAcademyRevisionAction", _requestAcademyRevisionAction);
+
 
 /**
  * Admin: Approve an academy application — sets status + sends approval email
  */
-export async function approveAcademyApplicationAction(
+async function _approveAcademyApplicationAction(
     applicationId: string
 ): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
@@ -1551,32 +1712,43 @@ export async function approveAcademyApplicationAction(
         }
 
         const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
-        const appDoc = await appRef.get();
-        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+        
+        let userId: string | undefined;
+        let appData: any;
 
-        const appData = appDoc.data();
-        const userId = appData?.userId;
+        // Atomic update using a transaction
+        await db.runTransaction(async (transaction) => {
+            const appDoc = await transaction.get(appRef);
+            if (!appDoc.exists) throw new Error('Application not found');
 
-        await appRef.update({
-            status: 'approved',
-            approvedAt: FieldValue.serverTimestamp(),
-            approvedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
+            appData = appDoc.data();
+            userId = appData?.userId;
+
+            // 1. Update application status
+            transaction.update(appRef, {
+                status: 'approved',
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. Update user document
+            if (userId) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+                transaction.update(userRef, {
+                    'serviceRegistrations.academy.status': 'approved',
+                    roles: FieldValue.arrayUnion('academy_participant'),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
         });
 
         if (userId) {
-            await db.collection(COLLECTIONS.USERS).doc(userId).update({
-                'serviceRegistrations.academy.status': 'approved',
-                roles: FieldValue.arrayUnion('academy_participant'),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        }
-
-        try {
-            const { Resend } = await import('resend');
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-            const email = userDoc.data()?.email;
+            try {
+                const { Resend } = await import('resend');
+                const resend = new Resend(process.env.RESEND_API_KEY);
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                const email = userDoc.data()?.email;
             const name = appData?.personalInfo?.firstName ? `${appData.personalInfo.firstName} ${appData.personalInfo.lastName || ''}`.trim() : appData?.personalInfo?.fullName || 'Learner';
             if (email) {
                 const { data, error } = await resend.emails.send({
@@ -1589,8 +1761,9 @@ export async function approveAcademyApplicationAction(
                     logger.error("Resend API Error (Academy approval email):", error);
                 }
             }
-        } catch (emailError) {
-            logger.error('Academy approval email failed (non-blocking):', emailError);
+            } catch (emailError) {
+                logger.error('Academy approval email failed (non-blocking):', emailError);
+            }
         }
 
         return { success: true };
@@ -1599,16 +1772,21 @@ export async function approveAcademyApplicationAction(
         return { success: false, error: 'Failed to approve application' };
     }
 }
+export const approveAcademyApplicationAction = withFlexibleSafeAction("approveAcademyApplicationAction", _approveAcademyApplicationAction);
+
+
+import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 
 /**
  * Resubmit academy application after revision request
  */
-export async function resubmitAcademyApplicationAction(data: {
-    personalInfo: any;
-    education: any;
-    interests: any;
-}): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+async function _resubmitAcademyApplicationAction(
+    data: AcademyApplicationInput
+): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
     try {
+        // Validate input
+        AcademyApplicationInputSchema.parse(data);
+
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized' };
         const { session } = sessionResult;
@@ -1622,29 +1800,38 @@ export async function resubmitAcademyApplicationAction(data: {
             return { success: false, error: 'Your application cannot be resubmitted at this time.' };
         }
 
-        const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-            .where('userId', '==', session.user.id)
-            .get();
+        // Atomic update using a transaction
+        await db.runTransaction(async (transaction) => {
+            const snap = await transaction.get(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where('userId', '==', session.user.id));
 
-        if (snap.empty) return { success: false, error: 'No existing application found' };
+            if (snap.empty) throw new Error('No existing application found');
 
-        const sortedDocs = snap.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
+            const sortedDocs = snap.docs.sort((a, b) => {
+                const aData = a.data();
+                const bData = b.data();
+                const aTime = aData.createdAt?.toMillis?.() || aData.createdAt?.seconds * 1000 || 0;
+                const bTime = bData.createdAt?.toMillis?.() || bData.createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
 
-        await sortedDocs[0].ref.update({
-            ...data,
-            status: 'pending',
-            revisionNote: null,
-            resubmittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            const latestDoc = sortedDocs[0];
 
-        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
-            'serviceRegistrations.academy.status': 'pending',
-            updatedAt: FieldValue.serverTimestamp(),
+            // 1. Update application
+            transaction.update(latestDoc.ref, {
+                ...data,
+                status: 'pending',
+                revisionNote: null,
+                resubmittedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. Update user status
+            const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+            transaction.update(userRef, {
+                'serviceRegistrations.academy.status': 'pending',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
         });
 
         return { success: true };
@@ -1653,3 +1840,5 @@ export async function resubmitAcademyApplicationAction(data: {
         return { success: false, error: 'Failed to resubmit application' };
     }
 }
+export const resubmitAcademyApplicationAction = withFlexibleSafeAction("resubmitAcademyApplicationAction", _resubmitAcademyApplicationAction);
+

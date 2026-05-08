@@ -114,8 +114,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const tier = membershipData.membershipTier || "Member";
-        const expectedAmount = 10000;
+        const { COOPERATIVE_CONFIG } = await import('@/lib/constants');
+        const expectedAmount = COOPERATIVE_CONFIG.registrationFee;
         const paidAmount = verifyData.data.amount / 100; // Paystack amount is in kobo
 
         // 🔒 SECURITY FIX: Validate Amount
@@ -130,14 +130,80 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Update payment status (Admin SDK with server timestamps)
-        await membershipRef.update({
-            paymentStatus: "completed",
-            paymentVerifiedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            // Ensure savings/loan balances are initialized if not already
-            savingsBalance: membershipData.savingsBalance || 0,
-            loanBalance: membershipData.loanBalance || 0,
+        // 🔒 SECURITY FIX: Check PROCESSED_PAYMENTS for global idempotency
+        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
+        const processedDoc = await processedRef.get();
+        if (processedDoc.exists) {
+            return NextResponse.json({
+                success: true,
+                message: "Payment already verified.",
+            });
+        }
+
+        // 🔒 ATOMIC TRANSACTION: Update membership and record ledger entries
+        await db.runTransaction(async (transaction) => {
+            // Re-read membership inside transaction
+            const tMembershipDoc = await transaction.get(membershipRef);
+            if (!tMembershipDoc.exists) {
+                throw new Error("Membership record not found during transaction");
+            }
+
+            // Update membership status
+            transaction.update(membershipRef, {
+                paymentStatus: "completed",
+                paymentVerifiedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                savingsBalance: FieldValue.increment(0), // Initialize if needed
+                loanBalance: FieldValue.increment(0),
+            });
+
+            // Mark payment as processed
+            transaction.set(processedRef, {
+                processedAt: FieldValue.serverTimestamp(),
+                userId,
+                amount: paidAmount,
+                type: "cooperative_membership_registration",
+                reference,
+            });
+
+            // Sync to User Doc for Middleware Gating
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            transaction.update(userRef, {
+                "serviceRegistrations.cooperatives.paymentStatus": "completed",
+                "serviceRegistrations.cooperatives.paymentReference": reference,
+                "serviceRegistrations.cooperatives.paymentAmount": paidAmount,
+                "serviceRegistrations.cooperatives.status": "pending", // Initial status
+                "serviceRegistrations.cooperatives.paidAt": FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // Global Ledger Record
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+            transaction.set(globalTxRef, {
+                id: reference,
+                userId,
+                type: "membership_registration",
+                module: "cooperative",
+                amount: paidAmount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: "Cooperative membership registration fee"
+            });
+
+            // Cooperative Ledger Record
+            const coopTxRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
+            transaction.set(coopTxRef, {
+                userId,
+                cooperativeId: membershipData.cooperativeId || "default",
+                type: "membership_registration",
+                amount: paidAmount,
+                date: FieldValue.serverTimestamp(),
+                status: "completed",
+                description: "Membership Registration Fee",
+                reference
+            });
         });
 
         return NextResponse.json({

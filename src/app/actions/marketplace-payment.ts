@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { revalidatePath } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getPlatformFees } from "@/lib/system-settings";
@@ -13,8 +13,9 @@ import { rateLimitConfig } from '@/lib/rate-limits.config';
 import {
     notifyOrderPlaced,
     notifyPaymentReceived,
-    notifyOrderCancelled,
 } from "@/lib/marketplace-notifications";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
+import type { CartItem } from "@/lib/types/marketplace";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -23,29 +24,21 @@ function nairaToKobo(naira: number): number {
     return Math.round(naira * 100);
 }
 
-export interface PaymentInitState {
-    success: boolean;
-    error?: string | null;
-    data?: {
-        authorizationUrl: string;
-        reference: string;
-    };
-}
-
-export interface CartItem {
-    id: string;
-    title: string;
+interface ValidatedItem {
+    productId: string;
+    productTitle: string;
     sellerId: string;
-    price: number;
     quantity: number;
     unit: string;
+    pricePerUnit: number;
+    totalPrice: number;
 }
 
 /**
  * Validate Cart Items against Database Prices
  * Returns the calculated subtotal and validated items list
  */
-async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: number; validatedItems: any[] }> {
+async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: number; validatedItems: ValidatedItem[] }> {
     let subtotal = 0;
     const validatedItems = [];
 
@@ -59,14 +52,7 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
         const productData = productDoc.data();
         const dbPrice = productData?.price || 0;
 
-        // Verify price match (allow minor floating point diffs if necessary, but exact match preferred for currency)
-        // In a real scenario, we might just overwrite with DB price, but let's be strict for security
-        if (Math.abs(dbPrice - item.price) > 0.1) {
-            logger.warn(`Price mismatch for ${item.id}. Client: ${item.price}, DB: ${dbPrice}`);
-            // We can either throw or perform "Silent Correction" - forcing the DB price
-            // Let's force DB price for security
-        }
-
+        // Force DB price for security
         const effectivePrice = dbPrice;
         const itemTotal = effectivePrice * item.quantity;
 
@@ -85,49 +71,50 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
     return { subtotal, validatedItems };
 }
 
+// Helper to calculate delivery fee server-side
+function calculateDeliveryFee(items: CartItem[], _location: any, fees: any): number {
+    const baseFee = fees.baseDeliveryFee || 1500;
+    const additionalItemFee = fees.additionalItemFee || 200;
+    return baseFee + (Math.max(0, items.length - 1) * additionalItemFee);
+}
+
 /**
  * Initialize Paystack Payment for Marketplace Order
  * Creates a payment session and returns authorization URL
  */
-export async function initializeOrderPaymentAction(
+async function _initializeOrderPaymentAction(
     cartItems: CartItem[],
     buyerEmail: string,
     buyerPhone: string,
     deliveryFee: number
-): Promise<PaymentInitState> {
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const userId = session.user.id;
 
-        // 🔒 SECURITY FIX: Validate Delivery Fee
         if (deliveryFee < 0) {
             return { error: "Invalid delivery fee", success: false };
         }
 
-        // 🔒 SECURITY FIX: Server-side Price Validation
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
 
-        // 🔒 SECURITY FIX: Server-Side Fee Calculation (Ignore client fee)
         const fees = await getPlatformFees();
-        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees); // Pass location if available
+        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
 
-        // Validate amount
         if (totalAmount < fees.minOrderAmount) {
             return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
         }
 
-        // Initialize payment with Paystack
         const { authorizationUrl, reference } = await initializePaystackPayment(
             buyerEmail,
             nairaToKobo(totalAmount),
             {
-                userId: session.user.id,
+                userId,
                 buyerEmail,
                 buyerPhone,
                 itemCount: cartItems.length,
@@ -139,40 +126,37 @@ export async function initializeOrderPaymentAction(
             }
         );
 
-        // Derive unique seller IDs for querying
         const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));
 
-        // Create pending order record with VALIDATED items
-        const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
+        const orderId = `ORD-${Date.now()}-${userId.substring(0, 8)}`;
         await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({
             sellerIds,
             orderId,
-            buyerId: session.user.id,
+            buyerId: userId,
             buyerEmail,
             buyerPhone,
-            items: validatedItems, // Use validated items
-            productIds: validatedItems.map(i => i.productId), // For querying
+            items: validatedItems,
+            productIds: validatedItems.map(i => i.productId),
             subtotal,
-            deliveryFee: calculatedDeliveryFee, // Use server calculated fee
+            deliveryFee: calculatedDeliveryFee,
             totalAmount,
             paymentReference: reference,
             paymentStatus: "pending",
             status: "pending_payment",
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
+            _version: 0,
         });
 
-        // Fire-and-forget: notify buyer, seller(s), and admins of new order placement
-        // Use first seller for single-seller carts; multi-seller handled by the notification helper
         const primarySellerId = validatedItems[0]?.sellerId;
         if (primarySellerId) {
             notifyOrderPlaced({
-                buyerId: session.user.id,
+                buyerId: userId,
                 sellerId: primarySellerId,
                 orderId,
                 orderNumber: orderId,
                 amount: totalAmount,
-            }).catch((e) => logger.error("[initializeOrderPaymentAction] Notification failed:", e));
+            }).catch((e) => logger.error("[initializeOrderPaymentAction] Notification failed:", { userId, error: e }));
         }
 
         return {
@@ -182,60 +166,34 @@ export async function initializeOrderPaymentAction(
                 reference,
             },
         };
-    } catch (error: any) {
-        logger.error("Order payment initialization error:", error);
+    } catch (error) {
+        logger.error("Order payment initialization error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error),
+            cartCount: cartItems.length
+        });
         return {
             success: false,
-            error: error.message || "Failed to initialize payment. Please try again.",
+            error: error instanceof Error ? error.message : "Failed to initialize payment. Please try again.",
         };
     }
 }
+export const initializeOrderPaymentAction = withFlexibleSafeAction("initializeOrderPaymentAction", _initializeOrderPaymentAction);
 
 /**
  * Verify Marketplace Order Payment
  * Updates order status after successful payment
  */
-// Helper to calculate delivery fee server-side
-function calculateDeliveryFee(items: any[], location: any, fees: any): number {
-    // 🔒 SECURITY FIX: Server-Side Fee Calculation
-    // For now, we assume a flat fees or based on item count as a placeholder for real logistics API.
-    // In a real app, this would query a logistics provider (e.g., GIGL, Kwik).
-
-    // Simple logic: Base fee + additional item fee
-    const baseFee = fees.baseDeliveryFee;
-    const additionalItemFee = fees.additionalItemFee;
-
-    // Filter distinct sellers (split delivery?) - For now assume consolidated or per-order fee
-    // Let's stick to a robust default standard for the MVP to prevent "0" fee exploits.
-
-    return baseFee + (Math.max(0, items.length - 1) * additionalItemFee);
-}
-
-/**
- * Platform Fee Percentage (Dynamic)
- */
-// Removed hardcoded PLATFORM_FEE_PERCENTAGE constant
-
-/**
- * Verify Marketplace Order Payment
- * Updates order status after successful payment
- */
-export async function verifyOrderPaymentAction(reference: string): Promise<{
-    success: boolean;
-    error?: string;
-    message?: string;
-    orderId?: string;
-}> {
+async function _verifyOrderPaymentAction(reference: string) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
+        const userId = session.user.id;
 
-        const rateLimitResult = await paymentLimiter.check(session.user.id);
+        const rateLimitResult = await paymentLimiter.check(userId);
         if (!rateLimitResult.success) {
             return {
                 success: false,
@@ -243,7 +201,6 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
             };
         }
 
-        // 🔒 SECURITY FIX #1: Double-payment protection
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
@@ -266,16 +223,15 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
 
         // Get metadata
         const metadata = paymentData.data.metadata as Record<string, any>;
-        const userId = metadata.userId;
+        const paystackUserId = metadata.userId;
         const amountInNaira = paymentData.data.amount / 100;
         const expectedAmount = metadata.totalAmount;
 
         // Verify user match
-        if (userId !== session.user.id) {
+        if (paystackUserId !== userId) {
             return { error: "Payment verification failed: User mismatch", success: false };
         }
 
-        // 🔒 SECURITY FIX #3: Amount re-validation
         const fees = await getPlatformFees();
         if (amountInNaira < fees.minOrderAmount || amountInNaira > fees.maxOrderAmount) {
             return { error: "Invalid payment amount", success: false };
@@ -299,26 +255,22 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
         const orderDoc = orderQuery.docs[0];
         const orderData = orderDoc.data();
 
-        // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        // This transaction now handles:
-        // 1. Order Status Update
-        // 2. Inventory Decrement (Prevent double-sell)
-        // 3. Escrow Ledger Creation (Revenue Split)
         await db.runTransaction(async (transaction) => {
             // 1. Update order status -> escrow_held
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
             transaction.update(orderRef, {
-                paymentStatus: "escrow_held", // Funds are held, not yet paid to seller
+                paymentStatus: "escrow_held",
                 status: "processing",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 paidAmount: amountInNaira,
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
             });
 
             // 2. Mark payment as processed
             transaction.set(processedRef, {
                 processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
+                userId: userId,
                 amount: amountInNaira,
                 type: "marketplace_order",
                 reference,
@@ -326,7 +278,7 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
 
             const items = orderData.items || [];
 
-            // 3. Decrement Inventory (CRITICAL FIX)
+            // 3. Decrement Inventory
             for (const item of items) {
                 const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                 const productDoc = await transaction.get(productRef);
@@ -336,7 +288,8 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
                     if (currentQty >= item.quantity) {
                         transaction.update(productRef, {
                             availableQuantity: FieldValue.increment(-item.quantity),
-                            orders: FieldValue.increment(1)
+                            orders: FieldValue.increment(1),
+                            _version: FieldValue.increment(1),
                         });
                     } else {
                         throw new Error(`Insufficient stock for product: ${item.productTitle}`);
@@ -344,34 +297,23 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
                 }
             }
 
-            // 4. Calculate Financial Split (CRITICAL FIX)
-            // Goal: Split items to sellers, add delivery fee to seller(s), deduct platform fee.
-
+            // 4. Calculate Financial Split
             const sellerTotals: Record<string, number> = {};
-            const sellerDeliveryShare: Record<string, number> = {}; // If we split delivery
-
-            // Identify unique sellers
             const uniqueSellers = Array.from(new Set(items.map((i: any) => i.sellerId))) as string[];
-            const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length; // Simply split delivery fee among sellers for now
+            const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length;
 
-            // Calculate total per seller
             items.forEach((item: any) => {
                 const sellerId = item.sellerId;
                 const itemTotal = item.pricePerUnit * item.quantity;
-
-                if (!sellerTotals[sellerId]) sellerTotals[sellerId] = 0;
-                sellerTotals[sellerId] += itemTotal;
-
-                if (!sellerDeliveryShare[sellerId]) sellerDeliveryShare[sellerId] = 0;
+                sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + itemTotal;
             });
 
-            // Add Delivery Share
             uniqueSellers.forEach(sellerId => {
                 sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
             });
 
             // Create Escrow Record for each seller
-            Object.entries(sellerTotals).forEach(([sellerId, grossAmount]) => {
+            for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
                 const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
                 const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
@@ -381,101 +323,94 @@ export async function verifyOrderPaymentAction(reference: string): Promise<{
                 transaction.set(escrowRef, {
                     id: escrowId,
                     orderId: orderData.orderId,
-                    buyerId: session.user.id,
+                    buyerId: userId,
                     sellerId: sellerId,
-                    grossAmount: grossAmount,     // Total items + delivery
-                    platformFee: platformFee,     // Dynamic Commission
-                    netAmount: netAmount,         // What seller actually gets
-                    status: "funded",             // Funds are secured
+                    grossAmount: grossAmount,
+                    platformFee: platformFee,
+                    netAmount: netAmount,
+                    status: "funded",
                     createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: 0,
                 });
+            }
+
+            // 5. Global Ledger Record
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
+            transaction.set(globalTxRef, {
+                id: reference,
+                userId: userId,
+                type: "marketplace_order",
+                module: "marketplace",
+                amount: amountInNaira,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference,
+                description: `Order #${orderData.orderId} - ${items.length} items`
             });
         });
 
         revalidatePath("/dashboard");
         revalidatePath("/marketplace/buyer/orders");
 
-        // Notify buyer (payment confirmed) + all sellers (payment received) + admins
         const uniqueSellerIds = Array.from(new Set(orderData.items?.map((i: any) => i.sellerId) || [])) as string[];
-        const notifPromises = [
+        const notifPromises = uniqueSellerIds.map(sellerId => 
             notifyPaymentReceived({
-                buyerId: session.user.id,
-                sellerId: uniqueSellerIds[0] || orderData.sellerIds?.[0] || "",
+                buyerId: userId,
+                sellerId: sellerId,
                 orderId: orderData.orderId,
                 orderNumber: orderData.orderId,
                 amount: amountInNaira,
                 paymentMethod: "escrow",
             })
-        ];
-        // Fan-out to all sellers if multi-seller order
-        for (let i = 1; i < uniqueSellerIds.length; i++) {
-            notifPromises.push(
-                notifyPaymentReceived({
-                    buyerId: session.user.id,
-                    sellerId: uniqueSellerIds[i],
-                    orderId: orderData.orderId,
-                    orderNumber: orderData.orderId,
-                    amount: amountInNaira,
-                    paymentMethod: "escrow",
-                })
-            );
-        }
-        Promise.allSettled(notifPromises).catch((e) => logger.error("[verifyOrderPaymentAction] Notification failed:", e));
+        );
+        
+        Promise.allSettled(notifPromises).catch((e) => logger.error("[verifyOrderPaymentAction] Notification failed:", { userId, error: e }));
 
         return {
             success: true,
-            message: `Payment secured in Escrow! Order #${orderData.orderId} is now processing.`,
-            orderId: orderData.orderId,
+            data: {
+                message: `Payment secured in Escrow! Order #${orderData.orderId} is now processing.`,
+                orderId: orderData.orderId,
+            }
         };
-    } catch (error: any) {
-        // 🔒 SECURITY FIX #2: Sanitized error logging
+    } catch (error) {
         logger.error('[Payment Verification Error]', {
-            timestamp: new Date().toISOString(),
+            userId: sessionResult?.session?.user?.id,
             action: 'verifyOrder',
             reference,
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
         });
 
         return {
             success: false,
-            error: "Failed to verify payment: " + error.message,
+            error: "Failed to verify payment: " + (error instanceof Error ? error.message : "Unknown error"),
         };
     }
 }
+export const verifyOrderPaymentAction = withFlexibleSafeAction("verifyOrderPaymentAction", _verifyOrderPaymentAction);
 
 /**
  * Create Marketplace Order with Bank Transfer Payment
- * Creates a pending order that requires manual payment verification
  */
-export async function createBankTransferOrderAction(
+async function _createBankTransferOrderAction(
     cartItems: CartItem[],
     buyerEmail: string,
     buyerPhone: string,
     deliveryFee: number
-): Promise<{
-    success: boolean;
-    error?: string;
-    orderId?: string;
-    orderReference?: string;
-}> {
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
+        sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false };
-        }
-
-        // 🔒 SECURITY FIX: Validate Delivery Fee
         if (deliveryFee < 0) {
             return { error: "Invalid delivery fee", success: false };
         }
 
-        // 🔒 SECURITY FIX: Server-side Price Validation
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
-
-        // 🔒 SECURITY FIX: Server-Side Fee Calculation (Ignore client fee)
         const fees = await getPlatformFees();
         const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
@@ -485,12 +420,10 @@ export async function createBankTransferOrderAction(
         }
 
         const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));
-
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
         const orderReference = `BT-${Date.now()}`;
 
         await db.runTransaction(async (transaction) => {
-            // 1. Check all inventory first
             for (const item of validatedItems) {
                 const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                 const productDoc = await transaction.get(productRef);
@@ -504,16 +437,15 @@ export async function createBankTransferOrderAction(
                 }
             }
 
-            // 2. Decrement inventory
             for (const item of validatedItems) {
                 const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                 transaction.update(productRef, {
                     availableQuantity: FieldValue.increment(-item.quantity),
-                    orders: FieldValue.increment(1)
+                    orders: FieldValue.increment(1),
+                    _version: FieldValue.increment(1),
                 });
             }
 
-            // 3. Create the order
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
             transaction.set(orderRef, {
                 sellerIds,
@@ -521,55 +453,59 @@ export async function createBankTransferOrderAction(
                 buyerId: session.user.id,
                 buyerEmail,
                 buyerPhone,
-                items: validatedItems, // Use validated items
-                productIds: validatedItems.map(i => i.productId), // For querying
+                items: validatedItems,
+                productIds: validatedItems.map(i => i.productId),
                 subtotal,
-                deliveryFee: calculatedDeliveryFee, // Use server calculated fee
+                deliveryFee: calculatedDeliveryFee,
                 totalAmount,
                 paymentMethod: "bank_transfer",
                 paymentReference: orderReference,
                 paymentStatus: "pending_verification",
-                status: "processing", // changed from pending_payment, as inventory is held and waiting for manual processing
+                status: "processing",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: 0,
             });
         });
 
-        return { success: true, orderId,
-            orderReference };
-    } catch (error: any) {
-        logger.error("Bank transfer order creation error:", error);
+        return { success: true, data: { orderId, orderReference } };
+    } catch (error) {
+        logger.error("Bank transfer order creation error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
         return {
             success: false,
-            error: error.message || "Failed to create order. Please try again.",
+            error: error instanceof Error ? error.message : "Failed to create order. Please try again.",
         };
     }
 }
+export const createBankTransferOrderAction = withFlexibleSafeAction("createBankTransferOrderAction", _createBankTransferOrderAction);
 
 /**
  * Calculate Delivery Fee (Server-Side)
- * Exposed for UI to display accurate fees before payment
  */
-export async function calculateDeliveryAction(items: CartItem[], location?: any): Promise<{ success: boolean; fee: number; error?: string }> {
+async function _calculateDeliveryAction(items: CartItem[], location?: any) {
+    let sessionResult;
     try {
+        sessionResult = await requireSession().catch(() => ({ session: null }));
         const fees = await getPlatformFees();
         const fee = calculateDeliveryFee(items, location, fees);
-        return { success: true, fee };
+        return { success: true, data: { fee } };
     } catch (error: any) {
-        return { success: false, fee: 0, error: error.message };
+        logger.error("Calculate delivery fee error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, data: { fee: 0 }, error: error.message };
     }
 }
-
-// ============================================================================
-// PAYMENT ON DELIVERY — Order Creation
-// ============================================================================
+export const calculateDeliveryAction = withFlexibleSafeAction("calculateDeliveryAction", _calculateDeliveryAction);
 
 /**
  * Create a marketplace order with Payment on Delivery.
- * Only available if the seller has 'allowsPaymentOnDelivery' enabled.
- * No escrow is created — funds are collected offline on delivery.
  */
-export async function createPaymentOnDeliveryOrderAction(
+async function _createPaymentOnDeliveryOrderAction(
     cartItems: CartItem[],
     buyerPhone: string,
     deliveryAddress: {
@@ -580,13 +516,13 @@ export async function createPaymentOnDeliveryOrderAction(
         state: string;
         lga: string;
     }
-): Promise<{ success: boolean; orderId?: string; error?: string }> {
+) {
+    let sessionResult;
     try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        // Validate and price items server-side
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
         const fees = await getPlatformFees();
         const deliveryFee = calculateDeliveryFee(cartItems, {}, fees);
@@ -596,7 +532,6 @@ export async function createPaymentOnDeliveryOrderAction(
             return { success: false, error: `Minimum order amount is ₦${fees.minOrderAmount}` };
         }
 
-        // Verify each seller allows POD
         const sellerIds = Array.from(new Set(validatedItems.map((i) => i.sellerId))) as string[];
         for (const sid of sellerIds) {
             const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sid).get();
@@ -611,7 +546,6 @@ export async function createPaymentOnDeliveryOrderAction(
         const orderId = `POD-${Date.now()}-${session.user.id.substring(0, 8)}`;
 
         await db.runTransaction(async (transaction) => {
-            // 1. Check all inventory first
             for (const item of validatedItems) {
                 const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                 const productDoc = await transaction.get(productRef);
@@ -625,16 +559,15 @@ export async function createPaymentOnDeliveryOrderAction(
                 }
             }
 
-            // 2. Decrement inventory
             for (const item of validatedItems) {
                 const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                 transaction.update(productRef, {
                     availableQuantity: FieldValue.increment(-item.quantity),
-                    orders: FieldValue.increment(1)
+                    orders: FieldValue.increment(1),
+                    _version: FieldValue.increment(1),
                 });
             }
 
-            // 3. Create the order
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
             transaction.set(orderRef, {
                 orderId,
@@ -654,11 +587,11 @@ export async function createPaymentOnDeliveryOrderAction(
                 reviewSubmitted: false,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                _version: 0,
             });
         });
 
-        // Notify buyer + seller(s) + admins
-        await notifyOrderPlaced({
+        notifyOrderPlaced({
             buyerId: session.user.id,
             sellerId: sellerIds[0],
             orderId,
@@ -667,9 +600,13 @@ export async function createPaymentOnDeliveryOrderAction(
         }).catch((e) => logger.error("[POD] Notification error:", e));
 
         revalidatePath("/marketplace/buyer/orders");
-        return { success: true, orderId };
-    } catch (error: any) {
-        logger.error("createPaymentOnDeliveryOrderAction error:", error);
-        return { success: false, error: error.message || "Failed to create POD order" };
+        return { success: true, data: { orderId } };
+    } catch (error) {
+        logger.error("createPaymentOnDeliveryOrderAction error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false, error: error instanceof Error ? error.message : "Failed to create POD order" };
     }
 }
+export const createPaymentOnDeliveryOrderAction = withFlexibleSafeAction("createPaymentOnDeliveryOrderAction", _createPaymentOnDeliveryOrderAction);

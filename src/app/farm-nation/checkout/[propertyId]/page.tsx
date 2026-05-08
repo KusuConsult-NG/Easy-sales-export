@@ -53,10 +53,12 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (status === "authenticated") {
             getUserTierAction().then((res) => {
-                const tier = res.data?.tier;
-                setUserTier(tier || null);
-                if (tier !== "Member") {
-                    router.push(`/farm-nation/property/${propertyId}`);
+                if (res.success && res.data) {
+                    const tier = res.data.tier;
+                    setUserTier(tier || null);
+                    if (tier !== "Member") {
+                        router.push(`/farm-nation/property/${propertyId}`);
+                    }
                 }
             });
 
