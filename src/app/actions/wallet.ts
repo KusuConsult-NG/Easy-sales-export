@@ -93,9 +93,10 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
         }
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
-        const userId = sessionResult.session.user.id;
-        const userEmail = sessionResult.session.user.email;
+        const session = sessionResult.session;
+        if (!session) return { success: false as const, error: "Unauthorized" , data: null };
+        const userId = session.user.id;
+        const userEmail = session.user.email;
 
         const reference = `WALLET-${userId}-${Date.now()}`;
         const amountKobo = amountNGN * 100; // Paystack uses kobo
@@ -359,8 +360,9 @@ export async function withdrawFromWalletAction(
         }
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
-        const userId = sessionResult.session.user.id;
+        const session = sessionResult.session;
+        if (!session) return { success: false as const, error: "Unauthorized", data: null };
+        const userId = session.user.id;
 
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
 
