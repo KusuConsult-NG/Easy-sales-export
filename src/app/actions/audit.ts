@@ -3,7 +3,7 @@
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { createAuditLog } from '@/lib/audit-log';
-import type { AuditAction } from '@/lib/audit-log';
+import type { AuditAction, AuditLogEntry } from '@/lib/audit-log';
 import { getAuditLogsAction as coreGetAuditLogsAction } from './audit-log-actions';
 
 /**
@@ -75,7 +75,7 @@ export async function getAuditLogsAction(
         }
 
         // Map standard AuditLogEntry to legacy format used by old UI
-        const logs: AuditLog[] = result.logs.map(log => { let logDate = new Date();
+        const logs: AuditLog[] = (result.logs as AuditLogEntry[]).map((log: AuditLogEntry) => { let logDate = new Date();
             if (log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp) {
                 logDate = log.timestamp.toDate(); 
             } else if (log.timestamp && typeof log.timestamp === 'string') { logDate = new Date(log.timestamp);

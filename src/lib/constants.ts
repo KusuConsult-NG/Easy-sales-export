@@ -82,6 +82,12 @@ export const ACADEMY_CONFIG = {
             highlight: false,
         },
     },
+};
+
+// Marketplace Configuration
+export const MARKETPLACE_CONFIG = {
+    platformFee: 5, // 5%
+    processingTimeDays: "2-3", // "2-3 business days"
 } as const;
 
 

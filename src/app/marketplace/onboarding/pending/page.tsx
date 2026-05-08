@@ -9,6 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Clock, CheckCircle, Mail, Home, FileText } from "lucide-react";
+import { MARKETPLACE_CONFIG } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { db } from "@/lib/firebase";
@@ -113,7 +114,7 @@ export default function MarketplacePendingPage() {
                                 </div>
                                 <div className="text-left flex-1">
                                     <p className="font-semibold text-slate-900">Decision Notification</p>
-                                    <p className="text-sm text-slate-600">You'll receive an email (1-3 days)</p>
+                                    <p className="text-sm text-slate-600">You'll receive an email ({MARKETPLACE_CONFIG.processingTimeDays} days)</p>
                                 </div>
                             </div>
                         </div>
@@ -123,7 +124,7 @@ export default function MarketplacePendingPage() {
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
                         <div className="flex items-center justify-center gap-2 text-blue-900">
                             <Clock className="w-5 h-5" />
-                            <span className="font-semibold">Expected review time: 1-3 business days</span>
+                            <span className="font-semibold">Expected review time: {MARKETPLACE_CONFIG.processingTimeDays} business days</span>
                         </div>
                     </div>
 

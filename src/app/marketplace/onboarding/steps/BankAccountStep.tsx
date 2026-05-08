@@ -7,6 +7,7 @@
 "use client";
 
 import BankAccountVerification from "@/components/shared/BankAccountVerification";
+import { MARKETPLACE_CONFIG } from "@/lib/constants";
 
 interface BankAccountData {
     bankName: string;
@@ -57,7 +58,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                             </p>
                             <p className="text-blue-800">
                                 Your bank account will be used to receive payments from sales. Payments are processed
-                                automatically after order completion via escrow system. Funds typically arrive within 2-3 business days.
+                                automatically after order completion via escrow system. Funds typically arrive within {MARKETPLACE_CONFIG.processingTimeDays} business days.
                             </p>
                         </div>
                     </div>
@@ -81,11 +82,11 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                         </div>
                         <div className="flex justify-between items-center">
                             <span>Processing time</span>
-                            <span className="font-semibold">2-3 business days</span>
+                            <span className="font-semibold">{MARKETPLACE_CONFIG.processingTimeDays} business days</span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span>Platform fee</span>
-                            <span className="font-semibold">5% per transaction</span>
+                            <span className="font-semibold">{MARKETPLACE_CONFIG.platformFee}% per transaction</span>
                         </div>
                         <div className="flex justify-between items-center">
                             <span>Withdrawal limit</span>

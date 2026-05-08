@@ -71,7 +71,7 @@ export async function getBriefingRegistrationsAction(
         }
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) { return { success: false as const, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false, data: null } };
+        if (!sessionResult.session) { return { success: false as const, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
         }
         const { session } = sessionResult;
 
@@ -79,7 +79,7 @@ export async function getBriefingRegistrationsAction(
             session.user.roles?.includes("admin") ||
             session.user.roles?.includes("super_admin");
 
-        if (!hasAdminRole) { return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false, data: null } };
+        if (!hasAdminRole) { return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
         }
 
         const pageSize = Math.min(Math.max(limit, 1), 5000);
@@ -190,7 +190,7 @@ export async function getBriefingRegistrationsAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore, totalCount , data: null } , data: null };
+        return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore, totalCount } };
     } catch (error: any) { logger.error("getBriefingRegistrationsAction error:", error);
         
         // Next.js Server Actions strip standard Error objects, so we extract the message manually
@@ -202,7 +202,7 @@ export async function getBriefingRegistrationsAction(
         } else if (error) { errorMessage = String(error);
         }
         
-        return { success: false as const, error: errorMessage, meta: { cursor: null, hasMore: false, totalCount: 0, data: null } 
+        return { success: false as const, error: errorMessage, meta: { cursor: null, hasMore: false, totalCount: 0 } 
         };
     }
 }

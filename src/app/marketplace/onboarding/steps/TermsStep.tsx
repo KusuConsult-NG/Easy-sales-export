@@ -8,6 +8,7 @@
 "use client";
 
 import { CheckCircle } from "lucide-react";
+import { MARKETPLACE_CONFIG } from "@/lib/constants";
 
 interface TermsStepProps {
     accepted: boolean;
@@ -33,7 +34,7 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
             points: [
                 "All transactions protected by escrow",
                 "Payments released after delivery confirmation",
-                "Platform fee: 5% per transaction",
+                `Platform fee: ${MARKETPLACE_CONFIG.platformFee}% per transaction`,
                 "Refund policy for disputed orders"
             ]
         },

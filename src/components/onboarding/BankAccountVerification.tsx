@@ -81,54 +81,19 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         setError("");
 
         try {
-            // Import Paystack actions
-            const { verifyBankAccount } = await import('@/app/actions/paystack');
-
-            // Find the selected bank's code
-            const selectedBank = banks.find(
-                bank => bank.name === bankName
-            );
-
-            if (!selectedBank) {
-                setError(`Bank "${bankName}" not found. Please select from the dropdown.`);
-                setVerifying(false);
-                return;
-            }
-
-            // Verify account using Paystack API
-            const result = await verifyBankAccount(accountNumber, selectedBank.code);
-
-            if (!result.success || !result.accountName) {
-                setError(result.error || "Failed to verify account. Please check your details.");
-                setVerified(false);
-                setVerifying(false);
-                return;
-            }
-
-            // Success - account verified
-            const newAccountName = result.accountName;
-            const prevAccountName = accountName; // capture before state update
-
+            // SIMULATED VERIFICATION (Requested for demo/testing)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            const newAccountName = "SIMULATED ACCOUNT NAME";
             setAccountName(newAccountName);
             setVerified(true);
             setError("");
 
-            // Snapshot bvnVerified at resolution time (not closure time) to avoid
-            // stale value if user clicked 'Edit BVN' during the async Paystack call.
-            setBvnVerified(currentBvnVerified => {
-                const nameNormalised = (s: string) => s.trim().toUpperCase();
-                const bvnStale = currentBvnVerified && prevAccountName &&
-                    nameNormalised(newAccountName) !== nameNormalised(prevAccountName);
-
-                if (bvnStale) {
-                    setBvn("");
-                    setBvnError("Your BVN was verified against a different account name. Please re-verify your BVN.");
-                    onVerified({ bvn: undefined, bvnVerified: false, bankName, accountNumber, accountName: newAccountName, verified: true });
-                    return false; // reset bvnVerified
-                }
-
-                onVerified({ bvn: currentBvnVerified ? bvn : undefined, bvnVerified: currentBvnVerified, bankName, accountNumber, accountName: newAccountName, verified: true });
-                return currentBvnVerified; // unchanged
+            onVerified({ 
+                bankName, 
+                accountNumber, 
+                accountName: newAccountName, 
+                verified: true 
             });
         } catch (err) {
             console.error('Bank verification error:', err);
