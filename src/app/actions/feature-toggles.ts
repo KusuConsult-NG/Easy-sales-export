@@ -13,8 +13,7 @@ import { createAdminAuditLog } from "@/lib/audit-log-admin";
  * Get feature toggle state
  * Returns default if not found in database
  */
-export async function getFeatureToggle(featureName: string): Promise<boolean> {
-    try {
+export async function getFeatureToggle(featureName: string): Promise<boolean> { try {
         const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
         const toggleDoc = await toggleRef.get();
 
@@ -38,14 +37,15 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> {
 export async function updateFeatureToggle(
     featureName: string,
     enabled: boolean
-): Promise<{ error: string | null, success: boolean;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false as const, error: "Unauthorized: Admin access required" };
+        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { success: false as const, error: "Unauthorized: Admin access required"};
         }
 
         const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
@@ -53,12 +53,10 @@ export async function updateFeatureToggle(
 
         const previousState = toggleDoc.exists ? (toggleDoc.data() as FeatureToggle).enabled : DEFAULT_TOGGLES[featureName];
 
-        if (toggleDoc.exists) {
-            // Update existing toggle
+        if (toggleDoc.exists) { // Update existing toggle
             await toggleRef.update({
                 enabled,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         } else {
             // Create new toggle
             await toggleRef.set({
@@ -68,13 +66,11 @@ export async function updateFeatureToggle(
                 enabled,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                createdBy: session.user.id,
-            });
+                createdBy: session.user.id });
         }
 
         // Audit log
-        await createAdminAuditLog({
-            action: "feature_toggled",
+        await createAdminAuditLog({ action: "feature_toggled",
             userId: session.user.id,
             userEmail: session.user.email || "",
             targetId: featureName,
@@ -82,15 +78,12 @@ export async function updateFeatureToggle(
             metadata: {
                 featureName,
                 previousState,
-                newState: enabled,
-            },
-            details: `Feature '${featureName}' ${enabled ? "enabled" : "disabled"}`,
-        });
+                newState: enabled },
+            details: `Feature '${featureName}' ${enabled ? "enabled" : "disabled"}` });
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error("Failed to update feature toggle:", error);
-        return { success: false as const, error: error.message || "Failed to update toggle" };
+        return { error: null,  success: true as const, data: null };
+    } catch (error: any) { logger.error("Failed to update feature toggle:", error);
+        return { success: false as const, error: error.message || "Failed to update toggle"};
     }
 }
 
@@ -98,16 +91,14 @@ export async function updateFeatureToggle(
  * Get all feature toggles (admin only)
  */
 export async function getAllFeatureToggles(): Promise<
-    | { success: true; error: null; data?: FeatureToggle[] }
-    | { success: false; error: string; data?: null; data?: FeatureToggle[] }
-> {
-    try {
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false as const, error: "Unauthorized: Admin access required" };
+        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { success: false as const, error: "Unauthorized: Admin access required"};
         }
 
         const togglesRef = db.collection(COLLECTIONS.FEATURE_TOGGLES);
@@ -115,10 +106,9 @@ export async function getAllFeatureToggles(): Promise<
 
         const toggles = snapshot.docs.map(doc => doc.data() as FeatureToggle);
 
-        return { success: true as const, data: toggles };
-    } catch (error: any) {
-        logger.error("Failed to get feature toggles:", error);
-        return { success: false as const, error: error.message || "Failed to fetch toggles" };
+        return { error: null,  success: true as const, data: toggles};
+    } catch (error: any) { logger.error("Failed to get feature toggles:", error);
+        return { success: false as const, error: error.message || "Failed to fetch toggles"};
     }
 }
 
@@ -129,8 +119,7 @@ export async function hasFeatureAccess(
     featureName: string,
     userId: string,
     userRole?: string
-): Promise<boolean> {
-    try {
+): Promise<boolean> { try {
         const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
         const toggleDoc = await toggleRef.get();
 
@@ -141,20 +130,17 @@ export async function hasFeatureAccess(
 
         const toggle = toggleDoc.data() as FeatureToggle;
 
-        if (!toggle.enabled) {
-            return false;
+        if (!toggle.enabled) { return false;
         }
 
         // Check role restrictions
-        if (toggle.targetRoles && toggle.targetRoles.length > 0) {
-            if (!userRole || !toggle.targetRoles.includes(userRole)) {
+        if (toggle.targetRoles && toggle.targetRoles.length > 0) { if (!userRole || !toggle.targetRoles.includes(userRole)) {
                 return false;
             }
         }
 
         // Check user-specific access
-        if (toggle.targetUsers && toggle.targetUsers.length > 0) {
-            if (!toggle.targetUsers.includes(userId)) {
+        if (toggle.targetUsers && toggle.targetUsers.length > 0) { if (!toggle.targetUsers.includes(userId)) {
                 return false;
             }
         }

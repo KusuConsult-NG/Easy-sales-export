@@ -13,8 +13,8 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { withFlexibleSafeAction } from "@/lib/safe-action";
-import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/lib/admin-action-response";
+import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
+import { paginatedOk, paginatedErr, nextCursor as computeNextCursor, PaginatedAdminResponse } from "@/lib/admin-action-response";
 import {
     sendWithdrawalApprovedEmail,
     sendWithdrawalRejectedEmail
@@ -55,46 +55,18 @@ async function getAdminScope(userId: string, userRoles: string[]): Promise<strin
 // ADMIN DASHBOARD STATS
 // ============================================================================
 
-async function _getCooperativeStatsAction(): Promise<{ error: string | null, success: boolean, 
-    meta?: any;
-    data: {
-        stats: {
-            totalMembers: number;
-            paidMembers: number;
-            activeMembers: number;
-            pendingMembers: number;
-            suspendedMembers: number;
-            totalContributions: number;
-            monthlyContributions: number;
-            totalLoans: number;
-            activeLoans: number;
-            pendingLoans: number;
-            totalSavings: number;
-            monthlyGrowth: number;
-            totalTransactions: number;
-            totalTransactionAmount: number;
-            completedTransactions: number;
-            pendingTransactions: number;
-            failedTransactions: number;
-            totalMembersCount?: number;
-        }
-    };
-} | {
-    
-    data?: null;
-    meta?: null;
-}> {
+async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated", data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
@@ -246,7 +218,7 @@ async function _getCooperativeStatsAction(): Promise<{ error: string | null, suc
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch statistics" };
+        return { success: false as const, error: "Failed to fetch statistics", data: null };
     }
 }
 export const getCooperativeStatsAction = withFlexibleSafeAction("getCooperativeStatsAction", _getCooperativeStatsAction);
@@ -259,22 +231,18 @@ async function _getAllMembersAction(options?: {
     status?: "all" | "active" | "pending" | "suspended" | string;
     limit?: number;
     search?: string;
-}): Promise<{
-    error: null, success: boolean;
-    meta?: any;
-    data?: { members: any[] };
-}> {
+}): Promise<ActionResponse<{ members: any[] }>> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated", data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
@@ -336,7 +304,7 @@ async function _getAllMembersAction(options?: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch members" };
+        return { success: false as const, error: "Failed to fetch members", data: null };
     }
 }
 export const getAllMembersAction = withFlexibleSafeAction("getAllMembersAction", _getAllMembersAction);
@@ -348,14 +316,14 @@ async function _updateMemberStatusAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated", data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const emailData = await db.runTransaction(async (transaction) => {
@@ -443,7 +411,7 @@ async function _updateMemberStatusAction(
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to update member status" };
+        return { success: false as const, error: "Failed to update member status", data: null };
     }
 }
 export const updateMemberStatusAction = withFlexibleSafeAction("updateMemberStatusAction", _updateMemberStatusAction);
@@ -457,33 +425,18 @@ async function _getAllTransactionsAction(options?: {
     status?: "all" | "pending" | "completed" | "failed";
     limit?: number;
     lastDocId?: string;
-}): Promise<{
-    error: null, success: boolean;
-    meta?: any;
-    data?: { transactions: Array<{
-        id: string;
-        userId: string;
-        userName: string;
-        type: string;
-        amount: number;
-        status: string;
-        date: string;
-        description?: string;
-        reference?: string;
-        metadata?: Record<string, unknown>;
-    }> };
-}> {
+}): Promise<ActionResponse<{ transactions: any[] }>> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated", data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
@@ -580,7 +533,7 @@ async function _getAllTransactionsAction(options?: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch transactions" };
+        return { success: false as const, error: "Failed to fetch transactions", data: null };
     }
 }
 export const getAllTransactionsAction = withFlexibleSafeAction("getAllTransactionsAction", _getAllTransactionsAction);
@@ -592,30 +545,18 @@ export const getAllTransactionsAction = withFlexibleSafeAction("getAllTransactio
 export async function getContributionReportsAction(options?: {
     month?: number;
     year?: number;
-}): Promise<{
-    error: null, success: boolean;
-    meta?: any;
-    data?: {
-        reports: {
-            totalContributions: number;
-            memberCount: number;
-            averageContribution: number;
-            topContributors: Array<{ userId: string; name: string; total: number }>;
-            monthlyTrend: Array<{ month: string; amount: number }>;
-        }
-    };
-}> {
+}): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated", data: null };
         }
 
         // Check admin role directly from session (Performance Optimization)
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
@@ -727,7 +668,7 @@ export async function getContributionReportsAction(options?: {
         return payload;
     } catch (error) {
         logger.error("Get contribution reports error:", error);
-        return { success: false as const, error: "Failed to generate report" };
+        return { success: false as const, error: "Failed to generate report", data: null };
     }
 }
 
@@ -735,27 +676,18 @@ export async function getContributionReportsAction(options?: {
 // RECENT ACTIVITY
 // ============================================================================
 
-export async function getRecentActivityAction(): Promise<{
-    error: null, success: boolean;
-    meta?: any;
-    data?: { activities: Array<{
-        type: string;
-        description: string;
-        timestamp: string;
-        userId?: string;
-    }> };
-}> {
+export async function getRecentActivityAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated", data: null };
         }
 
         // Check admin role directly from session (Performance Optimization)
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
@@ -785,7 +717,7 @@ export async function getRecentActivityAction(): Promise<{
         return { error: null, success: true as const, data: { activities }, meta: null };
     } catch (error) {
         logger.error("Get recent activity error:", error);
-        return { success: false as const, error: "Failed to fetch activity" };
+        return { success: false as const, error: "Failed to fetch activity", data: null };
     }
 }
 
@@ -801,14 +733,14 @@ export async function getRecentActivityAction(): Promise<{
  */
 export async function approveWithdrawalAction(
     withdrawalId: string
-): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
+): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         // Check admin role directly from session (Performance Optimization)
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminId = session.user.id;
@@ -909,7 +841,7 @@ export async function approveWithdrawalAction(
 
     } catch (error: any) {
         logger.error("Approve withdrawal error:", error);
-        return { success: false as const, error: error.message || "Failed to approve withdrawal" };
+        return { success: false as const, error: (error as any).message || "Failed to approve withdrawal", data: null };
     }
 }
 
@@ -921,13 +853,13 @@ export async function approveWithdrawalAction(
 export async function rejectWithdrawalAction(
     withdrawalId: string,
     reason: string
-): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
+): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const adminId = session.user.id;
@@ -1031,7 +963,7 @@ export async function rejectWithdrawalAction(
 
     } catch (error: any) {
         logger.error("Reject withdrawal error:", error);
-        return { success: false as const, error: error.message || "Failed to reject withdrawal" };
+        return { success: false as const, error: (error as any).message || "Failed to reject withdrawal", data: null };
     }
 }
 
@@ -1045,13 +977,13 @@ export async function rejectWithdrawalAction(
 export async function requestCooperativeRevisionAction(
     memberId: string,
     reason: string
-): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
+): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!isAdmin(session?.user?.roles)) {
-            return { success: false as const, error: 'Admin access required' };
+            return { success: false as const, error: 'Admin access required', data: null };
         }
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
@@ -1115,10 +1047,10 @@ export async function requestCooperativeRevisionAction(
             logger.error('Cooperative revision email failed (non-blocking):', emailError);
         }
 
-        return { success: true as const, data: { message: "Revision requested" }, meta: null };
+        return { success: true, error: null, data: { message: "Revision requested" }, meta: null };
     } catch (error: any) {
         logger.error('requestCooperativeRevisionAction error:', error);
-        return { success: false as const, error: error.message || 'Failed to request revision' };
+        return { success: false as const, error: (error as any).message || 'Failed to request revision', data: null };
     }
 }
 
@@ -1132,7 +1064,7 @@ export async function getStandardCooperativeMembersAction(
         dateFrom?: string; // YYYY-MM-DD
         dateTo?: string;   // YYYY-MM-DD
     } = {}
-): Promise<{ error: string | null, success: boolean; data: any[]; hasMore: boolean; lastDocId?: string; meta?: any }> {
+): Promise<PaginatedAdminResponse<any>> {
     const { status: statusFilter = "all", paymentStatus: paymentFilter = "all", cursorId, limit: limitCount = 50, search } = options;
     try {
         const sessionResult = await requireSession();

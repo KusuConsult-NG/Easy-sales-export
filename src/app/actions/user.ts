@@ -15,27 +15,23 @@ import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-inv
  * but permanently scrubs all Personally Identifiable Information (PII).
  * NOTE: Declared as async function (not const) so Next.js "use server" validator accepts it.
  */
-async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
-    try {
+async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Unauthorized. You must be logged in." };
+        if (!session?.user?.id) { return { success: false as const, error: "Unauthorized. You must be logged in.", data: null };
         }
 
         const userId = session.user.id;
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
         const userSnap = await userRef.get();
-        if (!userSnap.exists) {
-            return { success: false as const, error: "User profile not found." };
+        if (!userSnap.exists) { return { success: false as const, error: "User profile not found.", data: null };
         }
 
         // Scrub all PII. We retain the UID so that database foreign keys (like
         // 'sellerId' on an order or 'buyerId' on a farm purchase) do not break.
-        await userRef.update({
-            fullName: "Redacted User",
+        await userRef.update({ fullName: "Redacted User",
             email: "deleted_" + userId + "@redacted.local",
             phone: FieldValue.delete(),
             gender: FieldValue.delete(),
@@ -48,24 +44,20 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
             // Track deletion status and timestamp
             deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
         logger.info(`[NDPR Compliance] User PII successfully scrubbed for UID: ${userId}`);
 
         // Invalidate Cache
-        try {
-            await invalidateUserCache(userId);
+        try { await invalidateUserCache(userId);
             await invalidateAdminGlobalStats();
-        } catch (err) {
-            logger.error("Cache invalidation failed after account deletion", err);
+        } catch (err) { logger.error("Cache invalidation failed after account deletion", err);
         }
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error("[NDPR Compliance] Account deletion error:", error);
+        return { success: true as const, error: null, data: null };
+    } catch (error: any) { logger.error("[NDPR Compliance] Account deletion error:", error);
         const msg = typeof error === 'string' ? error : (error?.message || "Account deletion failed");
-        return { success: false as const, error: msg };
+        return { success: false as const, error: msg, data: null };
     }
 }
 

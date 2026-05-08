@@ -12,8 +12,7 @@ import { getAuditLogsAction as coreGetAuditLogsAction } from './audit-log-action
  * Tracks all admin actions for compliance and security.
  */
 
-export interface AuditLog {
-    id: string;
+export interface AuditLog { id: string;
     action: AuditAction;
     adminId: string;
     adminEmail: string;
@@ -21,16 +20,15 @@ export interface AuditLog {
     targetType: "user" | "application" | "withdrawal" | "export" | "cooperative" | "cooperative_member" | "land_listing" | "seller_verification" | "export_onboarding" | "export_onboarding_applications" | "academy_application" | string;
     details: Record<string, any>;
     timestamp: Date;
-    ipAddress?: string;
-}
+    ipAddress?: string; }
 
-type LogAuditState =
-    | { error: string; success: false }
-    | { error: null; success: true };
+type LogAuditState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
-type GetAuditLogsState =
-    | { error: string; success: false; data: null }
-    | { error: null; success: true; data: AuditLog[] };
+type GetAuditLogsState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
 /**
  * Log an audit event
@@ -40,26 +38,22 @@ export async function logAuditAction(
     targetId: string,
     targetType: AuditLog["targetType"],
     details: Record<string, any> = {}
-): Promise<LogAuditState> {
-    try {
+): Promise<LogAuditState> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
-        await createAuditLog({
-            action,
+        await createAuditLog({ action,
             userId: session.user.id,
             userEmail: session.user.email || "",
             targetId,
             targetType,
             details: JSON.stringify(details),
-            metadata: details,
-        });
+            metadata: details });
 
-        return { error: null, success: true as const };
-    } catch (error: any) {
-        logger.error("Audit log error:", error);
-        return { error: "Failed to log audit action", success: false as const };
+        return { error: null, success: true as const , data: null };
+    } catch (error: any) { logger.error("Audit log error:", error);
+        return { error: "Failed to log audit action", success: false as const, data: null };
     }
 }
 
@@ -68,28 +62,23 @@ export async function logAuditAction(
  */
 export async function getAuditLogsAction(
     limitCount: number = 50
-): Promise<GetAuditLogsState> {
-    try {
+): Promise<GetAuditLogsState> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
-        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized: Admin access required", success: false as const, data: null };
+        if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized: Admin access required", success: false as const, data: null };
         }
 
         const result = await coreGetAuditLogsAction({ limit: limitCount });
         
-        if (!result.success || !result.logs) {
-            return { error: result.error || "Failed to fetch audit logs", success: false as const, data: null };
+        if (!result.success || !result.logs) { return { error: result.error || "Failed to fetch audit logs", success: false as const, data: null };
         }
 
         // Map standard AuditLogEntry to legacy format used by old UI
-        const logs: AuditLog[] = result.logs.map(log => {
-            let logDate = new Date();
+        const logs: AuditLog[] = result.logs.map(log => { let logDate = new Date();
             if (log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp) {
                 logDate = log.timestamp.toDate(); 
-            } else if (log.timestamp && typeof log.timestamp === 'string') {
-                logDate = new Date(log.timestamp);
+            } else if (log.timestamp && typeof log.timestamp === 'string') { logDate = new Date(log.timestamp);
             }
 
             return {
@@ -100,17 +89,11 @@ export async function getAuditLogsAction(
                 targetId: log.targetId || '',
                 targetType: log.targetType || '',
                 details: log.metadata || {},
-                timestamp: logDate,
-            };
+                timestamp: logDate };
         });
 
-        return {
-            error: null,
-            success: true as const,
-            data: logs,
-        };
-    } catch (error: any) {
-        logger.error("Get audit logs error:", error);
+        return { error: null, success: true as const, data: logs };
+    } catch (error: any) { logger.error("Get audit logs error:", error);
         return { error: "Failed to fetch audit logs", success: false as const, data: null };
     }
 }

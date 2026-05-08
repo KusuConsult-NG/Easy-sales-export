@@ -5,12 +5,10 @@ import { db, adminAuth } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 
-interface StandardizationReport {
-    collection: string;
+interface StandardizationReport { collection: string;
     scanned: number;
     updated: number;
-    details: string[];
-}
+    details: string[]; }
 
 /**
  * Run Schema Standardization
@@ -20,8 +18,8 @@ interface StandardizationReport {
  * @param dryRun If true, only logs changes without writing to DB.
  */
 export async function runSchemaStandardizationAction(dryRun: boolean = true): Promise<
-    | { success: true; error: null; reports: StandardizationReport[] }
-    | { success: false; error: string; data?: null; reports: StandardizationReport[] }
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
     const reports: StandardizationReport[] = [];
 
@@ -44,37 +42,31 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
             const missingFields: string[] = [];
 
             // 1.1 Roles
-            if (!data.roles || !Array.isArray(data.roles)) {
-                updates.roles = ["general_user"];
+            if (!data.roles || !Array.isArray(data.roles)) { updates.roles = ["general_user"];
                 missingFields.push("roles");
             }
 
             // 1.2 isVerified
-            if (typeof data.isVerified === 'undefined') {
-                updates.isVerified = false;
+            if (typeof data.isVerified === 'undefined') { updates.isVerified = false;
                 missingFields.push("isVerified");
             }
 
             // 1.3 Timestamps
-            if (!data.createdAt) {
-                updates.createdAt = FieldValue.serverTimestamp();
+            if (!data.createdAt) { updates.createdAt = FieldValue.serverTimestamp();
                 missingFields.push("createdAt");
             }
-            if (!data.updatedAt) {
-                updates.updatedAt = FieldValue.serverTimestamp();
+            if (!data.updatedAt) { updates.updatedAt = FieldValue.serverTimestamp();
                 missingFields.push("updatedAt");
             }
 
             // 1.4 Profile Basics
-            if (!data.email) {
-                // Try to fetch from Auth? Too expensive here. Just flag.
+            if (!data.email) { // Try to fetch from Auth? Too expensive here. Just flag.
                 // updates.email = "missing@fixme.com"; // Dangerous to guess
             }
 
             if (Object.keys(updates).length > 0) {
                 usersReport.details.push(`User ${doc.id}: Missing [${missingFields.join(", ")}]`);
-                if (!dryRun) {
-                    userUpdates.push(doc.ref.update(updates));
+                if (!dryRun) { userUpdates.push(doc.ref.update(updates));
                 }
                 usersReport.updated++;
             }
@@ -98,29 +90,25 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
             const missingFields: string[] = [];
 
             // 2.1 Status
-            if (!data.status) {
-                updates.status = "draft"; // Safe default
+            if (!data.status) { updates.status = "draft"; // Safe default
                 missingFields.push("status");
             }
 
             // 2.2 Price
-            if (typeof data.price === 'undefined') {
-                updates.price = 0;
+            if (typeof data.price === 'undefined') { updates.price = 0;
                 missingFields.push("price");
             }
 
             // 2.3 Stock/Inventory
             // Some implementation might use 'inventory', some 'stock'. Let's standardize on 'quantity' or ensure existing one is set.
             // Assuming 'quantity' or 'availableQuantity' based on previous files seen.
-            if (typeof data.quantity === 'undefined' && typeof data.availableQuantity === 'undefined') {
-                updates.availableQuantity = 0;
+            if (typeof data.quantity === 'undefined' && typeof data.availableQuantity === 'undefined') { updates.availableQuantity = 0;
                 missingFields.push("availableQuantity");
             }
 
             if (Object.keys(updates).length > 0) {
                 productsReport.details.push(`Product ${doc.id}: Missing [${missingFields.join(", ")}]`);
-                if (!dryRun) {
-                    productUpdates.push(doc.ref.update(updates));
+                if (!dryRun) { productUpdates.push(doc.ref.update(updates));
                 }
                 productsReport.updated++;
             }
@@ -142,23 +130,19 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
             const updates: Record<string, any> = {};
             const missingFields: string[] = [];
 
-            if (!data.status) {
-                updates.status = "pending";
+            if (!data.status) { updates.status = "pending";
                 missingFields.push("status");
             }
-            if (!data.participants) {
-                updates.participants = [];
+            if (!data.participants) { updates.participants = [];
                 missingFields.push("participants");
             }
-            if (typeof data.totalInvested === 'undefined') {
-                updates.totalInvested = 0;
+            if (typeof data.totalInvested === 'undefined') { updates.totalInvested = 0;
                 missingFields.push("totalInvested");
             }
 
             if (Object.keys(updates).length > 0) {
                 exportReport.details.push(`ExportWindow ${doc.id}: Missing [${missingFields.join(", ")}]`);
-                if (!dryRun) {
-                    exportUpdates.push(doc.ref.update(updates));
+                if (!dryRun) { exportUpdates.push(doc.ref.update(updates));
                 }
                 exportReport.updated++;
             }
@@ -180,23 +164,19 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
             const updates: Record<string, any> = {};
             const missingFields: string[] = [];
 
-            if (!data.status) {
-                updates.status = "pending";
+            if (!data.status) { updates.status = "pending";
                 missingFields.push("status");
             }
-            if (!data.members) {
-                updates.members = [];
+            if (!data.members) { updates.members = [];
                 missingFields.push("members");
             }
-            if (typeof data.totalSavings === 'undefined') {
-                updates.totalSavings = 0;
+            if (typeof data.totalSavings === 'undefined') { updates.totalSavings = 0;
                 missingFields.push("totalSavings");
             }
 
             if (Object.keys(updates).length > 0) {
                 coopReport.details.push(`Cooperative ${doc.id}: Missing [${missingFields.join(", ")}]`);
-                if (!dryRun) {
-                    coopUpdates.push(doc.ref.update(updates));
+                if (!dryRun) { coopUpdates.push(doc.ref.update(updates));
                 }
                 coopReport.updated++;
             }
@@ -218,16 +198,14 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
             const missingFields: string[] = [];
 
             // The main field is status.
-            if (!data.status && !data.applicationStatus) {
-                updates.status = "pending";
+            if (!data.status && !data.applicationStatus) { updates.status = "pending";
                 missingFields.push("status");
             }
             // Some logic uses applicationStatus, some uses status. Let's fix 'status' as primary if missing.
 
             if (Object.keys(updates).length > 0) {
                 waveReport.details.push(`WaveApp ${doc.id}: Missing [${missingFields.join(", ")}]`);
-                if (!dryRun) {
-                    waveUpdates.push(doc.ref.update(updates));
+                if (!dryRun) { waveUpdates.push(doc.ref.update(updates));
                 }
                 waveReport.updated++;
             }
@@ -236,10 +214,9 @@ export async function runSchemaStandardizationAction(dryRun: boolean = true): Pr
         reports.push(waveReport);
 
 
-        return { error: null, success: true as const, reports };
+        return { error: null, success: true as const, reports , data: null };
 
-    } catch (error: any) {
-        logger.error("[SCHEMA FIX] Failed:", error);
-        return { error: "Action failed", success: false as const, reports: [] }; // Should probably return partial reports
+    } catch (error: any) { logger.error("[SCHEMA FIX] Failed:", error);
+        return { error: "Action failed", success: false as const, reports: [], data: null }; // Should probably return partial reports
     }
 }

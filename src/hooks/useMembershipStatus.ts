@@ -25,7 +25,7 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
         }
 
         // Determine the correct collection based on the module
-        let collectionName = COLLECTIONS.COOPERATIVE_MEMBERS;
+        let collectionName: string = COLLECTIONS.COOPERATIVE_MEMBERS;
         if (moduleType === "wave") collectionName = COLLECTIONS.WAVE_APPLICATIONS;
         if (moduleType === "academy") collectionName = COLLECTIONS.ACADEMY_APPLICATIONS;
         if (moduleType === "export") collectionName = COLLECTIONS.EXPORT_APPLICATIONS;

@@ -8,35 +8,29 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { serializeDocs } from "@/lib/firestore-serialize";
 
-export interface CreateBookingData {
-    exportWindowId: string;
+export interface CreateBookingData { exportWindowId: string;
     quantity: number;
-    totalPrice: number;
-}
+    totalPrice: number; }
 
 /**
  * Create an export booking in Firestore
  */
-export async function createBookingAction(data: CreateBookingData) {
-    try {
+export async function createBookingAction(data: CreateBookingData) { try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false, data: null, error: 'Not authenticated', meta: null };
+        if (!session?.user?.id) { return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }
 
         // Validate input
-        if (!data.exportWindowId || data.quantity <= 0 || data.totalPrice <= 0) {
-            return { success: false as const, data: null, error: 'Invalid booking data', meta: null };
+        if (!data.exportWindowId || data.quantity <= 0 || data.totalPrice <= 0) { return { success: false as const, data: null, error: 'Invalid booking data', meta: null };
         }
 
         // Check if export window exists and has availability
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.exportWindowId);
         const windowDoc = await windowRef.get();
 
-        if (!windowDoc.exists) {
-            return { success: false as const, data: null, error: 'Export window not found', meta: null };
+        if (!windowDoc.exists) { return { success: false as const, data: null, error: 'Export window not found', meta: null };
         }
 
         const windowData = windowDoc.data()!;
@@ -44,9 +38,9 @@ export async function createBookingAction(data: CreateBookingData) {
 
         if (data.quantity > availableVolume) {
             return {
-                error: "Action failed", success: false as const,
-                data: null,
+                success: false as const,
                 error: `Only ${availableVolume}kg available`,
+                data: null,
                 meta: null
             };
         }
@@ -59,27 +53,22 @@ export async function createBookingAction(data: CreateBookingData) {
             totalPrice: data.totalPrice,
             status: 'pending',
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         // Update export window current volume
         await windowRef.update({
             currentVolume: FieldValue.increment(data.quantity),
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
 
-        return {
-            error: null, success: true as const,
-            data: { bookingId: bookingRef.id },
-            error: null,
-            meta: null
-        };
+        return { error: null, success: true as const, data: { bookingId: bookingRef.id } };
     } catch (error) {
         logger.error('Create booking error:', error);
         return {
-            error: "Action failed", success: false as const,
-            data: null,
+            success: false as const,
             error: 'Failed to create booking',
+            data: null,
             meta: null
         };
     }
@@ -88,13 +77,11 @@ export async function createBookingAction(data: CreateBookingData) {
 /**
  * Get user's bookings
  */
-export async function getUserBookingsAction() {
-    try {
+export async function getUserBookingsAction() { try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, data: null, error: 'Not authenticated', meta: null };
+        if (!session?.user?.id) { return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }
 
         const snapshot = await db.collection(COLLECTIONS.EXPORT_BOOKINGS)
@@ -105,8 +92,7 @@ export async function getUserBookingsAction() {
         const bookings = serializeDocs(snapshot.docs);
 
         return { success: true as const, data: bookings, error: null, meta: null };
-    } catch (error) {
-        logger.error('Get bookings error:', error);
+    } catch (error) { logger.error('Get bookings error:', error);
         return { success: false as const, data: null, error: 'Failed to fetch bookings', meta: null };
     }
 }

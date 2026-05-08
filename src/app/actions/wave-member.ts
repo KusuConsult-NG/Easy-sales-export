@@ -15,33 +15,23 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 /**
  * Check if current user is enrolled in WAVE
  */
-export async function checkWaveMembershipAction(): Promise<{ error: string | null, success: boolean; data?: { enrolled: boolean; memberData?: any }; meta?: any;  }> {
-    try {
+export async function checkWaveMembershipAction(): Promise<{ success: true; error: null; data: { enrolled: boolean; memberData?: any }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: null, success: true as const, data: { enrolled: false } };
+            return { success: true as const, error: null, data: { enrolled: false } };
         }
 
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
 
-        if (!memberDoc.exists || !memberDoc.data()?.active) {
-            // Check for admin bypass first
+        if (!memberDoc.exists || !memberDoc.data()?.active) { // Check for admin bypass first
             const { isAdmin } = await import("@/lib/admin-permissions");
-            if (isAdmin(session.user.roles)) {
-                return {
-                    error: null, success: true as const,
-                    data: {
-                        enrolled: true,
-                        memberData: serializeDoc(session.user.id, {
-                            name: session.user.name || "Administrator",
-                            email: session.user.email,
-                            roles: session.user.roles,
-                            active: true,
-                            status: "approved",
-                            enrolledAt: new Date(),
-                        })
+            if (isAdmin(session.user.roles)) { return { error: null, success: true as const, data: {
+                        enrolled: true, memberData: serializeDoc(session.user.id, {
+                            name: session.user.name || "Administrator", email: session.user.email, roles: session.user.roles, active: true, status: "approved", enrolledAt: new Date() })
                     }
                 };
             }
@@ -54,8 +44,7 @@ export async function checkWaveMembershipAction(): Promise<{ error: string | nul
             if (hasRole) {
                 logger.info(`[Auto-Heal] Creating missing wave_members doc for ${session.user.id}`);
                 const now = new Date();
-                const memberData = {
-                    userId: session.user.id,
+                const memberData = { userId: session.user.id,
                     email: session.user.email,
                     name: session.user.name || "WAVE Participant",
                     roles: ["wave_participant"],
@@ -64,51 +53,41 @@ export async function checkWaveMembershipAction(): Promise<{ error: string | nul
                     enrolledAt: now,
                     lastHealedAt: now,
                     createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                };
+                    updatedAt: FieldValue.serverTimestamp() };
 
                 await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).set(memberData, { merge: true });
 
-                return {
-                    error: null, success: true as const,
-                    data: {
-                        enrolled: true,
-                        memberData: serializeDoc(session.user.id, memberData)
-                    }
+                return { error: null, success: true as const, data: {
+                        enrolled: true, memberData: serializeDoc(session.user.id, memberData)
+ }
                 };
             }
 
             return { error: null, success: true as const, data: { enrolled: false } };
         }
 
-        return {
-            error: null, success: true as const,
-            data: {
-                enrolled: true,
-                memberData: serializeDoc(memberDoc.id, memberDoc.data()),
-            }
+        return { error: null, success: true as const, data: {
+                enrolled: true, memberData: serializeDoc(memberDoc.id, memberDoc.data()) }
         };
-    } catch (error) {
-        logger.error("WAVE membership check error:", error);
-        return { success: false as const, error: "Failed to check membership" };
+    } catch (error) { logger.error("WAVE membership check error:", error);
+        return { success: false as const, error: "Failed to check membership", data: null };
     }
 }
 
 /**
  * Get member dashboard stats
  */
-export async function getWaveMemberStatsAction(): Promise<{ error: string | null, success: boolean; data?: { stats: any }; meta?: any;  }> {
-    try {
+export async function getWaveMemberStatsAction(): Promise<{ success: true; error: null; data: { stats: any }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+        if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
 
         const membershipResult = await checkWaveMembershipAction();
-        if (!membershipResult.success || !membershipResult.data?.enrolled) {
-            return { success: false as const, error: "Not enrolled in WAVE" };
+        if (!membershipResult.success || !membershipResult.data?.enrolled) { return { success: false as const, error: "Not enrolled in WAVE", data: null };
         }
         const membership = membershipResult.data!;
 
@@ -133,33 +112,33 @@ export async function getWaveMemberStatsAction(): Promise<{ error: string | null
             (Date.now() - enrolledAt.getTime()) / (1000 * 60 * 60 * 24)
         );
 
-        return {
-            error: null, success: true as const,
-            data: {
+        return { 
+            error: null, 
+            success: true as const, 
+            data: { 
                 stats: {
                     resourcesAccessed: resourceAccessSnap.size,
-                    trainingsRegistered: trainingSnap.size,
                     trainingsCompleted,
-                    daysActive,
+                    daysActive: Math.max(0, daysActive)
                 }
-            },
+            } 
         };
-    } catch (error) {
-        logger.error("Failed to get member stats:", error);
-        return { success: false as const, error: "Failed to fetch stats" };
+    } catch (error) { logger.error("Failed to get member stats:", error);
+        return { success: false as const, error: "Failed to fetch stats", data: null };
     }
 }
 
 /**
  * Track resource access
  */
-export async function trackResourceAccessAction(resourceId: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+export async function trackResourceAccessAction(resourceId: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+        if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
 
         // Check if already accessed
@@ -168,48 +147,41 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{ e
             .where("resourceId", "==", resourceId)
             .get();
 
-        if (accessSnap.empty) {
-            // First time access
+        if (accessSnap.empty) { // First time access
             await db.collection(COLLECTIONS.WAVE_RESOURCE_ACCESS).add({
                 userId: session.user.id,
                 resourceId,
                 accessedAt: new Date(),
                 accessCount: 1,
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-        } else {
-            // Increment access count
+                updatedAt: FieldValue.serverTimestamp() });
+        } else { // Increment access count
             const accessDoc = accessSnap.docs[0];
             await accessDoc.ref.update({
                 accessCount: FieldValue.increment(1),
                 lastAccessedAt: new Date(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         }
 
         // Increment resource downloads
-        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
-            downloads: FieldValue.increment(1),
-        });
+        await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({ downloads: FieldValue.increment(1) });
 
-        return { error: null, success: true as const };
-    } catch (error) {
-        logger.error("Failed to track resource access:", error);
-        return { success: false as const, error: "Failed to track access" };
+        return { error: null, success: true as const , data: null };
+    } catch (error) { logger.error("Failed to track resource access:", error);
+        return { success: false as const, error: "Failed to track access", data: null };
     }
 }
 
 /**
  * Get user's training registrations
  */
-export async function getUserTrainingRegistrationsAction(): Promise<{ error: string | null, success: boolean; data?: { registrations: any[] }; meta?: any;  }> {
-    try {
+export async function getUserTrainingRegistrationsAction(): Promise<{ success: true; error: null; data: { registrations: any[] }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+        if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
 
         const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
@@ -219,8 +191,7 @@ export async function getUserTrainingRegistrationsAction(): Promise<{ error: str
         const registrations = serializeDocs(snap.docs);
 
         return { error: null, success: true as const, data: { registrations } };
-    } catch (error) {
-        logger.error("Failed to get registrations:", error);
-        return { success: false as const, error: "Failed to fetch registrations" };
+    } catch (error) { logger.error("Failed to get registrations:", error);
+        return { success: false as const, error: "Failed to fetch registrations", data: null };
     }
 }

@@ -365,6 +365,7 @@ declare module "next-auth" {
             onboardingCompleted?: boolean;
             sellerVerificationStatus?: string;
             serviceRegistrations?: Record<string, any>;
+            currentModuleId?: string;
         };
         firebaseToken?: string;
     }
@@ -379,5 +380,6 @@ declare module "next-auth" {
         onboardingCompleted?: boolean;
         sellerVerificationStatus?: string;
         serviceRegistrations?: Record<string, any>;
+        currentModuleId?: string;
     }
 }

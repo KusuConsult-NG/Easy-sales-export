@@ -16,18 +16,13 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
  * Server Actions for Order Management
  */
 
-export interface CreateOrderState {
-    error: null, success: boolean;
-    orderId?: string;
-    orderIds?: string[];
-    paymentUrl?: string;
-}
+export type CreateOrderState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
-export interface OrderItem {
-    productId: string;
+export interface OrderItem { productId: string;
     quantity: number;
-    tierType: "retail" | "bulk" | "export";
-}
+    tierType: "retail" | "bulk" | "export"; }
 
 /**
  * Create a new order
@@ -37,25 +32,22 @@ export interface OrderItem {
  */
 async function _createOrderAction(
     items: OrderItem[],
-    deliveryAddress: {
-        street: string;
+    deliveryAddress: { street: string;
         city: string;
         state: string;
         lga: string;
         phone: string;
     }
-): Promise<CreateOrderState> {
-    let sessionResult;
+): Promise<CreateOrderState> { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
         const fees = await getPlatformFees();
         
-        return await db.runTransaction(async (transaction) => {
-            const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
+        return await db.runTransaction(async (transaction) => { const productRefs = items.map(item => db.collection(COLLECTIONS.PRODUCTS).doc(item.productId));
             const productDocs = await Promise.all(productRefs.map(ref => transaction.get(ref)));
 
             const sellerOrders = new Map<string, { items: { productId: string; productTitle: string; quantity: number; unitPrice: number; totalPrice: number; tier: string }[], subtotal: number }>();
@@ -82,26 +74,21 @@ async function _createOrderAction(
                 const totalPrice = tier.price * item.quantity;
                 const sellerId = product.sellerId;
 
-                if (!sellerOrders.has(sellerId)) {
-                    sellerOrders.set(sellerId, { items: [], subtotal: 0 });
+                if (!sellerOrders.has(sellerId)) { sellerOrders.set(sellerId, { items: [], subtotal: 0 });
                 }
                 const so = sellerOrders.get(sellerId)!;
                 so.subtotal += totalPrice;
 
-                transaction.update(productRefs[i], {
-                    availableQuantity: product.availableQuantity - item.quantity,
+                transaction.update(productRefs[i], { availableQuantity: product.availableQuantity - item.quantity,
                     _version: FieldValue.increment(1),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
 
-                so.items.push({
-                    productId: item.productId,
+                so.items.push({ productId: item.productId,
                     productTitle: product.title,
                     quantity: item.quantity,
                     unitPrice: tier.price,
                     totalPrice: totalPrice,
-                    tier: item.tierType,
-                });
+                    tier: item.tierType });
             }
 
             const orderIds: string[] = [];
@@ -121,14 +108,12 @@ async function _createOrderAction(
                     sellerId,
                     productIds: data.items.map(i => i.productId),
                     items: data.items as any,
-                    deliveryAddress: {
-                        recipientName: session.user.name || "",
+                    deliveryAddress: { recipientName: session.user.name || "",
                         recipientPhone: deliveryAddress.phone,
                         street: deliveryAddress.street,
                         city: deliveryAddress.city,
                         state: deliveryAddress.state,
-                        lga: deliveryAddress.lga,
-                    },
+                        lga: deliveryAddress.lga },
                     subtotal: data.subtotal,
                     deliveryFee: deliveryFeePerSeller,
                     serviceFee: 0,
@@ -137,24 +122,19 @@ async function _createOrderAction(
                     buyerConfirmed: false,
                     _version: 0,
                     createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                };
+                    updatedAt: FieldValue.serverTimestamp() };
 
                 transaction.set(orderRef, orderData);
             }
 
-            return { error: null, success: true as const, data: { orderId: orderIds[0], orderIds } };
+            return { error: null, success: true as const, data: null };
         });
 
-    } catch (error) {
-        logger.error("Create order error:", {
+    } catch (error) { logger.error("Create order error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            success: false as const,
-            error: error instanceof Error ? error.message : "Failed to create order",
-        };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to create order", data: null };
     }
 }
 export const createOrderAction = withFlexibleSafeAction("createOrderAction", _createOrderAction);
@@ -162,34 +142,30 @@ export const createOrderAction = withFlexibleSafeAction("createOrderAction", _cr
 /**
  * Get order by ID
  */
-async function _getOrderByIdAction(orderId: string) {
-    let sessionResult;
+async function _getOrderByIdAction(orderId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
-        if (!orderDoc.exists) {
-            return { success: false as const, error: "Order not found" };
+        if (!orderDoc.exists) { return { success: false as const, error: "Order not found", data: null };
         }
 
         const orderData = orderDoc.data();
 
-        if (orderData?.buyerId !== session.user.id) {
-            return { success: false as const, error: "Unauthorized" };
+        if (orderData?.buyerId !== session.user.id) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const { serializeDoc } = await import("@/lib/firestore-serialize");
-        return { error: null, success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, orderData) } };
-    } catch (error) {
-        logger.error("Get order error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get order error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed", data: null };
     }
 }
 export const getOrderByIdAction = withFlexibleSafeAction("getOrderByIdAction", _getOrderByIdAction);
@@ -201,41 +177,35 @@ async function _updateOrderPaymentAction(
     orderId: string,
     paymentReference: string,
     paymentStatus: "success" | "failed"
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        await withOptimisticLock<Order>(orderRef, undefined, (transaction, order) => {
-            if (order.buyerId !== session.user.id) {
+        await withOptimisticLock<Order>(orderRef, undefined, (transaction, order) => { if (order.buyerId !== session.user.id) {
                 throw new Error("Unauthorized");
             }
 
-            if (order.status === "confirmed" || order.paymentStatus === "paid") {
-                return;
+            if (order.status === "confirmed" || order.paymentStatus === "paid") { return;
             }
 
-            transaction.update(orderRef, {
-                paymentStatus: paymentStatus === "success" ? "paid" : "failed",
+            transaction.update(orderRef, { paymentStatus: paymentStatus === "success" ? "paid" : "failed",
                 paymentReference,
                 status: paymentStatus === "success" ? "confirmed" : "cancelled",
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
         });
 
-        return { error: null, success: true as const, data: { message: "Payment status updated successfully" } };
-    } catch (error) {
-        logger.error("Update payment error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Update payment error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error instanceof Error ? error.message : "Update failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Update failed", data: null };
     }
 }
 export const updateOrderPaymentAction = withFlexibleSafeAction("updateOrderPaymentAction", _updateOrderPaymentAction);

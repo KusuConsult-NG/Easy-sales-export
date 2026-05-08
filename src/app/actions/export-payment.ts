@@ -9,53 +9,39 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
-function nairaToKobo(naira: number): number {
-    return Math.round(naira * 100);
-}
+function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
 
-export interface PaymentInitState {
-    error: null, success: boolean;
-    meta?: any;
-    data?: {
-        authorizationUrl: string;
-        reference: string;
-    };
-}
+export type PaymentInitState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
-export interface ExportCartItemInput {
-    productId: string;
+export interface ExportCartItemInput { productId: string;
     quantityMT: number;
-    grade: string;
-}
+    grade: string; }
 
-export interface ExportBuyerDetails {
-    companyName: string;
+export interface ExportBuyerDetails { companyName: string;
     contactPerson: string;
     email: string;
     phone: string;
     country: string;
     portOfDestination: string;
     shippingTerm: string;
-    additionalNotes: string;
-}
+    additionalNotes: string; }
 
 const USD_TO_NGN_RATE = 1650; // TODO: Fetch dynamically in a real app
 
 export async function initializeExportOrderPaymentAction(
     cartItems: ExportCartItemInput[],
     buyerDetails: ExportBuyerDetails
-): Promise<PaymentInitState> {
-    try {
+): Promise<PaymentInitState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const, data: undefined, meta: null };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, data: null, meta: null };
         }
 
-        if (!cartItems.length) {
-            return { error: "Cart is empty", success: false as const, data: undefined, meta: null };
+        if (!cartItems.length) { return { error: "Cart is empty", success: false as const, data: undefined, meta: null };
         }
 
         let totalUSD = 0;
@@ -78,8 +64,7 @@ export async function initializeExportOrderPaymentAction(
             const itemTotalUSD = pricePerMT * item.quantityMT;
             totalUSD += itemTotalUSD;
 
-            validatedItems.push({
-                productId: item.productId,
+            validatedItems.push({ productId: item.productId,
                 name: productData.name,
                 grade: item.grade,
                 quantityMT: item.quantityMT,
@@ -101,14 +86,12 @@ export async function initializeExportOrderPaymentAction(
                 totalUSD,
                 totalNGN,
                 itemCount: cartItems.length,
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/buyer/cart/payment-callback`,
-            }
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/buyer/cart/payment-callback` }
         );
 
         // Pre-create the order as "pending_payment"
         const orderId = `EXP-ORD-${Date.now()}-${session.user.id.substring(0, 5)}`;
-        await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderId).set({
-            orderId,
+        await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderId).set({ orderId,
             buyerId: session.user.id,
             buyerDetails,
             items: validatedItems,
@@ -119,47 +102,31 @@ export async function initializeExportOrderPaymentAction(
             paymentStatus: "pending",
             status: "pending_payment",
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
-        return {
-            error: null, success: true as const,
-            data: {
-                authorizationUrl,
-                reference,
-            },
+        return { error: null, success: true as const,
             meta: null
-        };
-    } catch (error: any) {
-        logger.error("Export Order payment initialization error:", error);
-        return {
-            success: false as const,
-            error: error.message || "Failed to initialize payment.",
-            data: undefined,
-            meta: null
-        };
+        , data: null };
+    } catch (error: any) { logger.error("Export Order payment initialization error:", error);
+        return { error: "Failed to initialize payment.", success: false as const, data: undefined, meta: null
+ };
     }
 }
 
-export async function verifyExportOrderPaymentAction(reference: string) {
-    try {
+export async function verifyExportOrderPaymentAction(reference: string) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const, data: null, meta: null };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
         // Double-payment protection
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) {
-            return {
-                error: "Payment has already been processed",
-                success: false as const, data: null, meta: null
-            };
+        if (existingPayment.exists) { return { error: "Payment has already been processed", success: false as const, meta: null
+ };
         }
 
         // Verify payment with Paystack
@@ -168,7 +135,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status || 'failed'}. Please contact support if amount was debited.`,
-                success: false as const, data: null, meta: null
+                success: false as const, meta: null
             };
         }
 
@@ -178,8 +145,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         const amountInNaira = paymentData.data.amount / 100;
 
         // Verify user match
-        if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false as const, data: null, meta: null };
+        if (userId !== session.user.id) { return { error: "Payment verification failed: User mismatch", success: false as const, meta: null };
         }
 
         // Find the pending order
@@ -188,31 +154,26 @@ export async function verifyExportOrderPaymentAction(reference: string) {
             .limit(1)
             .get();
 
-        if (orderQuery.empty) {
-            return { error: "Export Order record not found", success: false as const, data: null, meta: null };
+        if (orderQuery.empty) { return { error: "Export Order record not found", success: false as const, meta: null };
         }
 
         const orderDoc = orderQuery.docs[0];
         const orderData = orderDoc.data();
 
-        await db.runTransaction(async (transaction) => {
-            // Update order status
+        await db.runTransaction(async (transaction) => { // Update order status
             const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderDoc.id);
             transaction.update(orderRef, {
                 status: "processing",
                 paymentStatus: "paid",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
 
             // Mark payment as processed
-            transaction.set(processedRef, {
-                processedAt: FieldValue.serverTimestamp(),
+            transaction.set(processedRef, { processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "export_buyer_order",
-                reference,
-            });
+                reference });
 
             // Global Ledger Record
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
@@ -234,8 +195,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         });
 
         // Notify Admins
-        try {
-            const { sendEmailNotification } = await import("@/lib/email-notifications");
+        try { const { sendEmailNotification } = await import("@/lib/email-notifications");
             const sysConfig = await db.collection(COLLECTIONS.SYSTEM_SETTINGS).doc("general").get();
             const adminEmail = sysConfig.data()?.adminEmail || "admin@easysales.com";
             
@@ -245,32 +205,20 @@ export async function verifyExportOrderPaymentAction(reference: string) {
                 message: `<p>A new international export order (${orderData.orderId}) has been fully paid and is awaiting processing. Shipping Term: ${orderData.buyerDetails.shippingTerm}. Port: ${orderData.buyerDetails.portOfDestination}.</p>`,
                 metadata: { type: "export_admin_notification" }
             });
-        } catch (e: any) {
-            logger.warn("Failed to send export order admin notification", { error: e?.message || String(e) });
+        } catch (e: any) { logger.warn("Failed to send export order admin notification", { error: e?.message || String(e) });
         }
 
-        return {
-            error: null, success: true as const,
-            data: {
-                message: "Export order payment verified successfully.",
-                orderId: orderData.orderId,
-            },
+        return { error: null, success: true as const,
             meta: null
-        };
-    } catch (error: any) {
-        logger.error('[Export Order Payment Verification Error]', {
+        , data: null };
+    } catch (error: any) { logger.error('[Export Order Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyExportOrder',
             reference,
             error: error.message
         });
 
-        return {
-            error: "Action failed", success: false as const,
-            data: null,
-            meta: null,
-            error: "Failed to verify export order payment. Please contact support.",
-        };
+        return { error: "Failed to verify export order payment. Please contact support.", success: false as const, meta: null };
     }
 }
 
@@ -284,40 +232,33 @@ export async function initializeInvestmentPaymentAction(
     investmentAmount: number,
     commodity: string,
     expectedROI: number
-): Promise<PaymentInitState> {
-    try {
+): Promise<PaymentInitState> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const, data: undefined, meta: null };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
         // Validate amount
-        if (investmentAmount < 50000) {
-            return { error: "Minimum investment is ₦50,000", success: false as const, data: undefined, meta: null };
+        if (investmentAmount < 50000) { return { error: "Minimum investment is ₦50, 000", success: false as const, data: undefined, meta: null };
         }
 
-        if (investmentAmount > 10000000) {
-            return { error: "Maximum investment is ₦10,000,000", success: false as const, data: undefined, meta: null };
+        if (investmentAmount > 10000000) { return { error: "Maximum investment is ₦10, 000, 000", success: false as const, data: undefined, meta: null };
         }
 
         // Check if export window exists and is open
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
         const windowDoc = await windowRef.get();
 
-        if (!windowDoc.exists) {
-            return { error: "Export window not found", success: false as const, data: undefined, meta: null };
+        if (!windowDoc.exists) { return { error: "Export window not found", success: false as const, data: undefined, meta: null };
         }
 
         const windowData = windowDoc.data();
-        if (!windowData) {
-            return { error: "Export window data is corrupted", success: false as const, data: undefined, meta: null };
+        if (!windowData) { return { error: "Export window data is corrupted", success: false as const, data: undefined, meta: null };
         }
 
-        if (windowData.status !== "open" && windowData.status !== "active") {
-            return { error: "This export window is no longer accepting investments", success: false as const, data: undefined, meta: null };
+        if (windowData.status !== "open" && windowData.status !== "active") { return { error: "This export window is no longer accepting investments", success: false as const, data: undefined, meta: null };
         }
 
         // Check if funding goal exceeded
@@ -345,14 +286,12 @@ export async function initializeInvestmentPaymentAction(
                 investmentAmount,
                 expectedROI,
                 type: "export_investment",
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/payment/callback`,
-            }
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/export/payment/callback` }
         );
 
         // Create pending investment record
         const investmentId = `${session.user.id}_${windowId}_${Date.now()}`;
-        await db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentId).set({
-            investmentId,
+        await db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentId).set({ investmentId,
             windowId,
             windowTitle,
             commodity,
@@ -365,25 +304,14 @@ export async function initializeInvestmentPaymentAction(
             paymentReference: reference,
             status: "pending_payment",
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
-        return {
-            error: null, success: true as const,
-            data: {
-                authorizationUrl,
-                reference,
-            },
+        return { error: null, success: true as const,
             meta: null
-        };
-    } catch (error: any) {
-        logger.error("Investment payment initialization error:", error);
-        return {
-            success: false as const,
-            error: error.message || "Failed to initialize investment payment. Please try again.",
-            data: undefined,
-            meta: null
-        };
+        , data: null };
+    } catch (error: any) { logger.error("Investment payment initialization error:", error);
+        return { error: "Failed to initialize investment payment. Please try again.", success: false as const, data: undefined, meta: null
+ };
     }
 }
 
@@ -391,25 +319,20 @@ export async function initializeInvestmentPaymentAction(
  * Verify Export Investment Payment
  * Updates investment and portfolio after successful payment
  */
-export async function verifyInvestmentPaymentAction(reference: string) {
-    try {
+export async function verifyInvestmentPaymentAction(reference: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const, data: null, meta: null };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) {
-            return {
-                error: "Payment has already been processed",
-                success: false as const, data: null, meta: null
-            };
+        if (existingPayment.exists) { return { error: "Payment has already been processed", success: false as const, meta: null
+ };
         }
 
         // Verify payment with Paystack
@@ -418,7 +341,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status}. Please contact support if amount was debited.`,
-                success: false as const, data: null, meta: null
+                success: false as const, meta: null
             };
         }
 
@@ -430,18 +353,15 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         const expectedAmount = metadata.investmentAmount;
 
         // Verify user match
-        if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false as const, data: null, meta: null };
+        if (userId !== session.user.id) { return { error: "Payment verification failed: User mismatch", success: false as const, meta: null };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
-        if (amountInNaira < 50000 || amountInNaira > 10000000) {
-            return { error: "Invalid payment amount", success: false as const, data: null, meta: null };
+        if (amountInNaira < 50000 || amountInNaira > 10000000) { return { error: "Invalid payment amount", success: false as const, meta: null };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
-        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: "Payment amount mismatch", success: false as const, data: null, meta: null };
+        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) { return { error: "Payment amount mismatch", success: false as const, meta: null };
         }
 
         // Find investment record
@@ -450,30 +370,26 @@ export async function verifyInvestmentPaymentAction(reference: string) {
             .limit(1)
             .get();
 
-        if (investmentQuery.empty) {
-            return { error: "Investment record not found", success: false as const, data: null, meta: null };
+        if (investmentQuery.empty) { return { error: "Investment record not found", success: false as const, meta: null };
         }
 
         const investmentDoc = investmentQuery.docs[0];
         const investmentData = investmentDoc.data();
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
-        await db.runTransaction(async (transaction) => {
-            // Update investment status
+        await db.runTransaction(async (transaction) => { // Update investment status
             const investmentRef = db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentDoc.id);
             transaction.update(investmentRef, {
                 status: "active",
                 paymentStatus: "paid",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
 
             // Update export window funding
             const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
             const windowSnap = await transaction.get(windowRef);
 
-            if (!windowSnap.exists) {
-                throw new Error("Export window not found");
+            if (!windowSnap.exists) { throw new Error("Export window not found");
             }
 
             const windowData = windowSnap.data();
@@ -488,19 +404,16 @@ export async function verifyInvestmentPaymentAction(reference: string) {
                 // In a real system, we might auto-refund here or mark as "overpaid_pending_refund"
             }
 
-            transaction.update(windowRef, {
-                currentFunding: currentFunding + amountInNaira,
+            transaction.update(windowRef, { currentFunding: currentFunding + amountInNaira,
                 investorCount: investorCount + 1,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
 
             // Update or create investor portfolio
             const portfolioId = session.user.id || "";
             const portfolioRef = db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(portfolioId);
             const portfolioSnap = await transaction.get(portfolioRef);
 
-            if (portfolioSnap.exists) {
-                const pData = portfolioSnap.data();
+            if (portfolioSnap.exists) { const pData = portfolioSnap.data();
                 if (pData) {
                     const currentInvested = pData.totalInvested || 0;
                     const currentReturns = pData.totalExpectedReturns || 0;
@@ -510,11 +423,9 @@ export async function verifyInvestmentPaymentAction(reference: string) {
                         totalInvested: currentInvested + amountInNaira,
                         totalExpectedReturns: currentReturns + (investmentData?.expectedReturn || 0),
                         activeInvestments: activeCount + 1,
-                        updatedAt: FieldValue.serverTimestamp(),
-                    });
+                        updatedAt: FieldValue.serverTimestamp() });
                 }
-            } else {
-                transaction.set(portfolioRef, {
+            } else { transaction.set(portfolioRef, {
                     investorId: session.user.id,
                     investorEmail: session.user.email,
                     totalInvested: amountInNaira,
@@ -523,18 +434,15 @@ export async function verifyInvestmentPaymentAction(reference: string) {
                     activeInvestments: 1,
                     completedInvestments: 0,
                     createdAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
             }
 
             // Mark payment as processed
-            transaction.set(processedRef, {
-                processedAt: FieldValue.serverTimestamp(),
+            transaction.set(processedRef, { processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "export_investment",
-                reference,
-            });
+                reference });
 
             // Global Ledger Record
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
@@ -553,26 +461,22 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         });
 
         return {
-            error: null, success: true as const,
-            data: {
-                message: `Investment successful! Your ₦${amountInNaira.toLocaleString()} investment in ${metadata.windowTitle} is now active.`,
-                investmentId: investmentDoc.id,
-            },
-            meta: null
+            error: null,
+            success: true as const,
+            data: { investmentId: investmentDoc.id }
         };
-    } catch (error: any) {
-        // 🔒 SECURITY FIX #2: Sanitized error logging
+    } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyInvestment',
-            reference,
+            reference
         });
 
         return {
-            error: "Action failed", success: false as const,
-            data: null,
-            meta: null,
             error: "Failed to verify investment payment. Please contact support with your payment reference.",
+            success: false as const,
+            data: null,
+            meta: null
         };
     }
 }

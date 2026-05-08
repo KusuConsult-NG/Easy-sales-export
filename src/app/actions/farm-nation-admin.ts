@@ -7,16 +7,19 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
-import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 
-async function _getFarmNationStatsAction(): Promise<{ success: true; data: { stats: { totalApplications: number } } } | { success: false; error: string }> {
-    let sessionResult;
+/**
+ * Get global stats for Farm Nation admin dashboard
+ */
+async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { totalApplications: number } }>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false as const };
+        
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -25,7 +28,9 @@ async function _getFarmNationStatsAction(): Promise<{ success: true; data: { sta
         try {
             const cached = await getCached<any>(cacheKey);
             if (cached) return cached;
-        } catch (e) {}
+        } catch (e) {
+            // Redis error should not block the action
+        }
 
         const countSnap = await db.collection(COLLECTIONS.USERS)
             .where('serviceRegistrations.farmNation.status', '!=', null)
@@ -33,45 +38,52 @@ async function _getFarmNationStatsAction(): Promise<{ success: true; data: { sta
             .get();
         const totalApplications = countSnap.data().count;
 
-        const payload = { error: null, success: true as const, data: { stats: { totalApplications } } };
+        const response: ActionResponse<{ stats: { totalApplications: number } }> = {
+            success: true,
+            error: null,
+            data: { stats: { totalApplications } }
+        };
 
         try {
-            await setCache(cacheKey, payload, 120);
-        } catch (e) {}
+            await setCache(cacheKey, response, 120);
+        } catch (e) {
+            // Redis error should not block the action
+        }
 
-        return payload;
+        return response;
     } catch (error: any) {
         logger.error("Get farm nation stats error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch farm nation stats" };
+        return { success: false, error: "Failed to fetch farm nation stats", data: null };
     }
 }
 export const getFarmNationStatsAction = withFlexibleSafeAction("getFarmNationStatsAction", _getFarmNationStatsAction);
 
-async function _getFarmNationRegistrantsAction(options: {
+/**
+ * Get registrants for Farm Nation (Legacy/General User collection check)
+ */
+async function _getFarmNationRegistrantsAction(options: { 
     limit?: number;
     page?: number;
     search?: string;
     status?: string;
-    lastDocId?: string;
-} = {}): Promise<
-    | { success: true; error: null; data?: any; meta?: any }
-    | { success: false; error: string; data?: null; data?: any; meta?: any }
-> {
-    let sessionResult;
+    lastDocId?: string; 
+} = {}): Promise<ActionResponse<any[]>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false as const };
+        
+        if (!isAdmin(session.user.roles)) {
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const pageSize = options.search ? 2000 : (options.limit || 20);
         const page = options.page ?? 0;
 
+        // Note: This fetches a large set of users and filters in memory. 
+        // This is not ideal for massive scale but works for the current user base.
         const snapshot = await db.collection(COLLECTIONS.USERS).limit(500).get();
 
         let users = snapshot.docs
@@ -89,15 +101,13 @@ async function _getFarmNationRegistrantsAction(options: {
                     isVerified: data.isVerified ?? false,
                     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0),
                     farmNation: data.farmNation,
-                    serviceRegistrations: { farmNation },
+                    serviceRegistrations: { farmNation }
                 };
             })
             .filter(Boolean) as any[];
 
         if (options.status && options.status !== "all") {
-            users = users.filter(u =>
-                u.serviceRegistrations?.farmNation?.status === options.status
-            );
+            users = users.filter(u => u.serviceRegistrations?.farmNation?.status === options.status);
         }
 
         if (options.search) {
@@ -119,47 +129,44 @@ async function _getFarmNationRegistrantsAction(options: {
         const paged = users.slice(offset, offset + pageSize);
         const hasMore = offset + pageSize < users.length;
 
-        return {
-            error: null, success: true as const,
-            data: { users: paged },
-            meta: {
+        return { 
+            success: true, 
+            error: null, 
+            data: paged,
+            meta: { 
                 hasMore,
-                cursor: hasMore ? String(page + 1) : null
+                cursor: hasMore ? String(page + 1) : null,
+                total: users.length
             }
         };
     } catch (error: any) {
         logger.error("getFarmNationRegistrantsAction error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: "Action failed", success: false as const,
-            data: null,
-            meta: null,
-            error: "Failed to fetch farm nation registrants",
-        };
+        return { success: false, error: "Failed to fetch farm nation registrants", data: null };
     }
 }
 export const getFarmNationRegistrantsAction = withFlexibleSafeAction("getFarmNationRegistrantsAction", _getFarmNationRegistrantsAction);
 
-async function _getStandardFarmNationRegistrantsAction(options: {
+/**
+ * Get standard Farm Nation registrants with enriched profile data
+ */
+async function _getStandardFarmNationRegistrantsAction(options: { 
     limit?: number;
     search?: string;
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
-    dateTo?: string;
-} = {}): Promise<{ success: true; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false; error: string }> {
-    let sessionResult;
+    dateTo?: string; 
+} = {}): Promise<ActionResponse<any[]>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -200,12 +207,13 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 : (user.name || user.fullName || user.email || "Unknown User");
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
 
-            const profileAlias = {
+            const profileAlias = { 
                 phone:   user.phone || user.phoneNumber || null,
                 state:   user.stateOfOrigin || user.address?.state || user.state || null,
                 lga:     user.lga || user.address?.lga || null,
-                address: user.residentialAddress || user.address?.street || (typeof user.address === 'string' ? user.address : null) || null,
+                address: user.residentialAddress || user.address?.street || (typeof user.address === 'string' ? user.address : null) || null 
             };
+            
             const mergedData = {
                 ...user,
                 phone:              profileAlias.phone,
@@ -222,13 +230,13 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                         phone:   (user.farmNation?.profile?.phone   || profileAlias.phone),
                         state:   (user.farmNation?.profile?.state   || profileAlias.state),
                         lga:     (user.farmNation?.profile?.lga     || profileAlias.lga),
-                        address: (user.farmNation?.profile?.address || profileAlias.address),
+                        address: (user.farmNation?.profile?.address || profileAlias.address) 
                     },
-                    interests: user.farmNation?.interests || user.serviceRegistrations?.farmNation?.interests || null,
-                },
+                    interests: user.farmNation?.interests || user.serviceRegistrations?.farmNation?.interests || null 
+                } 
             };
 
-            return {
+            return { 
                 id: user.id,
                 user: {
                     id: user.id,
@@ -238,7 +246,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                     dob: mergedData.dateOfBirth || "Unknown",
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
-                    lga: mergedData.lga || "Unknown",
+                    lga: mergedData.lga || "Unknown" 
                 },
                 status: status,
                 data: mergedData
@@ -266,48 +274,35 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            error: null, success: true as const, 
-            data: applications,
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor,
+            success: true, 
+            error: null, 
+            data: applications, 
             meta: {
-                totalFetched: users.length,
-                hasMore: !!nextCursor
+                totalFetched: users.length, 
+                hasMore: !!nextCursor,
+                lastDocId: nextCursor
             }
         };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Get standard Farm Nation registrants error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch applications" };
+        return { success: false, error: "Failed to fetch applications", data: null };
     }
 }
 export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("getStandardFarmNationRegistrantsAction", _getStandardFarmNationRegistrantsAction);
 
 /**
  * Get aggregate counts for land_listings by verification status.
- * Uses Firestore COUNT queries — independent of pagination.
  */
-async function _getFarmNationVerificationStatsAction(): Promise<{
-    error: null, success: boolean;
-    data?: {
-        stats: {
-            total: number;
-            pending: number;
-            verified: number;
-            rejected: number;
-        };
-    };
-}> {
-    let sessionResult;
+async function _getFarmNationVerificationStatsAction(): Promise<ActionResponse<{ stats: { total: number; pending: number; verified: number; rejected: number; } }>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -316,7 +311,9 @@ async function _getFarmNationVerificationStatsAction(): Promise<{
         try {
             const cached = await getCached<any>(cacheKey);
             if (cached) return cached;
-        } catch (e) {}
+        } catch (e) {
+            // Redis error should not block the action
+        }
 
         const [totalSnap, pendingSnap, verifiedSnap] = await Promise.all([
             db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).count().get(),
@@ -324,47 +321,52 @@ async function _getFarmNationVerificationStatsAction(): Promise<{
             db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where("verified", "==", true).count().get(),
         ]);
 
-        const payload = {
-            error: null, success: true as const,
-            data: {
-                stats: {
-                    total:    totalSnap.data().count,
-                    pending:  pendingSnap.data().count,
-                    verified: verifiedSnap.data().count,
-                    rejected: 0,
-                },
-            },
+        const stats = {
+            total: totalSnap.data().count,
+            pending: pendingSnap.data().count,
+            verified: verifiedSnap.data().count,
+            rejected: 0 // Placeholder if rejection is tracked separately
+        };
+
+        const response: ActionResponse<{ stats: { total: number; pending: number; verified: number; rejected: number; } }> = {
+            success: true,
+            error: null,
+            data: { stats }
         };
 
         try {
-            await setCache(cacheKey, payload, 60);
-        } catch (e) {}
+            await setCache(cacheKey, response, 60);
+        } catch (e) {
+            // Redis error should not block the action
+        }
 
-        return payload;
+        return response;
     } catch (error: any) {
         logger.error("getFarmNationVerificationStatsAction error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch stats" };
+        return { success: false, error: "Failed to fetch stats", data: null };
     }
 }
 export const getFarmNationVerificationStatsAction = withFlexibleSafeAction("getFarmNationVerificationStatsAction", _getFarmNationVerificationStatsAction);
 
-async function _getAdminLandVerificationsAction(options: {
+/**
+ * Get land listings for admin verification
+ */
+async function _getAdminLandVerificationsAction(options: { 
     limit?: number;
     search?: string;
     status?: string;
     lastDocId?: string;
-    sortOrder?: "asc" | "desc";
-} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
-    let sessionResult;
+    sortOrder?: "asc" | "desc"; 
+} = {}): Promise<ActionResponse<any[]>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
+        
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -378,6 +380,13 @@ async function _getAdminLandVerificationsAction(options: {
                 .orderBy("createdAt", orderDirection);
         }
 
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                queryRef = queryRef.startAfter(lastDoc);
+            }
+        }
+
         const snapshot = await queryRef.limit(fetchLimit).get();
         let verifications = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -386,7 +395,7 @@ async function _getAdminLandVerificationsAction(options: {
                 ...data,
                 verificationStatus: data.verified ? "verified" : "pending",
                 createdAt: data.createdAt?.toDate() || new Date(),
-                verifiedAt: data.verifiedAt?.toDate() || undefined,
+                verifiedAt: data.verifiedAt?.toDate() || undefined
             };
         }) as any[];
 
@@ -402,33 +411,38 @@ async function _getAdminLandVerificationsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            error: null, success: true as const, 
-            data: verifications,
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor
+            success: true, 
+            error: null, 
+            data: verifications, 
+            meta: {
+                lastDocId: nextCursor, 
+                hasMore: !!nextCursor
+            }
         };
     } catch (error: any) {
         logger.error("Get admin land verifications error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch verifications" };
+        return { success: false, error: "Failed to fetch verifications", data: null };
     }
 }
 export const getAdminLandVerificationsAction = withFlexibleSafeAction("getAdminLandVerificationsAction", _getAdminLandVerificationsAction);
 
-async function _getFarmNationTransactionsAction(options: {
+/**
+ * Get farm nation transactions
+ */
+async function _getFarmNationTransactionsAction(options: { 
     limit?: number;
     status?: string;
-    lastDocId?: string;
-} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; lastDocId?: string; hasMore?: boolean }> {
-    let sessionResult;
+    lastDocId?: string; 
+} = {}): Promise<ActionResponse<any[]>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
+        
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const fetchLimit = options.limit || 50;
@@ -440,6 +454,13 @@ async function _getFarmNationTransactionsAction(options: {
                 .orderBy("createdAt", "desc");
         }
 
+        if (options.lastDocId) {
+            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                queryRef = queryRef.startAfter(lastDoc);
+            }
+        }
+
         const snapshot = await queryRef.limit(fetchLimit).get();
         let transactions = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -448,40 +469,45 @@ async function _getFarmNationTransactionsAction(options: {
                 ...data,
                 createdAt: data.createdAt?.toDate() || new Date(),
                 updatedAt: data.updatedAt?.toDate() || new Date(),
-                paymentVerifiedAt: data.paymentVerifiedAt?.toDate() || undefined,
+                paymentVerifiedAt: data.paymentVerifiedAt?.toDate() || undefined
             };
         }) as any[];
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            error: null, success: true as const, 
-            data: transactions,
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor
+            success: true, 
+            error: null, 
+            data: transactions, 
+            meta: {
+                lastDocId: nextCursor, 
+                hasMore: !!nextCursor
+            }
         };
     } catch (error: any) {
         logger.error("Get admin farm nation transactions error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch transactions" };
+        return { success: false, error: "Failed to fetch transactions", data: null };
     }
 }
 export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNationTransactionsAction", _getFarmNationTransactionsAction);
 
-async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ error: string | null, success: boolean; message?: string;  }> {
-    let sessionResult;
+/**
+ * Release escrow and transfer property ownership
+ */
+async function _releaseFarmNationEscrowAction(transactionId: string): Promise<ActionResponse<{ message: string }>> {
     try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
         const txRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(transactionId);
+        
         await db.runTransaction(async (tx) => {
             const txDoc = await tx.get(txRef);
             if (!txDoc.exists) throw new Error("Transaction not found");
@@ -502,7 +528,7 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
                 previousOwnerId: txData.sellerId,
                 soldAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
+                _version: FieldValue.increment(1)
             });
 
             tx.update(txRef, {
@@ -511,8 +537,9 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
                 escrowReleasedAt: FieldValue.serverTimestamp(),
                 escrowReleasedBy: session.user.id,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
+                _version: FieldValue.increment(1)
             });
+
             const payoutRef = db.collection("farm_nation_payouts").doc(transactionId);
             tx.set(payoutRef, {
                 transactionId,
@@ -522,17 +549,20 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
                 status: "pending_transfer",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: 0,
+                _version: 0
             });
         });
 
-        return { success: true as const, message: "Escrow released and property ownership transferred successfully." };
+        return { 
+            success: true, 
+            error: null, 
+            data: { message: "Escrow released and property ownership transferred successfully." }
+        };
     } catch (error: any) {
         logger.error("Release Farm Nation Escrow error:", {
-            userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message || "Failed to release escrow" };
+        return { success: false, error: error.message || "Failed to release escrow", data: null };
     }
 }
 export const releaseFarmNationEscrowAction = withFlexibleSafeAction("releaseFarmNationEscrowAction", _releaseFarmNationEscrowAction);

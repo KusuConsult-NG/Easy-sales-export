@@ -19,48 +19,45 @@
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 
-const ALLOWED_TYPES: Record<string, string> = {
-    "image/jpeg": "jpg",
+const ALLOWED_TYPES: Record<string, string> = { "image/jpeg": "jpg",
     "image/jpg": "jpg",
     "image/png": "png",
-    "application/pdf": "pdf",
-};
+    "application/pdf": "pdf" };
 
 const MAX_SIZE_MB = 5;
 
 // ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
     formData: FormData
-): Promise<{ error: string | null, success: boolean; url?: string; fallback?: boolean }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const file = formData.get("file") as File | null;
         const fileName = formData.get("fileName") as string;
         const mimeType = formData.get("mimeType") as string;
         const documentType = formData.get("documentType") as string;
 
         if (!file || !fileName || !mimeType || !documentType) {
-            return { success: false as const, error: "Missing required upload parameters." };
+            return { success: false as const, error: "Missing required upload parameters.", data: null };
         }
 
         // ── Auth check ───────────────────────────────────────────────────────
         const sessionResult = await requireSession();
-        if (!sessionResult.session) {
-            return { success: false as const, error: "Your session has expired. Please log in again." };
+        if (!sessionResult.session) { return { success: false as const, error: "Your session has expired. Please log in again.", data: null };
         }
         const { session } = sessionResult;
         const userId = session.user.id;
 
         // ── Validate mime type ───────────────────────────────────────────────
         const ext = ALLOWED_TYPES[mimeType];
-        if (!ext) {
-            return { success: false as const, error: "Invalid file type. Only JPG, PNG, PDF allowed." };
+        if (!ext) { return { success: false as const, error: "Invalid file type. Only JPG, PNG, PDF allowed.", data: null };
         }
 
         // ── Size-check ───────────────────────────────────────────────────────
         // size property on File is in bytes natively. 
         const sizeMB = file.size / (1024 * 1024);
-        if (sizeMB > MAX_SIZE_MB) {
-            return { success: false as const, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
+        if (sizeMB > MAX_SIZE_MB) { return { success: false as const, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
         logger.info(`[Upload:Start] User:${userId} | Stream Size: ${sizeMB.toFixed(2)}MB`);
 
@@ -69,12 +66,8 @@ export async function uploadDocumentAction(
         const apiKey = process.env.CLOUDINARY_API_KEY;
         const apiSecret = process.env.CLOUDINARY_API_SECRET;
 
-        if (!cloudName || !apiKey || !apiSecret) {
-            logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
-            return {
-                success: false as const,
-                error: "Upload service is temporarily unavailable. Please try again later or contact support.",
-            };
+        if (!cloudName || !apiKey || !apiSecret) { logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
+            return { success: false as const, error: "Upload service is temporarily unavailable. Please try again later or contact support."};
         }
 
         // ── Build signed Cloudinary upload ───────────────────────────────────
@@ -100,26 +93,18 @@ export async function uploadDocumentAction(
         const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
         const response = await fetch(uploadUrl, { method: "POST", body: cloudinaryForm });
 
-        if (!response.ok) {
-            const errBody = await response.text();
+        if (!response.ok) { const errBody = await response.text();
             logger.error("[uploadDocumentAction] Cloudinary upload failed:", errBody);
-            return {
-                success: false as const,
-                error: "File upload failed. Please check your file and try again.",
-            };
+            return { success: false as const, error: "File upload failed. Please check your file and try again."};
         }
 
         const result = await response.json();
         const url: string = result.secure_url;
 
         logger.info(`[uploadDocumentAction] Uploaded to Cloudinary: ${documentType} for user ${userId}`);
-        return { error: null, success: true as const, url };
+        return { error: null, success: true as const, url , data: null };
 
-    } catch (error) {
-        logger.error("[uploadDocumentAction] Unexpected error:", error);
-        return {
-            success: false as const,
-            error: error instanceof Error ? error.message : "Upload failed. Please try again.",
-        };
+    } catch (error) { logger.error("[uploadDocumentAction] Unexpected error:", error);
+        return { success: false as const, error: error instanceof Error ? error.message : "Upload failed. Please try again.", data: null };
     }
 }

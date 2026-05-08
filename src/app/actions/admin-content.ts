@@ -51,15 +51,15 @@ function sanitizeForSerialization(obj: unknown): unknown {
  * - Land Listings (verificationStatus: pending)
  */
 export async function getPendingContentAction(): Promise<
-    | { success: true; error: null; data?: PendingContentItem[] }
-    | { success: false; error: string; data?: null; data?: PendingContentItem[] }
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         // Check admin role
@@ -67,7 +67,7 @@ export async function getPendingContentAction(): Promise<
         const userData = userDoc.data();
         const roles = userData?.roles || [];
         if (!userDoc.exists || !userData || !isAdmin(roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const pendingItems: PendingContentItem[] = [];
@@ -119,20 +119,23 @@ export async function getPendingContentAction(): Promise<
 
     } catch (error: any) {
         logger.error("Get pending content error:", error);
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message , data: null };
     }
 }
 
 export async function approveContentAction(
     id: string,
     type: ContentType
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const timestamp = FieldValue.serverTimestamp();
@@ -154,14 +157,14 @@ export async function approveContentAction(
                 });
                 break;
             default:
-                return { success: false as const, error: "Invalid content type" };
+                return { success: false as const, error: "Invalid content type" , data: null };
         }
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
 
     } catch (error: any) {
         logger.error("Approve content error:", error);
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message , data: null };
     }
 }
 
@@ -169,13 +172,16 @@ export async function rejectContentAction(
     id: string,
     type: ContentType,
     reason: string
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const timestamp = FieldValue.serverTimestamp();
@@ -183,10 +189,10 @@ export async function rejectContentAction(
 
         // Validate reason
         if (!reason || reason.trim().length < 5) {
-            return { success: false as const, error: "Rejection reason must be at least 5 characters" };
+            return { success: false as const, error: "Rejection reason must be at least 5 characters" , data: null };
         }
         if (reason.length > 500) {
-            return { success: false as const, error: "Rejection reason is too long (max 500 characters)" };
+            return { success: false as const, error: "Rejection reason is too long (max 500 characters)" , data: null };
         }
 
         switch (type) {
@@ -207,12 +213,12 @@ export async function rejectContentAction(
                 });
                 break;
             default:
-                return { success: false as const, error: "Invalid content type" };
+                return { success: false as const, error: "Invalid content type" , data: null };
         }
 
-        return { success: true as const };
+        return { error: null,  success: true as const , data: null };
     } catch (error: any) {
         logger.error("Reject content error:", error);
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message , data: null };
     }
 }

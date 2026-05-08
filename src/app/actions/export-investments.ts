@@ -7,8 +7,7 @@ import { COLLECTIONS, type ExportWindow } from "@/lib/types/firestore";
 import { Timestamp } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 
-export type ExportOpportunity = {
-    id: string;
+export type ExportOpportunity = { id: string;
     commodity: string;
     destination: string;
     openDate: Date | string;
@@ -28,8 +27,7 @@ export type ExportOpportunity = {
         url?: string;
         required: boolean;
     }[];
-    timeline?: {
-        phase: string;
+    timeline?: { phase: string;
         duration: string;
         description: string;
         status: string;
@@ -48,8 +46,7 @@ export type ExportOpportunity = {
 
 // Internal cached version
 const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => unstable_cache(
-    async () => {
-        try {
+    async () => { try {
             let query = db.collection(COLLECTIONS.EXPORT_WINDOWS)
                 .where("status", "in", ["open", "active"])
                 .orderBy("createdAt", "desc");
@@ -64,8 +61,7 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
             query = query.limit(limit);
             const snapshot = await query.get();
 
-            const opportunities = snapshot.docs.map(doc => {
-                const data = doc.data() as ExportWindow;
+            const opportunities = snapshot.docs.map(doc => { const data = doc.data() as ExportWindow;
                 return {
                     id: doc.id,
                     commodity: data.commodity,
@@ -83,20 +79,17 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
                     specifications: data.specifications || [],
                     benefits: data.benefits || [],
                     documents: data.documents || [],
-                    timeline: (data.timeline as unknown as Array<Record<string, string>>)?.map(t => ({
-                        phase: t.phase || "",
+                    timeline: (data.timeline as unknown as Array<Record<string, string>>)?.map(t => ({ phase: t.phase || "",
                         duration: t.date || t.duration || "TBD",
                         description: t.description || "",
                         status: t.status || "pending"
-                    })) || [],
-                };
+                    })) || [] };
             });
 
             const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
             return { success: true as const, data: opportunities, error: null, meta: { cursor: lastDocId, hasMore: !!lastDocId } };
-        } catch (error: any) {
-            logger.error("Error fetching export opportunities:", error);
+        } catch (error: any) { logger.error("Error fetching export opportunities:", error);
             return { success: false as const, data: null, error: error.message, meta: null };
         }
     },
@@ -107,16 +100,13 @@ const getCachedExportOpportunities = (limit: number = 12, lastId?: string) => un
 /**
  * Get all export investment opportunities
  */
-export async function getExportOpportunities(limit: number = 12, lastId?: string) {
-    return getCachedExportOpportunities(limit, lastId);
-}
+export async function getExportOpportunities(limit: number = 12, lastId?: string) { return getCachedExportOpportunities(limit, lastId); }
 
 /**
  * Seed initial export opportunities (Temporary helper) - Admin Only
  */
-export async function seedExportOpportunities() {
-    // Legacy seeding function - discouraged now that we use real Export Windows
-    return { success: false as const, data: null, error: "Seeding is deprecated. Please create Export Windows from Admin Panel.", meta: null };
+export async function seedExportOpportunities() { // Legacy seeding function - discouraged now that we use real Export Windows
+    return { success: false as const, error: "Seeding is deprecated. Please create Export Windows from Admin Panel.", meta: null };
 }
 
 /**
@@ -125,19 +115,17 @@ export async function seedExportOpportunities() {
 
 // Internal cached version
 const getCachedExportOpportunityById = (id: string) => unstable_cache(
-    async () => {
-        try {
+    async () => { try {
             const docRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(id);
             const snapshot = await docRef.get();
 
             if (!snapshot.exists) {
-                return { success: false as const, data: null, error: "Opportunity not found", meta: null };
+                return { success: false as const, error: "Opportunity not found", meta: null };
             }
 
             const data = snapshot.data() as ExportWindow;
 
-            const opportunity: ExportOpportunity = {
-                id: snapshot.id,
+            const opportunity: ExportOpportunity = { id: snapshot.id,
                 commodity: data.commodity,
                 destination: (data as ExportWindow & { destination?: string }).destination || "International",
                 openDate: (data.startDate as unknown as Timestamp)?.toDate ? (data.startDate as unknown as Timestamp).toDate().toISOString() : new Date(data.startDate || Date.now()).toISOString(),
@@ -153,18 +141,15 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
                 specifications: data.specifications || [],
                 benefits: data.benefits || [],
                 documents: data.documents || [],
-                timeline: (data.timeline as unknown as Array<Record<string, string>>)?.map(t => ({
-                    phase: t.phase || "",
+                timeline: (data.timeline as unknown as Array<Record<string, string>>)?.map(t => ({ phase: t.phase || "",
                     duration: t.date || t.duration || "TBD",
                     description: t.description || "",
                     status: t.status || "pending"
-                })) || [],
-            };
+                })) || [] };
 
-            return { success: true as const, data: opportunity, error: null, meta: null };
-        } catch (error: any) {
-            logger.error("Error fetching export opportunity:", error);
-            return { success: false as const, data: null, error: error.message, meta: null };
+            return { error: null,  success: true as const, data: opportunity, meta: null };
+        } catch (error: any) { logger.error("Error fetching export opportunity:", error);
+            return { success: false as const, error: error.message, meta: null };
         }
     },
     [`export-opportunity-${id}`],
@@ -174,6 +159,4 @@ const getCachedExportOpportunityById = (id: string) => unstable_cache(
 /**
  * Get single export opportunity by ID
  */
-export async function getExportOpportunityById(id: string) {
-    return getCachedExportOpportunityById(id);
-}
+export async function getExportOpportunityById(id: string) { return getCachedExportOpportunityById(id); }

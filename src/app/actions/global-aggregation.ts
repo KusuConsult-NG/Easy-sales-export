@@ -11,10 +11,9 @@ import { logger } from "@/lib/logger";
  * Returns exact system-wide analytics pulling Exclusively from the 
  * single-source-of-truth TRANSACTIONS collection and aggregated pending applications.
  */
-export async function getPlatformMetricsAction() {
-    try {
+export async function getPlatformMetricsAction() { try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         // 1. Transactions - Aggregate from actual historical collections 
         const [revenueSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
@@ -29,8 +28,7 @@ export async function getPlatformMetricsAction() {
         let totalRevenue = 0;
         let totalTransactions = 0;
         
-        if (revenueSnap.status === 'fulfilled') {
-            revenueSnap.value.docs.forEach(d => {
+        if (revenueSnap.status === 'fulfilled') { revenueSnap.value.docs.forEach(d => {
                 totalRevenue += (Number(d.data().amount) || 0);
             });
             totalTransactions = revenueSnap.value.docs.length;
@@ -38,17 +36,10 @@ export async function getPlatformMetricsAction() {
 
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
         
-        return {
-            error: null, success: true as const,
-            data: {
-                totalUsers,
-                totalTransactions,
-                totalRevenue
-            }
+        return { error: null, success: true as const, data: null
         };
-    } catch (error: any) {
-        logger.error("Failed to aggregate platform metrics:", error);
-        return { success: false as const, error: error.message };
+    } catch (error: any) { logger.error("Failed to aggregate platform metrics:", error);
+        return { success: false as const, error: error.message, data: null };
     }
 }
 
@@ -56,10 +47,9 @@ export async function getPlatformMetricsAction() {
  * Computes exactly how many pending approvals exist across the ENTIRE stack.
  * Ensures Analytics, Dashboard, and Modules ALWAYS hit the exact same number.
  */
-export async function getGlobalPendingApprovalsAction() {
-    try {
+export async function getGlobalPendingApprovalsAction() { try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
         const [
             wave,
@@ -81,8 +71,7 @@ export async function getGlobalPendingApprovalsAction() {
             db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).where("status", "==", "pending").count().get()
         ]);
 
-        const counts = {
-            wave: wave.data().count || 0,
+        const counts = { wave: wave.data().count || 0,
             cooperative: cooperative.data().count || 0,
             export: exportOnboarding.data().count || 0,
             sellers: sellers.data().count || 0,
@@ -93,15 +82,9 @@ export async function getGlobalPendingApprovalsAction() {
 
         const totalPending = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
-        return {
-            error: null, success: true as const,
-            data: {
-                totalPending,
-                breakdown: counts
-            }
+        return { error: null, success: true as const, data: null
         };
-    } catch (error: any) {
-        logger.error("Failed to compute pending approvals:", error);
-        return { success: false as const, error: error.message };
+    } catch (error: any) { logger.error("Failed to compute pending approvals:", error);
+        return { success: false as const, error: error.message, data: null };
     }
 }

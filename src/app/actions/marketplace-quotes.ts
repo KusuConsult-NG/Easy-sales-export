@@ -9,38 +9,33 @@ import { revalidatePath } from "next/cache";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
-export interface QuoteRequestData {
-    productId: string;
+export interface QuoteRequestData { productId: string;
     productName: string;
     sellerId: string;
     quantity: number;
     unit?: string;
     notes?: string;
-    preferredDeliveryDate?: string;
-}
+    preferredDeliveryDate?: string; }
 
 /**
  * Submit a Request for Quote (RFQ) to a seller
  */
-async function _submitQuoteRequestAction(data: QuoteRequestData) {
-    let sessionResult;
+async function _submitQuoteRequestAction(data: QuoteRequestData) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
 
-        const quoteRef = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).add({
-            ...data,
+        const quoteRef = await db.collection(COLLECTIONS.MARKETPLACE_QUOTES).add({ ...data,
             buyerId: userId,
             buyerName: session.user.name || "Unknown Buyer",
             buyerEmail: session.user.email,
             status: "pending",
             _version: 0,
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
         await db.collection(COLLECTIONS.NOTIFICATIONS).add({
             userId: data.sellerId,
@@ -49,25 +44,18 @@ async function _submitQuoteRequestAction(data: QuoteRequestData) {
             message: `You have received a new quote request for "${data.productName}" from ${session.user.name || "a buyer"}.`,
             link: `/marketplace/seller/quotes/${quoteRef.id}`,
             read: false,
-            createdAt: FieldValue.serverTimestamp(),
-        });
+            createdAt: FieldValue.serverTimestamp() });
 
         revalidatePath("/marketplace/buyer/quotes");
         revalidatePath(`/marketplace/products/${data.productId}`);
 
-        return { 
-            error: null, success: true as const, 
-            data: { 
-                quoteId: quoteRef.id,
-                message: "Quote request submitted successfully. The seller has been notified."
-            }
+        return { error: null, success: true as const, data: null
         };
-    } catch (error) {
-        logger.error("Submit quote request error:", {
+    } catch (error) { logger.error("Submit quote request error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to submit quote request. Please try again later." };
+        return { success: false as const, error: "Failed to submit quote request. Please try again later.", data: null };
     }
 }
 export const submitQuoteRequestAction = withFlexibleSafeAction("submitQuoteRequestAction", _submitQuoteRequestAction);
@@ -75,11 +63,10 @@ export const submitQuoteRequestAction = withFlexibleSafeAction("submitQuoteReque
 /**
  * Fetch quotes for the current user (either as buyer or seller)
  */
-async function _getMyQuotesAction(role: "buyer" | "seller") {
-    let sessionResult;
+async function _getMyQuotesAction(role: "buyer" | "seller") { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -92,13 +79,12 @@ async function _getMyQuotesAction(role: "buyer" | "seller") {
 
         const quotes = serializeDocs(snapshot.docs);
 
-        return { error: null, success: true as const, data: { quotes } };
-    } catch (error) {
-        logger.error("Get my quotes error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get my quotes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch quotes" };
+        return { success: false as const, error: "Failed to fetch quotes", data: null };
     }
 }
 export const getMyQuotesAction = withFlexibleSafeAction("getMyQuotesAction", _getMyQuotesAction);

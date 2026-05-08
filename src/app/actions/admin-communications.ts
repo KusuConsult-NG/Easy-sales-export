@@ -7,23 +7,20 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { serializeDocs } from '@/lib/firestore-serialize';
 
-export interface SendBulkEmailState {
-    error: null, success: boolean;
-    recipientCount?: number;
-}
+export type SendBulkEmailState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
-export interface CreateAnnouncementState {
-    error: null, success: boolean;
-    id?: string;
-}
+export type CreateAnnouncementState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
 /**
  * Get recipient emails based on segment
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
     logger.info(`[AdminComms] getRecipientEmails called with segment: '${segment}'`);
-    try {
-        const query = db.collection(COLLECTIONS.USERS);
+    try { const query = db.collection(COLLECTIONS.USERS);
         let snapshot;
 
         const emails: string[] = [];
@@ -40,8 +37,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
                 count++;
             }
             logger.info(`[AdminComms] cooperative segment: ${count} docs found`);
-        } else {
-            let stream: any;
+        } else { let stream: any;
             switch (segment) {
                 case 'active':
                     stream = query.where('status', '==', 'active').select('email').get();
@@ -71,8 +67,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
             }
 
             let mainCount = 0;
-            for (const doc of (await stream).docs) {
-                const data = doc.data();
+            for (const doc of (await stream).docs) { const data = doc.data();
                 if (data.email) {
                     emails.push(data.email);
                 }
@@ -83,8 +78,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
 
         logger.info(`[AdminComms] Returning ${emails.length} emails (deduped: ${[...new Set(emails)].length})`);
         return [...new Set(emails)];
-    } catch (error) {
-        logger.error('[AdminComms] ERROR in getRecipientEmails:', error);
+    } catch (error) { logger.error('[AdminComms] ERROR in getRecipientEmails:', error);
         return [];
     }
 }
@@ -93,9 +87,8 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  * Send bulk email to users
  * Accepts recipients segment, subject, and HTML body
  */
-export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
-    const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
+export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> { const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required"};
     try {
         const recipients = formData.get('recipients') as string;
         const subject = formData.get('subject') as string;
@@ -103,15 +96,13 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
 
         logger.info(`[AdminComms] sendBulkEmailAction — recipients: '${recipients}', subject: '${subject?.substring(0, 50)}', body length: ${body?.length || 0}`);
 
-        if (!recipients || !subject || !body) {
-            return { success: false as const, error: 'All fields are required' };
+        if (!recipients || !subject || !body) { return { success: false as const, error: 'All fields are required'};
         }
 
         // Get recipient emails
         const emails = await getRecipientEmails(recipients);
 
-        if (emails.length === 0) {
-            return { success: false as const, error: 'No recipients found for this segment' };
+        if (emails.length === 0) { return { success: false as const, error: 'No recipients found for this segment'};
         }
 
         // Send email via Resend
@@ -143,18 +134,15 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
                 hasError = true;
                 lastError = error.message || 'Email delivery failed for some recipients';
                 // Continue sending to other chunks even if one fails
-            } else {
-                successfulSends += chunk.length;
+            } else { successfulSends += chunk.length;
             }
         }
 
-        if (hasError && successfulSends === 0) {
-            return { success: false as const, error: lastError };
+        if (hasError && successfulSends === 0) { return { success: false as const, error: lastError, data: null };
         }
 
         // Log email in database
-        await db.collection(COLLECTIONS.EMAIL_HISTORY).add({
-            recipients: recipients,
+        await db.collection(COLLECTIONS.EMAIL_HISTORY).add({ recipients: recipients,
             subject,
             body,
             recipientCount: successfulSends,
@@ -165,13 +153,9 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             error: hasError ? lastError : null
         });
 
-        return { success: true as const, recipientCount: emails.length };
-    } catch (error: any) {
-        logger.error('Failed to send bulk email:', error);
-        return {
-            success: false as const,
-            error: error.message || 'Failed to send email. Please try again.'
-        };
+        return { success: true as const, recipientCount: emails.length, error: null };
+    } catch (error: any) { logger.error('Failed to send bulk email:', error);
+        return { success: false as const, error: error.message || 'Failed to send email. Please try again.', data: null };
     }
 }
 
@@ -179,22 +163,18 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
  * Create platform announcement
  * Displayed on user dashboards
  */
-export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> {
-    const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required" };
-    try {
-
-        const title = formData.get('title') as string;
+export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> { const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
+    try { const title = formData.get('title') as string;
         const message = formData.get('message') as string;
         const priority = formData.get('priority') as string;
 
         if (!title || !message || !priority) {
-            return { success: false as const, error: 'All fields are required' };
+            return { success: false as const, error: 'All fields are required', data: null };
         }
 
         // Create announcement in database
-        const announcementRef = await db.collection(COLLECTIONS.ANNOUNCEMENTS).add({
-            title,
+        const announcementRef = await db.collection(COLLECTIONS.ANNOUNCEMENTS).add({ title,
             message,
             priority,
             active: true,
@@ -203,43 +183,30 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             updatedAt: FieldValue.serverTimestamp()
         });
 
-        return { error: null, success: true as const, id: announcementRef.id };
-    } catch (error) {
-        logger.error('Failed to create announcement:', error);
-        return {
-            success: false as const,
-            error: 'Failed to create announcement. Please try again.'
-        };
+        return { error: null, success: true as const, id: announcementRef.id , data: null };
+    } catch (error) { logger.error('Failed to create announcement:', error);
+        return { success: false as const, error: 'Failed to create announcement. Please try again.', data: null };
     }
 }
 
-export type GetEmailHistoryState = { error: string | null,
-    success: true ;
-    history: any[];
-    } | {
-    success: false;
-    error: string;
-    history?: undefined;
-};
+export type GetEmailHistoryState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
 /**
  * Fetch admin email send history from Firestore (email_history collection)
  */
-export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
-    const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required" };
-    try {
-
-        const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
+export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> { const adminCheck = await requireAdmin();
+    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
+    try { const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
             .orderBy('sentAt', 'desc')
             .limit(50)
             .get();
 
         const history = serializeDocs(snapshot.docs) as any[];
 
-        return { success: true as const, history, error: null };
-    } catch (error) {
-        logger.error('Failed to fetch email history:', error);
-        return { success: false as const, error: 'Failed to load email history' };
+        return { error: null,  success: true as const, history , data: null };
+    } catch (error) { logger.error('Failed to fetch email history:', error);
+        return { success: false as const, error: 'Failed to load email history', data: null };
     }
 }

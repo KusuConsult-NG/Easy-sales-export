@@ -10,8 +10,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
-export interface WaveResource {
-    id?: string;
+export interface WaveResource { id?: string;
     title: string;
     description: string;
     category: "document" | "video" | "template" | "guide";
@@ -26,20 +25,20 @@ export interface WaveResource {
     tags?: string[];
     isActive: boolean;
     createdAt?: FieldValue | Timestamp;
-    updatedAt?: FieldValue | Timestamp;
-}
+    updatedAt?: FieldValue | Timestamp; }
 
 /**
  * Upload a resource to Firebase Storage and create Firestore record
  */
-export async function uploadResourceAction(formData: FormData): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+export async function uploadResourceAction(formData: FormData): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         // Check if user is admin (multi-role array aware)
@@ -47,8 +46,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{ error:
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) {
-            return { success: false as const, error: "Admin access required" };
+        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const file = formData.get("file") as File;
@@ -57,29 +55,23 @@ export async function uploadResourceAction(formData: FormData): Promise<{ error:
         const category = formData.get("category") as "document" | "video" | "template" | "guide";
         const tags = formData.get("tags") as string;
 
-        if (!file || !title || !description || !category) {
-            return { success: false as const, error: "Missing required fields" };
+        if (!file || !title || !description || !category) { return { success: false as const, error: "Missing required fields", data: null };
         }
 
         // Validate file size (50MB for documents, 200MB for videos)
         const maxSize = category === "video" ? 200 * 1024 * 1024 : 50 * 1024 * 1024;
-        if (file.size > maxSize) {
-            return {
-                success: false as const,
-                error: `File too large. Max size: ${maxSize / (1024 * 1024)}MB`
+        if (file.size > maxSize) { return { success: false as const, error: `File too large. Max size: ${maxSize / (1024 * 1024)}MB`
             };
         }
 
         // Validate file type
-        const allowedTypes: Record<string, string[]> = {
-            document: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        const allowedTypes: Record<string, string[]> = { document: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
             video: ["video/mp4", "video/quicktime"],
             template: ["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
             guide: ["application/pdf"]
         };
 
-        if (!allowedTypes[category].includes(file.type)) {
-            return { success: false as const, error: "Invalid file type for this category" };
+        if (!allowedTypes[category].includes(file.type)) { return { success: false as const, error: "Invalid file type for this category"};
         }
 
         // Create unique filename
@@ -93,11 +85,8 @@ export async function uploadResourceAction(formData: FormData): Promise<{ error:
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        await fileRef.save(buffer, {
-            metadata: {
-                contentType: file.type,
-            },
-        });
+        await fileRef.save(buffer, { metadata: {
+                contentType: file.type } });
 
         // Make file public or generate signed URL
         // For simplicity, we'll make it public assuming resources are public
@@ -105,8 +94,7 @@ export async function uploadResourceAction(formData: FormData): Promise<{ error:
         const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
 
         // Create Firestore record
-        const resourceData: Omit<WaveResource, "id"> = {
-            title,
+        const resourceData: Omit<WaveResource, "id"> = { title,
             description,
             category,
             fileUrl,
@@ -120,31 +108,29 @@ export async function uploadResourceAction(formData: FormData): Promise<{ error:
             tags: tags ? tags.split(",").map(t => t.trim()) : [],
             isActive: true,
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+            updatedAt: FieldValue.serverTimestamp() };
 
         const docRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add(resourceData);
 
         // Create audit log
-        await createAdminAuditLog({
-            action: "resource_uploaded",
+        await createAdminAuditLog({ action: "resource_uploaded",
             userId: session.user.id,
             targetId: docRef.id,
-            targetType: "wave_resource",
-        });
+            targetType: "wave_resource" });
 
-        return { success: true as const, data: { resourceId: docRef.id } };
-    } catch (error: any) {
-        logger.error("Resource upload error:", error);
-        return { success: false as const, error: error.message || "Failed to upload resource" };
+        return { success: true as const, error: null, data: null };
+    } catch (error: any) { logger.error("Resource upload error:", error);
+        return { success: false as const, error: error.message || "Failed to upload resource", data: null };
     }
 }
 
 /**
  * Get all active resources, optionally filtered by category
  */
-export async function getResourcesAction(category?: string): Promise<{ error: string | null, success: boolean; data?: WaveResource[]; meta?: any;  }> {
-    try {
+export async function getResourcesAction(category?: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         let query = db.collection(COLLECTIONS.WAVE_RESOURCES)
             .where("isActive", "==", true)
             .orderBy("uploadedAt", "desc");
@@ -156,66 +142,61 @@ export async function getResourcesAction(category?: string): Promise<{ error: st
         const snapshot = await query.get();
 
         return { error: null, success: true as const, data: serializeDocs(snapshot.docs) as unknown as WaveResource[] };
-    } catch (error) {
-        logger.error("Failed to fetch resources:", error);
-        return { success: false as const, error: "Failed to fetch resources" };
+    } catch (error) { logger.error("Failed to fetch resources:", error);
+        return { success: false as const, error: "Failed to fetch resources", data: null };
     }
 }
 
 /**
  * Track download and return resource URL
  */
-export async function downloadResourceAction(resourceId: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+export async function downloadResourceAction(resourceId: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
         const resourceDoc = await resourceRef.get();
 
-        if (!resourceDoc.exists) {
-            return { success: false as const, error: "Resource not found" };
+        if (!resourceDoc.exists) { return { success: false as const, error: "Resource not found", data: null };
         }
 
         const resource = resourceDoc.data() as WaveResource;
 
         // Increment download count
-        await resourceRef.update({
-            downloads: FieldValue.increment(1),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        await resourceRef.update({ downloads: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp() });
 
         // Create audit log
-        await createAdminAuditLog({
-            action: "resource_download",
+        await createAdminAuditLog({ action: "resource_download",
             userId: session.user.id,
             targetId: resourceId,
-            targetType: "wave_resource",
-        });
+            targetType: "wave_resource" });
 
-        return { success: true as const, data: { url: resource.fileUrl } };
-    } catch (error: any) {
-        logger.error("Download tracking error:", error);
-        return { success: false as const, error: error.message || "Failed to track download" };
+        return { error: null,  success: true as const, data: null };
+    } catch (error: any) { logger.error("Download tracking error:", error);
+        return { success: false as const, error: error.message || "Failed to track download", data: null };
     }
 }
 
 /**
  * Soft delete a resource (admin only)
  */
-export async function deleteResourceAction(resourceId: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+export async function deleteResourceAction(resourceId: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         // Check if user is admin (multi-role array aware)
@@ -223,31 +204,25 @@ export async function deleteResourceAction(resourceId: string): Promise<{ error:
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) {
-            return { success: false as const, error: "Admin access required" };
+        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
         // Soft delete
-        await resourceRef.update({
-            isActive: false,
+        await resourceRef.update({ isActive: false,
             updatedAt: FieldValue.serverTimestamp(),
-            deletedAt: FieldValue.serverTimestamp(),
-        });
+            deletedAt: FieldValue.serverTimestamp() });
 
         // Create audit log
-        await createAdminAuditLog({
-            action: "resource_delete",
+        await createAdminAuditLog({ action: "resource_delete",
             userId: session.user.id,
             targetId: resourceId,
-            targetType: "wave_resource",
-        });
+            targetType: "wave_resource" });
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error("Delete resource error:", error);
-        return { success: false as const, error: error.message || "Failed to delete resource" };
+        return { success: true as const, error: null };
+    } catch (error: any) { logger.error("Delete resource error:", error);
+        return { success: false as const, error: error.message || "Failed to delete resource", data: null };
     }
 }
 
@@ -259,14 +234,15 @@ export async function updateResourceAction(
     title: string,
     description: string,
     tags?: string
-): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         // Check if user is admin (multi-role array aware)
@@ -274,30 +250,24 @@ export async function updateResourceAction(
         const userDoc = await userRef.get();
         const userData = userDoc.data();
         const userRoles: string[] = userData?.roles || (userData?.role ? [userData.role] : []);
-        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) {
-            return { success: false as const, error: "Admin access required" };
+        if (!userDoc.exists || !userData || (!userRoles.includes("admin") && !userRoles.includes("super_admin"))) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
-        await resourceRef.update({
-            title,
+        await resourceRef.update({ title,
             description,
             tags: tags ? tags.split(",").map(t => t.trim()) : [],
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
         // Create audit log
-        await createAdminAuditLog({
-            action: "resource_update",
+        await createAdminAuditLog({ action: "resource_update",
             userId: session.user.id,
             targetId: resourceId,
-            targetType: "wave_resource",
-        });
+            targetType: "wave_resource" });
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error("Update resource error:", error);
-        return { success: false as const, error: error.message || "Failed to update resource" };
+        return { success: true as const, error: null };
+    } catch (error: any) { logger.error("Update resource error:", error);
+        return { success: false as const, error: error.message || "Failed to update resource", data: null };
     }
 }

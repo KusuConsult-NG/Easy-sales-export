@@ -6,17 +6,14 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { BriefingRegistrationData, BriefingStatus } from "./briefing";
 
-export interface BriefingRegistration extends BriefingRegistrationData {
-    id: string;
+export interface BriefingRegistration extends BriefingRegistrationData { id: string;
     createdAt: string; // ISO string — safe for server→client boundary
     updatedAt: string; // ISO string
     status: BriefingStatus;
     attended: boolean;
-    confirmationSent: boolean;
-}
+    confirmationSent: boolean; }
 
-export interface BriefingRegistrationsResult {
-    error: null, success: boolean;
+export interface BriefingRegistrationsResult { error: null, success: boolean;
     data?: BriefingRegistration[];
     meta: {
         cursor: string | null;
@@ -28,8 +25,7 @@ export interface BriefingRegistrationsResult {
 /**
  * Options for fetching briefing registrations with server-side filters.
  */
-export interface BriefingRegistrationOpts {
-    lastDocId?: string | null;
+export interface BriefingRegistrationOpts { lastDocId?: string | null;
     limit?: number;
     /** Filter by Nigerian state */
     state?: string;
@@ -38,8 +34,7 @@ export interface BriefingRegistrationOpts {
     /** Filter by status ("registered", "attended", "cancelled") */
     status?: string;
     /** Free-text search — applied client-side (Firestore has no LIKE) */
-    search?: string;
-}
+    search?: string; }
 
 /**
  * Fetch WAVE Briefing Registrations with cursor-based pagination & server-side filters (Admin Only)
@@ -52,8 +47,7 @@ export interface BriefingRegistrationOpts {
 export async function getBriefingRegistrationsAction(
     opts: BriefingRegistrationOpts | string | null = {},
     limitArg?: number
-): Promise<BriefingRegistrationsResult> {
-    try {
+): Promise<BriefingRegistrationsResult> { try {
         // --- Normalise arguments: support old (cursor, limit) and new (opts) signatures ---
         let cursor: string | null | undefined;
         let limit = 25;
@@ -66,8 +60,7 @@ export async function getBriefingRegistrationsAction(
             // Legacy call: getBriefingRegistrationsAction(cursor, limit)
             cursor = opts;
             limit = limitArg ?? 25;
-        } else if (opts && typeof opts === "object") {
-            cursor = opts.lastDocId;
+        } else if (opts && typeof opts === "object") { cursor = opts.lastDocId;
             limit = opts.limit ?? limitArg ?? 25;
             filterState = opts.state && opts.state !== "all" ? opts.state : undefined;
             filterRole = opts.role && opts.role !== "all" ? opts.role : undefined;
@@ -76,8 +69,7 @@ export async function getBriefingRegistrationsAction(
         }
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) {
-            return { success: false, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
+        if (!sessionResult.session) { return { success: false as const, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false, data: null } };
         }
         const { session } = sessionResult;
 
@@ -85,8 +77,7 @@ export async function getBriefingRegistrationsAction(
             session.user.roles?.includes("admin") ||
             session.user.roles?.includes("super_admin");
 
-        if (!hasAdminRole) {
-            return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
+        if (!hasAdminRole) { return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false, data: null } };
         }
 
         const pageSize = Math.min(Math.max(limit, 1), 5000);
@@ -95,20 +86,16 @@ export async function getBriefingRegistrationsAction(
         let query: FirebaseFirestore.Query = db
             .collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS);
 
-        if (filterState) {
-            query = query.where("state", "==", filterState);
+        if (filterState) { query = query.where("state", "==", filterState);
         }
-        if (filterRole) {
-            query = query.where("role", "==", filterRole);
+        if (filterRole) { query = query.where("role", "==", filterRole);
         }
-        if (filterStatus) {
-            query = query.where("status", "==", filterStatus);
+        if (filterStatus) { query = query.where("status", "==", filterStatus);
         }
 
         query = query.orderBy("createdAt", "desc").limit(pageSize + 1); // +1 to detect hasMore
 
-        if (cursor) {
-            const cursorDate = new Date(cursor);
+        if (cursor) { const cursorDate = new Date(cursor);
             if (!isNaN(cursorDate.getTime())) {
                 query = query.startAfter(cursorDate);
             }
@@ -124,15 +111,13 @@ export async function getBriefingRegistrationsAction(
         let snapshot: any;
         let countSnap: any;
 
-        try {
-            const results = await Promise.all([
+        try { const results = await Promise.all([
                 query.get(),
                 countQuery.count().get()
             ]);
             snapshot = results[0];
             countSnap = results[1];
-        } catch (e: any) {
-            // Fallback for when composite indexes are missing on production
+        } catch (e: any) { // Fallback for when composite indexes are missing on production
             if (e.message && String(e.message).toLowerCase().includes("index")) {
                 logger.warn("Missing composite index, falling back to in-memory filter...");
                 try {
@@ -145,23 +130,19 @@ export async function getBriefingRegistrationsAction(
                     if (filterState) {
                         allDocs = allDocs.filter(doc => doc.data().state === filterState);
                     }
-                    if (filterRole) {
-                        allDocs = allDocs.filter(doc => doc.data().role === filterRole);
+                    if (filterRole) { allDocs = allDocs.filter(doc => doc.data().role === filterRole);
                     }
-                    if (filterStatus) {
-                        allDocs = allDocs.filter(doc => doc.data().status === filterStatus);
+                    if (filterStatus) { allDocs = allDocs.filter(doc => doc.data().status === filterStatus);
                     }
                     
                     // Sort chronologically in memory to mimic orderBy("createdAt", "desc")
-                    allDocs.sort((a, b) => {
-                        const timeA = a.data().createdAt?.toMillis?.() ?? 0;
+                    allDocs.sort((a, b) => { const timeA = a.data().createdAt?.toMillis?.() ?? 0;
                         const timeB = b.data().createdAt?.toMillis?.() ?? 0;
                         return timeB - timeA;
                     });
                     
                     let startIndex = 0;
-                    if (cursor) {
-                        const cursorTime = new Date(cursor).getTime();
+                    if (cursor) { const cursorTime = new Date(cursor).getTime();
                         if (!isNaN(cursorTime)) {
                             while (startIndex < allDocs.length && (allDocs[startIndex].data().createdAt?.toMillis?.() ?? 0) >= cursorTime) {
                                 startIndex++;
@@ -172,12 +153,10 @@ export async function getBriefingRegistrationsAction(
                     const slicedDocs = allDocs.slice(startIndex, startIndex + pageSize + 1);
                     snapshot = { docs: slicedDocs };
                     countSnap = { data: () => ({ count: allDocs.length }) };
-                } catch (fallbackError: any) {
-                    logger.error("Fallback query also failed:", fallbackError);
+                } catch (fallbackError: any) { logger.error("Fallback query also failed:", fallbackError);
                     throw fallbackError;
                 }
-            } else {
-                logger.error("Primary query failed with non-index error:", e);
+            } else { logger.error("Primary query failed with non-index error:", e);
                 throw e; // rethrow other errors
             }
         }
@@ -186,8 +165,7 @@ export async function getBriefingRegistrationsAction(
         const docs = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
         const totalCount = countSnap.data().count;
 
-        let data: BriefingRegistration[] = docs.map((doc: any) => {
-            const d = doc.data();
+        let data: BriefingRegistration[] = docs.map((doc: any) => { const d = doc.data();
             return {
                 id: doc.id,
                 ...d,
@@ -195,13 +173,11 @@ export async function getBriefingRegistrationsAction(
                 updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
                 status: d.status || "registered",
                 attended: d.attended ?? false,
-                confirmationSent: d.confirmationSent ?? false,
-            } as BriefingRegistration;
+                confirmationSent: d.confirmationSent ?? false } as BriefingRegistration;
         });
 
         // --- Client-side free-text search (Firestore has no full-text search) ---
-        if (searchQuery) {
-            data = data.filter(r =>
+        if (searchQuery) { data = data.filter(r =>
                 r.fullName?.toLowerCase().includes(searchQuery!) ||
                 r.email?.toLowerCase().includes(searchQuery!) ||
                 r.phoneNumber?.toLowerCase().includes(searchQuery!)
@@ -212,27 +188,19 @@ export async function getBriefingRegistrationsAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { error: null, success: true as const, data,
-            meta: { cursor: nextCursor, hasMore, totalCount } };
-    } catch (error: any) {
-        logger.error("getBriefingRegistrationsAction error:", error);
+        return { error: null, success: true as const, data, meta: { cursor: nextCursor, hasMore, totalCount , data: null } , data: null };
+    } catch (error: any) { logger.error("getBriefingRegistrationsAction error:", error);
         
         // Next.js Server Actions strip standard Error objects, so we extract the message manually
         let errorMessage = "Failed to fetch registrations";
         if (error?.message) {
             errorMessage = error.message;
-        } else if (typeof error === "string") {
-            errorMessage = error;
-        } else if (error?.details) {
-            errorMessage = String(error.details);
-        } else if (error) {
-            errorMessage = String(error);
+        } else if (typeof error === "string") { errorMessage = error;
+        } else if (error?.details) { errorMessage = String(error.details);
+        } else if (error) { errorMessage = String(error);
         }
         
-        return { 
-            success: false as const, 
-            error: errorMessage, 
-            meta: { cursor: null, hasMore: false, totalCount: 0 } 
+        return { success: false as const, error: errorMessage, meta: { cursor: null, hasMore: false, totalCount: 0, data: null } 
         };
     }
 }

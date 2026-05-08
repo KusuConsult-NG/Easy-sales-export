@@ -26,18 +26,21 @@ async function _createResourceAction(data: {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ error: string | null, success: boolean; data?: any;  }> {
+}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const resourceRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add({
@@ -57,13 +60,13 @@ async function _createResourceAction(data: {
             targetId: resourceRef.id,
         });
 
-        return { error: null, success: true as const, data: { resourceId: resourceRef.id } };
+        return { error: null, success: true as const, data: null };
     } catch (error) {
         logger.error("Create resource error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to create resource" };
+        return { success: false as const, error: "Failed to create resource" , data: null };
     }
 }
 export const createResourceAction = withFlexibleSafeAction("createResourceAction", _createResourceAction);
@@ -78,18 +81,21 @@ async function _updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
@@ -105,31 +111,34 @@ async function _updateResourceAction(
             targetId: resourceId,
         });
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (error) {
         logger.error("Update resource error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to update resource" };
+        return { success: false as const, error: "Failed to update resource" , data: null };
     }
 }
 export const updateResourceAction = withFlexibleSafeAction("updateResourceAction", _updateResourceAction);
 
 async function _deleteResourceAction(
     resourceId: string
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
@@ -147,13 +156,13 @@ async function _deleteResourceAction(
             targetId: resourceId,
         });
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (error) {
         logger.error("Delete resource error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to delete resource" };
+        return { success: false as const, error: "Failed to delete resource" , data: null };
     }
 }
 export const deleteResourceAction = withFlexibleSafeAction("deleteResourceAction", _deleteResourceAction);
@@ -170,18 +179,21 @@ async function _createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ error: string | null, success: boolean; data?: any;  }> {
+}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const eventRef = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).add({
@@ -201,13 +213,13 @@ async function _createTrainingEventAction(data: {
             targetId: eventRef.id,
         });
 
-        return { error: null, success: true as const, data: { eventId: eventRef.id } };
+        return { error: null, success: true as const, data: null };
     } catch (error) {
         logger.error("Create event error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to create event" };
+        return { success: false as const, error: "Failed to create event" , data: null };
     }
 }
 export const createTrainingEventAction = withFlexibleSafeAction("createTrainingEventAction", _createTrainingEventAction);
@@ -224,18 +236,21 @@ async function _updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
@@ -251,29 +266,32 @@ async function _updateTrainingEventAction(
             targetId: eventId,
         });
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (error) {
         logger.error("Update event error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to update event" };
+        return { success: false as const, error: "Failed to update event" , data: null };
     }
 }
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
-async function _getEventParticipantsAction(eventId: string): Promise<{ error: string | null, success: boolean; data?: any;  }> {
+async function _getEventParticipantsAction(eventId: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
@@ -282,13 +300,13 @@ async function _getEventParticipantsAction(eventId: string): Promise<{ error: st
 
         const participants = serializeDocs(snap.docs);
 
-        return { error: null, success: true as const, data: { participants } };
+        return { error: null, success: true as const, data: null };
     } catch (error) {
         logger.error("Get participants error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch participants" };
+        return { success: false as const, error: "Failed to fetch participants" , data: null };
     }
 }
 export const getEventParticipantsAction = withFlexibleSafeAction("getEventParticipantsAction", _getEventParticipantsAction);
@@ -297,53 +315,59 @@ export const getEventParticipantsAction = withFlexibleSafeAction("getEventPartic
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-async function _getWaveApplicationsAction(): Promise<{ error: string | null, success: boolean; data?: any;  }> {
+async function _getWaveApplicationsAction(): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
         const applications = serializeDocs(snapshot.docs);
 
-        return { error: null, success: true as const, data: { applications } };
+        return { error: null, success: true as const, data: null };
     } catch (error) {
         logger.error("Get applications error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch applications" };
+        return { success: false as const, error: "Failed to fetch applications" , data: null };
     }
 }
 export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicationsAction", _getWaveApplicationsAction);
 
 async function _approveWaveApplicationAction(
     applicationId: string
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
         if (!valid.success) {
-            return { success: false as const, error: "Invalid application data" };
+            return { success: false as const, error: "Invalid application data" , data: null };
         }
 
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" , data: null };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         let targetUserId: string | undefined;
@@ -437,7 +461,7 @@ async function _approveWaveApplicationAction(
             }
         }
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (error) {
         logger.error("Approve application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -451,7 +475,10 @@ export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveA
 async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
@@ -544,7 +571,7 @@ async function _rejectWaveApplicationAction(
             }
         }
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (error) {
         logger.error("Reject application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -563,7 +590,10 @@ async function _getStandardWaveApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -726,7 +756,10 @@ async function _getStandardWaveWithdrawalsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -802,7 +835,10 @@ async function _processWaveWithdrawalAction(data: {
     action: "approve" | "reject" | "complete";
     adminNotes?: string;
     transactionReference?: string;
-}): Promise<{ error: string | null, success: boolean; data?: any;  }> {
+}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -881,7 +917,7 @@ async function _processWaveWithdrawalAction(data: {
                      await invalidateServiceCache(withdrawalData.userId, 'wave');
                  } catch (e) { }
              }
-             return { error: null, success: true as const, data: { status: action === "reject" ? "rejected" : "completed" } };
+             return { error: null, success: true as const, data: null };
         }
 
         // PHASE 2: SIDE-EFFECT (PAYOUT)
@@ -941,7 +977,7 @@ async function _processWaveWithdrawalAction(data: {
                 } catch (e) { }
             }
 
-            return { error: null, success: true as const, data: { status: "completed" } };
+            return { error: null, success: true as const, data: null };
 
         } catch (error: any) {
             logger.error(`[WAVE:Payout] Critical error during payout for ${withdrawalId}:`, error);
@@ -951,12 +987,12 @@ async function _processWaveWithdrawalAction(data: {
                 payoutError: "Critical error during payout side-effect",
                 updatedAt: FieldValue.serverTimestamp(),
             }).catch(e => logger.error(`[WAVE:Rollback] Failed to rollback status for ${withdrawalId}:`, e));
-            return { success: false as const, error: "Critical payout failure. Status reverted to pending." };
+            return { success: false as const, error: "Critical payout failure. Status reverted to pending." , data: null };
         }
 
     } catch (error: any) {
         logger.error("Process WAVE withdrawal error:", error);
-        return { success: false as const, error: error.message || "Failed to process withdrawal" };
+        return { success: false as const, error: error.message || "Failed to process withdrawal" , data: null };
     }
 }
 

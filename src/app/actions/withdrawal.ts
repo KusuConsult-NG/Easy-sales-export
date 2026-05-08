@@ -13,28 +13,24 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { createAdminAuditLog } from '@/lib/audit-log-admin';
 import { revalidatePath } from 'next/cache';
 
-interface WithdrawalRequestData {
-    amount: number;
+interface WithdrawalRequestData { amount: number;
     bankName: string;
     accountNumber: string;
     accountName: string;
-    reason?: string;
-}
+    reason?: string; }
 
-interface ActionState {
-    error: null, success: boolean;
-    message?: string;
-}
+type ActionState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
 async function _submitWithdrawalRequestAction(
     data: WithdrawalRequestData
-): Promise<ActionState> {
-    let sessionResult;
+): Promise<ActionState> { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -45,17 +41,12 @@ async function _submitWithdrawalRequestAction(
 
         const validation = submissionSchema.safeParse(data);
 
-        if (!validation.success) {
-            return {
-                success: false as const,
-                error: validation.error.issues[0]?.message || "Invalid withdrawal data",
-            };
+        if (!validation.success) { return { success: false as const, error: validation.error.issues[0]?.message || "Invalid withdrawal data", data: null };
         }
 
         const validatedData = validation.data;
 
-        await db.runTransaction(async (transaction) => {
-            const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        await db.runTransaction(async (transaction) => { const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
             const membershipDoc = await transaction.get(membershipRef);
 
             if (!membershipDoc.exists) {
@@ -69,16 +60,13 @@ async function _submitWithdrawalRequestAction(
                 throw new Error(`Insufficient balance. Available: ₦${availableBalance.toLocaleString()}`);
             }
 
-            transaction.update(membershipRef, {
-                savingsBalance: FieldValue.increment(-validatedData.amount),
+            transaction.update(membershipRef, { savingsBalance: FieldValue.increment(-validatedData.amount),
                 lockedBalance: FieldValue.increment(validatedData.amount),
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
 
             const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
-            transaction.set(withdrawalRef, {
-                userId,
+            transaction.set(withdrawalRef, { userId,
                 userEmail,
                 userName: session.user.name || userEmail,
                 cooperativeId: membership.cooperativeId || "default",
@@ -91,8 +79,7 @@ async function _submitWithdrawalRequestAction(
                 _version: 0,
                 requestedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         });
 
         await createAdminAuditLog({
@@ -101,26 +88,20 @@ async function _submitWithdrawalRequestAction(
             userEmail,
             targetId: `W-${Date.now()}`,
             targetType: 'withdrawal',
-            metadata: {
-                amount: validatedData.amount,
+            metadata: { amount: validatedData.amount,
                 bankName: validatedData.bankName,
-                accountNumber: validatedData.accountNumber,
-            },
-            details: `Withdrawal request of ₦${validatedData.amount.toLocaleString()} submitted`,
-        });
+                accountNumber: validatedData.accountNumber },
+            details: `Withdrawal request of ₦${validatedData.amount.toLocaleString()} submitted` });
 
-        try {
-            const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
-            if (sendWithdrawalConfirmationEmail) {
-                await sendWithdrawalConfirmationEmail(
+        try { const { sendWithdrawalConfirmationEmail } = await import('@/lib/email-notifications');
+            if (sendWithdrawalConfirmationEmail) { await sendWithdrawalConfirmationEmail(
                     userEmail,
                     session.user.name || userEmail,
                     validatedData.amount,
                     "PENDING"
                 );
             }
-        } catch (emailError) {
-            logger.error('Failed to send confirmation email:', emailError);
+        } catch (emailError) { logger.error('Failed to send confirmation email:', emailError);
         }
 
         revalidatePath('/dashboard/wallet');
@@ -130,16 +111,13 @@ async function _submitWithdrawalRequestAction(
             error: null,
             success: true as const,
             message: `Withdrawal request for ₦${validatedData.amount.toLocaleString()} submitted successfully`,
+            data: { amount: validatedData.amount }
         };
-    } catch (error: any) {
-        logger.error('Withdrawal request error:', {
+    } catch (error: any) { logger.error('Withdrawal request error:', {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: error.message || 'Failed to submit withdrawal request',
-            success: false as const,
-        };
-    }
+        return { error: error.message || 'Failed to submit withdrawal request', success: false as const, data: null };
+        }
 }
 export const submitWithdrawalRequestAction = withFlexibleSafeAction("submitWithdrawalRequestAction", _submitWithdrawalRequestAction);

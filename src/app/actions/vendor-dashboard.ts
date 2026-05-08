@@ -12,14 +12,12 @@ import { logger } from "@/lib/logger";
  * VENDOR DASHBOARD ANALYTICS ACTIONS
  */
 
-async function _getVendorSalesStatsAction() {
-    let sessionResult;
+async function _getVendorSalesStatsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const vendorId = session.user.id;
@@ -37,15 +35,12 @@ async function _getVendorSalesStatsAction() {
 
         const orders = serializeDocs(ordersSnapshot.docs);
 
-        const stats = {
-            today: { orders: 0, revenue: 0 },
+        const stats = { today: { orders: 0, revenue: 0 },
             thisWeek: { orders: 0, revenue: 0 },
             thisMonth: { orders: 0, revenue: 0 },
-            allTime: { orders: orders.length, revenue: 0 },
-        };
+            allTime: { orders: orders.length, revenue: 0 } };
 
-        orders.forEach((order: any) => {
-            const createdAt = order.createdAt;
+        orders.forEach((order: any) => { const createdAt = order.createdAt;
             const amount = order.totalAmount || 0;
             stats.allTime.revenue += amount;
 
@@ -53,34 +48,30 @@ async function _getVendorSalesStatsAction() {
                 stats.today.orders++;
                 stats.today.revenue += amount;
             }
-            if (createdAt >= startOfWeek) {
-                stats.thisWeek.orders++;
+            if (createdAt >= startOfWeek) { stats.thisWeek.orders++;
                 stats.thisWeek.revenue += amount;
             }
-            if (createdAt >= startOfMonth) {
-                stats.thisMonth.orders++;
+            if (createdAt >= startOfMonth) { stats.thisMonth.orders++;
                 stats.thisMonth.revenue += amount;
             }
         });
 
-        return { success: true as const, data: { stats } };
-    } catch (error: any) {
-        logger.error("getVendorSalesStatsAction error:", {
+        return { success: true as const, error: null, data: stats };
+    } catch (error: any) { logger.error("getVendorSalesStatsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getVendorSalesStatsAction = withFlexibleSafeAction("getVendorSalesStatsAction", _getVendorSalesStatsAction);
 
-async function _getVendorRevenueTrendsAction() {
-    let sessionResult;
+async function _getVendorRevenueTrendsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
         const now = new Date();
@@ -95,8 +86,7 @@ async function _getVendorRevenueTrendsAction() {
 
         const dailyData: Record<string, { revenue: number; orders: number }> = {};
 
-        ordersSnapshot.docs.forEach(doc => {
-            const data = doc.data();
+        ordersSnapshot.docs.forEach(doc => { const data = doc.data();
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
             const dateKey = createdAt.toISOString().split('T')[0];
 
@@ -109,36 +99,32 @@ async function _getVendorRevenueTrendsAction() {
         });
 
         const trends: Array<{ date: string; revenue: number; orders: number }> = [];
-        for (let i = 29; i >= 0; i--) {
-            const date = new Date(now);
+        for (let i = 29; i >= 0; i--) { const date = new Date(now);
             date.setDate(date.getDate() - i);
             const dateKey = date.toISOString().split('T')[0];
 
             trends.push({
                 date: dateKey,
                 revenue: dailyData[dateKey]?.revenue || 0,
-                orders: dailyData[dateKey]?.orders || 0,
-            });
+                orders: dailyData[dateKey]?.orders || 0 });
         }
 
-        return { success: true as const, data: { trends } };
-    } catch (error: any) {
-        logger.error("getVendorRevenueTrendsAction error:", {
+        return { error: null, success: true as const, data: trends };
+    } catch (error: any) { logger.error("getVendorRevenueTrendsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getVendorRevenueTrendsAction = withFlexibleSafeAction("getVendorRevenueTrendsAction", _getVendorRevenueTrendsAction);
 
-async function _getTopSellingProductsAction(limit: number = 5) {
-    let sessionResult;
+async function _getTopSellingProductsAction(limit: number = 5) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
         const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
@@ -148,8 +134,7 @@ async function _getTopSellingProductsAction(limit: number = 5) {
 
         const productStats: Record<string, { name: string; sold: number; revenue: number }> = {};
 
-        ordersSnapshot.docs.forEach(doc => {
-            const data = doc.data();
+        ordersSnapshot.docs.forEach(doc => { const data = doc.data();
             const items = data.items || [];
 
             items.forEach((item: any) => {
@@ -157,8 +142,7 @@ async function _getTopSellingProductsAction(limit: number = 5) {
                     productStats[item.productId] = {
                         name: item.productName || "Unknown Product",
                         sold: 0,
-                        revenue: 0,
-                    };
+                        revenue: 0 };
                 }
 
                 productStats[item.productId].sold += item.quantity || 0;
@@ -167,49 +151,42 @@ async function _getTopSellingProductsAction(limit: number = 5) {
         });
 
         const products = Object.entries(productStats)
-            .map(([productId, stats]) => ({
-                productId,
+            .map(([productId, stats]) => ({ productId,
                 productName: stats.name,
                 totalSold: stats.sold,
-                totalRevenue: stats.revenue,
-            }))
+                totalRevenue: stats.revenue }))
             .sort((a, b) => b.totalRevenue - a.totalRevenue)
             .slice(0, limit);
 
-        return { success: true as const, data: { products } };
-    } catch (error: any) {
-        logger.error("getTopSellingProductsAction error:", {
+        return { success: true as const, error: null, data: products };
+    } catch (error: any) { logger.error("getTopSellingProductsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getTopSellingProductsAction = withFlexibleSafeAction("getTopSellingProductsAction", _getTopSellingProductsAction);
 
-async function _getVendorInventoryStatsAction() {
-    let sessionResult;
+async function _getVendorInventoryStatsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
         const productsSnapshot = await db.collection(COLLECTIONS.VENDOR_PRODUCTS)
             .where("vendorId", "==", vendorId)
             .get();
 
-        const stats = {
-            totalProducts: productsSnapshot.size,
+        const stats = { totalProducts: productsSnapshot.size,
             activeProducts: 0,
             outOfStock: 0,
             lowStock: 0,
-            lowStockProducts: [] as Array<{ id: string; name: string; stock: number; reorderLevel: number }>,
-        };
+            lowStockProducts: [] as Array<{ id: string; name: string; stock: number; reorderLevel: number }> };
 
-        productsSnapshot.docs.forEach(doc => {
-            const data = doc.data();
+        productsSnapshot.docs.forEach(doc => { const data = doc.data();
             const stock = data.stock || 0;
             const reorderLevel = data.reorderLevel || 10;
 
@@ -217,36 +194,32 @@ async function _getVendorInventoryStatsAction() {
 
             if (stock === 0) {
                 stats.outOfStock++;
-            } else if (stock < reorderLevel) {
-                stats.lowStock++;
+            } else if (stock < reorderLevel) { stats.lowStock++;
                 stats.lowStockProducts.push({
                     id: doc.id,
                     name: data.name || "Unnamed Product",
                     stock,
-                    reorderLevel,
-                });
+                    reorderLevel });
             }
         });
 
         stats.lowStockProducts.sort((a, b) => a.stock - b.stock);
-        return { success: true as const, data: { stats } };
-    } catch (error: any) {
-        logger.error("getVendorInventoryStatsAction error:", {
+        return { error: null, success: true as const, data: stats };
+    } catch (error: any) { logger.error("getVendorInventoryStatsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getVendorInventoryStatsAction = withFlexibleSafeAction("getVendorInventoryStatsAction", _getVendorInventoryStatsAction);
 
-async function _getVendorRevenueInsightsAction() {
-    let sessionResult;
+async function _getVendorRevenueInsightsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
         const ordersSnapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
@@ -258,8 +231,7 @@ async function _getVendorRevenueInsightsAction() {
         let completedTransactions = 0;
         const categoryRevenue: Record<string, number> = {};
 
-        ordersSnapshot.docs.forEach(doc => {
-            const data = doc.data();
+        ordersSnapshot.docs.forEach(doc => { const data = doc.data();
             const amount = data.totalAmount || 0;
 
             if (data.paymentStatus === "paid") {
@@ -271,8 +243,7 @@ async function _getVendorRevenueInsightsAction() {
                     const category = item.category || "Uncategorized";
                     categoryRevenue[category] = (categoryRevenue[category] || 0) + (item.price * item.quantity);
                 });
-            } else if (data.paymentStatus === "pending") {
-                pendingPayouts += amount;
+            } else if (data.paymentStatus === "pending") { pendingPayouts += amount;
             }
         });
 
@@ -282,34 +253,25 @@ async function _getVendorRevenueInsightsAction() {
             .sort((a, b) => b.revenue - a.revenue);
 
         return { 
-            error: null, success: true as const, 
-            data: { 
-                insights: {
-                    totalRevenue,
-                    pendingPayouts,
-                    completedTransactions,
-                    averageOrderValue,
-                    revenueByCategory, 
-                }
-            }
+            error: null, 
+            success: true as const, 
+            data: { totalRevenue, pendingPayouts, completedTransactions, averageOrderValue, revenueByCategory } 
         };
-    } catch (error: any) {
-        logger.error("getVendorRevenueInsightsAction error:", {
+    } catch (error: any) { logger.error("getVendorRevenueInsightsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getVendorRevenueInsightsAction = withFlexibleSafeAction("getVendorRevenueInsightsAction", _getVendorRevenueInsightsAction);
 
-async function _getVendorActivityFeedAction(limit: number = 20) {
-    let sessionResult;
+async function _getVendorActivityFeedAction(limit: number = 20) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
         const vendorId = session.user.id;
         const activities: Array<any> = [];
@@ -328,8 +290,7 @@ async function _getVendorActivityFeedAction(limit: number = 20) {
                 title: `New Order #${data.orderNumber}`,
                 description: `Order from ${data.customerName} - ₦${data.totalAmount?.toLocaleString()}`,
                 timestamp: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
-                metadata: { orderId: doc.id, status: data.status },
-            });
+                metadata: { orderId: doc.id, status: data.status } });
         });
 
         const productsSnapshot = await db.collection(COLLECTIONS.VENDOR_PRODUCTS)
@@ -348,19 +309,17 @@ async function _getVendorActivityFeedAction(limit: number = 20) {
                     title: "Low Stock Alert",
                     description: `${data.name} is running low (${stock} ${data.unit || 'units'} remaining)`,
                     timestamp: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : new Date()),
-                    metadata: { productId: doc.id, stock },
-                });
+                    metadata: { productId: doc.id, stock } });
             }
         });
 
         activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        return { success: true as const, data: { activities: serializeValue(activities.slice(0, limit)) } };
-    } catch (error: any) {
-        logger.error("getVendorActivityFeedAction error:", {
+        return { error: null, success: true as const, data: activities };
+    } catch (error: any) { logger.error("getVendorActivityFeedAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getVendorActivityFeedAction = withFlexibleSafeAction("getVendorActivityFeedAction", _getVendorActivityFeedAction);

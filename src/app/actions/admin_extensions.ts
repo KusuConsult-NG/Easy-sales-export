@@ -9,40 +9,36 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logAuditAction } from "./audit";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
-type ActionState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+type ActionState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };;
 
 /**
  * Soft delete user (Preserve Referential Integrity)
  * Replaces hard deletion to prevent orphaned products/orders.
  */
-export async function softDeleteUserAction(targetUserId: string): Promise<ActionState> {
-    try {
+export async function softDeleteUserAction(targetUserId: string): Promise<ActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         
         // Strict: Only Super Admin or Admin can delete users
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
-            // Fallback if specific permission doesn't exist
+        if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) { // Fallback if specific permission doesn't exist
             if (!isAdmin(session.user.roles)) {
-                return { error: "Unauthorized: Admin access required", success: false as const };
+                return { error: "Unauthorized: Admin access required", success: false as const, data: null };
             }
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
         const userDoc = await userRef.get();
 
-        if (!userDoc.exists) {
-            return { error: "User not found", success: false as const };
+        if (!userDoc.exists) { return { error: "User not found", success: false as const, data: null };
         }
 
         const userData = userDoc.data()!;
 
         // Prevent deleting yourself
-        if (targetUserId === session.user.id) {
-            return { error: "Cannot delete your own account", success: false as const };
+        if (targetUserId === session.user.id) { return { error: "Cannot delete your own account", success: false as const, data: null };
         }
 
         // PII Scrubbing
@@ -52,8 +48,7 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         const scrubbedName = "Deleted User";
 
         // 1. Update Firestore Doc (Soft Delete)
-        await userRef.update({
-            deleted: true,
+        await userRef.update({ deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
             deletedBy: session.user.id,
 
@@ -68,12 +63,10 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
             roles: ["deleted"],
             isActive: false,
 
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
         // 2. Disable in Firebase Auth (prevent login)
-        try {
-            await adminAuth.updateUser(targetUserId, {
+        try { await adminAuth.updateUser(targetUserId, {
                 disabled: true,
                 email: scrubbedEmail, // Sync email change so they can't recover via old email
                 displayName: scrubbedName
@@ -84,20 +77,17 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         }
 
         // 3. Clear Cache
-        try {
-            const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+        try { const { invalidateUserCache } = await import('@/lib/cache-invalidation');
             await invalidateUserCache(targetUserId);
         } catch (e: any) { logger.warn("Cache invalidation skipped:", e?.message); }
 
-        await logAuditAction("user_delete", targetUserId, "user", {
-            adminId: session.user.id,
+        await logAuditAction("user_delete", targetUserId, "user", { adminId: session.user.id,
             type: "soft_delete"
         });
 
         return { success: true as const, message: "User soft-deleted successfully", error: null };
 
-    } catch (error: any) {
-        logger.error("Soft delete user error:", error);
-        return { success: false as const, error: "Failed to delete user" };
+    } catch (error: any) { logger.error("Soft delete user error:", error);
+        return { success: false as const, error: "Failed to delete user", data: null };
     }
 }

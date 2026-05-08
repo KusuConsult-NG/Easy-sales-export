@@ -17,12 +17,11 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/termii";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
+import { ActionResponse } from "@/lib/safe-action";
 
-function isStateMatch(dbState: any, filterState: string | undefined): boolean {
-    if (!filterState) return true;
+function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
-    return dbState.toLowerCase().includes(filterState.toLowerCase());
-}
+    return dbState.toLowerCase().includes(filterState.toLowerCase()); }
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -43,40 +42,34 @@ export type SmsAudience =
     | "abandoned_failed_transactions"
     | "custom";
 
-export interface SmsFilters {
-    audience: SmsAudience;
+export interface SmsFilters { audience: SmsAudience;
     state?: string;
     sellerStatus?: "pending" | "approved" | "suspended";
-    customRecipients?: string[];
-}
+    customRecipients?: string[]; }
 
-export interface SmsBroadcastPreview {
+export type SmsBroadcastPreview = ActionResponse<{
     count: number;
     sample: { name: string; phone: string }[];
-}
+}>;
 
-export interface SmsBroadcastResult {
-    error: null, success: boolean;
+export type SmsBroadcastResult = ActionResponse<{
     sent: number;
     failed: number;
     skipped: number;
     logId?: string;
-}
+}>;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function normalisePhone(raw: string | undefined | null): string | null {
-    if (!raw) return null;
+function normalisePhone(raw: string | undefined | null): string | null { if (!raw) return null;
     let p = String(raw).replace(/\D/g, "");
     if (p.startsWith("0")) p = "234" + p.slice(1);
     if (p.length < 10) return null;
-    return p;
-}
+    return p; }
 
-async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
-    const compact = Array.from(new Set(userIds.filter(Boolean)));
+async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) { const compact = Array.from(new Set(userIds.filter(Boolean)));
     const map = new Map<string, any>();
     for (let i = 0; i < compact.length; i += 100) {
         const batch = compact.slice(i, i + 100).map((id) => db.collection(COLLECTIONS.USERS).doc(id));
@@ -92,17 +85,14 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
 /** Collect recipient phone numbers based on audience filter */
 async function collectSmsRecipients(
     filters: SmsFilters
-): Promise<{ name: string; phone: string }[]> {
-    const db = getAdminDb();
+): Promise<{ name: string; phone: string }[]> { const db = getAdminDb();
     const recipients: Map<string, { name: string; phone: string }> = new Map();
 
-    const add = (rawPhone: string | undefined | null, name: string) => {
-        const phone = normalisePhone(rawPhone);
+    const add = (rawPhone: string | undefined | null, name: string) => { const phone = normalisePhone(rawPhone);
         if (phone && !recipients.has(phone)) recipients.set(phone, { name, phone });
     };
 
-    switch (filters.audience) {
-        // ─────────────────────────────────────────────────────────────────
+    switch (filters.audience) { // ─────────────────────────────────────────────────────────────────
         // ALL USERS — harvest from main `users` collection PLUS supplement
         // from every module sub-collection for users whose phone was never
         // synced to their root profile (legacy data gap).
@@ -121,8 +111,7 @@ async function collectSmsRecipients(
 
             // 2. Supplement: cooperative_members (phone may be stored here only)
             const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("state", "address", "phone", "phoneNumber", "firstName", "lastName").get();
-            for (const d of (await cmStream).docs) {
-                const m: any = d.data();
+            for (const d of (await cmStream).docs) { const m: any = d.data();
                 const userState = m.state || (m.address && m.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = m.phone || m.phoneNumber;
@@ -132,8 +121,7 @@ async function collectSmsRecipients(
 
             // 3. Supplement: wave_applications
             const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName").get();
-            for (const d of (await waveStream).docs) {
-                const a: any = d.data();
+            for (const d of (await waveStream).docs) { const a: any = d.data();
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 const phone = a.phone || a.alternativePhone || a.phoneNumber;
                 const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
@@ -142,8 +130,7 @@ async function collectSmsRecipients(
 
             // 4. Supplement: academy_applications
             const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").get();
-            for (const d of (await academyStream).docs) {
-                const a: any = d.data();
+            for (const d of (await academyStream).docs) { const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = (a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber;
@@ -153,24 +140,21 @@ async function collectSmsRecipients(
 
             // 5. Supplement: wave_briefing_registrations
             const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("state", "phone", "phoneNumber", "name", "firstName", "surname").get();
-            for (const d of (await briefStream).docs) {
-                const r: any = d.data();
+            for (const d of (await briefStream).docs) { const r: any = d.data();
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
             }
 
             // 6. Supplement: farm_nation_inquiries
             const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").get();
-            for (const d of (await fnStream).docs) {
-                const a: any = d.data();
+            for (const d of (await fnStream).docs) { const a: any = d.data();
                 if (filters.state && !isStateMatch(a.state, filters.state)) continue;
                 add(a.phone || a.phoneNumber, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
             }
 
             // 7. Supplement: export_onboarding_applications
             const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").get();
-            for (const d of (await exportStream).docs) {
-                const a: any = d.data();
+            for (const d of (await exportStream).docs) { const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
@@ -178,8 +162,7 @@ async function collectSmsRecipients(
 
             break;
         }
-        case "buyers": {
-            const stream = db
+        case "buyers": { const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
@@ -194,8 +177,7 @@ async function collectSmsRecipients(
         }
         case "sellers":
         case "wholesale_sellers":
-        case "retail_sellers": {
-            let q: FirebaseFirestore.Query = db
+        case "retail_sellers": { let q: FirebaseFirestore.Query = db
                 .collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("status", "==", filters.sellerStatus || "approved");
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
@@ -210,14 +192,12 @@ async function collectSmsRecipients(
             }
             
             const uMap = await resolveUsers(db, userIds);
-            for (const userId of userIds) {
-                const u = uMap.get(userId);
+            for (const userId of userIds) { const u = uMap.get(userId);
                 if (u) add(u.phone || u.phoneNumber, u.fullName || u.name || "Seller");
             }
             break;
         }
-        case "marketplace_onboarded": {
-            const stream = db
+        case "marketplace_onboarded": { const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
@@ -230,8 +210,7 @@ async function collectSmsRecipients(
             }
             break;
         }
-        case "cooperative_members": {
-            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name").get();
+        case "cooperative_members": { const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name").get();
             const userIds: string[] = [];
             const members: any[] = [];
             for (const d of (await stream).docs) {
@@ -266,8 +245,7 @@ async function collectSmsRecipients(
             }
             break;
         }
-        case "academy_users": {
-            // Primary: academy_applications collection
+        case "academy_users": { // Primary: academy_applications collection
             const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
@@ -281,8 +259,7 @@ async function collectSmsRecipients(
                 .where("roles", "array-contains", "academy_participant")
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name")
                 .get();
-            for (const d of (await usersStream).docs) {
-                const u: any = d.data();
+            for (const d of (await usersStream).docs) { const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Academy User");
@@ -293,14 +270,12 @@ async function collectSmsRecipients(
                 .where("type", "==", "academy_registration")
                 .select("phone", "customerPhone", "customerName", "fullName")
                 .get();
-            for (const d of (await ppStream).docs) {
-                const p: any = d.data();
+            for (const d of (await ppStream).docs) { const p: any = d.data();
                 add(p.phone || p.customerPhone, p.customerName || p.fullName || "Academy User");
             }
             break;
         }
-        case "export_users": {
-            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").get();
+        case "export_users": { const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
@@ -313,8 +288,7 @@ async function collectSmsRecipients(
                 .where("roles", "array-contains", "export_member")
                 .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name")
                 .get();
-            for (const d of (await usersStream).docs) {
-                const u: any = d.data();
+            for (const d of (await usersStream).docs) { const u: any = d.data();
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber || (u.kyc && u.kyc.phoneNumber), u.fullName || u.name || "Export User");
@@ -334,14 +308,12 @@ async function collectSmsRecipients(
                 .where("type", "==", "farm_nation")
                 .select("phone", "customerPhone", "customerName")
                 .get();
-            for (const d of (await ppStream).docs) {
-                const p: any = d.data();
+            for (const d of (await ppStream).docs) { const p: any = d.data();
                 add(p.phone || p.customerPhone, p.customerName || "Farm Nation User");
             }
             break;
         }
-        case "abandoned_failed_transactions": {
-            const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerPhone", "phone", "customerName").get();
+        case "abandoned_failed_transactions": { const stream = db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerPhone", "phone", "customerName").get();
             const userIds: string[] = [];
             const failedPayments: any[] = [];
             for (const d of (await stream).docs) {
@@ -351,8 +323,7 @@ async function collectSmsRecipients(
             }
             
             const uMap = await resolveUsers(db, userIds);
-            for (const f of failedPayments) {
-                const phone = f.customerPhone || f.phone;
+            for (const f of failedPayments) { const phone = f.customerPhone || f.phone;
                 const name = f.customerName || "User";
                 if (phone) {
                     add(phone, name);
@@ -363,14 +334,12 @@ async function collectSmsRecipients(
                 if (!u) continue;
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                if (u.phone || u.phoneNumber) {
-                    add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
+                if (u.phone || u.phoneNumber) { add(u.phone || u.phoneNumber, f.customerName || u.fullName || u.name || "User");
                 }
             }
             break;
         }
-        case "unpaid_applicants": {
-            // Cross-module: everyone with paymentStatus "pending", "unpaid", or "failed".
+        case "unpaid_applicants": { // Cross-module: everyone with paymentStatus "pending", "unpaid", or "failed".
             const [coopSnap, acadSnap] = await Promise.all([
                 db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                     .where("paymentStatus", "in", ["pending", "unpaid", "failed"])
@@ -425,8 +394,7 @@ async function collectSmsRecipients(
             }
             break;
         }
-        case "custom": {
-            if (filters.customRecipients && Array.isArray(filters.customRecipients)) {
+        case "custom": { if (filters.customRecipients && Array.isArray(filters.customRecipients)) {
                 filters.customRecipients.forEach(phone => {
                     add(phone, "Custom User");
                 });
@@ -445,17 +413,18 @@ async function collectSmsRecipients(
  */
 export async function previewSmsBroadcastAction(
     filters: SmsFilters
-): Promise<SmsBroadcastPreview> {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { count: 0, sample: [], error: "Unauthorized: admin role required" };
-    try {
-        const recipients = await collectSmsRecipients(filters);
+): Promise<SmsBroadcastPreview> { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
+    try { const recipients = await collectSmsRecipients(filters);
         return {
-            count: recipients.length,
-            sample: recipients.slice(0, 3),
+            success: true,
+            error: null,
+            data: {
+                count: recipients.length,
+                sample: recipients.slice(0, 3)
+            }
         };
-    } catch (error: any) {
-        return { count: 0, sample: [], error: error.message };
+    } catch (error: any) { return { success: false, error: error.message, data: null };
     }
 }
 
@@ -466,13 +435,11 @@ export async function previewSmsBroadcastAction(
 export async function sendSmsBroadcastAction(
     filters: SmsFilters,
     message: string
-): Promise<SmsBroadcastResult> {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false as const, sent: 0, failed: 0, skipped: 0, error: "Unauthorized: admin role required" };
-    try {
-        const recipients = await collectSmsRecipients(filters);
+): Promise<SmsBroadcastResult> { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
+    try { const recipients = await collectSmsRecipients(filters);
         if (recipients.length === 0) {
-            return { success: false as const, sent: 0, failed: 0, skipped: 0, error: "No recipients with valid phone numbers matched your filters." };
+            return { success: false, error: "No recipients with valid phone numbers matched your filters.", data: null };
         }
 
         let sent = 0;
@@ -481,8 +448,7 @@ export async function sendSmsBroadcastAction(
 
         // Send in batches of 10 with a 1s pause between batches
         const BATCH = 10;
-        for (let i = 0; i < recipients.length; i += BATCH) {
-            const chunk = recipients.slice(i, i + BATCH);
+        for (let i = 0; i < recipients.length; i += BATCH) { const chunk = recipients.slice(i, i + BATCH);
             const results = await Promise.allSettled(
                 chunk.map((r) => sendSMS(r.phone, message))
             );
@@ -495,8 +461,7 @@ export async function sendSmsBroadcastAction(
 
         // Persist broadcast log
         const db = getAdminDb();
-        const logRef = await db.collection("sms_broadcast_logs").add({
-            message,
+        const logRef = await db.collection("sms_broadcast_logs").add({ message,
             audience: filters.audience,
             filters,
             sentBy: "admin",
@@ -505,11 +470,9 @@ export async function sendSmsBroadcastAction(
             sent,
             failed,
             skipped,
-            status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial",
-        });
+            status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial" });
 
-        return { success: true as const, sent, failed, skipped, logId: logRef.id };
-    } catch (error: any) {
-        return { success: false as const, sent: 0, failed: 0, skipped: 0, error: error.message };
+        return { success: true, error: null, data: { sent, failed, skipped, logId: logRef.id } };
+    } catch (error: any) { return { success: false, error: error.message, data: null };
     }
 }

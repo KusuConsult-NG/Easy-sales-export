@@ -19,12 +19,11 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
+import { ActionResponse } from "@/lib/safe-action";
 
-function isStateMatch(dbState: any, filterState: string | undefined): boolean {
-    if (!filterState) return true;
+function isStateMatch(dbState: any, filterState: string | undefined): boolean { if (!filterState) return true;
     if (!dbState || typeof dbState !== 'string') return false;
-    return dbState.toLowerCase().includes(filterState.toLowerCase());
-}
+    return dbState.toLowerCase().includes(filterState.toLowerCase()); }
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -48,28 +47,24 @@ import type { Notification } from "@/lib/types/firestore";
 
 export type NotificationType = Notification["type"];
 
-export interface InAppBroadcastFilters {
-    audience: InAppAudience;
+export interface InAppBroadcastFilters { audience: InAppAudience;
     state?: string;
-    sellerStatus?: "pending" | "approved" | "suspended";
-}
+    sellerStatus?: "pending" | "approved" | "suspended"; }
 
-export interface InAppBroadcastPreview {
+export type InAppBroadcastPreview = ActionResponse<{
     count: number;
     sample: { name: string; userId: string }[];
-}
+}>;
 
-export interface InAppBroadcastResult {
-    error: null, success: boolean;
+export type InAppBroadcastResult = ActionResponse<{
     delivered: number;
     logId?: string;
-}
+}>;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Collect unique user IDs based on audience filter */
-async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
-    const compact = Array.from(new Set(userIds.filter(Boolean)));
+async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) { const compact = Array.from(new Set(userIds.filter(Boolean)));
     const map = new Map<string, any>();
     for (let i = 0; i < compact.length; i += 100) {
         const batch = compact.slice(i, i + 100).map((id) => db.collection(COLLECTIONS.USERS).doc(id));
@@ -84,18 +79,15 @@ async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) 
 
 export async function collectRecipientUserIds(
     filters: InAppBroadcastFilters
-): Promise<{ userId: string; name: string }[]> {
-    const authCheck = await requireAdmin();
+): Promise<{ userId: string; name: string }[]> { const authCheck = await requireAdmin();
     if ("error" in authCheck) throw new Error("Unauthorized: admin role required");
     const db = getAdminDb();
     const recipients: Map<string, { userId: string; name: string }> = new Map();
 
-    const add = (userId: string, name: string) => {
-        if (userId && !recipients.has(userId)) recipients.set(userId, { userId, name });
+    const add = (userId: string, name: string) => { if (userId && !recipients.has(userId)) recipients.set(userId, { userId, name });
     };
 
-    switch (filters.audience) {
-        case "all": {
+    switch (filters.audience) { case "all": {
             // 1. Primary: root users collection
             const stream = db.collection(COLLECTIONS.USERS)
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
@@ -126,8 +118,7 @@ export async function collectRecipientUserIds(
 
             // 4. Supplement: academy_applications
             const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state").get();
-            for (const d of (await academyStream).docs) {
-                const a = d.data();
+            for (const d of (await academyStream).docs) { const a = d.data();
                 const userState = a.personalInfo?.state || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
@@ -151,8 +142,7 @@ export async function collectRecipientUserIds(
 
             // 7. Supplement: export_applications
             const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("userId", "profile", "companyInfo", "state").get();
-            for (const d of (await exportStream).docs) {
-                const a = d.data();
+            for (const d of (await exportStream).docs) { const a = d.data();
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
@@ -160,8 +150,7 @@ export async function collectRecipientUserIds(
 
             break;
         }
-        case "buyers": {
-            const stream = db
+        case "buyers": { const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "both"])
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
@@ -176,8 +165,7 @@ export async function collectRecipientUserIds(
         }
         case "sellers":
         case "wholesale_sellers":
-        case "retail_sellers": {
-            let q: FirebaseFirestore.Query = db
+        case "retail_sellers": { let q: FirebaseFirestore.Query = db
                 .collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("status", "==", filters.sellerStatus || "approved");
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
@@ -192,8 +180,7 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "marketplace_onboarded": {
-            const stream = db
+        case "marketplace_onboarded": { const stream = db
                 .collection(COLLECTIONS.USERS)
                 .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
@@ -206,8 +193,7 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "cooperative_members": {
-            // We use .get() for smaller auxiliary queries but we select minimum fields
+        case "cooperative_members": { // We use .get() for smaller auxiliary queries but we select minimum fields
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .select("userId", "firstName", "lastName", "state", "address")
                 .get();
@@ -239,8 +225,7 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "academy_users": {
-            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+        case "academy_users": { const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .select("userId", "personalInfo", "state")
                 .get();
             for (const d of (await stream).docs) {
@@ -251,8 +236,7 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "export_users": {
-            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+        case "export_users": { const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .select("userId", "profile", "companyInfo", "state")
                 .get();
             for (const d of (await stream).docs) {
@@ -287,8 +271,7 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "unpaid_applicants": {
-            // Cross-module: everyone with paymentStatus "pending", "unpaid", or "failed".
+        case "unpaid_applicants": { // Cross-module: everyone with paymentStatus "pending", "unpaid", or "failed".
             const [coopSnap, acadSnap] = await Promise.all([
                 db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                     .where("paymentStatus", "in", ["pending", "unpaid", "failed"])
@@ -329,8 +312,7 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "abandoned_failed_transactions": {
-            const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerName").get();
+        case "abandoned_failed_transactions": { const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).select("userId", "customerName").get();
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const f = d.data();
@@ -358,17 +340,18 @@ export async function collectRecipientUserIds(
  */
 export async function previewInAppBroadcastAction(
     filters: InAppBroadcastFilters
-): Promise<InAppBroadcastPreview> {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { count: 0, sample: [], error: "Unauthorized: admin role required" };
-    try {
-        const recipients = await collectRecipientUserIds(filters);
+): Promise<InAppBroadcastPreview> { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
+    try { const recipients = await collectRecipientUserIds(filters);
         return {
-            count: recipients.length,
-            sample: recipients.slice(0, 3),
+            success: true,
+            error: null,
+            data: {
+                count: recipients.length,
+                sample: recipients.slice(0, 3)
+            }
         };
-    } catch (error: any) {
-        return { count: 0, sample: [], error: error.message };
+    } catch (error: any) { return { success: false, error: error.message, data: null };
     }
 }
 
@@ -383,23 +366,20 @@ export async function sendInAppBroadcastAction(
     type: NotificationType = "info",
     link?: string,
     linkText?: string
-): Promise<InAppBroadcastResult> {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false as const, delivered: 0, error: "Unauthorized: admin role required" };
-    try {
-        const db = getAdminDb();
+): Promise<InAppBroadcastResult> { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
+    try { const db = getAdminDb();
         const recipients = await collectRecipientUserIds(filters);
 
         if (recipients.length === 0) {
-            return { success: false as const, delivered: 0, error: "No recipients matched the selected filters." };
+            return { success: false, error: "No recipients matched the selected filters.", data: null };
         }
 
         let delivered = 0;
 
         // Firestore batch limit is 500 writes per batch
         const BATCH_LIMIT = 500;
-        for (let i = 0; i < recipients.length; i += BATCH_LIMIT) {
-            const chunk = recipients.slice(i, i + BATCH_LIMIT);
+        for (let i = 0; i < recipients.length; i += BATCH_LIMIT) { const chunk = recipients.slice(i, i + BATCH_LIMIT);
             const batch = db.batch();
             chunk.forEach(({ userId }) => {
                 const ref = db.collection(COLLECTIONS.NOTIFICATIONS).doc();
@@ -413,16 +393,14 @@ export async function sendInAppBroadcastAction(
                     read: false,
                     // `broadcastId` lets us track that this notification originated from an admin broadcast
                     broadcastId: `BROADCAST-${Date.now()}`,
-                    createdAt: FieldValue.serverTimestamp(),
-                });
+                    createdAt: FieldValue.serverTimestamp() });
             });
             await batch.commit();
             delivered += chunk.length;
         }
 
         // Write a log entry
-        const logRef = await db.collection("inapp_broadcast_logs").add({
-            title,
+        const logRef = await db.collection("inapp_broadcast_logs").add({ title,
             message,
             type,
             link: link || null,
@@ -433,11 +411,9 @@ export async function sendInAppBroadcastAction(
             sentAt: FieldValue.serverTimestamp(),
             totalRecipients: recipients.length,
             delivered,
-            status: "done",
-        });
+            status: "done" });
 
-        return { success: true as const, delivered, logId: logRef.id };
-    } catch (error: any) {
-        return { success: false as const, delivered: 0, error: error.message };
+        return { success: true, error: null, data: { delivered, logId: logRef.id } };
+    } catch (error: any) { return { success: false, error: error.message, data: null };
     }
 }

@@ -13,16 +13,11 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
  * Combines membership and transaction queries into a single server action
  * for improved performance
  */
-export async function getDashboardDataAction() {
-    try {
+export async function getDashboardDataAction() { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-        if (!session?.user) {
-            return {
-                success: false as const,
-                error: "Not authenticated",
-            };
+        if (!session?.user) { return { success: false as const, error: "Not authenticated", data: null };
         }
 
         const userId = session.user.id;
@@ -39,8 +34,7 @@ export async function getDashboardDataAction() {
             if (docSnap.exists) {
                 logger.info(`[getDashboardData] Found membership via DocID fallback for user: ${userId}`);
                 // Mock a snapshot-like structure for the code below
-                membershipSnapshot = {
-                    empty: false,
+                membershipSnapshot = { empty: false,
                     size: 1,
                     docs: [docSnap]
                 } as any;
@@ -56,16 +50,12 @@ export async function getDashboardDataAction() {
 
         if (membershipSnapshot.empty) {
             logger.warn(`[getDashboardData] No membership found in ${COLLECTIONS.COOPERATIVE_MEMBERS} for user: ${userId}`);
-            return {
-                success: false as const,
-                error: `No cooperative membership found for ${userId}`,
-            };
+            return { success: false as const, error: `No cooperative membership found for ${userId}` };
         }
 
         logger.info(`[getDashboardData] Found ${membershipSnapshot.size} membership docs for user: ${userId}`);
 
-        const sortedDocs = membershipSnapshot.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+        const sortedDocs = membershipSnapshot.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
             const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
@@ -74,25 +64,17 @@ export async function getDashboardDataAction() {
 
         // Memory sort transactions since DB index is missing
         const rawTransactions = serializeDocs<CooperativeTransaction>(transactionsSnapshot.docs);
-        const transactions = rawTransactions.sort((a, b) => {
-            const aTime = new Date(a.date).getTime();
+        const transactions = rawTransactions.sort((a, b) => { const aTime = new Date(a.date).getTime();
             const bTime = new Date(b.date).getTime();
             return bTime - aTime;
         }).slice(0, 10); // Keep only recent 10
 
-        return {
-            error: null, success: true as const,
-            data: { membership, transactions },
-            meta: null,
-            error: null
+        return { error: null, success: true as const, data: null,
+            meta: null
         };
 
 
-    } catch (error) {
-        logger.error("Dashboard data fetch error:", error);
-        return {
-            success: false as const,
-            error: error instanceof Error ? error.message : "Failed to load dashboard data",
-        };
+    } catch (error) { logger.error("Dashboard data fetch error:", error);
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to load dashboard data", data: null };
     }
 }

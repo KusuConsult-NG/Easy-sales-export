@@ -7,14 +7,14 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log-admin";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
+import { ActionResponse } from "@/lib/safe-action";
 
 /**
  * Payment Tracking & Verification System
  * MIGRATED TO FIREBASE-ADMIN for server-side security
  */
 
-export interface PaymentRecord {
-    id?: string;
+export interface PaymentRecord { id?: string;
     userId: string;
     userEmail: string;
     amount: number;
@@ -27,14 +27,12 @@ export interface PaymentRecord {
     metadata?: Record<string, any>;
     initiatedAt: FieldValue | Timestamp;
     completedAt?: FieldValue | Timestamp;
-    paystackResponse?: any;
-}
+    paystackResponse?: any; }
 
 /**
  * Create payment record
  */
-export async function createPaymentRecordAction(data: {
-    userId: string;
+export async function createPaymentRecordAction(data: { userId: string;
     userEmail: string;
     amount: number;
     currency: string;
@@ -42,24 +40,19 @@ export async function createPaymentRecordAction(data: {
     paymentMethod: "paystack" | "bank_transfer" | "cash";
     purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string;
-    metadata?: Record<string, any>;
-}): Promise<{ error: string | null, success: boolean; paymentId?: string }> {
-    try {
+    metadata?: Record<string, any>; }): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error, data: null };
 
-        const payment: Omit<PaymentRecord, "id"> = {
-            ...data,
+        const payment: Omit<PaymentRecord, "id"> = { ...data,
             status: "pending",
             paymentMethod: data.paymentMethod,
             purpose: data.purpose,
-            initiatedAt: FieldValue.serverTimestamp(),
-        };
+            initiatedAt: FieldValue.serverTimestamp() };
 
         const docRef = await db.collection(COLLECTIONS.PAYMENTS).add(payment);
 
-        await createAdminAuditLog({
-            action: "payment_initiated",
+        await createAdminAuditLog({ action: "payment_initiated",
             userId: data.userId,
             userEmail: data.userEmail,
             targetId: docRef.id,
@@ -67,14 +60,11 @@ export async function createPaymentRecordAction(data: {
             metadata: {
                 amount: data.amount,
                 purpose: data.purpose,
-                reference: data.paymentReference,
-            },
-        });
+                reference: data.paymentReference } });
 
-        return { error: null, success: true as const, paymentId: docRef.id };
-    } catch (error) {
-        logger.error("Payment record creation error:", error);
-        return { success: false as const, error: "Failed to create payment record" };
+        return { success: true, error: null, data: { paymentId: docRef.id } };
+    } catch (error) { logger.error("Payment record creation error:", error);
+        return { success: false, error: "Failed to create payment record", data: null };
     }
 }
 
@@ -84,25 +74,22 @@ export async function createPaymentRecordAction(data: {
 export async function verifyPaymentAction(
     paymentReference: string,
     paystackResponse: any
-): Promise<{ error: string | null, success: boolean;  }> {
-    try {
+): Promise<ActionResponse<any>> { try {
         // Find payment by reference
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("paymentReference", "==", paymentReference)
             .get();
 
         if (snapshot.empty) {
-            return { success: false as const, error: "Payment not found" };
+            return { success: false, error: "Payment not found", data: null };
         }
 
         const paymentDoc = snapshot.docs[0];
         const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentDoc.id);
 
-        await paymentRef.update({
-            status: "success",
+        await paymentRef.update({ status: "success",
             completedAt: FieldValue.serverTimestamp(),
-            paystackResponse,
-        });
+            paystackResponse });
 
         const paymentData = paymentDoc.data() as PaymentRecord;
 
@@ -111,27 +98,23 @@ export async function verifyPaymentAction(
             paymentData.userId,
             paymentData.amount,
             paymentDoc.id,
-            {
-                purpose: paymentData.purpose,
-                reference: paymentReference,
-            }
+            { purpose: paymentData.purpose,
+                reference: paymentReference }
         );
 
         // Handle post-payment actions based on purpose
         await handlePostPaymentActions(paymentData, paymentDoc.id);
 
-        return { error: null, success: true as const };
-    } catch (error) {
-        logger.error("Payment verification error:", error);
-        return { success: false as const, error: "Failed to verify payment" };
+        return { success: true, error: null, data: null };
+    } catch (error) { logger.error("Payment verification error:", error);
+        return { success: false, error: "Failed to verify payment", data: null };
     }
 }
 
 /**
  * Handle post-payment actions
  */
-async function handlePostPaymentActions(payment: PaymentRecord, paymentId: string) {
-    try {
+async function handlePostPaymentActions(payment: PaymentRecord, paymentId: string) { try {
         switch (payment.purpose) {
             case "escrow_payment":
                 if (payment.relatedId) {
@@ -140,52 +123,44 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                     await escrowRef.update({
                         status: "held",
                         paymentReference: payment.paymentReference,
-                        paidAt: FieldValue.serverTimestamp(),
-                    });
+                        paidAt: FieldValue.serverTimestamp() });
                 }
                 break;
 
             case "export_slot":
-                if (payment.relatedId) {
-                    // Update slot status to "paid"
+                if (payment.relatedId) { // Update slot status to "paid"
                     const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc(payment.relatedId);
                     await slotRef.update({
                         status: "paid",
-                        paidAt: FieldValue.serverTimestamp(),
-                    });
+                        paidAt: FieldValue.serverTimestamp() });
                 }
                 break;
 
             case "loan_repayment":
-                if (payment.relatedId) {
-                    // Record the installment
+                if (payment.relatedId) { // Record the installment
                     await db.collection(COLLECTIONS.LOAN_REPAYMENTS).add({
                         loanId: payment.relatedId,
                         userId: payment.userId,
                         amount: payment.amount,
                         paymentReference: payment.paymentReference,
                         paymentId,
-                        paidAt: FieldValue.serverTimestamp(),
-                    });
+                        paidAt: FieldValue.serverTimestamp() });
                     // Update the parent loan's amountRepaid and status
                     const loanRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS).doc(payment.relatedId);
                     const loanSnap = await loanRef.get();
-                    if (loanSnap.exists) {
-                        const loanData = loanSnap.data()!;
+                    if (loanSnap.exists) { const loanData = loanSnap.data()!;
                         const newRepaid = (loanData.amountRepaid || 0) + payment.amount;
                         const isFullyRepaid = newRepaid >= (loanData.amount || 0);
                         await loanRef.update({
                             amountRepaid: newRepaid,
                             status: isFullyRepaid ? "repaid" : "active",
-                            lastRepaymentAt: FieldValue.serverTimestamp(),
-                        });
+                            lastRepaymentAt: FieldValue.serverTimestamp() });
                     }
                 }
                 break;
 
             case "cooperative_contribution":
-                if (payment.relatedId) {
-                    // Log the contribution record
+                if (payment.relatedId) { // Log the contribution record
                     await db.collection(COLLECTIONS.COOPERATIVE_CONTRIBUTIONS).add({
                         memberId: payment.relatedId,
                         userId: payment.userId,
@@ -193,30 +168,25 @@ async function handlePostPaymentActions(payment: PaymentRecord, paymentId: strin
                         paymentReference: payment.paymentReference,
                         paymentId,
                         contributedAt: FieldValue.serverTimestamp(),
-                        type: "monthly",
-                    });
+                        type: "monthly" });
                     // Increment member's totalContributions in cooperative_members
                     const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(payment.relatedId);
-                    await memberRef.update({
-                        totalContributions: FieldValue.increment(payment.amount),
-                        lastContributionAt: FieldValue.serverTimestamp(),
-                    });
+                    await memberRef.update({ totalContributions: FieldValue.increment(payment.amount),
+                        lastContributionAt: FieldValue.serverTimestamp() });
                 }
                 break;
 
             default:
                 break;
         }
-    } catch (error) {
-        logger.error("Post-payment action error:", error);
+    } catch (error) { logger.error("Post-payment action error:", error);
     }
 }
 
 /**
  * Get user payment history
  */
-export async function getUserPaymentHistoryAction(userId: string): Promise<PaymentRecord[]> {
-    try {
+export async function getUserPaymentHistoryAction(userId: string): Promise<PaymentRecord[]> { try {
         const sessionResult = await requireSession();
         if (sessionResult.error) return [];
 
@@ -225,8 +195,7 @@ export async function getUserPaymentHistoryAction(userId: string): Promise<Payme
             .get();
 
         return serializeDocs<PaymentRecord>(snapshot.docs);
-    } catch (error) {
-        logger.error("Failed to fetch payment history:", error);
+    } catch (error) { logger.error("Failed to fetch payment history:", error);
         return [];
     }
 }
@@ -236,8 +205,7 @@ export async function getUserPaymentHistoryAction(userId: string): Promise<Payme
  */
 export async function getPaymentByReferenceAction(
     paymentReference: string
-): Promise<PaymentRecord | null> {
-    try {
+): Promise<PaymentRecord | null> { try {
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
             .where("paymentReference", "==", paymentReference)
             .get();
@@ -247,8 +215,7 @@ export async function getPaymentByReferenceAction(
         }
 
         return serializeDoc<PaymentRecord>(snapshot.docs[0].id, snapshot.docs[0].data());
-    } catch (error) {
-        logger.error("Failed to fetch payment:", error);
+    } catch (error) { logger.error("Failed to fetch payment:", error);
         return null;
     }
 }

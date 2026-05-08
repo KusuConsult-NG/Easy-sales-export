@@ -10,20 +10,18 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export interface SendResetEmailState {
-    error: null, success: boolean;
-}
+export type SendResetEmailState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
-export interface ResetPasswordState {
-    error: null, success: boolean;
-}
+export type ResetPasswordState = 
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
 
 /**
  * Generate a secure random token for password reset
  */
-function generateResetToken(): string {
-    return crypto.randomBytes(32).toString('hex');
-}
+function generateResetToken(): string { return crypto.randomBytes(32).toString('hex'); }
 
 /**
  * Send password reset email to user
@@ -32,31 +30,25 @@ function generateResetToken(): string {
 export async function sendResetEmailAction(
     prevState: SendResetEmailState,
     formData: FormData
-): Promise<SendResetEmailState> {
-    try {
+): Promise<SendResetEmailState> { try {
         const rawEmail = formData.get('email') as string;
 
         if (!rawEmail) {
-            return { success: false, error: 'Email is required' };
+            return { success: false as const, error: 'Email is required', data: null };
         }
         
         const email = rawEmail.trim().toLowerCase();
 
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            return { success: false as const, error: 'Invalid email format' };
+        if (!emailRegex.test(email)) { return { success: false as const, error: 'Invalid email format', data: null };
         }
 
         const auth = getAuth();
-        try {
-            await auth.getUserByEmail(email);
-        } catch (error) {
-            // For security, don't reveal if email exists or not
-            return {
-                success: true as const,
-                error: null
-            };
+        try { await auth.getUserByEmail(email);
+        } catch (error) { // For security, don't reveal if email exists or not
+            return { success: true as const, error: null
+ };
         }
 
         // Generate reset token
@@ -64,8 +56,7 @@ export async function sendResetEmailAction(
         const expiry = Date.now() + 3600000; // 1 hour from now
 
         // Store reset token in Firestore
-        await db.collection(COLLECTIONS.PASSWORD_RESETS).add({
-            email,
+        await db.collection(COLLECTIONS.PASSWORD_RESETS).add({ email,
             token,
             expiry,
             used: false,
@@ -116,24 +107,14 @@ export async function sendResetEmailAction(
             `
         });
 
-        if (error) {
-            logger.error('Resend API Error (password reset):', error);
-            return {
-                success: false as const,
-                error: 'Failed to send reset email. Please try again later.'
-            };
+        if (error) { logger.error('Resend API Error (password reset):', error);
+            return { success: false as const, error: 'Failed to send reset email. Please try again later.', data: null };
         }
 
-        return {
-            success: true as const,
-            error: null
-        };
-    } catch (error) {
-        logger.error('Failed to send reset email:', error);
-        return {
-            success: false as const,
-            error: 'Failed to send reset email. Please try again later.'
-        };
+        return { success: true as const, error: null
+ };
+    } catch (error) { logger.error('Failed to send reset email:', error);
+        return { success: false as const, error: 'Failed to send reset email. Please try again later.', data: null };
     }
 }
 
@@ -143,23 +124,20 @@ export async function sendResetEmailAction(
 export async function resetPasswordAction(
     prevState: ResetPasswordState,
     formData: FormData
-): Promise<ResetPasswordState> {
-    try {
+): Promise<ResetPasswordState> { try {
         const token = formData.get('token') as string;
         const password = formData.get('password') as string;
         const confirmPassword = formData.get('confirmPassword') as string;
 
         // Validation
         if (!token || !password || !confirmPassword) {
-            return { success: false as const, error: 'All fields are required' };
+            return { success: false as const, error: 'All fields are required', data: null };
         }
 
-        if (password !== confirmPassword) {
-            return { success: false as const, error: 'Passwords do not match' };
+        if (password !== confirmPassword) { return { success: false as const, error: 'Passwords do not match', data: null };
         }
 
-        if (password.length < 8) {
-            return { success: false as const, error: 'Password must be at least 8 characters' };
+        if (password.length < 8) { return { success: false as const, error: 'Password must be at least 8 characters', data: null };
         }
 
         // Find and validate token in Firestore
@@ -168,46 +146,35 @@ export async function resetPasswordAction(
             .where('used', '==', false)
             .get();
 
-        if (snapshot.empty) {
-            return { success: false as const, error: 'Invalid or expired reset token' };
+        if (snapshot.empty) { return { success: false as const, error: 'Invalid or expired reset token', data: null };
         }
 
         const resetDoc = snapshot.docs[0];
         const resetData = resetDoc.data();
 
         // Check if token has expired
-        if (Date.now() > resetData.expiry) {
-            return { success: false as const, error: 'Reset token has expired' };
+        if (Date.now() > resetData.expiry) { return { success: false as const, error: 'Reset token has expired', data: null };
         }
 
         // Update password in Firebase Auth
         const auth = getAuth();
-        try {
-            // Find user again to be sure (since resetData.email is trusted from DB)
+        try { // Find user again to be sure (since resetData.email is trusted from DB)
             const user = await auth.getUserByEmail(resetData.email);
             await auth.updateUser(user.uid, {
                 password: password
             });
-        } catch (error) {
-            logger.error('Failed to update password:', error);
-            return { success: false as const, error: 'Failed to update password' };
+        } catch (error) { logger.error('Failed to update password:', error);
+            return { success: false as const, error: 'Failed to update password', data: null };
         }
 
         // Mark token as used
-        await db.collection(COLLECTIONS.PASSWORD_RESETS).doc(resetDoc.id).update({
-            used: true,
+        await db.collection(COLLECTIONS.PASSWORD_RESETS).doc(resetDoc.id).update({ used: true,
             usedAt: FieldValue.serverTimestamp()
         });
 
-        return {
-            success: true as const,
-            error: null
-        };
-    } catch (error) {
-        logger.error('Password reset failed:', error);
-        return {
-            success: false as const,
-            error: 'Password reset failed. Please try again.'
-        };
+        return { success: true as const, error: null
+ };
+    } catch (error) { logger.error('Password reset failed:', error);
+        return { success: false as const, error: 'Password reset failed. Please try again.', data: null };
     }
 }

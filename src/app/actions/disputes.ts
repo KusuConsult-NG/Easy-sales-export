@@ -17,45 +17,36 @@ import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 /**
  * Create a new dispute for an order
  */
-async function _createDisputeAction(params: {
-    orderId: string;
+async function _createDisputeAction(params: { orderId: string;
     reason: DisputeReason;
     description: string;
-    evidenceUrls?: string[];
-}) {
-    let sessionResult;
+    evidenceUrls?: string[]; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const { orderId, reason, description, evidenceUrls = [] } = params;
 
-        if (description.length < 50) {
-            return { success: false as const, error: "Description must be at least 50 characters" };
+        if (description.length < 50) { return { success: false as const, error: "Description must be at least 50 characters", data: null };
         }
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
-        if (!orderDoc.exists) {
-            return { success: false as const, error: "Order not found" };
+        if (!orderDoc.exists) { return { success: false as const, error: "Order not found", data: null };
         }
 
         const order = orderDoc.data() as Order;
-        if (order.buyerId !== userId) {
-            return { success: false as const, error: "Not authorized" };
+        if (order.buyerId !== userId) { return { success: false as const, error: "Not authorized", data: null };
         }
 
-        if (order.status === "completed" || order.status === "cancelled") {
-            return { success: false as const, error: "Cannot dispute completed or cancelled orders" };
+        if (order.status === "completed" || order.status === "cancelled") { return { success: false as const, error: "Cannot dispute completed or cancelled orders", data: null };
         }
 
-        if (order.status === "pending_payment") {
-            return { success: false as const, error: "Cannot dispute an unpaid order" };
+        if (order.status === "pending_payment") { return { success: false as const, error: "Cannot dispute an unpaid order", data: null };
         }
 
-        if (order.status === "disputed") {
-            return { success: false as const, error: "Order already has an active dispute" };
+        if (order.status === "disputed") { return { success: false as const, error: "Order already has an active dispute", data: null };
         }
 
         const existingDisputes = await db.collection(COLLECTIONS.DISPUTES)
@@ -63,27 +54,23 @@ async function _createDisputeAction(params: {
             .where("status", "in", ["open", "under_review"])
             .get();
 
-        if (!existingDisputes.empty) {
-            return { success: false as const, error: "Active dispute already exists for this order" };
+        if (!existingDisputes.empty) { return { success: false as const, error: "Active dispute already exists for this order", data: null };
         }
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        await db.runTransaction(async (tx) => {
-            const freshOrderDoc = await tx.get(orderRef);
+        await db.runTransaction(async (tx) => { const freshOrderDoc = await tx.get(orderRef);
             if (!freshOrderDoc.exists) throw new Error("Order not found");
 
             const freshOrder = freshOrderDoc.data() as Order;
             if (freshOrder.status === "disputed") {
                 throw new Error("Order already has an active dispute");
             }
-            if (freshOrder.status === "completed" || freshOrder.status === "cancelled") {
-                throw new Error("Cannot dispute completed or cancelled orders");
+            if (freshOrder.status === "completed" || freshOrder.status === "cancelled") { throw new Error("Cannot dispute completed or cancelled orders");
             }
 
-            const disputeData: Partial<Dispute> = {
-                orderId,
+            const disputeData: Partial<Dispute> = { orderId,
                 buyerId: userId,
                 sellerId: freshOrder.sellerId,
                 reason,
@@ -92,26 +79,22 @@ async function _createDisputeAction(params: {
                 status: "open",
                 _version: 0,
                 createdAt: FieldValue.serverTimestamp() as any,
-                updatedAt: FieldValue.serverTimestamp() as any,
-            };
+                updatedAt: FieldValue.serverTimestamp() as any };
 
             tx.set(disputeRef, disputeData);
-            tx.update(orderRef, {
-                status: "disputed",
+            tx.update(orderRef, { status: "disputed",
                 disputeId: disputeRef.id,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
         });
 
-        return { error: null, success: true as const, data: { disputeId: disputeRef.id } };
-    } catch (error) {
-        logger.error("Create dispute error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Create dispute error:", {
             userId: sessionResult?.session?.user?.id,
             orderId: params.orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error instanceof Error ? error.message : "Failed to create dispute" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to create dispute", data: null };
     }
 }
 export const createDisputeAction = withFlexibleSafeAction("createDisputeAction", _createDisputeAction);
@@ -119,11 +102,10 @@ export const createDisputeAction = withFlexibleSafeAction("createDisputeAction",
 /**
  * Get buyer's disputes
  */
-async function _getBuyerDisputesAction() {
-    let sessionResult;
+async function _getBuyerDisputesAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -132,24 +114,21 @@ async function _getBuyerDisputesAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        const disputes: Dispute[] = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 ...data,
                 id: doc.id,
                 createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
                 updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined,
-            };
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined };
         }) as Dispute[];
 
-        return { error: null, success: true as const, data: { disputes } };
-    } catch (error) {
-        logger.error("Get buyer disputes error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get buyer disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch disputes" };
+        return { success: false as const, error: "Failed to fetch disputes", data: null };
     }
 }
 export const getBuyerDisputesAction = withFlexibleSafeAction("getBuyerDisputesAction", _getBuyerDisputesAction);
@@ -157,11 +136,10 @@ export const getBuyerDisputesAction = withFlexibleSafeAction("getBuyerDisputesAc
 /**
  * Get seller's disputes
  */
-async function _getSellerDisputesAction() {
-    let sessionResult;
+async function _getSellerDisputesAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -170,24 +148,21 @@ async function _getSellerDisputesAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        const disputes: Dispute[] = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 ...data,
                 id: doc.id,
                 createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
                 updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined,
-            };
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined };
         }) as Dispute[];
 
-        return { error: null, success: true as const, data: { disputes } };
-    } catch (error) {
-        logger.error("Get seller disputes error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get seller disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch disputes" };
+        return { success: false as const, error: "Failed to fetch disputes", data: null };
     }
 }
 export const getSellerDisputesAction = withFlexibleSafeAction("getSellerDisputesAction", _getSellerDisputesAction);
@@ -195,64 +170,54 @@ export const getSellerDisputesAction = withFlexibleSafeAction("getSellerDisputes
 /**
  * Get all disputes (Admin only)
  */
-async function _getAdminDisputesAction(options: {
-    status?: "open" | "under_review" | "resolved" | "closed" | "all";
+async function _getAdminDisputesAction(options: { status?: "open" | "under_review" | "resolved" | "closed" | "all";
     escalated?: boolean;
     limit?: number;
     search?: string;
     lastDocId?: string;
-    sortOrder?: "asc" | "desc";
-} = {}) {
-    let sessionResult;
+    sortOrder?: "asc" | "desc"; } = {}) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!hasRole(userData?.roles || [], "admin")) {
-            return { success: false as const, error: "Not authorized as admin" };
+        if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
         let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", sortDirection);
 
-        if (options.status && options.status !== "all") {
-            queryRef = db.collection(COLLECTIONS.DISPUTES)
+        if (options.status && options.status !== "all") { queryRef = db.collection(COLLECTIONS.DISPUTES)
                 .where("status", "==", options.status)
                 .orderBy("createdAt", sortDirection);
         }
 
-        if (options.escalated !== undefined) {
-            queryRef = db.collection(COLLECTIONS.DISPUTES)
+        if (options.escalated !== undefined) { queryRef = db.collection(COLLECTIONS.DISPUTES)
                 .where("escalated", "==", options.escalated)
                 .orderBy("createdAt", sortDirection);
         }
 
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.DISPUTES).doc(options.lastDocId).get();
+        if (options.lastDocId) { const lastDoc = await db.collection(COLLECTIONS.DISPUTES).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 queryRef = queryRef.startAfter(lastDoc);
             }
         }
 
         const snapshot = await queryRef.limit(fetchLimit).get();
-        let disputes: Dispute[] = snapshot.docs.map(doc => {
-            const data = doc.data();
+        let disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 ...data,
                 id: doc.id,
                 createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
                 updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
-                resolvedAt: data.resolvedAt ? (data.resolvedAt as Timestamp).toDate().toISOString() : null,
-            };
+                resolvedAt: data.resolvedAt ? (data.resolvedAt as Timestamp).toDate().toISOString() : null };
         }) as any[];
 
-        if (options.search) {
-            const q = options.search.toLowerCase();
+        if (options.search) { const q = options.search.toLowerCase();
             disputes = disputes.filter(d => 
                 d.id?.toLowerCase().includes(q) ||
                 d.orderId?.toLowerCase().includes(q) ||
@@ -263,20 +228,13 @@ async function _getAdminDisputesAction(options: {
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { 
-            error: null, success: true as const, 
-            data: {
-                disputes,
-                lastDocId: nextCursor,
-                hasMore: !!nextCursor
-            }
+        return { error: null, success: true as const, data: null
         };
-    } catch (error) {
-        logger.error("Get admin disputes error:", {
+    } catch (error) { logger.error("Get admin disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch disputes for admin" };
+        return { success: false as const, error: "Failed to fetch disputes for admin", data: null };
     }
 }
 export const getAdminDisputesAction = withFlexibleSafeAction("getAdminDisputesAction", _getAdminDisputesAction);
@@ -284,17 +242,15 @@ export const getAdminDisputesAction = withFlexibleSafeAction("getAdminDisputesAc
 /**
  * Get single dispute by ID
  */
-async function _getDisputeByIdAction(disputeId: string) {
-    let sessionResult;
+async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
-        if (!disputeDoc.exists) {
-            return { success: false as const, error: "Dispute not found" };
+        if (!disputeDoc.exists) { return { success: false as const, error: "Dispute not found", data: null };
         }
 
         const dispute = disputeDoc.data() as Dispute;
@@ -305,26 +261,22 @@ async function _getDisputeByIdAction(disputeId: string) {
         const isBuyer = dispute.buyerId === userId;
         const isSeller = dispute.sellerId === userId;
 
-        if (!isAdmin && !isBuyer && !isSeller) {
-            return { success: false as const, error: "Not authorized to view this dispute" };
+        if (!isAdmin && !isBuyer && !isSeller) { return { success: false as const, error: "Not authorized to view this dispute", data: null };
         }
 
-        const disputeData: Dispute = {
-            ...dispute,
+        const disputeData: Dispute = { ...dispute,
             id: disputeDoc.id,
             createdAt: (dispute.createdAt as unknown as Timestamp)?.toDate ? (dispute.createdAt as unknown as Timestamp).toDate() : dispute.createdAt,
             updatedAt: (dispute.updatedAt as unknown as Timestamp)?.toDate ? (dispute.updatedAt as unknown as Timestamp).toDate() : dispute.updatedAt,
-            resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt,
-        } as Dispute;
+            resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt } as Dispute;
 
-        return { error: null, success: true as const, data: { dispute: disputeData } };
-    } catch (error) {
-        logger.error("Get dispute error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get dispute error:", {
             disputeId,
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch dispute details" };
+        return { success: false as const, error: "Failed to fetch dispute details", data: null };
     }
 }
 export const getDisputeByIdAction = withFlexibleSafeAction("getDisputeByIdAction", _getDisputeByIdAction);
@@ -337,29 +289,25 @@ async function _updateDisputeStatusAction(
     resolution: DisputeResolution,
     adminNotes: string,
     refundAmount?: number
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        if (!hasRole(userData?.roles || [], "admin")) {
-            return { success: false as const, error: "Not authorized as admin" };
+        if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
-        if (!disputeDoc.exists) {
-            return { success: false as const, error: "Dispute not found" };
+        if (!disputeDoc.exists) { return { success: false as const, error: "Dispute not found", data: null };
         }
 
         const dispute = disputeDoc.data() as Dispute;
 
-        if (dispute.status === "resolved" || dispute.status === "closed") {
-            return { success: false as const, error: `Dispute is already '${dispute.status}'` };
+        if (dispute.status === "resolved" || dispute.status === "closed") { return { success: false as const, error: `Dispute is already '${dispute.status}'` };
         }
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
@@ -373,57 +321,46 @@ async function _updateDisputeStatusAction(
                 throw new Error(`Dispute is already '${freshDispute.status}'`);
             }
 
-            const updateData: Record<string, unknown> = {
-                status: "resolved",
+            const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
                 adminId: userId,
                 adminNotes,
                 resolvedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            };
+                _version: FieldValue.increment(1) };
 
-            if (refundAmount !== undefined) {
-                updateData.refundAmount = refundAmount;
+            if (refundAmount !== undefined) { updateData.refundAmount = refundAmount;
             }
 
             tx.update(disputeRef, updateData);
 
-            if (freshDispute.orderId) {
-                const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(freshDispute.orderId);
+            if (freshDispute.orderId) { const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(freshDispute.orderId);
                 let newOrderStatus: string;
 
                 if (resolution === "refund_buyer") {
                     newOrderStatus = "cancelled";
-                } else if (resolution === "release_seller") {
-                    newOrderStatus = "completed";
-                } else {
-                    newOrderStatus = "completed";
+                } else if (resolution === "release_seller") { newOrderStatus = "completed";
+                } else { newOrderStatus = "completed";
                 }
 
-                tx.update(orderRef, {
-                    status: newOrderStatus,
+                tx.update(orderRef, { status: newOrderStatus,
                     updatedAt: FieldValue.serverTimestamp(),
-                    _version: FieldValue.increment(1),
-                });
+                    _version: FieldValue.increment(1) });
             }
         });
 
         // Invalidate Cache
-        try {
-            await invalidateAdminGlobalStats();
-        } catch (err) {
-            logger.error("Cache invalidation failed after dispute resolution", err);
+        try { await invalidateAdminGlobalStats();
+        } catch (err) { logger.error("Cache invalidation failed after dispute resolution", err);
         }
 
-        return { error: null, success: true as const, data: { message: "Dispute status updated successfully" } };
-    } catch (error) {
-        logger.error("Update dispute error:", {
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Update dispute error:", {
             disputeId,
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error instanceof Error ? error.message : "Failed to update dispute status" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to update dispute status", data: null };
     }
 }
 export const updateDisputeStatusAction = withFlexibleSafeAction("updateDisputeStatusAction", _updateDisputeStatusAction);

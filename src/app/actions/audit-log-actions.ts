@@ -12,73 +12,53 @@ import { getCached, setCache } from "@/lib/redis";
 /**
  * Get audit logs with enhanced filtering
  */
-export async function getAuditLogsAction(filters: {
-    userId?: string;
+export async function getAuditLogsAction(filters: { userId?: string;
     userEmail?: string;
     action?: AuditAction;
     severity?: AuditSeverity;
     startDate?: string;
     endDate?: string;
     limit?: number;
-    lastDocId?: string;
-}): Promise<{ error: string | null, success: boolean,  
-    data: AuditLogEntry[]; 
-    logs: AuditLogEntry[]; 
-    lastDocId?: string; 
-    hasMore?: boolean 
-} | { 
-    
-    data?: AuditLogEntry[]; 
-    logs?: AuditLogEntry[]; 
-    lastDocId?: undefined; 
-    hasMore?: false 
-}> {
-    try {
+    lastDocId?: string; }): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
-        if (!hasAdminRole) {
-            return { success: false as const, error: "Admin access required" };
+        if (!hasAdminRole) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         let q = db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc");
 
         // Apply filters
-        if (filters.userId) {
-            q = q.where("userId", "==", filters.userId);
+        if (filters.userId) { q = q.where("userId", "==", filters.userId);
         }
 
-        if (filters.userEmail) {
-            q = q.where("userEmail", "==", filters.userEmail);
+        if (filters.userEmail) { q = q.where("userEmail", "==", filters.userEmail);
         }
 
-        if (filters.action) {
-            q = q.where("action", "==", filters.action);
+        if (filters.action) { q = q.where("action", "==", filters.action);
         }
 
-        if (filters.severity) {
-            q = q.where("severity", "==", filters.severity);
+        if (filters.severity) { q = q.where("severity", "==", filters.severity);
         }
 
-        if (filters.startDate) {
-            q = q.where("timestamp", ">=", new Date(filters.startDate));
+        if (filters.startDate) { q = q.where("timestamp", ">=", new Date(filters.startDate));
         }
 
-        if (filters.endDate) {
-            q = q.where("timestamp", "<=", new Date(filters.endDate));
+        if (filters.endDate) { q = q.where("timestamp", "<=", new Date(filters.endDate));
         }
 
-        if (filters.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.AUDIT_LOGS).doc(filters.lastDocId).get();
+        if (filters.lastDocId) { const lastDoc = await db.collection(COLLECTIONS.AUDIT_LOGS).doc(filters.lastDocId).get();
             if (lastDoc.exists) {
                 q = q.startAfter(lastDoc);
             }
@@ -93,59 +73,50 @@ export async function getAuditLogsAction(filters: {
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { 
-            success: true as const, 
-            error: null,
-            data: logs,       // consumed by useAdminData (looks for result.data)
-            logs,             // consumed by audit.ts wrapper + exportAuditLogsCSV
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor
-        };
-    } catch (error: any) {
-        logger.error("Failed to fetch audit logs:", error);
-        return { success: false as const, error: error.message || "Failed to fetch audit logs" };
+        return { success: true as const, error: null, data: logs, // consumed by useAdminData (looks for result.data)
+            logs, // consumed by audit.ts wrapper + exportAuditLogsCSV
+            lastDocId: nextCursor, hasMore: !!nextCursor
+ };
+    } catch (error: any) { logger.error("Failed to fetch audit logs:", error);
+        return { success: false as const, error: error.message || "Failed to fetch audit logs", data: null };
     }
 }
 
 /**
  * Export audit logs to CSV
  */
-export async function exportAuditLogsCSV(filters: {
-    userId?: string;
+export async function exportAuditLogsCSV(filters: { userId?: string;
     userEmail?: string;
     action?: AuditAction;
     severity?: AuditSeverity;
     startDate?: string;
-    endDate?: string;
-}): Promise<{ success: true, csv: string; error: null } | { success: false; error: string; csv?: undefined }> {
-    try {
+    endDate?: string; }): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
-        if (!hasAdminRole) {
-            return { success: false as const, error: "Admin access required" };
+        if (!hasAdminRole) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         // Get logs (no limit for export)
         const result = await getAuditLogsAction(filters);
 
-        if (!result.success || !result.logs) {
-            return { success: false as const, error: result.error || "Failed to fetch logs" };
+        if (!result.success || !result.logs) { return { success: false as const, error: result.error || "Failed to fetch logs", data: null };
         }
 
         // Generate CSV
         const headers = ["Timestamp", "Severity", "Action", "User ID", "User Email", "Target Type", "Target ID", "Details"];
-        const rows = result.logs.map((log: any) => {
-            let timestampStr = "";
+        const rows = result.logs.map((log: any) => { let timestampStr = "";
             if (typeof log.timestamp === "string") timestampStr = log.timestamp;
             else if (log.timestamp?.toDate) timestampStr = log.timestamp.toDate().toISOString();
             else timestampStr = String(log.timestamp);
@@ -164,57 +135,44 @@ export async function exportAuditLogsCSV(filters: {
 
         const csvContent = [
             headers.join(","),
-            ...rows.map((row) =>
+            ...rows.map((row: string[]) =>
                 row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")
             ),
         ].join("\n");
 
-        return { success: true as const, csv: csvContent };
-    } catch (error: any) {
-        logger.error("Failed to export audit logs:", error);
-        return { success: false as const, error: error.message || "Failed to export logs" };
+        return { error: null,  success: true as const, csv: csvContent , data: null };
+    } catch (error: any) { logger.error("Failed to export audit logs:", error);
+        return { success: false as const, error: error.message || "Failed to export logs"};
     }
 }
 
 /**
  * Get audit log statistics
  */
-export async function getAuditStatsAction(days: number = 30): Promise<{ error: string | null, success: boolean, 
-    stats: {
-        totalLogs: number;
-        bySeverity: { info: number; warning: number; critical: number };
-        topActions: { action: string; count: number }[];
-        topUsers: { userId: string; userEmail: string; count: number }[];
-    };
-} | {
-    
-    stats?: undefined;
-}> {
-    try {
+export async function getAuditStatsAction(days: number = 30): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required"};
         }
 
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
-        if (!hasAdminRole) {
-            return { success: false as const, error: "Admin access required" };
+        if (!hasAdminRole) { return { success: false as const, error: "Admin access required"};
         }
 
         const cacheKey = `admin:audit-stats:${days}`;
-        try {
-            const cachedStats = await getCached<any>(cacheKey);
+        try { const cachedStats = await getCached<any>(cacheKey);
             if (cachedStats) {
-                return { error: null, success: true as const, stats: cachedStats };
+                return { error: null, success: true as const, stats: cachedStats , data: null };
             }
-        } catch (e) {
-            // cache bypass on error
+        } catch (e) { // cache bypass on error
         }
 
         const startDate = new Date();
@@ -226,21 +184,17 @@ export async function getAuditStatsAction(days: number = 30): Promise<{ error: s
         const logs = serializeDocs(snapshot.docs) as unknown as AuditLogEntry[];
 
         // Calculate statistics
-        const stats = {
-            totalLogs: logs.length,
+        const stats = { totalLogs: logs.length,
             bySeverity: {
                 info: logs.filter((l) => l.severity === "info").length,
                 warning: logs.filter((l) => l.severity === "warning").length,
-                critical: logs.filter((l) => l.severity === "critical").length,
-            },
+                critical: logs.filter((l) => l.severity === "critical").length },
             topActions: [] as { action: string; count: number }[],
-            topUsers: [] as { userId: string; userEmail: string; count: number }[],
-        };
+            topUsers: [] as { userId: string; userEmail: string; count: number }[] };
 
         // Top actions
         const actionCounts: Record<string, number> = {};
-        logs.forEach((log) => {
-            actionCounts[log.action] = (actionCounts[log.action] || 0) + 1;
+        logs.forEach((log) => { actionCounts[log.action] = (actionCounts[log.action] || 0) + 1;
         });
         stats.topActions = Object.entries(actionCounts)
             .map(([action, count]) => ({ action, count }))
@@ -249,8 +203,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{ error: s
 
         // Top users
         const userCounts: Record<string, { email: string; count: number }> = {};
-        logs.forEach((log) => {
-            if (!userCounts[log.userId]) {
+        logs.forEach((log) => { if (!userCounts[log.userId]) {
                 userCounts[log.userId] = { email: log.userEmail || "Unknown", count: 0 };
             }
             userCounts[log.userId].count++;
@@ -260,15 +213,12 @@ export async function getAuditStatsAction(days: number = 30): Promise<{ error: s
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
 
-        try {
-            await setCache(cacheKey, stats, 120); // Cache for 2 minutes
-        } catch (e) {
-            // silent fail
+        try { await setCache(cacheKey, stats, 120); // Cache for 2 minutes
+        } catch (e) { // silent fail
         }
 
-        return { success: true as const, stats };
-    } catch (error: any) {
-        logger.error("Failed to fetch audit stats:", error);
-        return { success: false as const, error: error.message || "Failed to fetch statistics" };
+        return { error: null,  success: true as const, stats , data: null };
+    } catch (error: any) { logger.error("Failed to fetch audit stats:", error);
+        return { success: false as const, error: error.message || "Failed to fetch statistics", data: null };
     }
 }

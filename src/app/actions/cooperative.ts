@@ -9,25 +9,21 @@ import { logAuditAction } from "@/app/actions/audit";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
-import {
-    contributionSchema,
+import { contributionSchema,
     cooperativeMembershipSchema,
     loanApplicationSchema,
     fixedSavingsSchema,
     type MembershipRegistrationState,
     type LoanApplicationState,
     type FixedSavingsState,
-    type WithdrawalActionState
-} from "@/lib/types/cooperative";
+    type WithdrawalActionState } from "@/lib/types/cooperative";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
-import type {
-    CooperativeMembership,
+import type { CooperativeMembership,
     CooperativeTransaction,
     JoinCooperativeState,
     MakeContributionState,
     GetMembershipState,
-    GetTransactionsState
-} from "@/lib/types/cooperative";
+    GetTransactionsState } from "@/lib/types/cooperative";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 
@@ -57,13 +53,11 @@ import { revalidatePath } from "next/cache";
  */
 async function _initiateCooperativePaymentAction(
     tier: "Member" = "Member"
-): Promise<MembershipRegistrationState> {
-    try {
+): Promise<MembershipRegistrationState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -74,18 +68,15 @@ async function _initiateCooperativePaymentAction(
 
         // Check if already active or paid
         const memberDoc = await memberRef.get();
-        if (memberDoc.exists) {
-            const data = memberDoc.data();
+        if (memberDoc.exists) { const data = memberDoc.data();
             if (data?.membershipStatus === "active") {
-                return { error: "You are already an active cooperative member.", success: false as const };
+                return { error: "You are already an active cooperative member.", success: false as const, data: null };
             }
-            if (data?.paymentStatus === "completed") {
-                return { error: "You have already paid. Please proceed to onboarding.", success: false as const };
+            if (data?.paymentStatus === "completed") { return { error: "You have already paid. Please proceed to onboarding.", success: false as const, data: null };
             }
         }
 
-        await memberRef.set({
-            userId,
+        await memberRef.set({ userId,
             membershipTier: tier,
             registrationFee,
             membershipStatus: "pending",
@@ -93,63 +84,48 @@ async function _initiateCooperativePaymentAction(
             paymentStatus: memberDoc.exists && memberDoc.data()?.paymentStatus === "completed" ? "completed" : "pending",
             updatedAt: FieldValue.serverTimestamp(),
             // Preserve creation date if exists
-            createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp(),
-        }, { merge: true });
+            createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp() }, { merge: true });
 
         // Initialize Paystack
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!paystackSecretKey) {
-            return { error: "Payment system not configured", success: false as const };
+        if (!paystackSecretKey) { return { error: "Payment system not configured", success: false as const, data: null };
         }
 
         const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${paystackSecretKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                email: session.user.email,
+                "Content-Type": "application/json" },
+            body: JSON.stringify({ email: session.user.email,
                 amount: registrationFee * 100,
                 channels: ["bank_transfer", "card", "bank", "ussd"], // Broaden allowed channels to prevent payment failures
                 metadata: {
                     userId,
                     membershipId: userId,
                     membershipTier: tier,
-                    type: "cooperative_membership_registration",
-                },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback`,
-            }),
-        });
+                    type: "cooperative_membership_registration" },
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/cooperatives/payment/callback` }) });
 
-        if (!paystackResponse.ok) {
-            return { error: "Failed to initialize payment", success: false as const };
+        if (!paystackResponse.ok) { return { error: "Failed to initialize payment", success: false as const, data: null };
         }
 
         const paystackData = await paystackResponse.json();
 
-        if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return { error: "Failed to generate payment link", success: false as const };
+        if (!paystackData.status || !paystackData.data?.authorization_url) { return { error: "Failed to generate payment link", success: false as const, data: null };
         }
 
         // Save reference
-        await memberRef.update({
-            paymentReference: paystackData.data.reference,
-        });
+        await memberRef.update({ paymentReference: paystackData.data.reference });
 
-        return {
-            success: true as const,
-            error: null,
-            data: { message: "Payment link generated", paymentUrl: paystackData.data.authorization_url },
+        return { error: null,  success: true as const,
             meta: null
-        };
+        , data: null };
 
-    } catch (error) {
-        logger.error("Initiate cooperative payment failed:", {
+    } catch (error) { logger.error("Initiate cooperative payment failed:", {
             tier,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to initiate payment", success: false as const };
+        return { error: "Failed to initiate payment", success: false as const, data: null };
     }
 }
 export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiateCooperativePaymentAction", _initiateCooperativePaymentAction);
@@ -160,13 +136,11 @@ export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiate
  */
 export async function registerCooperativeMemberAction(
     formData: FormData
-): Promise<MembershipRegistrationState> {
-    try {
+): Promise<MembershipRegistrationState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in to register", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in to register", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -182,30 +156,25 @@ export async function registerCooperativeMemberAction(
         let isLegacyImport = false;
         const membershipTier = (memberData?.membershipTier ?? "Member") as "Member";
 
-        if (inviteToken) {
-            if (existingMember.exists && memberData?.onboardingCompleted) {
-                 return { error: "You have already completed onboarding.", success: false as const };
+        if (inviteToken) { if (existingMember.exists && memberData?.onboardingCompleted) {
+                 return { error: "You have already completed onboarding.", success: false as const, data: null };
             }
             // Validate the token to allow bypassing payment
             const inviteRes = await validateCooperativeInviteAction(inviteToken);
-            if (!inviteRes.success) {
-                return { error: inviteRes.error || "Invalid invitation token", success: false as const };
+            if (!inviteRes.success) { return { error: inviteRes.error || "Invalid invitation token", success: false as const, data: null };
             }
             isLegacyImport = true;
-        } else {
-            // Legacy check
+        } else { // Legacy check
             if (!existingMember.exists) {
-                return { error: "No membership record found. Please complete payment first.", success: false as const };
+                return { error: "No membership record found. Please complete payment first.", success: false as const, data: null };
             }
 
-            if (memberData?.onboardingCompleted) {
-                return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const };
+            if (memberData?.onboardingCompleted) { return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const, data: null };
             }
 
             // 🔒 Verify Payment Status (Authoritative)
             isLegacyImport = Boolean(memberData?._importSource);
-            if (!isLegacyImport && memberData?.paymentStatus !== "completed") {
-                // Double check processedPayments collection
+            if (!isLegacyImport && memberData?.paymentStatus !== "completed") { // Double check processedPayments collection
                 const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                     .where("userId", "==", userId)
                     .where("type", "==", "cooperative_membership_registration")
@@ -214,17 +183,13 @@ export async function registerCooperativeMemberAction(
                     .get();
 
                 if (authPayment.empty) {
-                    return {
-                        error: "Payment not verified. Please ensure you have completed the payment step.",
-                        success: false as const,
-                    };
+                    return { error: "Payment not verified. Please ensure you have completed the payment step.", success: false as const, data: null };
                 }
             }
         }
 
         // Parse and validate form data
-        const rawData = {
-            firstName: formData.get("firstName") as string,
+        const rawData = { firstName: formData.get("firstName") as string,
             otherName: (formData.get("otherName") as string) || undefined,
             lastName: formData.get("lastName") as string,
             dateOfBirth: formData.get("dateOfBirth") as string,
@@ -238,16 +203,11 @@ export async function registerCooperativeMemberAction(
             nextOfKinName: formData.get("nextOfKinName") as string,
             nextOfKinPhone: formData.get("nextOfKinPhone") as string,
             nextOfKinAddress: formData.get("nextOfKinAddress") as string,
-            membershipTier: membershipTier,
-        };
+            membershipTier: membershipTier };
 
         // Validate with Zod
         const validationResult = cooperativeMembershipSchema.safeParse(rawData);
-        if (!validationResult.success) {
-            return {
-                error: validationResult.error.issues[0]?.message || "Validation failed",
-                success: false
-            };
+        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Validation failed", success: false as const, data: null };
         }
 
         const validatedData = validationResult.data;
@@ -269,16 +229,13 @@ export async function registerCooperativeMemberAction(
         const phoneDoc = coopPhoneExists.docs?.[0];
         const emailDoc = coopEmailExists.docs?.[0];
 
-        if (!coopPhoneExists.empty && phoneDoc?.id !== userId) {
-            return { error: "A cooperative member with this phone number already exists.", success: false as const };
+        if (!coopPhoneExists.empty && phoneDoc?.id !== userId) { return { error: "A cooperative member with this phone number already exists.", success: false as const, data: null };
         }
-        if (!coopEmailExists.empty && emailDoc?.id !== userId) {
-            return { error: "A cooperative member with this email address already exists.", success: false as const };
+        if (!coopEmailExists.empty && emailDoc?.id !== userId) { return { error: "A cooperative member with this email address already exists.", success: false as const, data: null };
         }
 
         // Update membership record with profile data
-        const updatedData = {
-            firstName: validatedData.firstName,
+        const updatedData = { firstName: validatedData.firstName,
             otherName: validatedData.otherName || null,
             lastName: validatedData.lastName,
             fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
@@ -294,22 +251,14 @@ export async function registerCooperativeMemberAction(
             nextOfKin: {
                 name: validatedData.nextOfKinName,
                 phone: validatedData.nextOfKinPhone,
-                address: validatedData.nextOfKinAddress,
-            },
-            documents: {
-                validId: formData.get("validIdUrl") ? {
+                address: validatedData.nextOfKinAddress },
+            documents: { validId: formData.get("validIdUrl") ? {
                     name: formData.get("validIdName") as string,
-                    url: formData.get("validIdUrl") as string,
-                } : undefined,
-                passportPhoto: formData.get("passportPhotoUrl") ? {
-                    name: formData.get("passportPhotoName") as string,
-                    url: formData.get("passportPhotoUrl") as string,
-                } : undefined,
-                proofOfAddress: formData.get("proofOfAddressUrl") ? {
-                    name: formData.get("proofOfAddressName") as string,
-                    url: formData.get("proofOfAddressUrl") as string,
-                } : undefined,
-            },
+                    url: formData.get("validIdUrl") as string } : undefined,
+                passportPhoto: formData.get("passportPhotoUrl") ? { name: formData.get("passportPhotoName") as string,
+                    url: formData.get("passportPhotoUrl") as string } : undefined,
+                proofOfAddress: formData.get("proofOfAddressUrl") ? { name: formData.get("proofOfAddressName") as string,
+                    url: formData.get("proofOfAddressUrl") as string } : undefined },
             bvn: formData.get("bvn") as string || undefined,
             // Flat state field for SMS geo-filter broadcast queries
             state: validatedData.stateOfOrigin,
@@ -322,18 +271,15 @@ export async function registerCooperativeMemberAction(
         };
 
         // If from an invite, mark them as paid and from an invite source
-        if (inviteToken) {
-            Object.assign(updatedData, {
+        if (inviteToken) { Object.assign(updatedData, {
                 paymentStatus: "completed",
                 _importSource: "email_invite",
                 userId: userId,
-                createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp(),
-            });
+                createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp() });
         }
 
         // Save to Firestore using a transaction for atomicity
-        await db.runTransaction(async (transaction) => {
-            // Re-read for version check
+        await db.runTransaction(async (transaction) => { // Re-read for version check
             const freshMember = await transaction.get(existingMemberRef);
             const freshData = freshMember.data();
 
@@ -350,8 +296,7 @@ export async function registerCooperativeMemberAction(
             transaction.set(existingMemberRef, updatedData, { merge: true });
 
             // 2. If an invite token was used, mark it as completed
-            if (inviteToken) {
-                transaction.update(db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(inviteToken), {
+            if (inviteToken) { transaction.update(db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(inviteToken), {
                     status: "used",
                     usedBy: userId,
                     usedAt: FieldValue.serverTimestamp()
@@ -359,8 +304,7 @@ export async function registerCooperativeMemberAction(
             }
 
             // 3. Update user service registration and sync profile data
-            transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), {
-                "serviceRegistrations.cooperatives.status": "pending",
+            transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), { "serviceRegistrations.cooperatives.status": "pending",
                 "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
                 "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
 
@@ -381,8 +325,7 @@ export async function registerCooperativeMemberAction(
                 "address.lga": validatedData.lga,
                 "address.street": validatedData.residentialAddress,
 
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         });
 
         // 5. Post-Commit Side Effects (Secondary Integrations)
@@ -393,26 +336,17 @@ export async function registerCooperativeMemberAction(
             }).catch(err => logger.error("Deferred audit log failed:", err));
         }
 
-        try {
-            await invalidateUserCache(userId);
-        } catch (err) {
-            logger.error("Failed to invalidate cache after Cooperative application:", err);
+        try { await invalidateUserCache(userId);
+        } catch (err) { logger.error("Failed to invalidate cache after Cooperative application:", err);
         }
 
-        return {
-            error: null,
-            success: true as const,
-            data: { message: "Application submitted successfully." },
+        return { error: null, success: true as const,
             meta: null
-        };
-    } catch (error) {
-        logger.error("Membership registration failed:", {
+        , data: null };
+    } catch (error) { logger.error("Membership registration failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: error instanceof Error ? error.message : "Registration failed. Please try again.",
-            success: false
-        };
+        return { error: error instanceof Error ? error.message : "Registration failed. Please try again.", success: false as const, data: null };
     }
 }
 
@@ -423,13 +357,11 @@ export async function registerCooperativeMemberAction(
 export async function joinCooperativeAction(
     cooperativeId: string,
     initialContribution: number = 0
-): Promise<JoinCooperativeState> {
-    try {
+): Promise<JoinCooperativeState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in to join a cooperative", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in to join a cooperative", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -438,8 +370,7 @@ export async function joinCooperativeAction(
         const cooperativeRef = db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId);
         const cooperativeDoc = await cooperativeRef.get();
 
-        if (!cooperativeDoc.exists) {
-            return { error: "Cooperative not found", success: false as const };
+        if (!cooperativeDoc.exists) { return { error: "Cooperative not found", success: false as const, data: null };
         }
 
         // Check if user is already a member
@@ -449,16 +380,14 @@ export async function joinCooperativeAction(
             .where("cooperativeId", "==", cooperativeId)
             .get();
 
-        if (!existingMembership.empty) {
-            return { error: "You are already a member of this cooperative", success: false as const };
+        if (!existingMembership.empty) { return { error: "You are already a member of this cooperative", success: false as const, data: null };
         }
 
         // Atomic batch: all 3-4 writes committed together so no partial state on crash.
         const batch = db.batch();
 
         const newMemberRef = membershipsRef.doc();
-        batch.set(newMemberRef, {
-            userId,
+        batch.set(newMemberRef, { userId,
             cooperativeId,
             savingsBalance: initialContribution,
             loanBalance: 0,
@@ -467,12 +396,10 @@ export async function joinCooperativeAction(
             status: "active"
         });
 
-        const cooperativeUpdateData: Record<string, FieldValue | number> = {
-            memberCount: FieldValue.increment(1)
+        const cooperativeUpdateData: Record<string, FieldValue | number> = { memberCount: FieldValue.increment(1)
         };
 
-        if (initialContribution > 0) {
-            const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
+        if (initialContribution > 0) { const txRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
             batch.set(txRef, {
                 userId,
                 cooperativeId,
@@ -484,8 +411,7 @@ export async function joinCooperativeAction(
             });
 
             // Universal ledger sync
-            batch.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), {
-                id: txRef.id,
+            batch.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), { id: txRef.id,
                 userId,
                 type: "contribution",
                 module: "cooperative",
@@ -506,57 +432,41 @@ export async function joinCooperativeAction(
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");
 
-        return {
-            error: null,
-            success: true as const,
-            data: { message: "Successfully joined the cooperative" },
+        return { error: null, success: true as const,
             meta: null
-        };
-    } catch (error) {
-        logger.error("Join cooperative failed:", {
+        , data: null };
+    } catch (error) { logger.error("Join cooperative failed:", {
             cooperativeId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: error instanceof Error ? error.message : "Failed to join cooperative",
-            success: false
-        };
+        return { error: error instanceof Error ? error.message : "Failed to join cooperative", success: false as const, data: null };
     }
 }
 
 async function _makeContributionAction(
     prevState: MakeContributionState,
     formData: FormData
-): Promise<MakeContributionState> {
-    try {
+): Promise<MakeContributionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in to make a contribution", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in to make a contribution", success: false as const, data: null };
         }
 
         const userId = session.user.id;
 
         // Parse and validate form data
-        const rawData = {
-            cooperativeId: formData.get("cooperativeId") as string,
+        const rawData = { cooperativeId: formData.get("cooperativeId") as string,
             amount: Number(formData.get("amount")),
-            type: formData.get("type") as "savings" | "loan_repayment",
-        };
+            type: formData.get("type") as "savings" | "loan_repayment" };
 
         const validationResult = contributionSchema.safeParse(rawData);
-        if (!validationResult.success) {
-            return {
-                error: validationResult.error.issues[0]?.message || "Invalid contribution data",
-                success: false
-            };
+        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Invalid contribution data", success: false as const, data: null };
         }
 
         const { cooperativeId, amount, type } = validationResult.data!;
 
-        if (amount <= 0) {
-            return { error: "Contribution amount must be positive", success: false as const };
+        if (amount <= 0) { return { error: "Contribution amount must be positive", success: false as const, data: null };
         }
 
         // Verify membership
@@ -566,8 +476,7 @@ async function _makeContributionAction(
             .where("cooperativeId", "==", cooperativeId)
             .get();
 
-        if (membershipSnapshot.empty) {
-            return { error: "You are not a member of this cooperative", success: false as const };
+        if (membershipSnapshot.empty) { return { error: "You are not a member of this cooperative", success: false as const, data: null };
         }
 
         const membershipDoc = membershipSnapshot.docs[0];
@@ -575,8 +484,7 @@ async function _makeContributionAction(
         // Atomic transaction: Record contribution + update both balances in one commit.
         // Without this, two concurrent contributions can both read the old balance
         // before either write lands, causing double-counting in cooperative totals.
-        await db.runTransaction(async (t) => {
-            // Re-read membership inside transaction for consistency
+        await db.runTransaction(async (t) => { // Re-read membership inside transaction for consistency
             const freshMembership = await t.get(membershipDoc.ref);
             if (!freshMembership.exists) throw new Error("Membership not found");
 
@@ -592,8 +500,7 @@ async function _makeContributionAction(
             });
 
             // Universal ledger sync
-            t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), {
-                id: txRef.id,
+            t.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(txRef.id), { id: txRef.id,
                 userId,
                 type: type,
                 module: "cooperative",
@@ -605,15 +512,12 @@ async function _makeContributionAction(
                 description: type === "savings" ? "Savings contribution" : "Loan repayment"
             });
 
-            if (type === "savings") {
-                t.update(membershipDoc.ref, {
+            if (type === "savings") { t.update(membershipDoc.ref, {
                     savingsBalance: FieldValue.increment(amount)
                 });
-                t.update(db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId), {
-                    totalSavings: FieldValue.increment(amount)
+                t.update(db.collection(COLLECTIONS.COOPERATIVES).doc(cooperativeId), { totalSavings: FieldValue.increment(amount)
                 });
-            } else {
-                t.update(membershipDoc.ref, {
+            } else { t.update(membershipDoc.ref, {
                     loanBalance: FieldValue.increment(-amount)
                 });
             }
@@ -622,20 +526,11 @@ async function _makeContributionAction(
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");
 
-        return {
-            error: null,
-            success: true as const,
-            data: { message: `Successfully contributed ₦${amount.toLocaleString()}` },
-            meta: null
-        };
-    } catch (error) {
-        logger.error("Contribution failed:", {
+        return { error: null, success: true as const, data: null, meta: null };
+    } catch (error) { logger.error("Contribution failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: error instanceof Error ? error.message : "Failed to make contribution",
-            success: false
-        };
+        return { error: error instanceof Error ? error.message : "Failed to make contribution", success: false as const, data: null };
     }
 }
 export const makeContributionAction = withFlexibleSafeAction("makeContributionAction", _makeContributionAction);
@@ -643,13 +538,11 @@ export const makeContributionAction = withFlexibleSafeAction("makeContributionAc
 async function _submitWithdrawalAction(
     prevState: WithdrawalActionState,
     formData: FormData
-): Promise<WithdrawalActionState> {
-    try {
+): Promise<WithdrawalActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -658,18 +551,14 @@ async function _submitWithdrawalAction(
         const bankAccountStr = formData.get("bankAccount") as string;
         let bankAccount = null;
 
-        if (isNaN(amount) || amount <= 0) {
-            return { error: "Amount must be greater than zero", success: false as const };
+        if (isNaN(amount) || amount <= 0) { return { error: "Amount must be greater than zero", success: false as const, data: null };
         }
 
-        try {
-            bankAccount = bankAccountStr ? JSON.parse(bankAccountStr) : null;
-        } catch (e) {
-            return { error: "Invalid bank account details", success: false as const };
+        try { bankAccount = bankAccountStr ? JSON.parse(bankAccountStr) : null;
+        } catch (e) { return { error: "Invalid bank account details", success: false as const, data: null };
         }
 
-        await db.runTransaction(async (transaction) => {
-            // Verify membership and balance
+        await db.runTransaction(async (transaction) => { // Verify membership and balance
             const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
             const membershipDoc = await transaction.get(membershipsRef.doc(userId));
             if (!membershipDoc.exists || membershipDoc.data()?.membershipStatus !== "active") {
@@ -677,20 +566,17 @@ async function _submitWithdrawalAction(
             }
 
             const currentBalance = membershipDoc.data()?.savingsBalance || 0;
-            if (amount > currentBalance) {
-                throw new Error("Insufficient savings balance");
+            if (amount > currentBalance) { throw new Error("Insufficient savings balance");
             }
 
             // Deduct funds IMMEDIATELY (Escrow pattern)
-            transaction.update(membershipDoc.ref, {
-                savingsBalance: FieldValue.increment(-amount),
+            transaction.update(membershipDoc.ref, { savingsBalance: FieldValue.increment(-amount),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
             // Create withdrawal request
             const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc();
-            transaction.set(withdrawalRef, {
-                userId,
+            transaction.set(withdrawalRef, { userId,
                 amount,
                 reason: reason || "Standard Withdrawal",
                 bankAccount,
@@ -709,28 +595,22 @@ async function _submitWithdrawalAction(
         });
 
         revalidatePath("/cooperatives/withdrawals");
-        return { 
-            success: true as const, 
-            error: null,
-            data: { message: "Withdrawal request submitted for review. Funds have been reserved." },
+        return { error: null,  success: true as const,
             meta: null
-        };
-    } catch (error) {
-        logger.error("Withdrawal error:", {
+        , data: null };
+    } catch (error) { logger.error("Withdrawal error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "Failed to submit withdrawal", success: false as const };
+        return { error: error instanceof Error ? error.message : "Failed to submit withdrawal", success: false as const, data: null };
     }
 }
 export const submitWithdrawalAction = withFlexibleSafeAction("submitWithdrawalAction", _submitWithdrawalAction);
 
-async function _getMembershipAction(): Promise<GetMembershipState> {
-    try {
+async function _getMembershipAction(): Promise<GetMembershipState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const };
+        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const, data: null };
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -738,30 +618,26 @@ async function _getMembershipAction(): Promise<GetMembershipState> {
             .where("userId", "==", userId)
             .get();
 
-        if (snapshot.empty) {
-            return { error: "No membership found", success: false as const };
+        if (snapshot.empty) { return { error: "No membership found", success: false as const, data: null };
         }
 
         const doc = snapshot.docs[0];
         const membership = serializeDoc<CooperativeMembership>(doc.id, doc.data());
 
-        return { success: true as const, error: null, data: { membership } };
-    } catch (error) {
-        logger.error("Get membership error:", {
+        return { error: null,  success: true as const, data: { membership } };
+    } catch (error) { logger.error("Get membership error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false as const };
+        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false as const, data: null };
     }
 }
 export const getMembershipAction = withFlexibleSafeAction("getMembershipAction", _getMembershipAction);
 
-async function _getTransactionsAction(): Promise<GetTransactionsState> {
-    try {
+async function _getTransactionsAction(): Promise<GetTransactionsState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const };
+        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const, data: null };
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -772,24 +648,21 @@ async function _getTransactionsAction(): Promise<GetTransactionsState> {
 
         const transactions = serializeDocs<CooperativeTransaction>(snapshot.docs);
 
-        return { success: true as const, error: null, data: { transactions } };
-    } catch (error) {
-        logger.error("Get transactions error:", {
+        return { error: null,  success: true as const, data: { transactions } };
+    } catch (error) { logger.error("Get transactions error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false as const };
+        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false as const, data: null };
     }
 }
 export const getTransactionsAction = withFlexibleSafeAction("getTransactionsAction", _getTransactionsAction);
 
-async function _getUserTierAction(): Promise<{
-    error: null, success: boolean;
-    data?: {
+async function _getUserTierAction(): Promise<{ success: true; error: null; data: {
         tier: "Member" | null;
         totalContributions: number;
-    }
-}> {
-    try {
+    } }
+    | { success: false; error: string; data: null }
+> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { error: "Action failed", success: false as const, data: { tier: null, totalContributions: 0 } };
         const { session } = sessionResult;
@@ -797,8 +670,7 @@ async function _getUserTierAction(): Promise<{
         const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
         const membershipDoc = await membershipRef.get();
 
-        if (!membershipDoc.exists) {
-            return { error: null, success: true as const, data: { tier: null, totalContributions: 0 } };
+        if (!membershipDoc.exists) { return { error: null, success: true as const, data: { tier: null, totalContributions: 0 } };
         }
 
         const data = membershipDoc.data();
@@ -811,8 +683,7 @@ async function _getUserTierAction(): Promise<{
         const tier = calculateUserTier(totalContributions);
 
         return { error: null, success: true as const, data: { tier, totalContributions } };
-    } catch (error) {
-        logger.error("Failed to get user tier:", {
+    } catch (error) { logger.error("Failed to get user tier:", {
             error: error instanceof Error ? error.message : String(error)
         });
         return { error: "Action failed", success: false as const, data: { tier: null, totalContributions: 0 } };
@@ -824,8 +695,7 @@ export const getUserTierAction = withFlexibleSafeAction("getUserTierAction", _ge
 // Check Cooperative Application Status Action
 // ============================================
 
-async function _checkCooperativeStatusAction(): Promise<string | null> {
-    try {
+async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
@@ -841,8 +711,7 @@ async function _checkCooperativeStatusAction(): Promise<string | null> {
             userData?.serviceRegistrations?.cooperative ||
             userData?.serviceRegistrations?.cooperatives;
 
-        if (registration?.status) {
-            // 'legacy_pending_onboarding' is a sentinel set by the import script.
+        if (registration?.status) { // 'legacy_pending_onboarding' is a sentinel set by the import script.
             // Pass it through so OnboardingClient knows to show the form without payment.
             return registration.status;
         }
@@ -852,8 +721,7 @@ async function _checkCooperativeStatusAction(): Promise<string | null> {
             .doc(session.user.id)
             .get();
 
-        if (memberSnap.exists) {
-            const memberData = memberSnap.data()!;
+        if (memberSnap.exists) { const memberData = memberSnap.data()!;
             // Legacy import members: paymentStatus=completed but onboardingCompleted=false
             if (memberData.paymentStatus === 'completed' && !memberData.onboardingCompleted) {
                 return 'legacy_pending_onboarding';
@@ -886,8 +754,7 @@ async function _checkCooperativeStatusAction(): Promise<string | null> {
         }
 
         return null;
-    } catch (error) {
-        logger.error("Error checking cooperative status:", {
+    } catch (error) { logger.error("Error checking cooperative status:", {
             error: error instanceof Error ? error.message : String(error)
         });
         return null;
@@ -902,36 +769,27 @@ export const checkCooperativeStatusAction = withFlexibleSafeAction("checkCoopera
 async function _applyForLoanAction(
     prevState: LoanApplicationState,
     formData: FormData
-): Promise<LoanApplicationState> {
-    try {
+): Promise<LoanApplicationState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in to apply for a loan", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in to apply for a loan", success: false as const, data: null };
         }
 
         const userId = session.user.id;
 
         // Parse and validate
-        const rawData = {
-            productId: formData.get("productId") as string,
+        const rawData = { productId: formData.get("productId") as string,
             amount: Number(formData.get("amount")),
-            purpose: formData.get("purpose") as string,
-        };
+            purpose: formData.get("purpose") as string };
 
         const validationResult = loanApplicationSchema.safeParse(rawData);
-        if (!validationResult.success) {
-            return {
-                error: validationResult.error.issues[0]?.message || "Invalid loan application",
-                success: false
-            };
+        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Invalid loan application", success: false as const, data: null };
         }
 
         const { productId, amount, purpose } = validationResult.data;
 
-        await db.runTransaction(async (t) => {
-            // Verify membership and eligibility
+        await db.runTransaction(async (t) => { // Verify membership and eligibility
             const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
             const membershipSnapshot = await t.get(membershipsRef.where("userId", "==", userId));
 
@@ -949,8 +807,7 @@ async function _applyForLoanAction(
                 .where("status", "in", ["pending", "approved", "disbursed"]);
             const activeLoansSnap = await t.get(activeLoansQuery);
 
-            if (!activeLoansSnap.empty) {
-                throw new Error("You already have an active or pending loan application");
+            if (!activeLoansSnap.empty) { throw new Error("You already have an active or pending loan application");
             }
 
             // 2. Check Loan Limit (e.g., 3x Savings Balance)
@@ -966,8 +823,7 @@ async function _applyForLoanAction(
             let durationMonths = 6;
 
             const productDoc = await t.get(db.collection(COLLECTIONS.COOPERATIVE_LOAN_PRODUCTS).doc(productId));
-            if (productDoc.exists) {
-                const prod = productDoc.data()!;
+            if (productDoc.exists) { const prod = productDoc.data()!;
                 interestRate = prod.interestRate;
                 durationMonths = prod.durationMonths;
             }
@@ -978,8 +834,7 @@ async function _applyForLoanAction(
 
             // Create Loan Application
             const newLoanRef = loansRef.doc();
-            t.set(newLoanRef, {
-                memberId: userId,
+            t.set(newLoanRef, { memberId: userId,
                 productId,
                 amount,
                 purpose,
@@ -990,25 +845,17 @@ async function _applyForLoanAction(
                 status: "pending",
                 appliedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         });
 
-        return {
-            error: null,
-            success: true as const,
-            data: { message: "Loan application submitted successfully. It is now under review." },
+        return { error: null, success: true as const,
             meta: null
-        };
+        , data: null };
 
-    } catch (error) {
-        logger.error("Loan application failed:", {
+    } catch (error) { logger.error("Loan application failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: error instanceof Error ? error.message : "Failed to submit loan application",
-            success: false
-        };
+        return { error: error instanceof Error ? error.message : "Failed to submit loan application", success: false as const, data: null };
     }
 }
 export const applyForLoanAction = withFlexibleSafeAction("applyForLoanAction", _applyForLoanAction);
@@ -1020,39 +867,29 @@ export const applyForLoanAction = withFlexibleSafeAction("applyForLoanAction", _
 async function _createFixedSavingsAction(
     prevState: FixedSavingsState,
     formData: FormData
-): Promise<FixedSavingsState> {
-    try {
+): Promise<FixedSavingsState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
 
         const userId = session.user.id;
 
-        const rawData = {
-            amount: Number(formData.get("amount")),
-            durationMonths: Number(formData.get("durationMonths")),
-        };
+        const rawData = { amount: Number(formData.get("amount")),
+            durationMonths: Number(formData.get("durationMonths")) };
 
         const validationResult = fixedSavingsSchema.safeParse(rawData);
-        if (!validationResult.success) {
-            return {
-                error: validationResult.error.issues[0]?.message || "Invalid input",
-                success: false
-            };
+        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Invalid input", success: false as const, data: null };
         }
 
         const { amount, durationMonths } = validationResult.data;
 
-        if (amount <= 0) {
-            return { error: "Amount must be positive", success: false as const };
+        if (amount <= 0) { return { error: "Amount must be positive", success: false as const, data: null };
         }
 
         // Transactional execution
-        await db.runTransaction(async (transaction) => {
-            // Check wallet/savings balance to ensure they have funds to lock
+        await db.runTransaction(async (transaction) => { // Check wallet/savings balance to ensure they have funds to lock
             const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
             const membershipSnapshot = await transaction.get(
                 membershipsRef.where("userId", "==", userId)
@@ -1067,43 +904,29 @@ async function _createFixedSavingsAction(
 
             const currentSavings = membershipDoc.data().savingsBalance || 0;
 
-            if (currentSavings < amount) {
-                throw new Error("Insufficient savings balance to create this fixed savings plan");
+            if (currentSavings < amount) { throw new Error("Insufficient savings balance to create this fixed savings plan");
             }
 
             // Deduct from main savings
-            transaction.update(membershipRef, {
-                savingsBalance: FieldValue.increment(-amount)
+            transaction.update(membershipRef, { savingsBalance: FieldValue.increment(-amount)
             });
 
             // Create Fixed Savings Record
             const fixedSavingsRef = db.collection(COLLECTIONS.COOPERATIVE_FIXED_SAVINGS).doc();
-            transaction.set(fixedSavingsRef, {
-                memberId: userId,
+            transaction.set(fixedSavingsRef, { memberId: userId,
                 amount,
                 durationMonths,
                 startDate: FieldValue.serverTimestamp(),
                 status: "active",
                 interestRate: 10, // Example: 10% p.a.
-                createdAt: FieldValue.serverTimestamp(),
-            });
+                createdAt: FieldValue.serverTimestamp() });
         });
 
-        return {
-            error: null,
-            success: true as const,
-            data: { message: `Fixed savings plan of ₦${amount.toLocaleString()} created successfully.` },
-            meta: null
-        };
-
-    } catch (error) {
-        logger.error("Fixed savings creation failed:", {
+        return { error: null, success: true as const, data: null  };
+    } catch (error) { logger.error("Fixed savings creation failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return {
-            error: error instanceof Error ? error.message : "Failed to create fixed savings plan",
-            success: false
-        };
+        return { error: error instanceof Error ? error.message : "Failed to create fixed savings plan", success: false as const, data: null };
     }
 }
 export const createFixedSavingsAction = withFlexibleSafeAction("createFixedSavingsAction", _createFixedSavingsAction);
@@ -1117,16 +940,14 @@ export const createFixedSavingsAction = withFlexibleSafeAction("createFixedSavin
 // ============================================
 
 async function _getDirectoryMembersAction(): Promise<
-    | { success: true; error: null; meta?: any; data?: any }
-    | { success: false; error: string; data?: null; meta?: any; data?: any }
-> {
-    try {
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
         // Allow any logged in user? Or just admin? Assuming members can view directory.
-        if (!session?.user) {
-            return { error: "Unauthorized", success: false as const, data: [] };
+        if (!session?.user) { return { error: "Unauthorized", success: false as const, data: [] };
         }
 
         const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
@@ -1156,13 +977,12 @@ async function _getDirectoryMembersAction(): Promise<
             })
             .filter(Boolean); // Remove nulls (corrupted)
 
-        return { error: null, success: true as const, data: { members }, meta: null };
+        return { error: null, success: true as const, data: null, meta: null };
 
-    } catch (error) {
-        logger.error("Failed to fetch directory:", {
+    } catch (error) { logger.error("Failed to fetch directory:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to load directory", success: false as const };
+        return { error: "Failed to load directory", success: false as const, data: null };
     }
 }
 export const getDirectoryMembersAction = withFlexibleSafeAction("getDirectoryMembersAction", _getDirectoryMembersAction);
@@ -1175,34 +995,31 @@ export const getDirectoryMembersAction = withFlexibleSafeAction("getDirectoryMem
  * Get the current user's existing cooperative onboarding data (for pre-populating edit form)
  */
 export async function getCooperativeApplicationAction(): Promise<
-    | { success: true; error: null; meta?: any; data?: any; revisionNote?: string }
-    | { success: false; error: string; data?: null; meta?: any; data?: any; revisionNote?: string }
-> {
-    try {
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) return { success: false as const, error: 'Unauthorized' };
+        if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
         // Find the member doc by userId
         const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', session.user.id)
             .get();
 
-        if (snap.empty) return { success: false as const, error: 'No application found' };
+        if (snap.empty) return { success: false as const, error: 'No application found'};
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => {
-            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
         const data = sortedDocs[0];
-        return { error: null, success: true as const, data: { application: data, revisionNote: data?.revisionNote }, meta: null };
-    } catch (error) {
-        logger.error('getCooperativeApplicationAction error:', {
+        return { error: null, success: true as const, data: null, meta: null };
+    } catch (error) { logger.error('getCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: 'Failed to fetch application' };
+        return { success: false as const, error: 'Failed to fetch application'};
     }
 }
 
@@ -1211,19 +1028,20 @@ export async function getCooperativeApplicationAction(): Promise<
  */
 export async function resubmitCooperativeApplicationAction(
     formData: FormData
-): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
-        if (!session?.user) return { success: false as const, error: 'Unauthorized' };
+        if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.cooperatives?.status;
 
         const allowedStatuses = ['pending', 'revision_required'];
-        if (!allowedStatuses.includes(existingStatus)) {
-            return { success: false as const, error: 'Your application cannot be resubmitted at this time.' };
+        if (!allowedStatuses.includes(existingStatus)) { return { success: false as const, error: 'Your application cannot be resubmitted at this time.'};
         }
 
         // Find the existing member doc
@@ -1231,10 +1049,9 @@ export async function resubmitCooperativeApplicationAction(
             .where('userId', '==', session.user.id)
             .get();
 
-        if (snap.empty) return { success: false as const, error: 'No existing application found' };
+        if (snap.empty) return { success: false as const, error: 'No existing application found'};
 
-        const sortedDocs = snap.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
             const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
@@ -1243,8 +1060,7 @@ export async function resubmitCooperativeApplicationAction(
         const first = (formData.get('firstName') as string || '').trim();
         const other = (formData.get('otherName') as string || '').trim();
         const last = (formData.get('lastName') as string || '').trim();
-        const updatePayload: Record<string, any> = {
-            firstName: first,
+        const updatePayload: Record<string, any> = { firstName: first,
             otherName: other || null,
             lastName: last,
             fullName: [first, other, last].filter(Boolean).join(' '),
@@ -1262,41 +1078,32 @@ export async function resubmitCooperativeApplicationAction(
             membershipStatus: 'pending',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+            updatedAt: FieldValue.serverTimestamp() };
 
-        if (formData.get('validIdUrl')) {
-            updatePayload['documents.validIdUrl'] = formData.get('validIdUrl');
+        if (formData.get('validIdUrl')) { updatePayload['documents.validIdUrl'] = formData.get('validIdUrl');
             updatePayload['documents.validIdName'] = formData.get('validIdName') || '';
         }
-        if (formData.get('passportPhotoUrl')) {
-            updatePayload['documents.passportPhotoUrl'] = formData.get('passportPhotoUrl');
+        if (formData.get('passportPhotoUrl')) { updatePayload['documents.passportPhotoUrl'] = formData.get('passportPhotoUrl');
         }
-        if (formData.get('proofOfAddressUrl')) {
-            updatePayload['documents.proofOfAddressUrl'] = formData.get('proofOfAddressUrl');
+        if (formData.get('proofOfAddressUrl')) { updatePayload['documents.proofOfAddressUrl'] = formData.get('proofOfAddressUrl');
         }
 
         const batch = db.batch();
         batch.update(memberRef, updatePayload);
-        batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
-            'serviceRegistrations.cooperatives.status': 'pending',
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), { 'serviceRegistrations.cooperatives.status': 'pending',
+            updatedAt: FieldValue.serverTimestamp() });
 
         await batch.commit();
 
-        try {
-            await invalidateUserCache(session.user.id);
-        } catch (err) {
-            logger.error("Failed to invalidate cache after Cooperative application resubmission:", err);
+        try { await invalidateUserCache(session.user.id);
+        } catch (err) { logger.error("Failed to invalidate cache after Cooperative application resubmission:", err);
         }
 
-        return { error: null, success: true as const, data: { message: "Application resubmitted successfully." }, meta: null };
-    } catch (error) {
-        logger.error('resubmitCooperativeApplicationAction error:', {
+        return { error: null, success: true as const, data: null, meta: null };
+    } catch (error) { logger.error('resubmitCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: 'Failed to resubmit application' };
+        return { success: false as const, error: 'Failed to resubmit application'};
     }
 }
 
@@ -1304,8 +1111,7 @@ export async function resubmitCooperativeApplicationAction(
 // MEMBER ID CARD
 // ============================================
 
-export type MemberIdCardData = {
-    fullName: string;
+export type MemberIdCardData = { fullName: string;
     memberNumber: string;
     membershipTier: "Member";
     gender: string;
@@ -1314,8 +1120,7 @@ export type MemberIdCardData = {
     joinedAt: string;
     validUntil: string;
     membershipStatus: string;
-    paymentStatus: string;
-};
+    paymentStatus: string; };
 
 /**
  * Get member data for ID card rendering.
@@ -1323,30 +1128,23 @@ export type MemberIdCardData = {
  * Gate 2: membershipStatus === 'active' (admin approved)
  */
 export async function getCooperativeMemberIdCardAction(): Promise<
-    | { success: true; error: null; meta?: any; data?: MemberIdCardData; reason?: "payment_required" | "pending_approval" | "not_member" }
-    | { success: false; error: string; data?: null; meta?: any; data?: MemberIdCardData; reason?: "payment_required" | "pending_approval" | "not_member" }
-> {
-    try {
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Not authenticated", reason: "not_member" };
+        if (!sessionResult.session) return { success: false as const, error: "Not authenticated", reason: "not_member"};
         const { session } = sessionResult;
 
         const userId = session.user.id;
         const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
-        if (!memberDoc.exists) {
-            return { success: false as const, error: "No cooperative membership found.", reason: "not_member" };
+        if (!memberDoc.exists) { return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
         }
 
         const d = memberDoc.data()!;
 
         // Gate 1: Paystack payment must be verified
-        if (d.paymentStatus !== "completed") {
-            return {
-                success: false as const,
-                error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.",
-                reason: "payment_required",
-            };
+        if (d.paymentStatus !== "completed") { return { success: false as const, error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.", reason: "payment_required"};
         }
 
         // Gate 2: Admin must have approved
@@ -1355,18 +1153,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 success: false as const,
                 error: "Your membership is pending admin approval. Your ID card will be available once approved.",
                 reason: "pending_approval",
-                data: {
-                    fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
-                    memberNumber: "",
-                    membershipTier: d.membershipTier || "Member",
-                    gender: d.gender || "",
-                    stateOfOrigin: d.stateOfOrigin || "",
-                    passportPhotoUrl: d.documents?.passportPhoto?.url || null,
-                    joinedAt: "",
-                    validUntil: "",
-                    membershipStatus: d.membershipStatus || "pending",
-                    paymentStatus: d.paymentStatus || "completed",
-                },
+                data: null
             };
         }
 
@@ -1378,10 +1165,8 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         const validUntil = new Date(joinedAt);
         validUntil.setFullYear(validUntil.getFullYear() + 1);
 
-        return {
-            error: null, success: true as const,
-            data: {
-                fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+        return { error: null, success: true as const, data: {
+                fullName: `${d.firstName || "" } ${d.lastName || ""}`.trim(),
                 memberNumber,
                 membershipTier: d.membershipTier || "Member",
                 gender: d.gender || "",
@@ -1390,12 +1175,9 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 joinedAt: joinedAt.toISOString(),
                 validUntil: validUntil.toISOString(),
                 membershipStatus: d.membershipStatus,
-                paymentStatus: d.paymentStatus,
-            },
-        };
-    } catch (error) {
-        logger.error("getCooperativeMemberIdCardAction error:", error);
-        return { success: false as const, error: "Failed to load ID card data. Please try again." };
+                paymentStatus: d.paymentStatus } };
+    } catch (error) { logger.error("getCooperativeMemberIdCardAction error:", error);
+        return { success: false as const, error: "Failed to load ID card data. Please try again.", data: null };
     }
 }
 
@@ -1406,34 +1188,31 @@ export async function getCooperativeMemberIdCardAction(): Promise<
 export async function updatePassportPhotoAction(
     passportUrl: string,
     passportName: string
-): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Not authenticated" };
+        if (!sessionResult.session) return { success: false as const, error: "Not authenticated", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const memberDoc = await memberRef.get();
 
-        if (!memberDoc.exists) {
-            return { success: false as const, error: "No cooperative membership found. Please register first." };
+        if (!memberDoc.exists) { return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
         }
 
-        await memberRef.update({
-            "documents.passportPhoto": {
+        await memberRef.update({ "documents.passportPhoto": {
                 name: passportName,
-                url: passportUrl,
-            },
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+                url: passportUrl },
+            updatedAt: FieldValue.serverTimestamp() });
 
         revalidatePath("/cooperatives/id-card");
 
-        return { error: null, success: true as const, data: { message: "Passport photo updated" }, meta: null };
-    } catch (error) {
-        logger.error("updatePassportPhotoAction error:", error);
-        return { success: false as const, error: "Failed to update passport photo. Please try again." };
+        return { error: null, success: true as const, data: null, meta: null };
+    } catch (error) { logger.error("updatePassportPhotoAction error:", error);
+        return { success: false as const, error: "Failed to update passport photo. Please try again.", data: null };
     }
 }
 
@@ -1443,33 +1222,28 @@ export async function updatePassportPhotoAction(
 
 export async function validateCooperativeInviteAction(
     token: string
-): Promise<{ error: string | null, success: boolean; meta?: any; data?: any;  }> {
-    try {
-        if (!token) return { success: false as const, error: "Invalid token" };
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
+        if (!token) return { success: false as const, error: "Invalid token", data: null };
 
         const inviteRef = db.collection(COLLECTIONS.COOPERATIVES_INVITES).doc(token);
         const inviteDoc = await inviteRef.get();
 
-        if (!inviteDoc.exists) {
-            return { success: false as const, error: "Invalid or expired invitation link." };
+        if (!inviteDoc.exists) { return { success: false as const, error: "Invalid or expired invitation link.", data: null };
         }
 
         const data = inviteDoc.data()!;
 
-        if (data.status !== "pending") {
-            return { success: false as const, error: "This invitation has already been used or revoked." };
+        if (data.status !== "pending") { return { success: false as const, error: "This invitation has already been used or revoked.", data: null };
         }
 
-        return {
-            error: null, success: true as const,
-            data: {
-                email: data.email,
-            },
+        return { error: null, success: true as const, data: null,
             meta: null
         };
 
-    } catch (error: any) {
-        logger.error("validateCooperativeInviteAction error:", error);
-        return { success: false as const, error: "Failed to validate invitation link. Please try again." };
+    } catch (error: any) { logger.error("validateCooperativeInviteAction error:", error);
+        return { success: false as const, error: "Failed to validate invitation link. Please try again.", data: null };
     }
 }

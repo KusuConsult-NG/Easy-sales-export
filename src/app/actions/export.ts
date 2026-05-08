@@ -20,17 +20,12 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
 // Export Window Schema
 // Kept as a private const — NOT exported ("use server" files cannot export non-async values)
-const exportWindowSchema = z.object({
-    commodity: z.enum(["yam", "sesame", "hibiscus", "other"], {
-        message: "Please select a valid commodity",
-    }),
+const exportWindowSchema = z.object({ commodity: z.enum(["yam", "sesame", "hibiscus", "other"], {
+        message: "Please select a valid commodity" }),
     quantity: z.string().min(1, "Quantity is required"),
     amount: z.number().positive("Amount must be greater than 0"),
     deliveryDate: z.string().optional(),
-    destination: z.enum(["europe", "north_america", "asia", "middle_east", "africa", "other"], {
-        message: "Please select a valid destination",
-    }).optional(),
-});
+    destination: z.enum(["europe", "north_america", "asia", "middle_east", "africa", "other"], { message: "Please select a valid destination" }).optional() });
 
 export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 
@@ -38,31 +33,24 @@ export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 
 import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/firestore";
 
-type ActionErrorState = {
-    error: string;
-    success: false;
-};
+type ActionErrorState = { error: string;
+    success: false; };
 
 
 
-type CreateExportSuccessState = {
-    error: null;
+type CreateExportSuccessState = { error: null;
     success: true;
     message: string;
     data: { orderId: string };
     meta: null;
 };
 
-type UpdateStatusSuccessState = {
-    error: null;
+type UpdateStatusSuccessState = { error: null;
     success: true;
-    message: string;
-    data: null;
-    meta: null;
-};
+    message: string; data: null;
+    meta: null; };
 
-type GetExportsSuccessState = {
-    error: null;
+type GetExportsSuccessState = { error: null;
     success: true;
     data: ExportWindow[];
     meta: { cursor: string | null; hasMore: boolean } | null;
@@ -80,36 +68,30 @@ export type GetExportsActionState = ActionErrorState | GetExportsSuccessState;
 export async function createExportWindowAction(
     prevState: CreateExportActionState,
     formData: FormData
-): Promise<CreateExportActionState> {
-    try {
+): Promise<CreateExportActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired", data: null };
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in to create an export window", success: false as const };
+        if (!session?.user) { return { error: "You must be logged in to create an export window", success: false as const, data: null };
         }
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
-        if (!idempotencyKey) {
-            return { error: "Missing security token. Please refresh the page.", success: false as const };
+        if (!idempotencyKey) { return { error: "Missing security token. Please refresh the page.", success: false as const, data: null };
         }
 
         // Extract and validate form data
-        const exportData = {
-            commodity: formData.get("commodity") as string,
+        const exportData = { commodity: formData.get("commodity") as string,
             quantity: formData.get("quantity") as string,
             amount: parseFloat(formData.get("amount") as string),
             deliveryDate: formData.get("deliveryDate") as string | undefined,
-            destination: formData.get("destination") as string | undefined,
-        };
+            destination: formData.get("destination") as string | undefined };
 
         // Validate with Zod
         const validatedData = exportWindowSchema.parse(exportData);
 
         let finalOrderId = "";
 
-        await db.runTransaction(async (transaction) => {
-            // 0. Idempotency Check
+        await db.runTransaction(async (transaction) => { // 0. Idempotency Check
             const idempotencyRef = db.collection(COLLECTIONS.IDEMPOTENCY_KEYS).doc(idempotencyKey);
             const idempotencyDoc = await transaction.get(idempotencyRef);
 
@@ -122,16 +104,14 @@ export async function createExportWindowAction(
             const userDoc = await transaction.get(userRef);
             const userData = userDoc.data();
 
-            if (!userData?.isVerified) {
-                throw new Error("Compliance Error: You must complete KYC verification to create Export Windows.");
+            if (!userData?.isVerified) { throw new Error("Compliance Error: You must complete KYC verification to create Export Windows.");
             }
 
             // 2. Check for Service Registration (CAC/NEPC)
             const exportReg = userData?.serviceRegistrations?.export;
             const serviceNumber = exportReg?.registrationNumber || userData?.cacNumber;
 
-            if (!serviceNumber && userData?.serviceRegistrations?.export?.status !== "approved") {
-                throw new Error("Compliance Error: Missing Export Service Registration (NEPC/CAC).");
+            if (!serviceNumber && userData?.serviceRegistrations?.export?.status !== "approved") { throw new Error("Compliance Error: Missing Export Service Registration (NEPC/CAC).");
             }
 
             // Generate unique order ID
@@ -140,16 +120,14 @@ export async function createExportWindowAction(
 
             // Calculate escrow release date (30 days after delivery)
             let escrowReleaseDate = null;
-            if (validatedData.deliveryDate) {
-                const deliveryDate = new Date(validatedData.deliveryDate);
+            if (validatedData.deliveryDate) { const deliveryDate = new Date(validatedData.deliveryDate);
                 escrowReleaseDate = new Date(deliveryDate);
                 escrowReleaseDate.setDate(escrowReleaseDate.getDate() + 30);
             }
 
             // Save to Firestore
             const exportWindowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc();
-            transaction.set(exportWindowRef, {
-                orderId,
+            transaction.set(exportWindowRef, { orderId,
                 commodity: validatedData.commodity,
                 quantity: validatedData.quantity,
                 amount: validatedData.amount,
@@ -160,39 +138,30 @@ export async function createExportWindowAction(
                 deliveryDate: validatedData.deliveryDate ? new Date(validatedData.deliveryDate) : null,
                 escrowReleaseDate: escrowReleaseDate,
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
 
             // 3. Lock Key
-            transaction.set(idempotencyRef, {
-                userId: session.user.id,
+            transaction.set(idempotencyRef, { userId: session.user.id,
                 action: "create_export_window",
-                createdAt: FieldValue.serverTimestamp(),
-            });
+                createdAt: FieldValue.serverTimestamp() });
         });
 
         revalidatePath("/export");
         revalidatePath("/dashboard/export");
 
-        return {
-            error: null,
-            success: true as const,
-            message: `Export window created successfully! Order ID: ${finalOrderId}`,
-            data: { orderId: finalOrderId },
+        return { error: null, success: true as const, message: `Export window created successfully! Order ID: ${finalOrderId }`,
             meta: null
-        };
-    } catch (error: any) {
-        logger.error("Create export window error:", error);
+        , data: null };
+    } catch (error: any) { logger.error("Create export window error:", error);
 
         if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance")) {
-            return { error: error.message, success: false as const };
+            return { error: error.message, success: false as const, data: null };
         }
 
-        if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const };
+        if (error.name === "ZodError") { return { error: "Please fill in all required fields correctly", success: false as const, data: null };
         }
 
-        return { error: "Failed to create export window. Please try again.", success: false as const };
+        return { error: "Failed to create export window. Please try again.", success: false as const, data: null };
     }
 }
 
@@ -203,26 +172,22 @@ export async function createExportWindowAction(
 export async function updateExportStatusAction(
     exportId: string,
     newStatus: "pending" | "in_transit" | "delivered" | "completed"
-): Promise<UpdateStatusActionState> {
-    try {
+): Promise<UpdateStatusActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
-        if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false as const };
+        if (!exportDoc.exists) { return { error: "Export window not found", success: false as const, data: null };
         }
 
         const data = exportDoc.data();
         // Verify ownership (unless admin)
-        if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized to update this export", success: false as const };
+        if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized to update this export", success: false as const, data: null };
         }
 
         // Prevent duplicate status updates to avoid multiple completion emails
@@ -231,14 +196,11 @@ export async function updateExportStatusAction(
         }
 
         // Update status
-        await exportRef.update({
-            status: newStatus,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        await exportRef.update({ status: newStatus,
+            updatedAt: FieldValue.serverTimestamp() });
 
         // When a window completes, email all investors with their returns
-        if (newStatus === "completed") {
-            try {
+        if (newStatus === "completed") { try {
                 const { sendExportWindowCompleteEmail } = await import("@/lib/email-notifications");
                 const slotsSnap = await db.collection(COLLECTIONS.EXPORT_SLOTS)
                     .where("exportId", "==", exportId)
@@ -248,8 +210,7 @@ export async function updateExportStatusAction(
                 const windowTitle = data?.title || "Export Window";
                 const roi = data?.roi || data?.returnRate || "N/A";
 
-                await Promise.all(slotsSnap.docs.map(async (slotDoc) => {
-                    const slot = slotDoc.data();
+                await Promise.all(slotsSnap.docs.map(async (slotDoc) => { const slot = slotDoc.data();
                     if (!slot.userId) return;
 
                     // Fetch user email
@@ -273,22 +234,16 @@ export async function updateExportStatusAction(
                 }));
 
                 logger.info(`[Export Complete] Notified investors for window: ${exportId}`);
-            } catch (emailErr) {
-                logger.error("[Export Complete] Failed to notify investors:", emailErr);
+            } catch (emailErr) { logger.error("[Export Complete] Failed to notify investors:", emailErr);
                 // Don't block the status update on email failure
             }
         }
 
-        return {
-            error: null,
-            success: true as const,
-            message: `Status updated to ${newStatus}`,
-            data: null,
+        return { error: null, success: true as const, message: `Status updated to ${newStatus }`,
             meta: null
-        };
-    } catch (error: any) {
-        logger.error("Update export status error:", error);
-        return { error: "Failed to update status", success: false as const };
+        , data: null };
+    } catch (error: any) { logger.error("Update export status error:", error);
+        return { error: "Failed to update status", success: false as const, data: null };
     }
 }
 
@@ -300,18 +255,15 @@ export async function updateExportStatusAction(
 export async function updateExportWindowAction(
     exportId: string,
     updateData: Partial<ExportWindow>
-) {
-    try {
+) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const, data: null, meta: null };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
         }
 
         // Verify Admin
-        if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized access", success: false as const, data: null, meta: null };
+        if ((!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized access", success: false as const, meta: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
@@ -322,15 +274,12 @@ export async function updateExportWindowAction(
         delete cleanData.createdAt;
         delete cleanData.updatedAt;
 
-        await exportRef.update({
-            ...cleanData,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        await exportRef.update({ ...cleanData,
+            updatedAt: FieldValue.serverTimestamp() });
 
-        return { error: null, success: true as const, data: null, meta: null };
-    } catch (error: any) {
-        logger.error("Update export window error:", error);
-        return { error: "Failed to update export window", success: false as const, data: null, meta: null };
+        return { error: null, success: true as const, meta: null , data: null };
+    } catch (error: any) { logger.error("Update export window error:", error);
+        return { error: "Failed to update export window", success: false as const, meta: null };
     }
 }
 
@@ -344,19 +293,14 @@ export async function getExportWindowsAction(
     toDate?: string,
     limit: number = 20,
     lastId?: string
-): Promise<{
-    error: string | null;
-    success: boolean;
-    data?: ExportWindow[];
-    lastId?: string | null;
-    meta?: any;
-}> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -366,16 +310,14 @@ export async function getExportWindowsAction(
             .where("userId", "==", userId);
 
         // Apply status filter if provided
-        if (statusFilter && statusFilter !== "all") {
-            exportsQuery = exportsQuery.where("status", "==", statusFilter);
+        if (statusFilter && statusFilter !== "all") { exportsQuery = exportsQuery.where("status", "==", statusFilter);
         }
 
         // Apply sorting
         exportsQuery = exportsQuery.orderBy("createdAt", "desc");
 
         // Apply Cursor
-        if (lastId) {
-            const lastDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastId).get();
+        if (lastId) { const lastDoc = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(lastId).get();
             if (lastDoc.exists) {
                 exportsQuery = exportsQuery.startAfter(lastDoc);
             }
@@ -390,16 +332,13 @@ export async function getExportWindowsAction(
 
         // Apply client-side date filtering (Note: This breaks pagination if used with limit. 
         // For now we keep it but warn that date filtering + pagination is complex in NoSQL without composite indexes)
-        if (fromDate || toDate) {
-            exports = exports.filter(exp => {
+        if (fromDate || toDate) { exports = exports.filter(exp => {
                 const createdDate = exp.createdAt;
 
                 if (fromDate && toDate) {
                     return createdDate >= new Date(fromDate) && createdDate <= new Date(toDate);
-                } else if (fromDate) {
-                    return createdDate >= new Date(fromDate);
-                } else if (toDate) {
-                    return createdDate <= new Date(toDate);
+                } else if (fromDate) { return createdDate >= new Date(fromDate);
+                } else if (toDate) { return createdDate <= new Date(toDate);
                 }
 
                 return true;
@@ -408,15 +347,10 @@ export async function getExportWindowsAction(
 
         const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
-        return {
-            error: null,
-            success: true as const,
-            data: exports,
-            meta: { cursor: lastDocId, hasMore: !!lastDocId }
+        return { error: null, success: true as const, data: exports, meta: { cursor: lastDocId, hasMore: !!lastDocId }
         };
-    } catch (error: any) {
-        logger.error("Get export windows error:", error);
-        return { error: "Failed to fetch export windows", success: false as const, data: undefined, meta: null };
+    } catch (error: any) { logger.error("Get export windows error:", error);
+        return { error: "Failed to fetch export windows", success: false as const, meta: null };
     }
 }
 
@@ -425,49 +359,40 @@ export async function getExportWindowsAction(
 // ============================================
 
 // Alias as an async wrapper — "use server" files can only export async functions, not const aliases
-export async function getExportRequestByIdAction(exportId: string) {
-    return getExportWindowDetailsAction(exportId);
-}
+export async function getExportRequestByIdAction(exportId: string) { return getExportWindowDetailsAction(exportId); }
 
 export async function getExportWindowDetailsAction(
     exportId: string
-): Promise<{ error: string | null; success: boolean; data?: ExportWindow; export?: ExportWindow }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
-        if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false as const };
+        if (!exportDoc.exists) { return { error: "Export window not found", success: false as const, data: null };
         }
 
         const data = exportDoc.data();
-        if (!data) {
-            return { error: "Export window data is missing", success: false as const };
+        if (!data) { return { error: "Export window data is missing", success: false as const, data: null };
         }
 
         // Verify ownership (unless admin)
-        if (data.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized to view this export", success: false as const };
+        if (data.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized to view this export", success: false as const, data: null };
         }
 
         const exportWindow = serializeDoc<ExportWindow>(exportDoc.id, data);
 
-        return {
-            error: null,
-            success: true as const,
-            data: exportWindow,
-            export: exportWindow // For compatibility
-        };
-    } catch (error: any) {
-        logger.error("Get export details error:", error);
-        return { error: "Failed to fetch export details", success: false as const };
+        return { error: null, success: true as const, data: exportWindow, export: exportWindow // For compatibility
+ };
+    } catch (error: any) { logger.error("Get export details error:", error);
+        return { error: "Failed to fetch export details", success: false as const, data: null };
     }
 }
 
@@ -485,13 +410,11 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 export async function submitExportOnboardingAction(
     prevState: any,
     formData: FormData
-) {
-    try {
+) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -500,21 +423,11 @@ export async function submitExportOnboardingAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
 
-        if (existingStatus === 'pending_approval' || existingStatus === 'under_review') {
-            return {
-                error: "Action failed", success: false as const,
-                data: undefined,
-                error: "Your previous application is still being processed.",
-                meta: null
-            };
+        if (existingStatus === 'pending_approval' || existingStatus === 'under_review') { return { success: false as const, error: "Your previous application is still being processed.", meta: null
+ };
         }
-        if (existingStatus === 'approved') {
-            return {
-                error: "Action failed", success: false as const,
-                data: undefined,
-                error: "You are already registered for Export.",
-                meta: null
-            };
+        if (existingStatus === 'approved') { return { error: "Action failed", success: false as const, data: undefined, error: "You are already registered for Export.", meta: null
+ };
         }
 
         // Extract Data
@@ -547,8 +460,7 @@ export async function submitExportOnboardingAction(
         const applicationId = `EXPORT-ONBOARD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
         // Combine all onboarding data
-        const fullApplication = {
-            applicationId,
+        const fullApplication = { applicationId,
             userId,
             userEmail: session.user.email,
             profile,
@@ -561,8 +473,7 @@ export async function submitExportOnboardingAction(
             status: "pending_review",
             submittedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+            updatedAt: FieldValue.serverTimestamp() };
 
         const batch = db.batch();
         const onboardingRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc();
@@ -578,8 +489,7 @@ export async function submitExportOnboardingAction(
         const computedFullName = [profileFirstName, profileOtherName, profileLastName]
             .filter(Boolean).join(" ").trim() || profile.fullName || kycData.fullName || "";
 
-        batch.update(userRef, {
-            "serviceRegistrations.export.status": "pending_approval",
+        batch.update(userRef, { "serviceRegistrations.export.status": "pending_approval",
             "serviceRegistrations.export.paymentStatus": "completed",
             "serviceRegistrations.export.applicationId": applicationId,
             "serviceRegistrations.export.appliedAt": FieldValue.serverTimestamp(),
@@ -590,8 +500,7 @@ export async function submitExportOnboardingAction(
             ...(computedFullName  && { fullName: computedFullName }),
             ...(profile.phone     && { phone: profile.phone }),
             ...(profile.state     && { stateOfOrigin: profile.state }),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
         await batch.commit();
 
@@ -600,20 +509,14 @@ export async function submitExportOnboardingAction(
             .set({ pending: FieldValue.increment(1) }, { merge: true })
             .catch(() => {});
 
-        try {
-            await invalidateUserCache(userId);
-        } catch (err) {
-            logger.error("Failed to invalidate cache after Export application:", err);
+        try { await invalidateUserCache(userId);
+        } catch (err) { logger.error("Failed to invalidate cache after Export application:", err);
         }
 
-        return {
-            error: null,
-            success: true as const,
-            data: { applicationId },
+        return { error: null, success: true as const,
             meta: null
-        };
-    } catch (error: any) {
-        logger.error("Submit export onboarding error:", error);
+        , data: null };
+    } catch (error: any) { logger.error("Submit export onboarding error:", error);
         return { error: "Failed to submit onboarding application", success: false as const, data: undefined, meta: null };
     }
 }
@@ -625,28 +528,14 @@ export async function submitExportOnboardingAction(
 export async function getUserExportInvestmentsAction(
     limit: number = 10,
     lastId?: string
-): Promise<{
-    error: string | null;
-    success: boolean;
-    meta?: any;
-    data?: Array<{
-        id: string;
-        commodity: string;
-        amount: number;
-        expectedReturn: number;
-        status: string;
-        daysRemaining: number;
-        startDate: string;
-        endDate: string;
-    }>;
-    lastId?: string | null;
-}> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user?.id) { return { error: "Authentication required", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -657,8 +546,7 @@ export async function getUserExportInvestmentsAction(
 
         const snapshotRaw = await query.get();
         // Robust Sort: Handle both Timestamps and String dates gracefully
-        const allDocs = snapshotRaw.docs.sort((a, b) => {
-             const dataA = a.data();
+        const allDocs = snapshotRaw.docs.sort((a, b) => { const dataA = a.data();
              const dataB = b.data();
              const getMillis = (val: any) => {
                  if (!val) return 0;
@@ -676,14 +564,12 @@ export async function getUserExportInvestmentsAction(
 
         // Manual Pagination
         let startIndex = 0;
-        if (lastId) {
-             const idx = allDocs.findIndex(d => d.id === lastId);
+        if (lastId) { const idx = allDocs.findIndex(d => d.id === lastId);
              if (idx !== -1) startIndex = idx + 1;
         }
         const paginatedDocs = allDocs.slice(startIndex, startIndex + limit);
 
-        const investments = await Promise.all(paginatedDocs.map(async doc => {
-            const data = doc.data();
+        const investments = await Promise.all(paginatedDocs.map(async doc => { const data = doc.data();
             // Soft-join to get the actual Export Window details dynamically
             let commodity = data.commodity || "Export Opportunity";
             let status = data.status || "pending";
@@ -712,8 +598,7 @@ export async function getUserExportInvestmentsAction(
             const amount = data.amount || data.totalCost || 0;
             const expectedReturn = data.expectedReturn || (amount * 0.20);
 
-            const formatDate = (val: any) => {
-                if (!val) return new Date().toISOString();
+            const formatDate = (val: any) => { if (!val) return new Date().toISOString();
                 if (typeof val.toDate === 'function') return val.toDate().toISOString();
                 if (val instanceof Date) return val.toISOString();
                 if (typeof val === 'string') return new Date(val).toISOString();
@@ -721,8 +606,7 @@ export async function getUserExportInvestmentsAction(
                 return new Date().toISOString();
             };
 
-            return {
-                id: doc.id,
+            return { id: doc.id,
                 commodity,
                 amount,
                 expectedReturn,
@@ -730,21 +614,15 @@ export async function getUserExportInvestmentsAction(
                 daysRemaining,
                 startDate,
                 endDate,
-                createdAt: formatDate(data.createdAt),
-            };
+                createdAt: formatDate(data.createdAt) };
         }));
 
         const lastDocId = paginatedDocs.length === limit ? paginatedDocs[paginatedDocs.length - 1].id : null;
 
-        return {
-            error: null,
-            success: true as const,
-            data: investments,
-            meta: { cursor: lastDocId, hasMore: !!lastDocId }
+        return { error: null, success: true as const, data: investments, meta: { cursor: lastDocId, hasMore: !!lastDocId }
         };
-    } catch (error: any) {
-        logger.error("Get user export investments error:", error);
-        return { error: "Failed to fetch investments", success: false as const, data: undefined, meta: null };
+    } catch (error: any) { logger.error("Get user export investments error:", error);
+        return { error: "Failed to fetch investments", success: false as const, meta: null };
     }
 }
 
@@ -752,13 +630,11 @@ export async function getUserExportInvestmentsAction(
 // Get User Export Stats Action
 // ============================================
 
-export async function getUserExportStatsAction() {
-    try {
+export async function getUserExportStatsAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user?.id) { return { error: "Authentication required", success: false as const, data: null };
         }
 
         const userId = session.user.id;
@@ -766,36 +642,19 @@ export async function getUserExportStatsAction() {
         // Fetch O(1) Compiled Stats from Active Paystack Integration
         const portfolioDoc = await db.collection(COLLECTIONS.INVESTOR_PORTFOLIOS).doc(userId).get();
 
-        if (portfolioDoc.exists) {
-             const data = portfolioDoc.data()!;
-             return {
-                 error: null,
-                 success: true as const,
-                 data: {
-                     totalInvested: data.totalInvested || 0,
-                     activeInvestments: data.activeInvestments || 0,
-                     totalReturns: data.totalReturned || 0,
-                     pendingReturns: data.totalExpectedReturns || 0,
-                 },
+        if (portfolioDoc.exists) { const data = portfolioDoc.data()!;
+             return { error: null, success: true as const,
                  meta: null
-             };
+             , data: null };
         }
 
         // Fallback if no portfolio exists yet
-        return {
-            error: null,
-            success: true as const,
-            data: {
-                totalInvested: 0,
-                activeInvestments: 0,
-                totalReturns: 0,
-                pendingReturns: 0,
-            },
-            meta: null
+        return { 
+            error: null, success: true as const, 
+            data: { totalInvested: 0, activeInvestments: 0, totalReturns: 0, pendingReturns: 0 } 
         };
-    } catch (error: any) {
-        logger.error("Get user export stats error:", error);
-        return { error: "Failed to fetch stats", success: false as const, data: undefined, meta: null };
+    } catch (error: any) { logger.error("Get user export stats error:", error);
+        return { error: "Failed to fetch stats", success: false as const, meta: null, data: null };
     }
 }
 
@@ -803,8 +662,7 @@ export async function getUserExportStatsAction() {
 // Check Export Application Status Action
 // ============================================
 
-export async function checkExportStatusAction(): Promise<string | null> {
-    try {
+export async function checkExportStatusAction(): Promise<string | null> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
@@ -815,8 +673,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
 
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for Export applications.
-        if (status !== "approved") {
-            const appSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+        if (status !== "approved") { const appSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where("userId", "==", session.user.id)
                 .orderBy("submittedAt", "desc")
                 .limit(1)
@@ -830,15 +687,13 @@ export async function checkExportStatusAction(): Promise<string | null> {
                     await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
                         serviceRegistrations: { export: { status: "approved", syncedAt: new Date().toISOString() } }
                     }, { merge: true });
-                } else if (appData.status) {
-                    // Normalize statuses
+                } else if (appData.status) { // Normalize statuses
                     status = appData.status === "pending_review" ? "pending_approval" : appData.status;
                 }
             }
         }
 
-        if (status) {
-            return status;
+        if (status) { return status;
         }
 
         // ── FALLBACK: Legacy Sync ──────
@@ -846,8 +701,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
             .where('userId', '==', session.user.id)
             .get();
 
-        if (!legacySnap.empty) {
-            const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
+        if (!legacySnap.empty) { const sortedDocs = legacySnap.docs.map(d => d.data()).sort((a: any, b: any) => {
                 const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
                 const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
                 return bTime - aTime;
@@ -865,8 +719,7 @@ export async function checkExportStatusAction(): Promise<string | null> {
         }
 
         return null;
-    } catch (error) {
-        logger.error("Error checking export status:", error);
+    } catch (error) { logger.error("Error checking export status:", error);
         return null;
     }
 }
@@ -878,36 +731,32 @@ export async function checkExportStatusAction(): Promise<string | null> {
 export async function investInExportAction(
     exportId: string,
     amount: number
-): Promise<{ error: string | null, success: boolean; data?: { authorizationUrl: string; reference: string } }> {
-    try {
+): Promise<{ success: true; error: null; data: { authorizationUrl: string }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required" };
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required"};
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
-        if (!exportDoc.exists) {
-            return { success: false as const, error: "Export window not found" };
+        if (!exportDoc.exists) { return { success: false as const, error: "Export window not found"};
         }
 
         const exportData = exportDoc.data();
-        if (exportData?.status !== "open" && exportData?.status !== "active") {
-            return { success: false as const, error: "This export window is not open for investment" };
+        if (exportData?.status !== "open" && exportData?.status !== "active") { return { success: false as const, error: "This export window is not open for investment"};
         }
 
         // Validate Minimum Investment (assuming 'amount' in window is unit price or min investment)
         const minInvestment = exportData?.amount || 50000; // Default fallback
-        if (amount < minInvestment) {
-            return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
+        if (amount < minInvestment) { return { success: false as const, error: `Minimum investment is ₦${minInvestment.toLocaleString()}` };
         }
 
         // Check Funding Limit (Optional - if totalSpots defined)
-        if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) {
-            return { success: false as const, error: "Investment slots are full" };
+        if (exportData?.totalSpots && exportData?.spotsFilled >= exportData?.totalSpots) { return { success: false as const, error: "Investment slots are full"};
         }
 
         // Initialize Paystack
@@ -915,8 +764,7 @@ export async function investInExportAction(
         const initResult = await initializePaystackPayment(
             session.user.email || "",
             Math.round(amount * 100), // Kobo
-            {
-                type: "export_investment",
+            { type: "export_investment",
                 exportId,
                 userId: session.user.id,
                 amount,
@@ -927,9 +775,8 @@ export async function investInExportAction(
 
         return { error: null, success: true as const, data: initResult };
 
-    } catch (error: any) {
-        logger.error("Invest in export error:", error);
-        return { success: false as const, error: error.message || "Investment initialization failed" };
+    } catch (error: any) { logger.error("Invest in export error:", error);
+        return { success: false as const, error: error.message || "Investment initialization failed"};
     }
 }
 
@@ -937,38 +784,37 @@ export async function investInExportAction(
 // Verify Export Investment
 // ============================================
 
-export async function verifyExportInvestmentAction(reference: string): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+export async function verifyExportInvestmentAction(reference: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized"};
 
         const { verifyPaystackPayment } = await import("@/lib/paystack-server");
         const verify = await verifyPaystackPayment(reference);
 
-        if (!verify.status || verify.data.status !== "success") {
-            return { success: false as const, error: "Payment verification failed" };
+        if (!verify.status || verify.data.status !== "success") { return { success: false as const, error: "Payment verification failed"};
         }
 
         const metadata = verify.data.metadata;
-        if (metadata.type !== "export_investment") {
-            return { success: false as const, error: "Invalid payment type" };
+        if (metadata.type !== "export_investment") { return { success: false as const, error: "Invalid payment type"};
         }
 
         const userId = metadata.userId;
         const exportId = metadata.exportId;
         const amount = metadata.amount;
 
-        if (userId !== session.user.id) return { success: false as const, error: "User mismatch" };
+        if (userId !== session.user.id) return { success: false as const, error: "User mismatch"};
 
         // Check already processed
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const processedDoc = await processedRef.get();
-        if (processedDoc.exists) return { success: false as const, error: "Payment already processed" };
+        if (processedDoc.exists) return { success: false as const, error: "Payment already processed"};
 
-        await db.runTransaction(async (t) => {
-            // 1. Create Investment Record (Slot)
+        await db.runTransaction(async (t) => { // 1. Create Investment Record (Slot)
             const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
             t.set(slotRef, {
                 userId,
@@ -984,15 +830,13 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
 
             // 2. Update Export Window Stats
             const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
-            t.update(exportRef, {
-                spotsFilled: FieldValue.increment(1),
+            t.update(exportRef, { spotsFilled: FieldValue.increment(1),
                 fundedAmount: FieldValue.increment(amount),
                 updatedAt: FieldValue.serverTimestamp()
             });
 
             // 3. Mark Payment Processed
-            t.set(processedRef, {
-                reference,
+            t.set(processedRef, { reference,
                 type: "export_investment",
                 userId,
                 exportId,
@@ -1004,8 +848,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
             // but audit log helper is outside tx usually. Let's do it after.)
         });
 
-        await createAdminAuditLog({
-            action: "export_investment",
+        await createAdminAuditLog({ action: "export_investment",
             userId,
             targetId: exportId,
             targetType: "export_window",
@@ -1015,11 +858,10 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
         revalidatePath("/dashboard/export");
         revalidatePath(`/export/windows/${exportId}`);
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
 
-    } catch (error: any) {
-        logger.error("Verify export investment error:", error);
-        return { success: false as const, error: "Failed to verify investment" };
+    } catch (error: any) { logger.error("Verify export investment error:", error);
+        return { success: false as const, error: "Failed to verify investment"};
     }
 }
 
@@ -1027,25 +869,22 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
 // Get My Investments (Revised for Investors)
 // ============================================
 
-export async function getMyExportInvestmentsAction() {
-    try {
+export async function getMyExportInvestmentsAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized"};
 
         const snapshot = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
             .where("investorId", "==", session.user.id)
             .get();
         // Use in-memory sort to avoid index compilation errors
-        const allDocs = snapshot.docs.sort((a, b) => {
-             const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
+        const allDocs = snapshot.docs.sort((a, b) => { const tA = a.data().createdAt?.toMillis() || a.data().bookedAt?.toMillis() || 0;
              const tB = b.data().createdAt?.toMillis() || b.data().bookedAt?.toMillis() || 0;
              return tB - tA;
         });
 
-        const investments = await Promise.all(allDocs.map(async (doc) => {
-            const data = doc.data();
+        const investments = await Promise.all(allDocs.map(async (doc) => { const data = doc.data();
             // Fetch window details for display safely
             let windowTitle = data.windowTitle || "Export Investment";
             if (data.windowId) {
@@ -1056,18 +895,15 @@ export async function getMyExportInvestmentsAction() {
                  }
             }
 
-            return {
-                id: doc.id,
+            return { id: doc.id,
                 ...data,
                 windowTitle,
-                createdAt: data.createdAt?.toDate() || data.bookedAt?.toDate() || new Date(),
-            };
+                createdAt: data.createdAt?.toDate() || data.bookedAt?.toDate() || new Date() };
         }));
 
         return { error: null, success: true as const, data: investments };
-    } catch (error) {
-        logger.error("Get my investments error:", error);
-        return { success: false as const, error: "Failed to fetch investments" };
+    } catch (error) { logger.error("Get my investments error:", error);
+        return { success: false as const, error: "Failed to fetch investments"};
     }
 }
 
@@ -1079,29 +915,28 @@ export async function extendEscrowAction(
     exportId: string,
     days: number,
     reason: string
-): Promise<{ error: string | null, success: boolean;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
         // Check admin role
-        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
-            return { success: false as const, error: "Unauthorized" };
+        if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) { return { success: false as const, error: "Unauthorized"};
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
-        if (!exportDoc.exists) {
-            return { success: false as const, error: "Export window not found" };
+        if (!exportDoc.exists) { return { success: false as const, error: "Export window not found"};
         }
 
         const currentReleaseDate = exportDoc.data()?.escrowReleaseDate?.toDate() || new Date();
         const newReleaseDate = new Date(currentReleaseDate);
         newReleaseDate.setDate(newReleaseDate.getDate() + days);
 
-        await exportRef.update({
-            escrowReleaseDate: newReleaseDate,
+        await exportRef.update({ escrowReleaseDate: newReleaseDate,
             updatedAt: FieldValue.serverTimestamp(),
             // We might want to track extensions in a subcollection or array, but for now just audit log
         });
@@ -1115,10 +950,9 @@ export async function extendEscrowAction(
             metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
         });
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error("Extend escrow error:", error);
-        return { success: false as const, error: error.message };
+        return { error: null,  success: true as const , data: null };
+    } catch (error: any) { logger.error("Extend escrow error:", error);
+        return { success: false as const, error: error.message};
     }
 }
 
@@ -1130,31 +964,28 @@ export async function extendEscrowAction(
  * Get current user's existing export onboarding application (for pre-populating edit form)
  */
 export async function getExportApplicationAction(): Promise<
-    | { success: true; error: null; data?: any; revisionNote?: string }
-    | { success: false; error: string; data?: null; data?: any; revisionNote?: string }
-> {
-    try {
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user) return { success: false as const, error: 'Unauthorized' };
+        if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
             .where('userId', '==', session.user.id)
             .get();
 
-        if (snap.empty) return { success: false as const, error: 'No application found' };
+        if (snap.empty) return { success: false as const, error: 'No application found'};
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => {
-            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
         const data = sortedDocs[0];
-        return { error: null, success: true as const, data: { ...data, revisionNote: data?.revisionNote } };
-    } catch (error) {
-        logger.error('getExportApplicationAction error:', error);
-        return { success: false as const, error: 'Failed to fetch application' };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error('getExportApplicationAction error:', error);
+        return { success: false as const, error: 'Failed to fetch application'};
     }
 }
 
@@ -1164,42 +995,38 @@ export async function getExportApplicationAction(): Promise<
 export async function requestExportRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false as const, error: 'Admin access required' };
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) { return { success: false as const, error: 'Admin access required'};
         }
 
         const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
-        if (!appDoc.exists) return { success: false as const, error: 'Application not found' };
+        if (!appDoc.exists) return { success: false as const, error: 'Application not found'};
 
         const appData = appDoc.data();
         const userId = appData?.userId;
 
         const batch = db.batch();
-        batch.update(appRef, {
-            status: 'revision_required',
+        batch.update(appRef, { status: 'revision_required',
             revisionNote: reason,
             revisionRequestedAt: FieldValue.serverTimestamp(),
             revisionRequestedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
-        if (userId) {
-            batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
+        if (userId) { batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
                 'serviceRegistrations.export.status': 'revision_required',
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         }
         await batch.commit();
 
         // Send revision email (non-blocking)
-        try {
-            const { Resend } = await import('resend');
+        try { const { Resend } = await import('resend');
             const resend = new Resend(process.env.RESEND_API_KEY);
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const email = userDoc.data()?.email;
@@ -1220,17 +1047,14 @@ export async function requestExportRevisionAction(
                         <div style="text-align:center;margin:24px 0;">
                             <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/onboarding" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Update Application</a>
                         </div>
-                    </div>`,
-                });
+                    </div>` });
             }
-        } catch (emailError) {
-            logger.error('Export revision email failed (non-blocking):', emailError);
+        } catch (emailError) { logger.error('Export revision email failed (non-blocking):', emailError);
         }
 
-        return { error: null, success: true as const };
-    } catch (error) {
-        logger.error('requestExportRevisionAction error:', error);
-        return { success: false as const, error: 'Failed to request revision' };
+        return { error: null, success: true as const , data: null };
+    } catch (error) { logger.error('requestExportRevisionAction error:', error);
+        return { success: false as const, error: 'Failed to request revision'};
     }
 }
 
@@ -1239,42 +1063,38 @@ export async function requestExportRevisionAction(
  */
 export async function approveExportApplicationAction(
     applicationId: string
-): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired"};
         const { session } = sessionResult;
-        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false as const, data: null, error: 'Admin access required', meta: null };
+        if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) { return { success: false as const, error: 'Admin access required', meta: null };
         }
 
         const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
-        if (!appDoc.exists) return { success: false as const, data: null, error: 'Application not found', meta: null };
+        if (!appDoc.exists) return { success: false as const, error: 'Application not found', meta: null };
 
         const appData = appDoc.data();
         const userId = appData?.userId;
 
         const batch = db.batch();
-        batch.update(appRef, {
-            status: 'approved',
+        batch.update(appRef, { status: 'approved',
             approvedAt: FieldValue.serverTimestamp(),
             approvedBy: session.user.id,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
-        if (userId) {
-            batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
+        if (userId) { batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
                 'serviceRegistrations.export.status': 'approved',
                 roles: FieldValue.arrayUnion('export_participant'),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         }
         await batch.commit();
 
         // Send approval email (non-blocking)
-        try {
-            const { Resend } = await import('resend');
+        try { const { Resend } = await import('resend');
             const resend = new Resend(process.env.RESEND_API_KEY);
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const email = userDoc.data()?.email;
@@ -1294,16 +1114,13 @@ export async function approveExportApplicationAction(
                             <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/export/dashboard" style="background:#ea580c;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">View Export Dashboard</a>
                         </div>
                         <p style="color:#6b7280;font-size:14px;">Easy Sales Export Team</p>
-                    </div>`,
-                });
+                    </div>` });
             }
-        } catch (emailError) {
-            logger.error('Export approval email failed (non-blocking):', emailError);
+        } catch (emailError) { logger.error('Export approval email failed (non-blocking):', emailError);
         }
 
         return { error: null, success: true as const, data: null, meta: null };
-    } catch (error) {
-        logger.error('approveExportApplicationAction error:', error);
+    } catch (error) { logger.error('approveExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to approve application', meta: null };
     }
 }
@@ -1317,10 +1134,9 @@ export async function approveExportApplicationAction(
  */
 export async function resubmitExportApplicationAction(
     fields: Record<string, any>
-) {
-    try {
+) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, data: null, error: 'Unauthorized', meta: null };
 
@@ -1329,8 +1145,7 @@ export async function resubmitExportApplicationAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
         const allowedStatuses = ['pending_approval', 'revision_required', 'rejected'];
-        if (!allowedStatuses.includes(existingStatus || '')) {
-            return { success: false as const, data: null, error: 'Your application cannot be resubmitted at this time.', meta: null };
+        if (!allowedStatuses.includes(existingStatus || '')) { return { success: false as const, data: null, error: 'Your application cannot be resubmitted at this time.', meta: null };
         }
 
         const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
@@ -1339,26 +1154,21 @@ export async function resubmitExportApplicationAction(
 
         if (snap.empty) return { success: false as const, data: null, error: 'No existing application found', meta: null };
 
-        const sortedDocs = snap.docs.sort((a, b) => {
-            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+        const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
             const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
         const appRef = sortedDocs[0].ref;
 
         const batch = db.batch();
-        batch.update(appRef, {
-            ...fields,
+        batch.update(appRef, { ...fields,
             status: 'pending_review',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+            updatedAt: FieldValue.serverTimestamp() });
 
-        batch.update(db.collection(COLLECTIONS.USERS).doc(userId), {
-            'serviceRegistrations.export.status': 'pending_approval',
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        batch.update(db.collection(COLLECTIONS.USERS).doc(userId), { 'serviceRegistrations.export.status': 'pending_approval',
+            updatedAt: FieldValue.serverTimestamp() });
 
         const oldData = snap.docs[0].data();
         const oldStatus = oldData.status;
@@ -1374,15 +1184,12 @@ export async function resubmitExportApplicationAction(
             .set(updates, { merge: true })
             .catch(() => {});
 
-        try {
-            await invalidateUserCache(userId);
-        } catch (err) {
-            logger.error("Failed to invalidate cache after Export application resubmission:", err);
+        try { await invalidateUserCache(userId);
+        } catch (err) { logger.error("Failed to invalidate cache after Export application resubmission:", err);
         }
 
         return { error: null, success: true as const, data: null, meta: null };
-    } catch (error) {
-        logger.error('resubmitExportApplicationAction error:', error);
+    } catch (error) { logger.error('resubmitExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to resubmit application', meta: null };
     }
 }

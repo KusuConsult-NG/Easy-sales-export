@@ -13,27 +13,21 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
+import { ActionResponse } from '@/lib/safe-action';
 import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { atomicUpdateUser } from '@/lib/services/userService';
 import { invalidateUserCache } from '@/lib/cache-invalidation';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface KYCVerificationResult {
-    error: null, success: boolean;
-    isMatch?: boolean;
-    /** Populated when names don't match — helps user see what name is on record */
-    hint?: string;
-}
+export type KYCVerificationResult = ActionResponse<{ isMatch: boolean; [key: string]: any }>;
 
-export interface SubmitKYCPayload {
-    firstName: string;
+export interface SubmitKYCPayload { firstName: string;
     lastName: string;
     /** 11-digit BVN (optional — only verified when provided) */
     bvn?: string;
     /** 11-digit NIN (optional — only verified when provided) */
-    nin?: string;
-}
+    nin?: string; }
 
 // ─── Verify BVN ──────────────────────────────────────────────────────────────
 
@@ -41,30 +35,24 @@ export interface SubmitKYCPayload {
  * Verify a single BVN against QoreID and save the result to Firestore.
  * Returns isMatch:true only if QoreID confirms the name matches the BVN record.
  */
-export async function verifyBVNAction(payload: {
-    bvn: string;
+export async function verifyBVNAction(payload: { bvn: string;
     firstName: string;
-    lastName: string;
-}): Promise<KYCVerificationResult> {
-    try {
+    lastName: string; }): Promise<KYCVerificationResult> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
         const userId = session.user!.id;
 
         const { bvn, firstName, lastName } = payload;
 
-        if (!bvn || !/^\d{11}$/.test(bvn)) {
-            return { success: false as const, error: 'BVN must be exactly 11 digits' };
+        if (!bvn || !/^\d{11}$/.test(bvn)) { return { success: false as const, error: 'BVN must be exactly 11 digits', data: null };
         }
-        if (!firstName || !lastName) {
-            return { success: false as const, error: 'First name and last name are required for BVN verification' };
+        if (!firstName || !lastName) { return { success: false as const, error: 'First name and last name are required for BVN verification', data: null };
         }
 
         // Guard: reject obviously fake / placeholder BVN patterns server-side
-        if (isObviouslyFakeId(bvn)) {
-            logger.warn('[verifyBVNAction] Suspicious BVN submitted', { userId, bvn });
-            return { success: false as const, error: fakeIdErrorMessage('BVN') };
+        if (isObviouslyFakeId(bvn)) { logger.warn('[verifyBVNAction] Suspicious BVN submitted', { userId, bvn });
+            return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
         }
 
         logger.info('BVN verification started [QOREID BYPASSED]', { userId, bvn: bvn.slice(0, 4) + '***' });
@@ -73,22 +61,17 @@ export async function verifyBVNAction(payload: {
         const result = { success: true as const, isMatch: true, error: null };
 
         // Persist result to Firestore regardless of match outcome
-        await atomicUpdateUser(userId, {
-            'kyc.bvn': bvn,
+        await atomicUpdateUser(userId, { 'kyc.bvn': bvn,
             'kyc.bvnVerified': result.success && result.isMatch,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.bvnStatus': result.success
                 ? (result.isMatch ? 'verified' : 'mismatch')
-                : 'failed',
-        });
+                : 'failed' });
 
-        if (!result.success) {
-            return { success: false as const, error: result.error || 'BVN verification failed' };
+        if (!result.success) { return { success: false as const, error: result.error || 'BVN verification failed', data: null };
         }
 
-        if (!result.isMatch) {
-            return { success: true as const, isMatch: false,
-                error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.' };
+        if (!result.isMatch) { return { success: false, error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.', data: null };
         }
 
         // Update overall KYC status if BVN now verified
@@ -97,10 +80,9 @@ export async function verifyBVNAction(payload: {
         await invalidateUserCache(userId);
 
         logger.info('BVN verified successfully', { userId });
-        return { success: true as const, isMatch: true };
-    } catch (error: any) {
-        logger.error('BVN verification action error', error);
-        return { success: false as const, error: error?.message || 'An unexpected error occurred' };
+        return { success: true, error: null, data: { isMatch: true } };
+    } catch (error: any) { logger.error('BVN verification action error', error);
+        return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
 
@@ -110,30 +92,24 @@ export async function verifyBVNAction(payload: {
  * Verify a single NIN against QoreID (nin-premium endpoint) and save
  * the result to Firestore.
  */
-export async function verifyNINAction(payload: {
-    nin: string;
+export async function verifyNINAction(payload: { nin: string;
     firstName: string;
-    lastName: string;
-}): Promise<KYCVerificationResult> {
-    try {
+    lastName: string; }): Promise<KYCVerificationResult> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const { nin, firstName, lastName } = payload;
 
-        if (!nin || !/^\d{11}$/.test(nin)) {
-            return { success: false as const, error: 'NIN must be exactly 11 digits' };
+        if (!nin || !/^\d{11}$/.test(nin)) { return { success: false as const, error: 'NIN must be exactly 11 digits', data: null };
         }
-        if (!firstName || !lastName) {
-            return { success: false as const, error: 'First name and last name are required for NIN verification' };
+        if (!firstName || !lastName) { return { success: false as const, error: 'First name and last name are required for NIN verification', data: null };
         }
 
         // Guard: reject obviously fake / placeholder NIN patterns server-side
-        if (isObviouslyFakeId(nin)) {
-            logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
-            return { success: false as const, error: fakeIdErrorMessage('NIN') };
+        if (isObviouslyFakeId(nin)) { logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
+            return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
         logger.info('NIN verification started [QOREID BYPASSED]', { userId, nin: nin.slice(0, 4) + '***' });
@@ -142,22 +118,17 @@ export async function verifyNINAction(payload: {
         const result = { success: true as const, isMatch: true, error: null };
 
         // Persist result to Firestore regardless of match outcome
-        await atomicUpdateUser(userId, {
-            'kyc.nin': nin,
+        await atomicUpdateUser(userId, { 'kyc.nin': nin,
             'kyc.ninVerified': result.success && result.isMatch,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.ninStatus': result.success
                 ? (result.isMatch ? 'verified' : 'mismatch')
-                : 'failed',
-        });
+                : 'failed' });
 
-        if (!result.success) {
-            return { success: false as const, error: result.error || 'NIN verification failed' };
+        if (!result.success) { return { success: false as const, error: result.error || 'NIN verification failed', data: null };
         }
 
-        if (!result.isMatch) {
-            return { success: true as const, isMatch: false,
-                error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.' };
+        if (!result.isMatch) { return { success: false, error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.', data: null };
         }
 
         // Update overall KYC status if NIN now verified
@@ -166,10 +137,9 @@ export async function verifyNINAction(payload: {
         await invalidateUserCache(userId);
 
         logger.info('NIN verified successfully', { userId });
-        return { success: true as const, isMatch: true };
-    } catch (error: any) {
-        logger.error('NIN verification action error', error);
-        return { success: false as const, error: error?.message || 'An unexpected error occurred' };
+        return { success: true, error: null, data: { isMatch: true } };
+    } catch (error: any) { logger.error('NIN verification action error', error);
+        return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
 
@@ -180,24 +150,19 @@ export async function verifyNINAction(payload: {
  * NOTE: PVC API is highly unreliable, so we allow users to pass this step
  * and defer to manual review.
  */
-export async function verifyVotersCardAction(payload: {
-    votersCardNumber: string;
+export async function verifyVotersCardAction(payload: { votersCardNumber: string;
     firstName: string;
-    lastName: string;
-}): Promise<KYCVerificationResult> {
-    try {
+    lastName: string; }): Promise<KYCVerificationResult> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const { votersCardNumber, firstName, lastName } = payload;
 
-        if (!votersCardNumber) {
-            return { success: false as const, error: "Voter's Card number is required" };
+        if (!votersCardNumber) { return { success: false as const, error: "Voter's Card number is required", data: null };
         }
-        if (!firstName || !lastName) {
-            return { success: false as const, error: "First name and last name are required for Voter's Card verification" };
+        if (!firstName || !lastName) { return { success: false as const, error: "First name and last name are required for Voter's Card verification", data: null };
         }
 
         logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });
@@ -207,15 +172,13 @@ export async function verifyVotersCardAction(payload: {
         const originalStatus = 'pending_manual_review';
 
         // Persist result to Firestore but forcefully override to allow the user to pass
-        await atomicUpdateUser(userId, {
-            'kyc.votersCard': votersCardNumber,
+        await atomicUpdateUser(userId, { 'kyc.votersCard': votersCardNumber,
             // Relaxation for Voter's Card: since PVC names in Nigeria often have inconsistent ordering
             // or the DB fails, we forcefully mark it verified so the user isn't stuck.
             'kyc.votersCardVerified': true,
             'kyc.votersCardVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.votersCardStatus': 'verified',
-            'kyc.votersCardOriginalQoreIdStatus': originalStatus,
-        });
+            'kyc.votersCardOriginalQoreIdStatus': originalStatus });
 
         // Update overall KYC status since we forced voter's card to verified
         await updateOverallKYCStatus(userId);
@@ -224,10 +187,9 @@ export async function verifyVotersCardAction(payload: {
 
         logger.info("Voter's Card allowed and bypassed for manual review", { userId });
         // Return 100% success to the frontend so KYCForm lets them proceed
-        return { success: true as const, isMatch: true };
-    } catch (error: any) {
-        logger.error("Voter's Card verification action error", error);
-        return { success: false as const, error: error?.message || 'An unexpected error occurred' };
+        return { success: true, error: null, data: { isMatch: true } };
+    } catch (error: any) { logger.error("Voter's Card verification action error", error);
+        return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
 
@@ -237,8 +199,7 @@ export async function verifyVotersCardAction(payload: {
  * Save personal KYC fields (no ID verification) — fullName, DOB, address etc.
  * Called from the onboarding flow after the form is filled.
  */
-export async function saveKYCProfileAction(payload: {
-    firstName: string;
+export async function saveKYCProfileAction(payload: { firstName: string;
     lastName: string;
     otherNames?: string;
     dateOfBirth: string;
@@ -247,11 +208,9 @@ export async function saveKYCProfileAction(payload: {
     city: string;
     state: string;
     idType?: string;
-    idNumber?: string;
-}): Promise<{ error: string | null, success: boolean;  }> {
-    try {
+    idNumber?: string; }): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -260,8 +219,7 @@ export async function saveKYCProfileAction(payload: {
             .join(' ');
 
         // Build root user update
-        const rootUpdate: Record<string, any> = {
-            'kyc.firstName': payload.firstName,
+        const rootUpdate: Record<string, any> = { 'kyc.firstName': payload.firstName,
             'kyc.lastName': payload.lastName,
             'kyc.otherNames': payload.otherNames || null,
             'kyc.fullName': computedFullName,
@@ -282,8 +240,7 @@ export async function saveKYCProfileAction(payload: {
             stateOfOrigin: payload.state,
             city: payload.city,
             residentialAddress: payload.address,
-            updatedAt: FieldValue.serverTimestamp(),
-        };
+            updatedAt: FieldValue.serverTimestamp() };
 
         await atomicUpdateUser(userId, rootUpdate);
 
@@ -291,8 +248,7 @@ export async function saveKYCProfileAction(payload: {
         // Propagate the latest phone / name / address to all module sub-collections
         // so that queries against those collections (SMS broadcast, admin views) are
         // always consistent. We use a Firestore batch for atomicity and efficiency.
-        try {
-            const batch = db.batch();
+        try { const batch = db.batch();
 
             // 1. academy_applications — find by userId
             const academySnap = await db
@@ -304,8 +260,7 @@ export async function saveKYCProfileAction(payload: {
                     'personalInfo.phone': payload.phoneNumber,
                     'personalInfo.fullName': computedFullName,
                     'personalInfo.state': payload.state,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
             }
 
             // 2. cooperative_members — find by userId
@@ -313,14 +268,12 @@ export async function saveKYCProfileAction(payload: {
                 .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .where('userId', '==', userId)
                 .get();
-            for (const doc of coopSnap.docs) {
-                batch.update(doc.ref, {
+            for (const doc of coopSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
                     state: payload.state,
                     address: payload.address,
                     fullName: computedFullName,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
             }
 
             // 3. wave_applications — find by userId
@@ -328,13 +281,11 @@ export async function saveKYCProfileAction(payload: {
                 .collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where('userId', '==', userId)
                 .get();
-            for (const doc of waveSnap.docs) {
-                batch.update(doc.ref, {
+            for (const doc of waveSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
                     stateOfOrigin: payload.state,
                     residentialAddress: payload.address,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
             }
 
             // 4. seller_verifications — find by userId
@@ -342,13 +293,11 @@ export async function saveKYCProfileAction(payload: {
                 .collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where('userId', '==', userId)
                 .get();
-            for (const doc of sellerSnap.docs) {
-                batch.update(doc.ref, {
+            for (const doc of sellerSnap.docs) { batch.update(doc.ref, {
                     phone: payload.phoneNumber,
                     'address.state': payload.state,
                     'address.city': payload.city,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
             }
 
             // 5. export_onboarding_applications — find by userId
@@ -356,28 +305,24 @@ export async function saveKYCProfileAction(payload: {
                 .collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where('userId', '==', userId)
                 .get();
-            for (const doc of exportSnap.docs) {
-                batch.update(doc.ref, {
+            for (const doc of exportSnap.docs) { batch.update(doc.ref, {
                     'profile.phone': payload.phoneNumber,
                     'profile.fullName': computedFullName,
                     'profile.state': payload.state,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
+                    updatedAt: FieldValue.serverTimestamp() });
             }
 
             await batch.commit();
             logger.info('Cross-module PII sync completed', { userId });
-        } catch (syncError: any) {
-            // Non-fatal — root KYC data was already saved. Log and continue.
+        } catch (syncError: any) { // Non-fatal — root KYC data was already saved. Log and continue.
             logger.warn('Cross-module PII sync partial failure', { userId, error: syncError?.message });
         }
 
         await invalidateUserCache(userId);
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error('Save KYC profile error', error);
-        return { success: false as const, error: error?.message || 'Failed to save KYC profile' };
+        return { success: true, error: null, data: null };
+    } catch (error: any) { logger.error('Save KYC profile error', error);
+        return { success: false as const, error: error?.message || 'Failed to save KYC profile', data: null };
     }
 }
 
@@ -396,12 +341,9 @@ async function updateOverallKYCStatus(userId: string) {
         // KYC is considered complete when BVN is verified and at least one primary ID (NIN or Voter's Card) is verified
         const kycComplete = bvnVerified && (ninVerified || votersCardVerified);
 
-        await atomicUpdateUser(userId, {
-            'kyc.status': kycComplete ? 'verified' : 'pending',
+        await atomicUpdateUser(userId, { 'kyc.status': kycComplete ? 'verified' : 'pending',
             'kyc.completedAt': kycComplete ? FieldValue.serverTimestamp() : null,
-            kycVerified: kycComplete,
-        });
-    } catch (err) {
-        logger.error('Failed to update overall KYC status', err);
+            kycVerified: kycComplete });
+    } catch (err) { logger.error('Failed to update overall KYC status', err);
     }
 }

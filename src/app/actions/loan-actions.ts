@@ -4,12 +4,10 @@ import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import {
-    loanApplicationSchema,
+import { loanApplicationSchema,
     loanApprovalSchema,
     type LoanApplicationData,
-    type LoanApprovalData
-} from "@/lib/validations/loan";
+    type LoanApprovalData } from "@/lib/validations/loan";
 import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
@@ -21,13 +19,11 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
  */
 export async function submitLoanApplication(
     data: z.infer<typeof loanApplicationSchema>
-) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-    try {
-        const validated = loanApplicationSchema.parse(data);
+    try { const validated = loanApplicationSchema.parse(data);
 
         // Create loan application in Firestore via transaction to ensure side-effects are atomic
         const result = await db.runTransaction(async (transaction) => {
@@ -40,16 +36,14 @@ export async function submitLoanApplication(
                 updatedAt: FieldValue.serverTimestamp(),
                 approvedBy: null,
                 approvedAt: null,
-                rejectionReason: null,
-            });
+                rejectionReason: null });
             return { loanId: loanRef.id };
         });
 
         const { loanId } = result;
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
-        try {
-            await createAdminAuditLog({
+        try { await createAdminAuditLog({
                 userId: session.user.id,
                 action: 'loan_approved', // Using existing enum or mapping
                 targetId: loanId,
@@ -57,101 +51,82 @@ export async function submitLoanApplication(
                 metadata: {
                     amount: validated.amount,
                     purpose: validated.purpose,
-                    repaymentPeriod: validated.repaymentPeriod,
-                },
-            });
-        } catch (auditError) {
-            console.error("Failed to log loan creation audit:", auditError);
+                    repaymentPeriod: validated.repaymentPeriod } });
+        } catch (auditError) { console.error("Failed to log loan creation audit:", auditError);
         }
 
-        return { error: null, success: true as const, data: { loanId, userId: session.user.id } };
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            return {
-                success: false as const,
-                error: "Validation error",
-                details: (error as z.ZodError).issues.map(e => e.message),
-            };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { if (error instanceof z.ZodError) {
+            return { success: false as const, error: "Validation error", details: (error as z.ZodError).issues.map(e => e.message), data: null };
         }
-        return { success: false as const, error: "Failed to submit loan application" };
+        return { success: false as const, error: "Failed to submit loan application", data: null };
     }
 }
 
 /**
  * Get all loan applications for current user
  */
-export async function getUserLoanApplications() {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function getUserLoanApplications() { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-    try {
-        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+    try { const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where('userId', '==', session.user.id)
             .orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { error: null, success: true as const, data: { loans, } };
-    } catch (error) {
-        return { success: false as const, error: "Failed to fetch loan applications", loans: [] };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { return { success: false as const, error: "Failed to fetch loan applications", loans: [], data: null };
     }
 }
 
 /**
  * Get a specific loan application by ID
  */
-export async function getLoanApplication(loanId: string) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function getLoanApplication(loanId: string) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
-    try {
-        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
+    try { const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
-            return { success: false as const, error: "Loan application not found", loan: null };
+            return { success: false as const, error: "Loan application not found", loan: null, data: null };
         }
 
         const data = loanDoc.data()!;
 
         // Check authorization - user can only view their own loans unless admin
-        if (data.userId !== session.user.id && !session.user.roles?.includes('admin')) {
-            return { success: false as const, error: "Unauthorized to view this loan", loan: null };
+        if (data.userId !== session.user.id && !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized to view this loan", loan: null, data: null };
         }
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
 
-        return { error: null, success: true as const, data: { loan, } };
-    } catch (error) {
-        return { success: false as const, error: "Failed to fetch loan application", loan: null };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { return { success: false as const, error: "Failed to fetch loan application", loan: null, data: null };
     }
 }
 
 /**
  * Get all pending loan applications (Admin only)
  */
-export async function getPendingLoanApplications() {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function getPendingLoanApplications() { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) {
-        return { success: false as const, error: "Unauthorized - Admin only", loans: [] };
+    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
     }
 
-    try {
-        const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+    try { const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .where('status', '==', LoanStatus.PENDING)
             .orderBy('createdAt', 'desc');
 
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { error: null, success: true as const, data: { loans, } };
-    } catch (error) {
-        return { success: false as const, error: "Failed to fetch pending loans", loans: [] };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { return { success: false as const, error: "Failed to fetch pending loans", loans: [], data: null };
     }
 }
 
@@ -160,12 +135,10 @@ export async function getPendingLoanApplications() {
  */
 export async function approveLoanApplication(
     data: z.infer<typeof loanApprovalSchema>
-) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) {
-        return { success: false as const, error: "Unauthorized - Admin only" };
+    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
     }
 
     try {
@@ -182,27 +155,22 @@ export async function approveLoanApplication(
                 throw new Error(`Loan application is already ${currentStatus}`);
             }
 
-            const updateData: Record<string, unknown> = {
-                status: validated.approved ? LoanStatus.APPROVED : LoanStatus.REJECTED,
+            const updateData: Record<string, unknown> = { status: validated.approved ? LoanStatus.APPROVED : LoanStatus.REJECTED,
                 approvedBy: session.user.id,
                 approvedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-            };
+                updatedAt: FieldValue.serverTimestamp() };
 
-            if (validated.notes) {
-                updateData.approvalNotes = validated.notes;
+            if (validated.notes) { updateData.approvalNotes = validated.notes;
             }
 
-            if (!validated.approved && validated.rejectionReason) {
-                updateData.rejectionReason = validated.rejectionReason;
+            if (!validated.approved && validated.rejectionReason) { updateData.rejectionReason = validated.rejectionReason;
             }
 
             transaction.update(loanRef, updateData);
         });
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
-        try {
-            await createAdminAuditLog({
+        try { await createAdminAuditLog({
                 userId: session.user.id,
                 action: validated.approved ? 'loan_approved' : 'loan_rejected',
                 targetId: validated.loanId,
@@ -210,35 +178,25 @@ export async function approveLoanApplication(
                 metadata: {
                     approved: validated.approved,
                     notes: validated.notes,
-                    rejectionReason: validated.rejectionReason,
-                },
-            });
-        } catch (auditError) {
-            console.error("Failed to log loan approval/rejection audit:", auditError);
+                    rejectionReason: validated.rejectionReason } });
+        } catch (auditError) { console.error("Failed to log loan approval/rejection audit:", auditError);
         }
 
-        return { error: null, success: true as const, data: { userId: session.user.id } };
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            return {
-                success: false as const,
-                error: "Validation error",
-                details: (error as z.ZodError).issues.map(e => e.message),
-            };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { if (error instanceof z.ZodError) {
+            return { success: false as const, error: "Validation error", details: (error as z.ZodError).issues.map(e => e.message)};
         }
-        return { success: false as const, error: "Failed to process loan approval" };
+        return { success: false as const, error: "Failed to process loan approval"};
     }
 }
 
 /**
  * Update loan status to DISBURSED (Admin only)
  */
-export async function disburseLoan(loanId: string, disbursementNotes?: string) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function disburseLoan(loanId: string, disbursementNotes?: string) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) {
-        return { success: false as const, error: "Unauthorized - Admin only" };
+    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only"};
     }
 
     try {
@@ -253,54 +211,40 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
                 throw new Error(`Loan must be APPROVED before disbursement. Current status: ${currentStatus}`);
             }
 
-            transaction.update(loanRef, {
-                status: LoanStatus.DISBURSED,
+            transaction.update(loanRef, { status: LoanStatus.DISBURSED,
                 disbursedAt: FieldValue.serverTimestamp(),
                 disbursedBy: session.user.id,
                 disbursementNotes,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+                updatedAt: FieldValue.serverTimestamp() });
         });
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
-        try {
-            await createAdminAuditLog({
+        try { await createAdminAuditLog({
                 userId: session.user.id,
                 action: 'loan_approved', // Using existing mapping
                 targetId: loanId,
                 targetType: 'loan_application',
                 metadata: {
                     status: 'disbursed',
-                    notes: disbursementNotes,
-                },
-            });
-        } catch (auditError) {
-            console.error("Failed to log loan disbursement audit:", auditError);
+                    notes: disbursementNotes } });
+        } catch (auditError) { console.error("Failed to log loan disbursement audit:", auditError);
         }
 
-        return { error: null, success: true as const, data: { userId: session.user.id } };
-    } catch (error) {
-        return { success: false as const, error: "Failed to disburse loan" };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { return { success: false as const, error: "Failed to disburse loan", data: null };
     }
 }
 
 /**
  * Get loan statistics (Admin only)
  */
-export async function getLoanStatistics() {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function getLoanStatistics() { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-    if (!session || !session.user.roles?.includes('admin')) {
-        return {
-            success: false as const,
-            error: "Unauthorized - Admin only",
-            stats: null
-        };
+    if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
     }
 
-    try {
-        // Optimization: Select only necessary fields to reduce bandwidth
+    try { // Optimization: Select only necessary fields to reduce bandwidth
         // Ideally, use Distributed Counters or Firestore Aggregation queries for 100k+ scale
         const loansSnapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
             .select('status', 'amount')
@@ -314,11 +258,9 @@ export async function getLoanStatistics() {
             disbursed: 0,
             repaid: 0,
             totalAmount: 0,
-            approvedAmount: 0,
-        };
+            approvedAmount: 0 };
 
-        loansSnapshot.docs.forEach(doc => {
-            const data = doc.data();
+        loansSnapshot.docs.forEach(doc => { const data = doc.data();
             const status = data.status as LoanStatus;
             const amount = data.amount as number || 0;
 
@@ -330,18 +272,15 @@ export async function getLoanStatistics() {
                 stats.approvedAmount += amount;
             }
             else if (status === LoanStatus.REJECTED) stats.rejected++;
-            else if (status === LoanStatus.DISBURSED) {
-                stats.disbursed++;
+            else if (status === LoanStatus.DISBURSED) { stats.disbursed++;
                 stats.approvedAmount += amount;
             }
-            else if (status === LoanStatus.REPAID) {
-                stats.repaid++;
+            else if (status === LoanStatus.REPAID) { stats.repaid++;
                 stats.approvedAmount += amount;
             }
         });
 
-        return { error: null, success: true as const, data: { stats, } };
-    } catch (error) {
-        return { success: false as const, error: "Failed to fetch loan statistics", stats: null };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { return { success: false as const, error: "Failed to fetch loan statistics", stats: null, data: null };
     }
 }

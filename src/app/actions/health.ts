@@ -5,29 +5,26 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
-export interface HealthIssue {
-    id: string; // userId
+export interface HealthIssue { id: string; // userId
     email: string;
     issueType: string;
     expectedState: string;
     actualState: string;
-    description: string;
-}
+    description: string; }
 
-export interface HealthReport {
-    totalScanned: number;
+export interface HealthReport { totalScanned: number;
     anomaliesFound: number;
-    issues: HealthIssue[];
-}
+    issues: HealthIssue[]; }
 
-export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ error: string | null, success: boolean, data?: HealthReport,  }> {
-    try {
+export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized access" };
+        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };
         }
 
         const db = getAdminDb();
@@ -71,8 +68,7 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
             // 3. Stale JWT Session Risk (Proxy check)
             // If the user's document was updated recently, but no active login within the last 2 hours.
             const untypedData = data as any;
-            if (untypedData.updatedAt && untypedData.lastLoginAt) {
-                 const lastLogin = (untypedData.lastLoginAt)?.toDate ? (untypedData.lastLoginAt).toDate().getTime() : new Date(untypedData.lastLoginAt).getTime();
+            if (untypedData.updatedAt && untypedData.lastLoginAt) { const lastLogin = (untypedData.lastLoginAt)?.toDate ? (untypedData.lastLoginAt).toDate().getTime() : new Date(untypedData.lastLoginAt).getTime();
                  const lastUpdated = (untypedData.updatedAt)?.toDate ? (untypedData.updatedAt).toDate().getTime() : new Date(untypedData.updatedAt).getTime();
                  // If document was mutated after their last login, their current JWT might be stale.
                  // This isn't inherently corruption, but raises a flag in health checks.
@@ -89,16 +85,9 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
             }
         });
 
-        return {
-             error: null, success: true as const,
-             data: {
-                 totalScanned: usersSnap.size,
-                 anomaliesFound: issues.length,
-                 issues
-             }
+        return { error: null, success: true as const, data: null
         };
 
-    } catch (e: any) {
-        return { success: false as const, error: e.message };
+    } catch (e: any) { return { success: false as const, error: e.message, data: null };
     }
 }

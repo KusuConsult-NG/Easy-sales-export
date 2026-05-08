@@ -13,26 +13,21 @@ import { requireSession } from "@/lib/session-guard";
 /**
  * Zod schema for AI chat message
  */
-const aiChatMessageSchema = z.object({
-    message: z.string().min(1, "Message required").max(2000, "Message too long"),
+const aiChatMessageSchema = z.object({ message: z.string().min(1, "Message required").max(2000, "Message too long"),
     context: z.object({
         currentPage: z.string().optional(),
         userRole: z.string().optional(),
-        metadata: z.record(z.string(), z.unknown()).optional(),
-    }).optional(),
-});
+        metadata: z.record(z.string(), z.unknown()).optional() }).optional() });
 
 /**
  * AI Chat message type
  */
-export interface AIChatMessage {
-    id: string;
+export interface AIChatMessage { id: string;
     userId: string;
     message: string;
     response: string;
     context?: Record<string, unknown>;
-    createdAt: Date;
-}
+    createdAt: Date; }
 
 /**
  * Send a message to AI and get response
@@ -40,9 +35,8 @@ export interface AIChatMessage {
  */
 export async function sendAIMessage(
     data: z.infer<typeof aiChatMessageSchema>
-) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
     try {
@@ -56,27 +50,19 @@ export async function sendAIMessage(
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-            },
-            body: JSON.stringify({
-                model: "gpt-4",
+                "Authorization": `Bearer ${process.env.OPENAI_API_KEY}` },
+            body: JSON.stringify({ model: "gpt-4",
                 messages: [
                     {
                         role: "system",
-                        content: systemPrompt,
-                    },
-                    {
-                        role: "user",
-                        content: validated.message,
-                    },
+                        content: systemPrompt },
+                    { role: "user",
+                        content: validated.message },
                 ],
                 temperature: 0.7,
-                max_tokens: 500,
-            }),
-        });
+                max_tokens: 500 }) });
 
-        if (!openaiResponse.ok) {
-            throw new Error("OpenAI API request failed");
+        if (!openaiResponse.ok) { throw new Error("OpenAI API request failed");
         }
 
         const aiData = await openaiResponse.json();
@@ -88,51 +74,34 @@ export async function sendAIMessage(
             message: validated.message,
             response: aiResponse,
             context: validated.context || {},
-            createdAt: FieldValue.serverTimestamp(),
-        });
+            createdAt: FieldValue.serverTimestamp() });
 
         // Audit log
-        await createAdminAuditLog({
-            userId: session.user.id,
+        await createAdminAuditLog({ userId: session.user.id,
             action: 'user_login', // Can add AI_CHAT to enum
             targetId: chatRef.id,
             targetType: 'ai_chat',
             metadata: {
                 messageLength: validated.message.length,
-                currentPage: validated.context?.currentPage,
-            },
-        });
+                currentPage: validated.context?.currentPage } });
 
-        return { error: null, success: true as const, data: { response: aiResponse,
-            chatId: chatRef.id,
-            userId: session.user.id, } };
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            return {
-                success: false as const,
-                error: "Validation error",
-                response: null,
-            };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { if (error instanceof z.ZodError) {
+            return { success: false as const, error: "Validation error", response: null};
         }
         logger.error("AI Chat Error:", error);
-        return {
-            success: false as const,
-            error: "Failed to get AI response. Please try again.",
-            response: null,
-        };
+        return { success: false as const, error: "Failed to get AI response. Please try again.", response: null};
     }
 }
 
 /**
  * Get chat history for current user
  */
-export async function getAIChatHistory(maxMessages: number = 20) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function getAIChatHistory(maxMessages: number = 20) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
-    try {
-        const chatQuery = db.collection(COLLECTIONS.AI_CHAT_HISTORY).where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
+    try { const chatQuery = db.collection(COLLECTIONS.AI_CHAT_HISTORY).where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
 
         const snapshot = await chatQuery.get();
 
@@ -144,35 +113,31 @@ export async function getAIChatHistory(maxMessages: number = 20) {
                 message: data.message,
                 response: data.response,
                 context: data.context,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            } as AIChatMessage;
+                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date() } as AIChatMessage;
         }).reverse(); // Reverse to show oldest first
 
-        return { error: null, success: true as const, data: { messages, } };
-    } catch (error) {
-        return { success: false as const, error: "Failed to fetch chat history", messages: [] };
+        return { error: null, success: true as const, data: null };
+    } catch (error) { return { success: false as const, error: "Failed to fetch chat history", messages: []};
     }
 }
 
 /**
  * Get context-aware suggestions based on current page
  */
-export async function getAISuggestions(context: { currentPage: string; userRole: string }) {
-    const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+export async function getAISuggestions(context: { currentPage: string; userRole: string }) { const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
     const { session } = sessionResult;
 
     // Generate contextual suggestions based on page
     const suggestions = generateSuggestions(context.currentPage, context.userRole);
 
-    return { error: null, success: true as const, data: { suggestions, } };
+    return { error: null, success: true as const, data: null };
 }
 
 /**
  * Build system prompt based on context
  */
-function buildSystemPrompt(context: any, userRole: string): string {
-    const basePrompt = `You are an AI assistant for the Easy Sales Export platform, a comprehensive agricultural export and marketplace system in Nigeria. You help users with:
+function buildSystemPrompt(context: any, userRole: string): string { const basePrompt = `You are an AI assistant for the Easy Sales Export platform, a comprehensive agricultural export and marketplace system in Nigeria. You help users with:
 - Farm Nation: Agricultural land listings, soil quality information, acreage calculations
 - Marketplace: Product listings, pricing, buyer-seller connections
 - Export Windows: International export processes, documentation, logistics
@@ -193,8 +158,7 @@ You should provide helpful, concise, and accurate information. Always be profess
             '/escrow': 'The user is viewing escrow transactions. Help with secure payments, escrow status, and dispute resolution.',
             '/academy': 'The user is in the learning academy. Help with courses, video content, and agricultural education.',
             '/loans': 'The user is managing loan applications. Help with loan amounts, collateral, repayment terms, and approval process.',
-            '/cooperatives': 'The user is in cooperatives section. Help with group farming, contributions, and member management.',
-        };
+            '/cooperatives': 'The user is in cooperatives section. Help with group farming, contributions, and member management.' };
 
         contextPrompt = pageContext[context.currentPage as keyof typeof pageContext] || '';
     }
@@ -211,8 +175,7 @@ You should provide helpful, concise, and accurate information. Always be profess
 /**
  * Generate context-aware suggestions
  */
-function generateSuggestions(currentPage: string, userRole: string): string[] {
-    const suggestionMap: Record<string, string[]> = {
+function generateSuggestions(currentPage: string, userRole: string): string[] { const suggestionMap: Record<string, string[]> = {
         '/farm-nation': [
             "How do I list my farmland?",
             "What soil quality is best for crops?",
@@ -247,8 +210,7 @@ function generateSuggestions(currentPage: string, userRole: string): string[] {
             "How do I join a cooperative?",
             "What are the benefits of cooperative farming?",
             "How are contributions tracked?",
-        ],
-    };
+        ] };
 
     return suggestionMap[currentPage] || [
         "How does the platform work?",

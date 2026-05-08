@@ -11,8 +11,7 @@ import { ActionResponse, withSafeAction } from "@/lib/safe-action";
 // Status type for strict typing
 export type BriefingStatus = "registered" | "attended" | "cancelled";
 
-export interface BriefingRegistrationData {
-    // Separated name fields (KYC-compliant)
+export interface BriefingRegistrationData { // Separated name fields (KYC-compliant)
     firstName?: string;
     lastName?: string;
     otherName?: string;
@@ -21,22 +20,19 @@ export interface BriefingRegistrationData {
     phoneNumber: string;
     email: string;
     state: string;
-    role: string;
-}
+    role: string; }
 
 import { z } from "zod";
 import { strictEmailSchema, strictNameSchema, strictNigerianPhoneSchema } from "@/lib/schemas";
 // Zod Validation Schema for Registration Data
-const briefingRegistrationSchema = z.object({
-    fullName: strictNameSchema,
+const briefingRegistrationSchema = z.object({ fullName: strictNameSchema,
     firstName: z.string().trim().optional(),
     lastName: z.string().trim().optional(),
     otherName: z.string().trim().optional(),
     email: strictEmailSchema,
     phoneNumber: strictNigerianPhoneSchema,
     state: z.string().trim().min(2, { message: "State is required" }),
-    role: z.string().trim().min(2, { message: "Role is required" }),
-});
+    role: z.string().trim().min(2, { message: "Role is required" }) });
 
 /**
  * Register a guest for the WAVE National Awareness Briefing
@@ -47,14 +43,13 @@ const briefingRegistrationSchema = z.object({
  * Public action — no auth required
  * NOTE: Declared as async function (not const) so Next.js "use server" validator accepts it.
  */
-export async function registerForBriefingAction(data: BriefingRegistrationData): Promise<ActionResponse<void>> {
-    try {
+export async function registerForBriefingAction(data: BriefingRegistrationData): Promise<ActionResponse<void>> { try {
         // Strict Zero-Trust Validation via Zod
         const validationResult = briefingRegistrationSchema.safeParse(data);
 
         if (!validationResult.success) {
             const firstError = validationResult.error.issues[0]?.message || "Invalid submission data";
-            return { success: false, error: firstError };
+            return { success: false as const, error: firstError, data: null };
         }
 
         const validData = validationResult.data!;
@@ -73,16 +68,13 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
                 .get(),
         ]);
 
-        if (!existingByEmail.empty) {
-            return { success: false as const, error: "This email address is already registered for the briefing." };
+        if (!existingByEmail.empty) { return { success: false as const, error: "This email address is already registered for the briefing.", data: null };
         }
-        if (!existingByPhone.empty) {
-            return { success: false as const, error: "This phone number is already registered for the briefing." };
+        if (!existingByPhone.empty) { return { success: false as const, error: "This phone number is already registered for the briefing.", data: null };
         }
 
         const status: BriefingStatus = "registered";
-        const docRef = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).add({
-            fullName: validData.fullName,
+        const docRef = await db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).add({ fullName: validData.fullName,
             firstName: validData.firstName || validData.fullName.split(' ')[0] || "",
             lastName: validData.lastName || validData.fullName.split(' ').slice(-1)[0] || "",
             otherName: validData.otherName || null,
@@ -94,21 +86,18 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
             updatedAt: FieldValue.serverTimestamp(),
             status: status,
             confirmationSent: false,
-            attended: false,
-        });
+            attended: false });
 
         logger.info(`[WAVE Briefing] New registration: ${emailToStore}`);
 
-        try {
-            const emailResult = await sendBriefingConfirmationEmail(emailToStore, validData.fullName);
+        try { const emailResult = await sendBriefingConfirmationEmail(emailToStore, validData.fullName);
             if (emailResult.success) {
                 await docRef.update({ confirmationSent: true });
                 logger.info(`[WAVE Briefing] Confirmation email sent to ${emailToStore}`);
             } else {
                 logger.warn(`[WAVE Briefing] Email failed for ${emailToStore}: ${emailResult.error}`);
             }
-            try {
-                await generateAndSendWhatsAppInvite("wave_briefing", { email: emailToStore, name: validData.fullName });
+            try { await generateAndSendWhatsAppInvite("wave_briefing", { email: emailToStore, name: validData.fullName });
             } catch (waError) {
                 logger.error(`[WAVE Briefing] WhatsApp invite failed for ${emailToStore}:`, waError);
             }
@@ -116,11 +105,10 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
             logger.error(`[WAVE Briefing] Email system error for ${emailToStore}:`, emailError);
         }
 
-        return { success: true as const };
-    } catch (error: any) {
-        logger.error("[WAVE Briefing] Registration error:", error);
+        return { success: true as const, error: null };
+    } catch (error: any) { logger.error("[WAVE Briefing] Registration error:", error);
         const msg = typeof error === 'string' ? error : (error?.message || "Registration failed");
-        return { success: false as const, error: msg };
+        return { success: false as const, error: msg, data: null };
     }
 }
 

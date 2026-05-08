@@ -1,72 +1,62 @@
 "use server";
 
-import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { initializePaystackPayment, verifyPaystackPayment } from "@/lib/paystack-server";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { rateLimit } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
-function nairaToKobo(naira: number): number {
-    return Math.round(naira * 100);
-}
-
-export interface PaymentInitState {
-    error: null, success: boolean;
-    data?: {
-        authorizationUrl: string;
-        reference: string;
-    };
-}
+function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
 
 /**
  * Initialize Paystack Payment for Property Purchase
  * Creates a payment session and returns authorization URL
  */
-export async function initializePropertyPaymentAction(
+async function _initializePropertyPaymentAction(
     propertyId: string,
     propertyTitle: string,
     amount: number,
     sellerId: string,
     buyerInfo: { fullName: string; email: string; phone: string; purpose: string; }
-): Promise<PaymentInitState> {
+): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user) { 
+            return { success: false, error: "Authentication required", data: null };
         }
 
         // Validate amount
-        if (amount < 10000) {
-            return { error: "Minimum property purchase is ₦10,000", success: false as const };
+        if (amount < 10000) { 
+            return { success: false, error: "Minimum property purchase is ₦10,000", data: null };
         }
 
         // Check if property exists and is available
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
-        if (!propertyDoc.exists) {
-            return { error: "Property not found", success: false as const };
+        if (!propertyDoc.exists) { 
+            return { success: false, error: "Property not found", data: null };
         }
 
         const propertyData = propertyDoc.data()!;
 
-        if (propertyData.status !== "available") {
-            return { error: "Property is no longer available", success: false as const };
+        if (propertyData.status !== "available") { 
+            return { success: false, error: "Property is no longer available", data: null };
         }
 
         // Buyer cannot purchase their own property
-        if (propertyData.ownerId === session.user.id) {
-            return { error: "You cannot purchase your own property", success: false as const };
+        if (propertyData.ownerId === session.user.id) { 
+            return { success: false, error: "You cannot purchase your own property", data: null };
         }
 
         // Initialize payment with Paystack
@@ -79,13 +69,13 @@ export async function initializePropertyPaymentAction(
                 propertyTitle,
                 sellerId,
                 type: "property_purchase",
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/farm-nation/payment/callback`,
+                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/farm-nation/payment/callback` 
             }
         );
 
         // Create pending purchase record in FARM_NATION_TRANSACTIONS
         const purchaseId = `${session.user.id}_${propertyId}_${Date.now()}`;
-        await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({
+        await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseId).set({ 
             id: purchaseId,
             propertyId,
             propertyName: propertyTitle,
@@ -103,64 +93,51 @@ export async function initializePropertyPaymentAction(
             escrowStatus: "pending",
             paymentReference: reference,
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp() 
         });
         
-        await propertyRef.update({
+        await propertyRef.update({ 
             status: "pending",
-            updatedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp() 
         });
 
-        return {
-            error: null, success: true as const,
-            data: {
-                authorizationUrl,
-                reference,
-            },
+        return { 
+            success: true, 
+            error: null, 
+            data: { authorizationUrl, reference } 
         };
-    } catch (error: any) {
+    } catch (error: any) { 
         logger.error("Property payment initialization error:", error);
-        return {
-            success: false as const,
-            error: error.message || "Failed to initialize payment. Please try again.",
-        };
+        return { success: false, error: error.message || "Failed to initialize payment. Please try again.", data: null };
     }
 }
+export const initializePropertyPaymentAction = withFlexibleSafeAction("initializePropertyPaymentAction", _initializePropertyPaymentAction);
 
 /**
  * Verify Property Purchase Payment
  * Updates ownership after successful payment
  */
-export async function verifyPropertyPaymentAction(reference: string): Promise<
-    | { success: true; error: null; message?: string; propertyId?: string }
-    | { success: false; error: string; data?: null; message?: string; propertyId?: string }
-> {
+async function _verifyPropertyPaymentAction(reference: string): Promise<ActionResponse<{ propertyId: string; message: string }>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+        if (!session?.user) { 
+            return { success: false, error: "Authentication required", data: null };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
-        if (!rateLimitResult.success) {
-            return {
-                success: false as const,
-                error: "Too many payment verification attempts. Please try again later."
-            };
+        if (!rateLimitResult.success) { 
+            return { success: false, error: "Too many payment verification attempts. Please try again later.", data: null };
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) {
-            return {
-                error: "Payment has already been processed",
-                success: false
-            };
+        if (existingPayment.exists) { 
+            return { success: false, error: "Payment has already been processed", data: null };
         }
 
         // Verify payment with Paystack
@@ -168,8 +145,9 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<
 
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
+                success: false,
                 error: `Payment ${paymentData.data.status}: ${paymentData.data.gateway_response}`,
-                success: false as const,
+                data: null
             };
         }
 
@@ -179,14 +157,14 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<
         const userId = metadata.userId;
 
         // Verify user match
-        if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false as const };
+        if (userId !== session.user.id) { 
+            return { success: false, error: "Payment verification failed: User mismatch", data: null };
         }
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
         let amountInNaira = 0;
 
-        await db.runTransaction(async (tx) => {
+        await db.runTransaction(async (tx) => { 
             const freshPropertyDoc = await tx.get(propertyRef);
             if (!freshPropertyDoc.exists) {
                 throw new Error("Property not found");
@@ -200,21 +178,21 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<
             }
 
             // Transfer ownership later, just lock it in escrow
-            const updatedData = {
+            const updatedData = { 
                 status: "pending_escrow", // Wait for admin to release C of O
                 escrowHeldAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp() 
             };
             tx.update(propertyRef, updatedData);
 
             // Mark payment as processed inside the transaction for full atomicity
             const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-            tx.set(processedRef, {
+            tx.set(processedRef, { 
                 processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "farm_nation_escrow",
-                reference,
+                reference 
             });
 
             // Global Ledger Record
@@ -238,34 +216,38 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<
                 .limit(1)
                 .get();
 
-            if (!purchaseQuery.empty) {
+            if (!purchaseQuery.empty) { 
                 const purchaseRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(purchaseQuery.docs[0].id);
                 tx.update(purchaseRef, {
                     status: "payment_confirmed",
                     escrowStatus: "held",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
-                    updatedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp() 
                 });
             }
-
-            return updatedData;
         });
 
         return {
-            error: null, success: true as const,
-            message: `Payment successful! Your funds are held securely in escrow for ${metadata.propertyTitle}.`,
-            propertyId,
+            success: true,
+            error: null,
+            data: { 
+                propertyId,
+                message: `Payment successful! Your funds are held securely in escrow for ${metadata.propertyTitle}.`
+            }
         };
     } catch (error: any) {
         logger.error('[Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyProperty',
             reference,
+            error: error instanceof Error ? error.message : String(error)
         });
 
         return {
-            success: false as const,
+            success: false,
             error: "Failed to verify payment. Please contact support with reference: " + reference,
+            data: null
         };
     }
 }
+export const verifyPropertyPaymentAction = withFlexibleSafeAction("verifyPropertyPaymentAction", _verifyPropertyPaymentAction);

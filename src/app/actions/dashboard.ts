@@ -14,26 +14,21 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  */
 
 // Type definitions
-export type DashboardStats = {
-    totalExports: number;
+export type DashboardStats = { totalExports: number;
     activeOrders: number;
     totalEscrow: number;
     cooperativeSavings: number;
     academyEnrollments: number;
-    onboardingCompleted: boolean;
-};
+    onboardingCompleted: boolean; };
 
-export type RecentActivity = {
-    id: string;
+export type RecentActivity = { id: string;
     type: "export" | "cooperative" | "academy" | "wave";
     title: string;
     description: string;
     timestamp: Date;
-    status?: string;
-}[];
+    status?: string; }[];
 
-export type EscrowStatus = {
-    totalLocked: number;
+export type EscrowStatus = { totalLocked: number;
     pendingRelease: number;
     nextReleaseDate: Date | null;
     upcomingReleases: {
@@ -43,23 +38,17 @@ export type EscrowStatus = {
     }[];
 };
 
-type DashboardActionState = {
-    error: string | null;
+type DashboardActionState = { error: string | null;
     success: boolean;
-    data?: DashboardStats;
-};
+    data?: DashboardStats; };
 
-type ActivityActionState = {
-    error: string | null;
+type ActivityActionState = { error: string | null;
     success: boolean;
-    data?: RecentActivity;
-};
+    data?: RecentActivity; };
 
-type EscrowActionState = {
-    error: string | null;
+type EscrowActionState = { error: string | null;
     success: boolean;
-    data?: EscrowStatus;
-};
+    data?: EscrowStatus; };
 
 // ============================================
 // Dashboard Stats Action
@@ -69,10 +58,9 @@ type EscrowActionState = {
 // Dashboard Stats Action
 // ============================================
 
-export async function getDashboardStatsAction(): Promise<DashboardActionState> {
-    try {
+export async function getDashboardStatsAction(): Promise<DashboardActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -136,15 +124,13 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
         const userData = userDoc.data();
         const cooperativeId = userData?.cooperativeId;
 
-        if (cooperativeId) {
-            // Priority: Check Root Collection (Standardized)
+        if (cooperativeId) { // Priority: Check Root Collection (Standardized)
             const rootMemberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
 
             if (rootMemberDoc.exists) {
                 const data = rootMemberDoc.data();
                 cooperativeSavings = data?.savingsBalance || data?.balance || 0;
-            } else {
-                // Fallback: Check Nested Collection (Legacy)
+            } else { // Fallback: Check Nested Collection (Legacy)
                 const nestedMemberDoc = await db
                     .collection(COLLECTIONS.COOPERATIVES)
                     .doc(cooperativeId)
@@ -158,21 +144,9 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             }
         }
 
-        return {
-            error: null,
-            success: true as const,
-            data: {
-                totalExports,
-                activeOrders,
-                totalEscrow,
-                cooperativeSavings,
-                academyEnrollments,
-                onboardingCompleted: userData?.onboardingCompleted ?? false,
-            },
-        };
-    } catch (error: any) {
-        logger.error("Dashboard stats error:", error);
-        return { error: "Failed to fetch dashboard stats", success: false as const };
+        return { error: null, success: true as const, data: null };
+    } catch (error: any) { logger.error("Dashboard stats error:", error);
+        return { error: "Failed to fetch dashboard stats", success: false as const, data: null };
     }
 }
 
@@ -180,10 +154,9 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
 // Recent Activity Action
 // ============================================
 
-export async function getRecentActivityAction(): Promise<ActivityActionState> {
-    try {
+export async function getRecentActivityAction(): Promise<ActivityActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -205,8 +178,7 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
                 title: `Export Order ${data.orderId}`,
                 description: `${data.commodity} - ${data.quantity}`,
                 timestamp: data.createdAt?.toDate() || new Date(),
-                status: data.status,
-            });
+                status: data.status });
         });
 
         // Fetch recent notifications
@@ -217,28 +189,22 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
             .limit(2)
             .get();
 
-        notificationsSnapshot.forEach(doc => {
-            const data = doc.data();
+        notificationsSnapshot.forEach(doc => { const data = doc.data();
             activities.push({
                 id: doc.id,
                 type: data.type || "export",
                 title: data.title,
                 description: data.message,
-                timestamp: data.createdAt?.toDate() || new Date(),
-            });
+                timestamp: data.createdAt?.toDate() || new Date() });
         });
 
         // Sort all activities by timestamp
         activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
-        return {
-            error: null,
-            success: true as const,
-            data: activities.slice(0, 5), // Return top 5
-        };
-    } catch (error: any) {
-        logger.error("Recent activity error:", error);
-        return { error: "Failed to fetch recent activity", success: false as const };
+        return { error: null, success: true as const, data: activities.slice(0, 5), // Return top 5
+ };
+    } catch (error: any) { logger.error("Recent activity error:", error);
+        return { error: "Failed to fetch recent activity", success: false as const, data: null };
     }
 }
 
@@ -246,10 +212,9 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
 // Escrow Status Action
 // ============================================
 
-export async function getEscrowStatusAction(): Promise<EscrowActionState> {
-    try {
+export async function getEscrowStatusAction(): Promise<EscrowActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -268,8 +233,7 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
 
         const now = new Date();
 
-        exportsSnapshot.forEach(docSnapshot => {
-            const data = docSnapshot.data();
+        exportsSnapshot.forEach(docSnapshot => { const data = docSnapshot.data();
             const amount = data.amount || 0;
             const escrowReleaseDate = data.escrowReleaseDate?.toDate();
 
@@ -279,17 +243,14 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
                 if (escrowReleaseDate <= now) {
                     // Ready for release
                     pendingRelease += amount;
-                } else {
-                    // Future release
+                } else { // Future release
                     upcomingReleases.push({
                         amount,
                         releaseDate: escrowReleaseDate,
-                        orderId: data.orderId,
-                    });
+                        orderId: data.orderId });
 
                     // Track next release date
-                    if (!nextReleaseDate || escrowReleaseDate < nextReleaseDate) {
-                        nextReleaseDate = escrowReleaseDate;
+                    if (!nextReleaseDate || escrowReleaseDate < nextReleaseDate) { nextReleaseDate = escrowReleaseDate;
                     }
                 }
             }
@@ -298,18 +259,8 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
         // Sort upcoming releases by date
         upcomingReleases.sort((a, b) => a.releaseDate.getTime() - b.releaseDate.getTime());
 
-        return {
-            error: null,
-            success: true as const,
-            data: {
-                totalLocked,
-                pendingRelease,
-                nextReleaseDate,
-                upcomingReleases: upcomingReleases.slice(0, 5), // Top 5
-            },
-        };
-    } catch (error: any) {
-        logger.error("Escrow status error:", error);
-        return { error: "Failed to fetch escrow status", success: false as const };
+        return { error: null, success: true as const, data: null };
+    } catch (error: any) { logger.error("Escrow status error:", error);
+        return { error: "Failed to fetch escrow status", success: false as const, data: null };
     }
 }

@@ -37,22 +37,25 @@ export async function createVillageMarketEventAction(data: {
     endTime: string;   // ISO string
     isRecurring?: boolean;
     recurringDay?: string;
-}): Promise<{ error: string | null, success: boolean; eventId?: string;  }> {
+}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         // Admins only
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false as const, error: "Unauthorized: admin role required" };
+            return { success: false as const, error: "Unauthorized: admin role required" , data: null };
         }
 
         const startTime = new Date(data.startTime);
         const endTime = new Date(data.endTime);
 
         if (endTime <= startTime) {
-            return { success: false as const, error: "End time must be after start time" };
+            return { success: false as const, error: "End time must be after start time" , data: null };
         }
 
         const eventDoc = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).add({
@@ -87,10 +90,10 @@ export async function createVillageMarketEventAction(data: {
             startTime,
         });
 
-        return { error: null, success: true as const, eventId: eventDoc.id };
+        return { error: null, success: true as const, eventId: eventDoc.id , data: null };
     } catch (err: any) {
         logger.error("createVillageMarketEventAction error:", err);
-        return { success: false as const, error: err.message || "Failed to create event" };
+        return { success: false as const, error: err.message || "Failed to create event" , data: null };
     }
 }
 
@@ -151,25 +154,28 @@ export async function getVillageMarketEventAction(eventId: string): Promise<{
 
 export async function joinVillageMarketEventAction(
     eventId: string
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         // Must be an approved seller
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (userDoc.data()?.sellerVerificationStatus !== "approved") {
-            return { success: false as const, error: "Your seller account must be approved to join Village Market events" };
+            return { success: false as const, error: "Your seller account must be approved to join Village Market events" , data: null };
         }
 
         const eventRef = db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId);
         const eventDoc = await eventRef.get();
-        if (!eventDoc.exists) return { success: false as const, error: "Event not found" };
+        if (!eventDoc.exists) return { success: false as const, error: "Event not found" , data: null };
 
         const eventData = eventDoc.data()!;
         if (!["upcoming", "active"].includes(eventData.status)) {
-            return { success: false as const, error: "This event is no longer accepting participants" };
+            return { success: false as const, error: "This event is no longer accepting participants" , data: null };
         }
 
         await eventRef.update({
@@ -177,10 +183,10 @@ export async function joinVillageMarketEventAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (err: any) {
         logger.error("joinVillageMarketEventAction error:", err);
-        return { success: false as const, error: err.message || "Failed to join event" };
+        return { success: false as const, error: err.message || "Failed to join event" , data: null };
     }
 }
 
@@ -198,20 +204,23 @@ export async function addFlashSaleProductAction(data: {
     availableQuantity?: number;
     imageUrl?: string;
     productId?: string; // Reference to existing marketplace product
-}): Promise<{ error: string | null, success: boolean; flashProductId?: string;  }> {
+}): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         // Check event exists and is accepting products
         const eventDoc = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(data.eventId).get();
-        if (!eventDoc.exists) return { success: false as const, error: "Event not found" };
+        if (!eventDoc.exists) return { success: false as const, error: "Event not found" , data: null };
 
         const eventData = eventDoc.data()!;
         const participantIds: string[] = eventData.participantSellerIds || [];
         if (!participantIds.includes(userId)) {
-            return { success: false as const, error: "You must join the event before listing products" };
+            return { success: false as const, error: "You must join the event before listing products" , data: null };
         }
 
         const docRef = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS).add({
@@ -231,10 +240,10 @@ export async function addFlashSaleProductAction(data: {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { error: null, success: true as const, flashProductId: docRef.id };
+        return { error: null, success: true as const, flashProductId: docRef.id , data: null };
     } catch (err: any) {
         logger.error("addFlashSaleProductAction error:", err);
-        return { success: false as const, error: err.message || "Failed to add product" };
+        return { success: false as const, error: err.message || "Failed to add product" , data: null };
     }
 }
 
@@ -245,14 +254,17 @@ export async function addFlashSaleProductAction(data: {
 export async function addExternalMerchantAction(
     eventId: string,
     merchant: Omit<ExternalMerchant, "id">
-): Promise<{ error: string | null, success: boolean; merchantId?: string;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false as const, error: "Unauthorized: admin role required" };
+            return { success: false as const, error: "Unauthorized: admin role required" , data: null };
         }
 
         const merchantId = `ext_${Date.now()}`;
@@ -263,10 +275,10 @@ export async function addExternalMerchantAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { error: null, success: true as const, merchantId };
+        return { error: null, success: true as const, merchantId , data: null };
     } catch (err: any) {
         logger.error("addExternalMerchantAction error:", err);
-        return { success: false as const, error: err.message || "Failed to add merchant" };
+        return { success: false as const, error: err.message || "Failed to add merchant" , data: null };
     }
 }
 
@@ -277,14 +289,17 @@ export async function addExternalMerchantAction(
 export async function updateVillageMarketEventStatusAction(
     eventId: string,
     status: "active" | "ended" | "cancelled"
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).update({
@@ -292,10 +307,10 @@ export async function updateVillageMarketEventStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (err: any) {
         logger.error("updateVillageMarketEventStatusAction error:", err);
-        return { success: false as const, error: err.message || "Failed to update event status" };
+        return { success: false as const, error: err.message || "Failed to update event status" , data: null };
     }
 }
 
@@ -305,22 +320,25 @@ export async function updateVillageMarketEventStatusAction(
 
 export async function removeFlashSaleProductAction(
     flashProductId: string
-): Promise<{ error: string | null, success: boolean;  }> {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         const docRef = db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS).doc(flashProductId);
         const doc = await docRef.get();
-        if (!doc.exists) return { success: false as const, error: "Product not found" };
-        if (doc.data()?.sellerId !== userId) return { success: false as const, error: "Unauthorized" };
+        if (!doc.exists) return { success: false as const, error: "Product not found" , data: null };
+        if (doc.data()?.sellerId !== userId) return { success: false as const, error: "Unauthorized" , data: null };
 
         await docRef.update({ status: "removed", updatedAt: FieldValue.serverTimestamp() });
-        return { error: null, success: true as const };
+        return { error: null, success: true as const , data: null };
     } catch (err: any) {
         logger.error("removeFlashSaleProductAction error:", err);
-        return { success: false as const, error: err.message || "Failed to remove product" };
+        return { success: false as const, error: err.message || "Failed to remove product" , data: null };
     }
 }
 
@@ -333,16 +351,16 @@ export async function getAdminVillageMarketEventsAction(options: {
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
 } = {}): Promise<
-    | { success: true; error: null; data?: VillageMarketEvent[]; lastDocId?: string; hasMore?: boolean }
-    | { success: false; error: string; data?: null; data?: VillageMarketEvent[]; lastDocId?: string; hasMore?: boolean }
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
         const userId = sessionResult.session.user.id;
 
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const fetchLimit = options.limit || 25;
@@ -371,6 +389,6 @@ export async function getAdminVillageMarketEventsAction(options: {
         };
     } catch (err: any) {
         logger.error("getAdminVillageMarketEventsAction error:", err);
-        return { success: false as const, error: err.message || "Failed to fetch market events" };
+        return { success: false as const, error: err.message || "Failed to fetch market events" , data: null };
     }
 }

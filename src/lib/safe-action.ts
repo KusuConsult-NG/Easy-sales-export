@@ -9,10 +9,13 @@ import { z } from "zod";
 export type ActionResponse<T = any> = {
     success: true;
     error: null;
-    data?: T;
+    data: T;
+    meta?: any;
 } | {
     success: false;
     error: string;
+    data: null;
+    meta?: any;
 };
 
 /**
@@ -59,7 +62,7 @@ export function withSafeAction<TArgs extends any[], TReturn>(
             if (error instanceof z.ZodError) {
                 const firstIssue = error.issues[0];
                 const errorMessage = firstIssue ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : "Invalid input data";
-                return { success: false, error: errorMessage };
+                return { success: false, error: errorMessage, data: null as any };
             }
 
             // Log full stack trace and redacted input securely via our new Telemetry
@@ -73,6 +76,7 @@ export function withSafeAction<TArgs extends any[], TReturn>(
             return {
                 success: false,
                 error: errorMessage,
+                data: null as any,
             };
         }
     };
@@ -85,8 +89,8 @@ export function withSafeAction<TArgs extends any[], TReturn>(
 export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
     actionName: string,
     actionFn: (...args: TArgs) => Promise<TReturn>
-): (...args: TArgs) => Promise<TReturn | { success: false; error: string }> {
-    return async (...args: TArgs): Promise<TReturn | { success: false; error: string }> => {
+): (...args: TArgs) => Promise<TReturn | { success: false; error: string; data: null }> {
+    return async (...args: TArgs): Promise<TReturn | { success: false; error: string; data: null }> => {
         try {
             return await actionFn(...args);
         } catch (error: any) {
@@ -102,7 +106,7 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
             if (error instanceof z.ZodError) {
                 const firstIssue = error.issues[0];
                 const errorMessage = firstIssue ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : "Invalid input data";
-                return { success: false, error: errorMessage };
+                return { success: false, error: errorMessage, data: null as any };
             }
 
             // Log full stack trace and redacted input securely via our new Telemetry
@@ -116,6 +120,7 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
             return {
                 success: false,
                 error: errorMessage,
+                data: null as any,
             };
         }
     };

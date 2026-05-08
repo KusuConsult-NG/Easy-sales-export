@@ -18,13 +18,11 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 /**
  * Get all conversations for the current user
  */
-export async function getConversationsAction() {
-    try {
+export async function getConversationsAction() { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", conversations: [] };
+        if (!session?.user?.id) { return { error: "Not authenticated", conversations: [] };
         }
 
         const conversationsRef = db.collection(COLLECTIONS.CONVERSATIONS);
@@ -37,8 +35,7 @@ export async function getConversationsAction() {
         const conversations = serializeDocs(snapshot.docs) as unknown as Conversation[];
 
         return { conversations, error: null };
-    } catch (error) {
-        logger.error("Get conversations error", error);
+    } catch (error) { logger.error("Get conversations error", error);
         return { error: "Failed to load conversations", conversations: [] };
     }
 }
@@ -47,21 +44,18 @@ export async function getConversationsAction() {
  * Admin-only: Get ALL conversations across all users
  * Used by the admin support inbox at /admin/messages
  */
-export async function getAllConversationsAdminAction() {
-    try {
+export async function getAllConversationsAdminAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", conversations: [] };
+        if (!session?.user?.id) { return { error: "Not authenticated", conversations: [] };
         }
 
         // Verify caller is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const roles: string[] = userDoc.data()?.roles ?? [];
         const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
-        if (!isAdmin) {
-            return { error: "Access denied", conversations: [] };
+        if (!isAdmin) { return { error: "Access denied", conversations: [] };
         }
 
         const snapshot = await db.collection(COLLECTIONS.CONVERSATIONS)
@@ -72,8 +66,7 @@ export async function getAllConversationsAdminAction() {
         const conversations = serializeDocs(snapshot.docs) as unknown as Conversation[];
 
         return { conversations, error: null };
-    } catch (error) {
-        logger.error("Get all conversations (admin) error", error);
+    } catch (error) { logger.error("Get all conversations (admin) error", error);
         return { error: "Failed to load conversations", conversations: [] };
     }
 }
@@ -81,26 +74,22 @@ export async function getAllConversationsAdminAction() {
 /**
  * Get messages for a specific conversation
  */
-export async function getMessagesAction(conversationId: string, limit = 50) {
-    try {
+export async function getMessagesAction(conversationId: string, limit = 50) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", messages: [] };
+        if (!session?.user?.id) { return { error: "Not authenticated", messages: [] };
         }
 
         // Verify user is participant OR is admin
         const conversationDoc = await db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId).get();
-        if (!conversationDoc.exists) {
-            return { error: "Conversation not found", messages: [] };
+        if (!conversationDoc.exists) { return { error: "Conversation not found", messages: [] };
         }
 
         const conversation = conversationDoc.data() as Conversation;
         const isParticipant = conversation.participants.includes(session.user.id);
 
-        if (!isParticipant) {
-            // Check if admin
+        if (!isParticipant) { // Check if admin
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const roles: string[] = userDoc.data()?.roles ?? [];
             const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
@@ -119,8 +108,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
         const messages = serializeDocs(snapshot.docs) as unknown as Message[];
 
         return { messages, error: null };
-    } catch (error) {
-        logger.error("Get messages error", error);
+    } catch (error) { logger.error("Get messages error", error);
         return { error: "Failed to load messages", messages: [] };
     }
 }
@@ -128,44 +116,38 @@ export async function getMessagesAction(conversationId: string, limit = 50) {
 /**
  * Send a message in a conversation
  */
-export async function sendMessageAction(conversationId: string, text: string) {
-    try {
+export async function sendMessageAction(conversationId: string, text: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", success: false as const };
+        if (!session?.user?.id) { return { error: "Not authenticated", success: false as const, data: null };
         }
 
         const trimmedText = text.trim();
-        if (!trimmedText) {
-            return { error: "Message cannot be empty", success: false as const };
+        if (!trimmedText) { return { error: "Message cannot be empty", success: false as const, data: null };
         }
 
         // Get conversation
         const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
         const conversationDoc = await conversationRef.get();
 
-        if (!conversationDoc.exists) {
-            return { error: "Conversation not found", success: false as const };
+        if (!conversationDoc.exists) { return { error: "Conversation not found", success: false as const, data: null };
         }
 
         const conversation = conversationDoc.data() as Conversation;
         const isParticipant = conversation.participants.includes(session.user.id);
 
-        if (!isParticipant) {
-            // Allow admins to reply to any conversation (support inbox)
+        if (!isParticipant) { // Allow admins to reply to any conversation (support inbox)
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
             const roles: string[] = userDoc.data()?.roles ?? [];
             const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
             if (!isAdmin) {
-                return { error: "Access denied", success: false as const };
+                return { error: "Access denied", success: false as const, data: null };
             }
         }
 
         // Add message
-        const messageData = {
-            senderId: session.user.id,
+        const messageData = { senderId: session.user.id,
             senderName: session.user.name || "User",
             senderEmail: session.user.email || "",
             text: trimmedText,
@@ -177,8 +159,7 @@ export async function sendMessageAction(conversationId: string, text: string) {
         await conversationRef.collection(COLLECTIONS.MESSAGES).add(messageData);
 
         // Update conversation's lastMessage, updatedAt, and lastMessageAt
-        await conversationRef.update({
-            lastMessage: {
+        await conversationRef.update({ lastMessage: {
                 text: trimmedText,
                 senderId: session.user.id,
                 senderName: session.user.name || "Support",
@@ -189,22 +170,19 @@ export async function sendMessageAction(conversationId: string, text: string) {
         });
 
         return { success: true as const, error: null };
-    } catch (error) {
-        logger.error("Send message error", error);
-        return { error: "Failed to send message", success: false as const };
+    } catch (error) { logger.error("Send message error", error);
+        return { error: "Failed to send message", success: false as const, data: null };
     }
 }
 
 /**
  * Mark messages as read in a conversation
  */
-export async function markAsReadAction(conversationId: string) {
-    try {
+export async function markAsReadAction(conversationId: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", success: false as const };
+        if (!session?.user?.id) { return { error: "Not authenticated", success: false as const, data: null };
         }
 
         const conversationRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
@@ -215,26 +193,22 @@ export async function markAsReadAction(conversationId: string) {
         });
 
         return { success: true as const, error: null };
-    } catch (error) {
-        logger.error("Mark as read error", error);
-        return { error: "Failed to mark as read", success: false as const };
+    } catch (error) { logger.error("Mark as read error", error);
+        return { error: "Failed to mark as read", success: false as const, data: null };
     }
 }
 
 /**
  * Start a new conversation with a user
  */
-export async function startConversationAction(participantUid: string, productId?: string, orderId?: string) {
-    try {
+export async function startConversationAction(participantUid: string, productId?: string, orderId?: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", conversationId: null };
+        if (!session?.user?.id) { return { error: "Not authenticated", conversationId: null };
         }
 
-        if (participantUid === session.user.id) {
-            return { error: "Cannot message yourself", conversationId: null };
+        if (participantUid === session.user.id) { return { error: "Cannot message yourself", conversationId: null };
         }
 
         // Check if conversation already exists
@@ -242,8 +216,7 @@ export async function startConversationAction(participantUid: string, productId?
             .where("participants", "array-contains", session.user.id)
             .get();
 
-        for (const doc of existingSnapshot.docs) {
-            const conversation = doc.data() as any;
+        for (const doc of existingSnapshot.docs) { const conversation = doc.data() as any;
             if (conversation.participants.includes(participantUid) && conversation.participants.length === 2) {
                 // Ensure exact match of chat context to avoid mingling product/order/generic chats
                 const hasMatchingProduct = productId ? conversation.productId === productId : !conversation.productId;
@@ -257,15 +230,13 @@ export async function startConversationAction(participantUid: string, productId?
 
         // Get participant details
         const participantDoc = await db.collection(COLLECTIONS.USERS).doc(participantUid).get();
-        if (!participantDoc.exists) {
-            return { error: "User not found", conversationId: null };
+        if (!participantDoc.exists) { return { error: "User not found", conversationId: null };
         }
 
         const participant = participantDoc.data();
 
         // Create new conversation
-        const conversationData: any = {
-            participants: [session.user.id, participantUid],
+        const conversationData: any = { participants: [session.user.id, participantUid],
             participantDetails: {
                 [session.user.id]: {
                     uid: session.user.id,
@@ -273,8 +244,7 @@ export async function startConversationAction(participantUid: string, productId?
                     email: session.user.email || "",
                     lastRead: null
                 },
-                [participantUid]: {
-                    uid: participantUid,
+                [participantUid]: { uid: participantUid,
                     name: participant?.fullName || "User",
                     email: participant?.email || "",
                     lastRead: null
@@ -291,8 +261,7 @@ export async function startConversationAction(participantUid: string, productId?
         const newConversation = await db.collection(COLLECTIONS.CONVERSATIONS).add(conversationData);
 
         return { conversationId: newConversation.id, error: null };
-    } catch (error) {
-        logger.error("Start conversation error", error);
+    } catch (error) { logger.error("Start conversation error", error);
         return { error: "Failed to start conversation", conversationId: null };
     }
 }
@@ -300,13 +269,11 @@ export async function startConversationAction(participantUid: string, productId?
 /**
  * Search for users to start a conversation with
  */
-export async function searchUsersAction(query: string) {
-    try {
+export async function searchUsersAction(query: string) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", users: [] };
+        if (!session?.user?.id) { return { error: "Not authenticated", users: [] };
         }
 
         const trimmedQuery = query.trim().toLowerCase();
@@ -319,8 +286,7 @@ export async function searchUsersAction(query: string) {
         const userIsAdmin = userRoles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
 
         // Mapping of user roles to module keywords found in admin emails
-        const ROLE_MODULE_KEYWORDS: Record<string, string> = {
-            wave_participant: "wave",
+        const ROLE_MODULE_KEYWORDS: Record<string, string> = { wave_participant: "wave",
             cooperative_member: "cooperative",
             academy_participant: "academy",
             marketplace_buyer: "marketplace",
@@ -337,8 +303,7 @@ export async function searchUsersAction(query: string) {
             .filter(Boolean) as string[];
 
         // If no query, return filtered administrators
-        if (!trimmedQuery) {
-            const adminsSnapshot = await db.collection(COLLECTIONS.USERS)
+        if (!trimmedQuery) { const adminsSnapshot = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains-any", ADMIN_ROLES)
                 .get();
 
@@ -353,8 +318,7 @@ export async function searchUsersAction(query: string) {
                         roles: userData.roles || []
                     };
                 })
-                .filter(admin => {
-                    // Admins see all other admins
+                .filter(admin => { // Admins see all other admins
                     if (userIsAdmin) return true;
                     
                     // Always show global/super admins
@@ -373,15 +337,13 @@ export async function searchUsersAction(query: string) {
         let generalSnapshot: any;
         let exactEmailSnapshot: any;
 
-        try {
-            [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
+        try { [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
                 db.collection(COLLECTIONS.USERS).orderBy("lastLoginAt", "desc").limit(500).get(),
                 // Add exact email lookup for the query string
                 db.collection(COLLECTIONS.USERS).where("email", "==", trimmedQuery.toLowerCase()).get()
             ]);
-        } catch (e) {
-            [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
+        } catch (e) { [adminsSnapshot, generalSnapshot, exactEmailSnapshot] = await Promise.all([
                 db.collection(COLLECTIONS.USERS).where("roles", "array-contains-any", ADMIN_ROLES).get(),
                 db.collection(COLLECTIONS.USERS).limit(500).get(),
                 db.collection(COLLECTIONS.USERS).where("email", "==", trimmedQuery.toLowerCase()).get()
@@ -391,8 +353,7 @@ export async function searchUsersAction(query: string) {
         const users: UserSearchResult[] = [];
         const seenIds = new Set<string>([session.user.id]);
 
-        const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-            if (seenIds.has(doc.id)) return;
+        const processDoc = (doc: FirebaseFirestore.QueryDocumentSnapshot) => { if (seenIds.has(doc.id)) return;
             const userData = doc.data();
             const fullName = (userData.fullName || "").toLowerCase();
             const email = (userData.email || "").toLowerCase();
@@ -407,8 +368,7 @@ export async function searchUsersAction(query: string) {
             }
 
             const matches = fullName.includes(trimmedQuery.toLowerCase()) || email.includes(trimmedQuery.toLowerCase());
-            if (matches) {
-                users.push({
+            if (matches) { users.push({
                     uid: doc.id,
                     fullName: userData.fullName || userData.email || "User",
                     email: userData.email || "",
@@ -419,16 +379,14 @@ export async function searchUsersAction(query: string) {
         };
 
         // Priority 1: Exact email match
-        if (exactEmailSnapshot) {
-            exactEmailSnapshot.docs.forEach(processDoc);
+        if (exactEmailSnapshot) { exactEmailSnapshot.docs.forEach(processDoc);
         }
 
         adminsSnapshot.docs.forEach(processDoc);
         generalSnapshot.docs.forEach(processDoc);
 
         return { users, error: null };
-    } catch (error) {
-        logger.error("Search users error", error);
+    } catch (error) { logger.error("Search users error", error);
         return { error: "Failed to search users", users: [] };
     }
 }
@@ -436,21 +394,18 @@ export async function searchUsersAction(query: string) {
 /**
  * Start a Support conversation with an Administrator
  */
-export async function startSupportConversationAction(module?: string) {
-    try {
+export async function startSupportConversationAction(module?: string) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { error: "Not authenticated", conversationId: null };
+        if (!session?.user?.id) { return { error: "Not authenticated", conversationId: null };
         }
 
         // Get user roles to find the right admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userRoles: string[] = userDoc.data()?.roles ?? [];
 
-        const ROLE_MODULE_KEYWORDS: Record<string, string> = {
-            wave_participant: "wave",
+        const ROLE_MODULE_KEYWORDS: Record<string, string> = { wave_participant: "wave",
             cooperative_member: "cooperative",
             academy_participant: "academy",
             marketplace_buyer: "marketplace",
@@ -467,8 +422,7 @@ export async function startSupportConversationAction(module?: string) {
             .filter(Boolean) as string[];
         
         // If a specific module was requested, prioritize it
-        if (module && !userModuleKeywords.includes(module)) {
-            userModuleKeywords.unshift(module);
+        if (module && !userModuleKeywords.includes(module)) { userModuleKeywords.unshift(module);
         }
 
         // Find admins
@@ -476,40 +430,34 @@ export async function startSupportConversationAction(module?: string) {
             .where("roles", "array-contains-any", ["admin", "super_admin", "wave_admin", "cooperative_admin", "marketplace_admin", "export_admin", "farmnation_admin", "academy_admin"])
             .get();
 
-        if (adminSnapshot.empty) {
-            return { error: "No admin available currently", conversationId: null };
+        if (adminSnapshot.empty) { return { error: "No admin available currently", conversationId: null };
         }
 
         // Pick the best admin for the user
-        let targetAdmin = adminSnapshot.docs.find(doc => {
-            const email = (doc.data().email || "").toLowerCase();
+        let targetAdmin = adminSnapshot.docs.find(doc => { const email = (doc.data().email || "").toLowerCase();
 
             return userModuleKeywords.some(keyword => email.includes(keyword));
         });
 
         // Fallback to global admin if no module admin found
-        if (!targetAdmin) {
-            targetAdmin = adminSnapshot.docs.find(doc => {
+        if (!targetAdmin) { targetAdmin = adminSnapshot.docs.find(doc => {
                 const email = (doc.data().email || "").toLowerCase();
                 return email.includes("super") || email.includes("admin.easysalesexport");
             });
         }
 
         // Final fallback to the first available admin
-        if (!targetAdmin) {
-            targetAdmin = adminSnapshot.docs[0];
+        if (!targetAdmin) { targetAdmin = adminSnapshot.docs[0];
         }
 
         const adminUid = targetAdmin.id;
 
         // If user is admin themselves, prevent messaging themselves
-        if (adminUid === session.user.id) {
-            return { error: "You are an admin", conversationId: null };
+        if (adminUid === session.user.id) { return { error: "You are an admin", conversationId: null };
         }
 
         return await startConversationAction(adminUid);
-    } catch (error) {
-        logger.error("Start support conversation error", error);
+    } catch (error) { logger.error("Start support conversation error", error);
         return { error: "Failed to start support conversation", conversationId: null };
     }
 }

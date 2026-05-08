@@ -19,11 +19,10 @@ const escrowStatusSchema = z.enum(["pending", "funded", "in_transit", "delivered
 /**
  * Get user's escrow transactions
  */
-async function _getUserEscrowTransactions() {
-    let sessionResult;
+async function _getUserEscrowTransactions() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -33,8 +32,7 @@ async function _getUserEscrowTransactions() {
             .orderBy("createdAt", "desc")
             .get();
 
-        const transactions = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const transactions = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 id: doc.id,
                 ...data,
@@ -43,17 +41,15 @@ async function _getUserEscrowTransactions() {
                 paidAt: (data.paidAt as Timestamp)?.toDate(),
                 releasedAt: (data.releasedAt as Timestamp)?.toDate(),
                 refundedAt: (data.refundedAt as Timestamp)?.toDate(),
-                releaseRequestedAt: (data.releaseRequestedAt as Timestamp)?.toDate(),
-            };
+                releaseRequestedAt: (data.releaseRequestedAt as Timestamp)?.toDate() };
         });
 
-        return { success: true as const, data: { transactions: serializeValue(transactions) as EscrowTransaction[] } };
-    } catch (error: any) {
-        logger.error("Get escrow transactions error:", {
+        return { success: true as const, error: null, data: null };
+    } catch (error: any) { logger.error("Get escrow transactions error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getUserEscrowTransactions = withFlexibleSafeAction("getUserEscrowTransactions", _getUserEscrowTransactions);
@@ -62,38 +58,32 @@ export const getUserEscrowTransactions = withFlexibleSafeAction("getUserEscrowTr
  * Get ALL escrow transactions (Admin only)
  * Used by the admin escrow management dashboard.
  */
-async function _getAllEscrowTransactionsAdmin(options: {
-    status?: EscrowStatus;
+async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
     limit?: number;
     lastDocId?: string;
     search?: string;
-    sortOrder?: "asc" | "desc";
-} = {}) {
-    let sessionResult;
+    sortOrder?: "asc" | "desc"; } = {}) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         // Live role re-validation
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
-        if (!callerRoles.includes("admin") && !callerRoles.includes("super_admin")) {
-            return { success: false as const, error: "Admin access required" };
+        if (!callerRoles.includes("admin") && !callerRoles.includes("super_admin")) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", sortDirection);
 
-        if (options.status) {
-            q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+        if (options.status) { q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("status", "==", options.status)
                 .orderBy("createdAt", sortDirection);
         }
 
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(options.lastDocId).get();
+        if (options.lastDocId) { const lastDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 q = q.startAfter(lastDoc);
             }
@@ -102,8 +92,7 @@ async function _getAllEscrowTransactionsAdmin(options: {
         q = q.limit(fetchLimit);
         const snapshot = await q.get();
 
-        let transactions = snapshot.docs.map(doc => {
-            const data = doc.data();
+        let transactions = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 id: doc.id,
                 ...data,
@@ -112,13 +101,11 @@ async function _getAllEscrowTransactionsAdmin(options: {
                 paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,
                 releasedAt: data.releasedAt ? (data.releasedAt as Timestamp).toDate().toISOString() : null,
                 refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
-                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null,
-            };
+                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null };
         });
 
         // Client-side search if specified
-        if (options.search) {
-            const s = options.search.toLowerCase();
+        if (options.search) { const s = options.search.toLowerCase();
             transactions = transactions.filter((t: any) => 
                 t.buyerEmail?.toLowerCase().includes(s) || 
                 t.sellerEmail?.toLowerCase().includes(s) || 
@@ -129,20 +116,13 @@ async function _getAllEscrowTransactionsAdmin(options: {
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { 
-            error: null, success: true as const, 
-            data: {
-                transactions: serializeValue(transactions) as EscrowTransaction[],
-                lastDocId: nextCursor,
-                hasMore: !!nextCursor
-            }
+        return { error: null, success: true as const, data: null
         };
-    } catch (error: any) {
-        logger.error("Get all escrow transactions admin error:", {
+    } catch (error: any) { logger.error("Get all escrow transactions admin error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const getAllEscrowTransactionsAdmin = withFlexibleSafeAction("getAllEscrowTransactionsAdmin", _getAllEscrowTransactionsAdmin);
@@ -153,11 +133,10 @@ export const getAllEscrowTransactionsAdmin = withFlexibleSafeAction("getAllEscro
 async function _updateEscrowStatus(
     transactionId: string,
     status: EscrowStatus
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -166,8 +145,7 @@ async function _updateEscrowStatus(
 
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
 
-        await db.runTransaction(async (tx) => {
-            const txDoc = await tx.get(txRef);
+        await db.runTransaction(async (tx) => { const txDoc = await tx.get(txRef);
             if (!txDoc.exists) throw new Error("Transaction not found");
 
             const txData = txDoc.data()!;
@@ -179,15 +157,13 @@ async function _updateEscrowStatus(
 
             // Validate state transitions
             const currentStatus = txData.status;
-            const validTransitions: Record<string, string[]> = {
-                pending: ["funded", "cancelled"],
+            const validTransitions: Record<string, string[]> = { pending: ["funded", "cancelled"],
                 funded: ["in_transit", "disputed", "cancelled"],
                 in_transit: ["delivered", "disputed"],
                 delivered: ["completed", "disputed"],
                 completed: [],
                 disputed: ["completed", "cancelled"],
-                cancelled: [],
-            };
+                cancelled: [] };
 
             if (!validTransitions[currentStatus]?.includes(status)) {
                 throw new Error(`Invalid status transition from ${currentStatus} to ${status}`);
@@ -198,22 +174,19 @@ async function _updateEscrowStatus(
                 (currentStatus === "disputed" || status === "completed") &&
                 !session.user.roles?.includes("admin") &&
                 !session.user.roles?.includes("super_admin")
-            ) {
-                throw new Error("Admin access required to perform this transition");
+            ) { throw new Error("Admin access required to perform this transition");
             }
 
             tx.update(txRef, {
                 status,
                 updatedAt: FieldValue.serverTimestamp(),
                 [`${status}At`]: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
         });
 
         // Notifications
         const txDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId).get();
-        if (txDoc.exists) {
-            const txData = txDoc.data()!;
+        if (txDoc.exists) { const txData = txDoc.data()!;
             const otherPartyId = txData.buyerId === userId ? txData.sellerId : txData.buyerId;
             const statusLabels: Record<string, string> = {
                 funded: "Funded",
@@ -221,30 +194,26 @@ async function _updateEscrowStatus(
                 delivered: "Delivered",
                 completed: "Completed",
                 disputed: "Disputed",
-                cancelled: "Cancelled",
-            };
+                cancelled: "Cancelled" };
             await createNotificationAction({
                 userId: otherPartyId,
                 type: "escrow",
                 title: `Escrow ${statusLabels[status] ?? status}`,
                 message: `The escrow for "${txData.productName}" has been updated to status: ${statusLabels[status] ?? status}.`,
                 link: `/escrow/${transactionId}`,
-                linkText: "View Escrow",
-            }).catch((e) => logger.error("[updateEscrowStatus] Notification failed:", e));
+                linkText: "View Escrow" }).catch((e) => logger.error("[updateEscrowStatus] Notification failed:", e));
         }
 
-        return { success: true as const, data: { message: "Escrow status updated successfully" } };
-    } catch (error: any) {
-        logger.error("Update escrow status error:", {
+        return { error: null,  success: true as const, data: null };
+    } catch (error: any) { logger.error("Update escrow status error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
 
-        if (error instanceof z.ZodError) {
-            return { success: false as const, error: "Invalid status value" };
+        if (error instanceof z.ZodError) { return { success: false as const, error: "Invalid status value"};
         }
 
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message};
     }
 }
 export const updateEscrowStatus = withFlexibleSafeAction("updateEscrowStatus", _updateEscrowStatus);
@@ -255,23 +224,20 @@ export const updateEscrowStatus = withFlexibleSafeAction("updateEscrowStatus", _
 async function _createEscrowDispute(
     transactionId: string,
     reason: string
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        if (!reason.trim() || reason.length < 10 || reason.length > 1000) {
-            return { success: false as const, error: "Dispute reason must be 10-1000 characters" };
+        if (!reason.trim() || reason.length < 10 || reason.length > 1000) { return { success: false as const, error: "Dispute reason must be 10-1000 characters"};
         }
 
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
 
-        await db.runTransaction(async (tx) => {
-            const txDoc = await tx.get(txRef);
+        await db.runTransaction(async (tx) => { const txDoc = await tx.get(txRef);
             if (!txDoc.exists) throw new Error("Transaction not found");
 
             const txData = txDoc.data()!;
@@ -284,8 +250,7 @@ async function _createEscrowDispute(
                 throw new Error(`Cannot dispute transaction in ${txData.status} status`);
             }
 
-            tx.set(disputeRef, {
-                escrowId: transactionId,
+            tx.set(disputeRef, { escrowId: transactionId,
                 buyerId: txData.buyerId,
                 sellerId: txData.sellerId,
                 reason,
@@ -294,24 +259,20 @@ async function _createEscrowDispute(
                 status: "open",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: 0,
-            });
+                _version: 0 });
 
-            tx.update(txRef, {
-                status: "disputed",
+            tx.update(txRef, { status: "disputed",
                 disputeId: disputeRef.id,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
         });
 
-        return { success: true as const, data: { message: "Escrow dispute created successfully" } };
-    } catch (error: any) {
-        logger.error("Create escrow dispute error:", {
+        return { error: null,  success: true as const, data: null };
+    } catch (error: any) { logger.error("Create escrow dispute error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message};
     }
 }
 export const createEscrowDispute = withFlexibleSafeAction("createEscrowDispute", _createEscrowDispute);
@@ -321,15 +282,13 @@ export const createEscrowDispute = withFlexibleSafeAction("createEscrowDispute",
  */
 async function _releaseEscrowFunds(
     transactionId: string
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
 
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { success: false as const, error: "Admin access required" };
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;
@@ -360,20 +319,16 @@ async function _releaseEscrowFunds(
                 description: `Release escrow funds for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: userId,
-                _version: 0,
-            });
+                _version: 0 });
 
-            tx.update(txRef, {
-                status: "released",
+            tx.update(txRef, { status: "released",
                 releasedAt: FieldValue.serverTimestamp(),
                 releasedBy: userId,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
         });
 
-        if (txData) {
-            await createAdminAuditLog({
+        if (txData) { await createAdminAuditLog({
                 userId,
                 action: 'escrow_released',
                 targetId: transactionId,
@@ -388,26 +343,23 @@ async function _releaseEscrowFunds(
                     title: "Escrow Funds Released",
                     message: `₦${txData.amount.toLocaleString()} for "${txData.productName}" has been released.`,
                     link: `/escrow/${transactionId}`,
-                    linkText: "View Details",
-                }),
+                    linkText: "View Details" }),
                 createNotificationAction({
                     userId: txData.buyerId,
                     type: "escrow",
                     title: "Transaction Completed",
                     message: `Escrow for "${txData.productName}" completed and funds released.`,
                     link: `/escrow/${transactionId}`,
-                    linkText: "View Details",
-                }),
+                    linkText: "View Details" }),
             ]).catch((e) => logger.error("[releaseEscrowFunds] Notifications failed:", e));
         }
 
-        return { success: true as const, data: { message: "Escrow funds released successfully" } };
-    } catch (error: any) {
-        logger.error("Release escrow funds error:", {
+        return { error: null,  success: true as const, data: null };
+    } catch (error: any) { logger.error("Release escrow funds error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message};
     }
 }
 export const releaseEscrowFunds = withFlexibleSafeAction("releaseEscrowFunds", _releaseEscrowFunds);
@@ -417,15 +369,13 @@ export const releaseEscrowFunds = withFlexibleSafeAction("releaseEscrowFunds", _
  */
 async function _refundEscrowToBuyer(
     transactionId: string
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
 
-        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { success: false as const, error: "Admin access required" };
+        if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Admin access required"};
         }
 
         const userId = session.user.id;
@@ -455,20 +405,16 @@ async function _refundEscrowToBuyer(
                 description: `Refund escrow for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
                 createdBy: userId,
-                _version: 0,
-            });
+                _version: 0 });
 
-            tx.update(txRef, {
-                status: "cancelled",
+            tx.update(txRef, { status: "cancelled",
                 refundedAt: FieldValue.serverTimestamp(),
                 refundedBy: userId,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
         });
 
-        if (txData) {
-            await createAdminAuditLog({
+        if (txData) { await createAdminAuditLog({
                 userId,
                 action: 'escrow_refunded',
                 targetId: transactionId,
@@ -483,26 +429,23 @@ async function _refundEscrowToBuyer(
                     title: "Escrow Refunded",
                     message: `Your escrow of ₦${txData.amount.toLocaleString()} for "${txData.productName}" has been refunded.`,
                     link: `/escrow/${transactionId}`,
-                    linkText: "View Details",
-                }),
+                    linkText: "View Details" }),
                 createNotificationAction({
                     userId: txData.sellerId,
                     type: "escrow",
                     title: "Escrow Cancelled",
                     message: `The escrow for "${txData.productName}" has been cancelled and funds returned to buyer.`,
                     link: `/escrow/${transactionId}`,
-                    linkText: "View Details",
-                }),
+                    linkText: "View Details" }),
             ]).catch((e) => logger.error("[refundEscrowToBuyer] Notifications failed:", e));
         }
 
-        return { success: true as const, data: { message: "Escrow refunded to buyer successfully" } };
-    } catch (error: any) {
-        logger.error("Refund escrow error:", {
+        return { success: true as const, error: null, data: null };
+    } catch (error: any) { logger.error("Refund escrow error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 export const refundEscrowToBuyer = withFlexibleSafeAction("refundEscrowToBuyer", _refundEscrowToBuyer);

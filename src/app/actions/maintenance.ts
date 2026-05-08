@@ -11,12 +11,10 @@ import { logger } from "@/lib/logger";
  * 
  * Heals records missing createdAt or updatedAt to prevent dashboard crashes.
  */
-export async function repairDataAction() {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
+export async function repairDataAction() { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
-    try {
-        const db = getAdminDb();
+    try { const db = getAdminDb();
         const snapshot = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS).get();
         const batch = db.batch();
         let count = 0;
@@ -35,8 +33,7 @@ export async function repairDataAction() {
             }
         });
 
-        if (count > 0) {
-            await batch.commit();
+        if (count > 0) { await batch.commit();
         }
 
         // Also check wallet transactions if necessary
@@ -44,8 +41,7 @@ export async function repairDataAction() {
         const walletBatch = db.batch();
         let walletCount = 0;
         
-        walletSnap.docs.forEach((doc) => {
-            const data = doc.data();
+        walletSnap.docs.forEach((doc) => { const data = doc.data();
             if (!data.createdAt || !data.updatedAt) {
                 walletBatch.update(doc.ref, {
                     createdAt: data.createdAt || new Date(),
@@ -56,17 +52,18 @@ export async function repairDataAction() {
             }
         });
 
-        if (walletCount > 0) {
-            await walletBatch.commit();
+        if (walletCount > 0) { await walletBatch.commit();
         }
 
-        return { 
-            error: null, success: true as const, 
-            message: `Healed ${count} payment records and ${walletCount} wallet records.` 
+        return {
+            error: null,
+            success: true as const,
+            message: `Healed ${count} payment records and ${walletCount} wallet records.`,
+            data: { paymentCount: count, walletCount }
         };
     } catch (error: any) {
         logger.error("[Maintenance] Repair error:", error);
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 
@@ -77,11 +74,11 @@ export async function repairDataAction() {
  */
 export async function runConsistencyCheckAction() {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
     try {
         const db = getAdminDb();
-        
+
         const [usersSnap, coopSnap, waveSnap, authCountSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS).count().get(),
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).count().get(),
@@ -100,8 +97,9 @@ export async function runConsistencyCheckAction() {
         });
 
         return {
-            error: null, success: true as const,
-            report: {
+            error: null,
+            success: true as const,
+            data: {
                 firestoreUserDocs: totalUsers,
                 uniqueEmailsInUsers: emails.size,
                 cooperativeMembershipDocs: totalCoop,
@@ -111,7 +109,7 @@ export async function runConsistencyCheckAction() {
             }
         };
     } catch (error: any) {
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message, data: null };
     }
 }
 
@@ -120,20 +118,17 @@ export async function runConsistencyCheckAction() {
  * 
  * Purges Next.js cache across the entire Hub.
  */
-export async function hardResetCacheAction() {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
+export async function hardResetCacheAction() { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
-    try {
-        revalidatePath("/", "layout");
+    try { revalidatePath("/", "layout");
         
         // Clear Redis via helper
         const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
         await invalidateAdminGlobalStats();
 
-        return { success: true as const, message: "Global cache purge triggered successfully." };
-    } catch (error: any) {
-        return { success: false as const, error: error.message };
+        return { error: null,  success: true as const, message: "Global cache purge triggered successfully." , data: null };
+    } catch (error: any) { return { success: false as const, error: error.message, data: null };
     }
 }
 
@@ -141,15 +136,12 @@ export async function hardResetCacheAction() {
  * 4. Cleanup Abandoned Drafts
  * (Required by Maintenance UI)
  */
-export async function cleanupAbandonedDraftsAction() {
-    const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
+export async function cleanupAbandonedDraftsAction() { const authCheck = await requireAdmin();
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized", data: null };
 
-    try {
-        const db = getAdminDb();
+    try { const db = getAdminDb();
         // Placeholder for logic to delete old 'draft' applications
-        return { success: true as const, message: "Draft cleanup executed (Dry run).", count: 0 };
-    } catch (error: any) {
-        return { success: false as const, error: error.message, count: 0 };
+        return { success: true as const, message: "Draft cleanup executed (Dry run).", count: 0, error: null };
+    } catch (error: any) { return { success: false as const, error: error.message, count: 0, data: null };
     }
 }

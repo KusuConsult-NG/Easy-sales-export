@@ -14,8 +14,7 @@ import { requireSession } from "@/lib/session-guard";
  * Slot-based export booking with countdown timers
  */
 
-export interface ExportWindow {
-    id?: string;
+export interface ExportWindow { id?: string;
     title: string;
     commodity: string;
     targetVolume: number; // in kg
@@ -26,11 +25,9 @@ export interface ExportWindow {
     destination: string;
     status: "open" | "closed" | "in_transit" | "completed";
     createdAt: FieldValue | Timestamp;
-    createdBy: string;
-}
+    createdBy: string; }
 
-export interface ExportSlot {
-    id?: string;
+export interface ExportSlot { id?: string;
     windowId: string;
     userId: string;
     userEmail: string;
@@ -39,28 +36,23 @@ export interface ExportSlot {
     totalCost: number;
     status: "pending" | "confirmed" | "paid" | "shipped";
     bookedAt: FieldValue | Timestamp;
-    paidAt?: FieldValue | Timestamp;
-}
+    paidAt?: FieldValue | Timestamp; }
 
 /**
  * Admin: Create export window
  */
-export async function createExportWindowAction(data: {
-    title: string;
+export async function createExportWindowAction(data: { title: string;
     commodity: string;
     targetVolume: number;
     slotPrice: number;
     startDate: string;
     endDate: string;
     destination: string;
-    adminId: string;
-}) {
-    try {
+    adminId: string; }) { try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
 
-        const window: Omit<ExportWindow, "id"> = {
-            title: data.title,
+        const window: Omit<ExportWindow, "id"> = { title: data.title,
             commodity: data.commodity,
             targetVolume: data.targetVolume,
             currentVolume: 0,
@@ -70,26 +62,21 @@ export async function createExportWindowAction(data: {
             destination: data.destination,
             status: "open",
             createdAt: FieldValue.serverTimestamp(),
-            createdBy: data.adminId,
-        };
+            createdBy: data.adminId };
 
         const docRef = await db.collection(COLLECTIONS.EXPORT_WINDOWS).add(window);
 
-        await createAdminAuditLog({
-            action: "user_update",
+        await createAdminAuditLog({ action: "user_update",
             userId: data.adminId,
             targetId: docRef.id,
             targetType: "export_window_creation",
             metadata: {
                 commodity: data.commodity,
                 targetVolume: data.targetVolume,
-                destination: data.destination,
-            },
-        });
+                destination: data.destination } });
 
-        return { error: null, success: true as const, data: { windowId: docRef.id }, meta: null };
-    } catch (error) {
-        logger.error("Export window creation error:", error);
+        return { error: null, success: true as const, data: null, meta: null };
+    } catch (error) { logger.error("Export window creation error:", error);
         return { success: false as const, data: null, error: "Failed to create export window", meta: null };
     }
 }
@@ -97,16 +84,14 @@ export async function createExportWindowAction(data: {
 /**
  * Get active export windows
  */
-export async function getActiveExportWindowsAction() {
-    try {
+export async function getActiveExportWindowsAction() { try {
         const q = db.collection(COLLECTIONS.EXPORT_WINDOWS).where("status", "==", "open");
 
         const snapshot = await q.get();
 
         const windows = serializeDocs(snapshot.docs) as unknown as ExportWindow[];
         return { error: null, success: true as const, data: windows, meta: null };
-    } catch (error) {
-        logger.error("Failed to fetch export windows:", error);
+    } catch (error) { logger.error("Failed to fetch export windows:", error);
         return { success: false as const, data: [], meta: null, error: "Failed to fetch" };
     }
 }
@@ -114,79 +99,59 @@ export async function getActiveExportWindowsAction() {
 /**
  * Book export slot
  */
-export async function bookExportSlotAction(data: {
-    windowId: string;
+export async function bookExportSlotAction(data: { windowId: string;
     userId: string;
     userEmail: string;
     fullName: string;
-    volume: number;
-}) {
-    try {
+    volume: number; }) { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error, data: null };
 
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
 
-        if (!windowDoc.exists) {
-            return { success: false as const, data: null, error: "Export window not found", meta: null };
+        if (!windowDoc.exists) { return { success: false as const, data: null, error: "Export window not found", meta: null };
         }
 
         const windowData = windowDoc.data() as ExportWindow;
 
-        if (windowData.status !== "open") {
-            return { success: false as const, data: null, error: "Export window is closed", meta: null };
+        if (windowData.status !== "open") { return { success: false as const, data: null, error: "Export window is closed", meta: null };
         }
 
-        if (new Date() > new Date(windowData.endDate)) {
-            return { success: false as const, data: null, error: "Export window has expired", meta: null };
+        if (new Date() > new Date(windowData.endDate)) { return { success: false as const, data: null, error: "Export window has expired", meta: null };
         }
 
-        if (windowData.currentVolume + data.volume > windowData.targetVolume) {
-            return {
-                error: "Action failed", success: false as const,
-                data: null,
-                meta: null,
-                error: `Only ${windowData.targetVolume - windowData.currentVolume}kg available`,
-            };
+        if (windowData.currentVolume + data.volume > windowData.targetVolume) { return { error: "Action failed", success: false as const, data: null, meta: null, error: `Only ${windowData.targetVolume - windowData.currentVolume }kg available` };
         }
 
         const totalCost = data.volume * windowData.slotPrice;
 
-        const slot: Omit<ExportSlot, "id"> = {
-            windowId: data.windowId,
+        const slot: Omit<ExportSlot, "id"> = { windowId: data.windowId,
             userId: data.userId,
             userEmail: data.userEmail,
             fullName: data.fullName,
             volume: data.volume,
             totalCost,
             status: "pending",
-            bookedAt: FieldValue.serverTimestamp(),
-        };
+            bookedAt: FieldValue.serverTimestamp() };
 
         const slotRef = await db.collection(COLLECTIONS.EXPORT_SLOTS).add(slot);
 
         // Update window volume
-        await windowRef.update({
-            currentVolume: windowData.currentVolume + data.volume,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        await windowRef.update({ currentVolume: windowData.currentVolume + data.volume,
+            updatedAt: FieldValue.serverTimestamp() });
 
-        await createAdminAuditLog({
-            action: "user_update",
+        await createAdminAuditLog({ action: "user_update",
             userId: data.userId,
             targetId: slotRef.id,
             targetType: "export_slot_booking",
             metadata: {
                 windowId: data.windowId,
                 volume: data.volume,
-                totalCost,
-            },
-        });
+                totalCost } });
 
-        return { error: null, success: true as const, data: { slotId: slotRef.id }, meta: null };
-    } catch (error) {
-        logger.error("Slot booking error:", error);
+        return { error: null, success: true as const, data: null, meta: null };
+    } catch (error) { logger.error("Slot booking error:", error);
         return { success: false as const, data: null, error: "Failed to book export slot", meta: null };
     }
 }
@@ -194,10 +159,9 @@ export async function bookExportSlotAction(data: {
 /**
  * Get user export slots
  */
-export async function getUserExportSlotsAction(userId: string) {
-    try {
+export async function getUserExportSlotsAction(userId: string) { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error, data: null };
 
         const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 
@@ -205,8 +169,7 @@ export async function getUserExportSlotsAction(userId: string) {
 
         const slots = serializeDocs(snapshot.docs) as unknown as ExportSlot[];
         return { error: null, success: true as const, data: slots, meta: null };
-    } catch (error) {
-        logger.error("Failed to fetch export slots:", error);
+    } catch (error) { logger.error("Failed to fetch export slots:", error);
         return { success: false as const, data: [], error: "Fetch failed", meta: null };
     }
 }

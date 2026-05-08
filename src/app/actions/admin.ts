@@ -3503,7 +3503,7 @@ async function _onboardLegacyMemberAction(
                 } : {},
                 notifications: {
                     newOrders: true,
-                    payments: true,
+                    payments: true
                 },
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
@@ -3531,7 +3531,7 @@ async function _onboardLegacyMemberAction(
         return { 
             error: null, success: true as const, 
             message: `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`,
-            error: null 
+            data: null 
         };
 
     } catch (error: any) {

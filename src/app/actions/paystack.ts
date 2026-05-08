@@ -2,27 +2,23 @@
 
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
+import { ActionResponse } from '@/lib/safe-action';
 
 /**
  * Paystack Integration Server Actions
  * Handles bank verification and related Paystack API calls
  */
 
-interface Bank {
-    id: number;
+interface Bank { id: number;
     name: string;
     code: string;
-    slug: string;
-}
+    slug: string; }
 
-interface BankListResponse {
-    status: boolean;
+interface BankListResponse { status: boolean;
     message: string;
-    data: Bank[];
-}
+    data: Bank[]; }
 
-interface VerifyAccountResponse {
-    status: boolean;
+interface VerifyAccountResponse { status: boolean;
     message: string;
     data?: {
         account_number: string;
@@ -31,33 +27,26 @@ interface VerifyAccountResponse {
     };
 }
 
-export interface BankVerificationResult {
-    error: null, success: boolean;
-    accountName?: string;
-}
+export type BankVerificationResult = ActionResponse<{ accountName: string }>;
 
 /**
  * Fetch list of Nigerian banks supported by Paystack
  */
-export async function getBankList(): Promise<{ error: string | null, success: boolean; banks?: Bank[];  }> {
-    try {
+export async function getBankList(): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error, data: null };
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
-        if (!secretKey) {
-            logger.error('PAYSTACK_SECRET_KEY not configured');
-            return { success: false as const, error: 'Payment service not configured' };
+        if (!secretKey) { logger.error('PAYSTACK_SECRET_KEY not configured');
+            return { success: false, error: 'Payment service not configured', data: null };
         }
 
         const response = await fetch('https://api.paystack.co/bank?country=nigeria', {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${secretKey}`,
-                'Content-Type': 'application/json',
-            },
-        });
+                'Content-Type': 'application/json' } });
 
         if (!response.ok) {
             throw new Error(`Paystack API error: ${response.status}`);
@@ -65,17 +54,12 @@ export async function getBankList(): Promise<{ error: string | null, success: bo
 
         const data: BankListResponse = await response.json();
 
-        if (!data.status || !data.data) {
-            return { success: false as const, error: 'Failed to fetch bank list' };
+        if (!data.status || !data.data) { return { success: false, error: 'Failed to fetch bank list', data: null };
         }
 
-        return { error: null, success: true as const, banks: data.data, };
-    } catch (error) {
-        logger.error('getBankList error:', error);
-        return {
-            success: false as const,
-            error: error instanceof Error ? error.message : 'Failed to fetch banks',
-        };
+        return { success: true, error: null, data: { banks: data.data } };
+    } catch (error) { logger.error('getBankList error:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch banks', data: null };
     }
 }
 
@@ -87,34 +71,29 @@ export async function getBankList(): Promise<{ error: string | null, success: bo
 export async function verifyBankAccount(
     accountNumber: string,
     bankCode: string
-): Promise<BankVerificationResult> {
-    try {
+): Promise<BankVerificationResult> { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error, data: null };
 
         // Validation
-        if (!accountNumber || !bankCode) {
-            logger.warn('verifyBankAccount: Missing required parameters', { accountNumber: !!accountNumber, bankCode: !!bankCode });
-            return { success: false as const, error: 'Account number and bank code are required' };
+        if (!accountNumber || !bankCode) { logger.warn('verifyBankAccount: Missing required parameters', { accountNumber: !!accountNumber, bankCode: !!bankCode });
+            return { success: false, error: 'Account number and bank code are required', data: null };
         }
 
         // Validate account number format
-        if (!/^\d{10}$/.test(accountNumber)) {
-            logger.warn('verifyBankAccount: Invalid account number format', { accountNumber });
-            return { success: false as const, error: 'Account number must be exactly 10 digits' };
+        if (!/^\d{10}$/.test(accountNumber)) { logger.warn('verifyBankAccount: Invalid account number format', { accountNumber });
+            return { success: false, error: 'Account number must be exactly 10 digits', data: null };
         }
 
         // Validate bank code format (Paystack bank codes are typically 3-6 digits)
-        if (!/^\d{3,6}$/.test(bankCode)) {
-            logger.warn('verifyBankAccount: Invalid bank code format', { bankCode });
-            return { success: false as const, error: 'Invalid bank code. Please select a valid bank from the dropdown.' };
+        if (!/^\d{3,6}$/.test(bankCode)) { logger.warn('verifyBankAccount: Invalid bank code format', { bankCode });
+            return { success: false, error: 'Invalid bank code. Please select a valid bank from the dropdown.', data: null };
         }
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
-        if (!secretKey) {
-            logger.error('PAYSTACK_SECRET_KEY not configured in environment variables');
-            return { success: false as const, error: 'Payment service not configured. Please contact support.' };
+        if (!secretKey) { logger.error('PAYSTACK_SECRET_KEY not configured in environment variables');
+            return { success: false, error: 'Payment service not configured. Please contact support.', data: null };
         }
 
         // Call Paystack Resolve Account Number API
@@ -126,95 +105,65 @@ export async function verifyBankAccount(
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${secretKey}`,
-                'Content-Type': 'application/json',
-            },
-        });
+                'Content-Type': 'application/json' } });
 
         const data: VerifyAccountResponse = await response.json();
 
-        logger.info('verifyBankAccount: Paystack response', {
-            status: response.status,
+        logger.info('verifyBankAccount: Paystack response', { status: response.status,
             success: data.status,
             message: data.message
         });
 
         // Handle API response
-        if (!response.ok || !data.status) {
-            // Common error: "Could not resolve account name"
+        if (!response.ok || !data.status) { // Common error: "Could not resolve account name"
             if (data.message?.toLowerCase().includes('could not resolve')) {
                 logger.warn('verifyBankAccount: Account not found', { accountNumber, bankCode });
-                return {
-                    success: false as const,
-                    error: 'Account not found. Please verify your account number and selected bank are correct.'
-                };
+                return { success: false as const, error: 'Account not found. Please verify your account number and selected bank are correct.', data: null };
             }
 
             // Invalid bank code error
-            if (data.message?.toLowerCase().includes('bank') && data.message?.toLowerCase().includes('invalid')) {
-                logger.warn('verifyBankAccount: Invalid bank code', { bankCode });
-                return {
-                    success: false as const,
-                    error: 'Invalid bank selected. Please choose your bank from the dropdown list.'
-                };
+            if (data.message?.toLowerCase().includes('bank') && data.message?.toLowerCase().includes('invalid')) { logger.warn('verifyBankAccount: Invalid bank code', { bankCode });
+                return { success: false as const, error: 'Invalid bank selected. Please choose your bank from the dropdown list.', data: null };
             }
 
             // API key error
-            if (response.status === 401 || response.status === 403) {
-                logger.error('verifyBankAccount: Authentication failed', { status: response.status });
-                return {
-                    success: false as const,
-                    error: 'Payment service authentication error. Please contact support.'
-                };
+            if (response.status === 401 || response.status === 403) { logger.error('verifyBankAccount: Authentication failed', { status: response.status });
+                return { success: false as const, error: 'Payment service authentication error. Please contact support.', data: null };
             }
 
             // Rate limiting
-            if (response.status === 429) {
-                logger.warn('verifyBankAccount: Rate limited');
-                return {
-                    success: false as const,
-                    error: 'Too many verification attempts. Please wait a moment and try again.'
-                };
+            if (response.status === 429) { logger.warn('verifyBankAccount: Rate limited');
+                return { success: false as const, error: 'Too many verification attempts. Please wait a moment and try again.', data: null };
             }
 
-            logger.error('verifyBankAccount: API error', {
-                status: response.status,
+            logger.error('verifyBankAccount: API error', { status: response.status,
                 message: data.message
             });
 
-            return {
-                success: false as const,
-                error: data.message || 'Failed to verify account. Please try again.'
-            };
+            return { success: false as const, error: data.message || 'Failed to verify account. Please try again.', data: null };
         }
 
-        if (!data.data?.account_name) {
-            logger.error('verifyBankAccount: No account name in response', { data });
-            return { success: false as const, error: 'Account verification incomplete. Please try again.' };
+        if (!data.data?.account_name) { logger.error('verifyBankAccount: No account name in response', { data });
+            return { success: false as const, error: 'Account verification incomplete. Please try again.', data: null };
         }
 
-        logger.info('verifyBankAccount: Success', {
-            accountNumber,
+        logger.info('verifyBankAccount: Success', { accountNumber,
             accountName: data.data.account_name
         });
 
-        return { error: null, success: true as const, accountName: data.data.account_name };
-    } catch (error) {
-        logger.error('verifyBankAccount: Unexpected error', error);
+        return { success: true, error: null, data: { accountName: data.data.account_name } };
+    } catch (error) { logger.error('verifyBankAccount: Unexpected error', error);
 
         // Network or timeout errors
         if (error instanceof Error) {
             if (error.message.includes('fetch') || error.message.includes('network')) {
-                return { success: false as const, error: 'Network error. Please check your connection and try again.' };
+                return { success: false as const, error: 'Network error. Please check your connection and try again.', data: null };
             }
 
-            if (error.message.includes('timeout')) {
-                return { success: false as const, error: 'Request timeout. Please try again.' };
+            if (error.message.includes('timeout')) { return { success: false as const, error: 'Request timeout. Please try again.', data: null };
             }
         }
 
-        return {
-            success: false as const,
-            error: 'An unexpected error occurred. Please try again.',
-        };
+        return { success: false as const, error: 'An unexpected error occurred. Please try again.', data: null };
     }
 }

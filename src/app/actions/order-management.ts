@@ -15,13 +15,10 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 /**
  * Get all orders for a seller
  */
-async function _getSellerOrdersAction(filters?: {
-    status?: OrderStatus;
-}) {
-    let sessionResult;
+async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -29,16 +26,14 @@ async function _getSellerOrdersAction(filters?: {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
 
-        if (!hasRole(userData?.roles || [], "seller")) {
-            return { success: false as const, error: "Not authorized as seller" };
+        if (!hasRole(userData?.roles || [], "seller")) { return { success: false as const, error: "Not authorized as seller", data: null };
         }
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)
             .orderBy("createdAt", "desc");
 
-        if (filters?.status) {
-            query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+        if (filters?.status) { query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
                 .where("sellerIds", "array-contains", userId)
                 .where("status", "==", filters.status)
                 .orderBy("createdAt", "desc");
@@ -47,13 +42,12 @@ async function _getSellerOrdersAction(filters?: {
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { error: null, success: true as const, data: { orders } };
-    } catch (error) {
-        logger.error("Get seller orders error:", { 
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get seller orders error:", { 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false as const, error: "Failed to fetch orders" };
+        return { success: false as const, error: "Failed to fetch orders", data: null };
     }
 }
 export const getSellerOrdersAction = withFlexibleSafeAction("getSellerOrdersAction", _getSellerOrdersAction);
@@ -65,18 +59,16 @@ async function _updateOrderStatusAction(
     orderId: string,
     newStatus: OrderStatus,
     trackingNumber?: string
-) {
-    let sessionResult;
+) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        await db.runTransaction(async (transaction) => {
-            const currentOrderDoc = await transaction.get(orderRef);
+        await db.runTransaction(async (transaction) => { const currentOrderDoc = await transaction.get(orderRef);
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
 
@@ -89,48 +81,41 @@ async function _updateOrderStatusAction(
                 throw new Error(`Sellers cannot set status to '${newStatus}'`);
             }
 
-            if (newStatus === "shipped" && !trackingNumber) {
-                throw new Error("Tracking number is required when marking order as shipped.");
+            if (newStatus === "shipped" && !trackingNumber) { throw new Error("Tracking number is required when marking order as shipped.");
             }
 
-            const updateData: any = {
-                status: newStatus,
+            const updateData: any = { status: newStatus,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            };
+                _version: FieldValue.increment(1) };
 
             if (trackingNumber) updateData.trackingNumber = trackingNumber;
-            if (newStatus === "shipped") {
-                const estimatedDate = new Date();
+            if (newStatus === "shipped") { const estimatedDate = new Date();
                 estimatedDate.setDate(estimatedDate.getDate() + 7);
                 updateData.estimatedDeliveryDate = estimatedDate;
             }
             if (newStatus === "delivered") updateData.deliveredAt = FieldValue.serverTimestamp();
 
-            if (newStatus === "cancelled" && currentOrder.status !== "cancelled") {
-                const items = currentOrder.items || [];
+            if (newStatus === "cancelled" && currentOrder.status !== "cancelled") { const items = currentOrder.items || [];
                 for (const item of items) {
                     const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                     transaction.update(productRef, {
                         availableQuantity: FieldValue.increment(item.quantity),
                         orders: FieldValue.increment(-1),
-                        _version: FieldValue.increment(1),
-                    });
+                        _version: FieldValue.increment(1) });
                 }
             }
 
             transaction.update(orderRef, updateData);
         });
 
-        return { error: null, success: true as const, data: { message: "Order status updated" } };
-    } catch (error) {
-        logger.error("Update order status error:", { 
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Update order status error:", { 
             orderId, 
             newStatus, 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false as const, error: error instanceof Error ? error.message : "Failed to update order status" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to update order status"};
     }
 }
 export const updateOrderStatusAction = withFlexibleSafeAction("updateOrderStatusAction", _updateOrderStatusAction);
@@ -138,13 +123,10 @@ export const updateOrderStatusAction = withFlexibleSafeAction("updateOrderStatus
 /**
  * Get all orders for a buyer
  */
-async function _getBuyerOrdersAction(filters?: {
-    status?: OrderStatus;
-}) {
-    let sessionResult;
+async function _getBuyerOrdersAction(filters?: { status?: OrderStatus; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -154,20 +136,18 @@ async function _getBuyerOrdersAction(filters?: {
             .where("buyerId", "==", userId)
             .orderBy("createdAt", "desc");
 
-        if (filters?.status) {
-            query = query.where("status", "==", filters.status);
+        if (filters?.status) { query = query.where("status", "==", filters.status);
         }
 
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { error: null, success: true as const, data: { orders } };
-    } catch (error) {
-        logger.error("Get buyer orders error:", { 
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get buyer orders error:", { 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false as const, error: "Failed to fetch orders" };
+        return { success: false as const, error: "Failed to fetch orders"};
     }
 }
 export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
@@ -175,18 +155,16 @@ export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction
 /**
  * Confirm delivery (buyer only)
  */
-async function _confirmDeliveryAction(orderId: string) {
-    let sessionResult;
+async function _confirmDeliveryAction(orderId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
 
         const userId = session.user.id;
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
-        const result = await db.runTransaction(async (transaction) => {
-            const currentOrderDoc = await transaction.get(orderRef);
+        const result = await db.runTransaction(async (transaction) => { const currentOrderDoc = await transaction.get(orderRef);
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
 
@@ -198,8 +176,7 @@ async function _confirmDeliveryAction(orderId: string) {
                 buyerConfirmedAt: FieldValue.serverTimestamp(),
                 status: "completed",
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1),
-            });
+                _version: FieldValue.increment(1) });
 
             const sellerRef = db.collection(COLLECTIONS.USERS).doc(currentOrder.sellerId);
             const sellerDoc = await transaction.get(sellerRef);
@@ -207,49 +184,42 @@ async function _confirmDeliveryAction(orderId: string) {
 
             let sellerAmount = 0;
 
-            if (sellerData?.bankAccountNumber && sellerData?.bankCode) {
-                const platformCommissionRate = 0.025;
+            if (sellerData?.bankAccountNumber && sellerData?.bankCode) { const platformCommissionRate = 0.025;
                 sellerAmount = Math.floor(currentOrder.totalAmount * (1 - platformCommissionRate));
             }
 
             return { sellerAmount, sellerData, currentOrder };
         });
 
-        if (result.sellerAmount > 0) {
-            try {
+        if (result.sellerAmount > 0) { try {
                 const res = await paystackPayout(
                     {
                         accountNumber: result.sellerData!.bankAccountNumber,
                         bankCode: result.sellerData!.bankCode,
-                        accountName: result.sellerData!.bankAccountName || result.sellerData!.name,
-                    },
+                        accountName: result.sellerData!.bankAccountName || result.sellerData!.name },
                     result.sellerAmount,
                     `Escrow release for order ${orderId}`
                 );
 
-                await orderRef.update({
-                    escrowReleased: res.success,
+                await orderRef.update({ escrowReleased: res.success,
                     escrowReleasedAt: res.success ? FieldValue.serverTimestamp() : null,
                     paystackTransferCode: res.transferCode || null,
                     sellerAmountPaid: result.sellerAmount,
                     escrowReleaseError: res.success ? null : res.error,
                     escrowPendingManualRelease: !res.success,
-                    _version: FieldValue.increment(1),
-                });
-            } catch (err) {
-                logger.error("Payout side effect failed:", { userId, error: err });
+                    _version: FieldValue.increment(1) });
+            } catch (err) { logger.error("Payout side effect failed:", { userId, error: err });
                 await orderRef.update({ escrowPendingManualRelease: true, _version: FieldValue.increment(1) });
             }
         }
 
-        return { error: null, success: true as const, data: { message: "Delivery confirmed" } };
-    } catch (error) {
-        logger.error("Confirm delivery error:", { 
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Confirm delivery error:", { 
             orderId, 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false as const, error: error instanceof Error ? error.message : "Failed to confirm delivery" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to confirm delivery", data: null };
     }
 }
 export const confirmDeliveryAction = withFlexibleSafeAction("confirmDeliveryAction", _confirmDeliveryAction);
@@ -257,34 +227,30 @@ export const confirmDeliveryAction = withFlexibleSafeAction("confirmDeliveryActi
 /**
  * Get a single order by ID — seller view
  */
-async function _getOrderDetailsAction(orderId: string) {
-    let sessionResult;
+async function _getOrderDetailsAction(orderId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
-        if (!orderDoc.exists) {
-            return { success: false as const, error: "Order not found" };
+        if (!orderDoc.exists) { return { success: false as const, error: "Order not found", data: null };
         }
 
         const data = orderDoc.data()!;
         const isAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
 
-        if (data.sellerId !== session.user.id && !isAdmin) {
-            return { success: false as const, error: "Unauthorized" };
+        if (data.sellerId !== session.user.id && !isAdmin) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        return { error: null, success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, data) } };
-    } catch (error) {
-        logger.error("Get order details error:", { 
+        return { error: null, success: true as const, data: null };
+    } catch (error) { logger.error("Get order details error:", { 
             orderId, 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false as const, error: "Failed to fetch order details" };
+        return { success: false as const, error: "Failed to fetch order details", data: null };
     }
 }
 export const getOrderDetailsAction = withFlexibleSafeAction("getOrderDetailsAction", _getOrderDetailsAction);

@@ -24,17 +24,14 @@ export type BroadcastAudience =
     | "farm_nation_users"
     | "export_users";
 
-export interface BroadcastFilters {
-    audience: BroadcastAudience;
+export interface BroadcastFilters { audience: BroadcastAudience;
     state?: string;
     sellerStatus?: "pending" | "approved" | "suspended";
     moduleStatus?: string;
     farmNationRole?: "buyer" | "seller" | "both";
-    csvEmails?: string[];
-}
+    csvEmails?: string[]; }
 
-export interface BroadcastLog {
-    id: string;
+export interface BroadcastLog { id: string;
     subject: string;
     body: string;
     audience: BroadcastAudience;
@@ -46,8 +43,7 @@ export interface BroadcastLog {
     sentAt: Date;
     sentBy: string;
     sentByName: string;
-    filters?: BroadcastFilters;
-}
+    filters?: BroadcastFilters; }
 
 /**
  * High-Assurance Broadcast List Generator
@@ -60,12 +56,10 @@ export interface BroadcastLog {
  * 
  * @returns A deduplicated, sanitized list of 36,924 recipients.
  */
-export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
-    try {
+export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { try {
         // 1. Security Check: Only admins can generate broadcast lists
         const { session } = await requireSession();
-        if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized. Admin access required." };
+        if (!session?.user || !isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized. Admin access required.", data: null };
         }
 
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
@@ -74,8 +68,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
         const snapshot = await db.collection(COLLECTIONS.USERS).get();
         const emailMap = new Map();
 
-        snapshot.docs.forEach(doc => {
-            const data = doc.data();
+        snapshot.docs.forEach(doc => { const data = doc.data();
             // We prioritize the 'email' field, falling back to 'userEmail' if present
             const rawEmail = data.email || data.userEmail;
             
@@ -100,16 +93,11 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
         
         logger.info(`[Broadcast] Clean Sweep complete. Original Docs: ${snapshot.size}, Unique Recipients: ${uniqueList.length}`);
 
-        return { 
-            error: null, success: true as const, 
-            recipients: uniqueList, 
-            count: uniqueList.length,
-            originalDocCount: snapshot.size
-        };
+        return { error: null, success: true as const, recipients: uniqueList, count: uniqueList.length, originalDocCount: snapshot.size
+ , data: null };
 
-    } catch (error) {
-        logger.error("[Broadcast] List generation failed:", error);
-        return { success: false as const, error: "Failed to generate broadcast list." };
+    } catch (error) { logger.error("[Broadcast] List generation failed:", error);
+        return { success: false as const, error: "Failed to generate broadcast list.", data: null };
     }
 }
 
@@ -117,42 +105,26 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
  * Preview Broadcast Action
  * (Required by Communications UI)
  */
-export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{ error: string | null, success: boolean, 
-    count: number | null;
-    sample: any[];
-} | {
-    
-    count: null;
-    sample: any[];
-}> {
-    const listResult = await getCleanBroadcastListAction(broadcastData);
+export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { const listResult = await getCleanBroadcastListAction(broadcastData);
     if (!listResult.success) {
-        return { 
-            success: false as const, 
-            error: listResult.error || "Failed to estimate recipients",
-            count: null,
-            sample: []
-        };
+        return { success: false as const, error: listResult.error || "Failed to estimate recipients", count: null, sample: [], data: null };
     }
     
-    return {
-        error: null, success: true as const,
-        count: listResult.count ?? null,
-        sample: listResult.recipients?.slice(0, 5) || [],
-        error: null
-    };
+    return { error: null, success: true as const, count: listResult.count ?? null, sample: listResult.recipients?.slice(0, 5) || []
+ , data: null };
 }
 
 /**
  * Get Broadcast History
  * (Required by Communications UI)
  */
-export async function getBroadcastHistoryAction(): Promise<{ error: string | null, success: boolean, 
-    logs: BroadcastLog[];
-} | {
-    logs: BroadcastLog[];
-}> {
-    try {
+export async function getBroadcastHistoryAction(): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
             .where("action", "==", "telemetry_broadcast_sent")
             .orderBy("timestamp", "desc")
@@ -179,8 +151,7 @@ export async function getBroadcastHistoryAction(): Promise<{ error: string | nul
         });
         
         return { success: true as const, logs, error: null };
-    } catch (error: any) {
-        return { success: false as const, logs: [], error: error.message || "Failed to fetch history" };
+    } catch (error: any) { return { success: false as const, logs: [], error: error.message || "Failed to fetch history", data: null };
     }
 }
 
@@ -188,8 +159,7 @@ export async function getBroadcastHistoryAction(): Promise<{ error: string | nul
  * Collect Recipients
  * (Required by Send API)
  */
-export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> {
-    const result = await getCleanBroadcastListAction(filters);
+export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> { const result = await getCleanBroadcastListAction(filters);
     if (result.success && result.recipients) {
         return result.recipients;
     }

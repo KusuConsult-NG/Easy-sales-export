@@ -10,12 +10,10 @@ import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { isAdmin } from "@/lib/admin-permissions";
 
 /** Helper: verify admin session */
-async function requireAdmin(): Promise<{ id: string } | null> {
-    const sessionResult = await requireSession();
+async function requireAdmin(): Promise<{ id: string } | null> { const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
-    if (!session?.user?.id || !isAdmin(session.user.roles)) {
-        return null;
+    if (!session?.user?.id || !isAdmin(session.user.roles)) { return null;
     }
     return { id: session.user.id };
 }
@@ -25,8 +23,7 @@ async function requireAdmin(): Promise<{ id: string } | null> {
  * Announcements, Banners, notifications
  */
 
-export interface Announcement {
-    id?: string;
+export interface Announcement { id?: string;
     title: string;
     content: string;
     type: "info" | "warning" | "success" | "emergency";
@@ -36,11 +33,9 @@ export interface Announcement {
     expiresAt?: Date | any;
     createdBy: string;
     createdAt: Date | any;
-    active: boolean;
-}
+    active: boolean; }
 
-export interface Banner {
-    id?: string;
+export interface Banner { id?: string;
     title: string;
     message: string;
     type: "promotional" | "informational" | "alert";
@@ -52,26 +47,24 @@ export interface Banner {
     position: "top" | "bottom" | "popup";
     createdBy: string;
     createdAt: Date | any;
-    active: boolean;
-}
+    active: boolean; }
 
 /**
  * Create announcement
  */
-export async function createAnnouncementAction(data: {
-    title: string;
+export async function createAnnouncementAction(data: { title: string;
     content: string;
     type: "info" | "warning" | "success" | "emergency";
     targetAudience: "all" | "members" | "exporters" | "admins" | "vendors";
     priority: "low" | "medium" | "high" | "urgent";
     expiresAt?: string;
-    adminId: string;
-}): Promise<{ error: string | null, success: boolean; announcementId?: string }> {
-    try {
+    adminId: string; }): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
-        const announcement: Omit<Announcement, "id"> = {
-            title: data.title,
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        const announcement: Omit<Announcement, "id"> = { title: data.title,
             content: data.content,
             type: data.type,
             targetAudience: data.targetAudience,
@@ -80,8 +73,7 @@ export async function createAnnouncementAction(data: {
             expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
             createdBy: data.adminId,
             createdAt: FieldValue.serverTimestamp(),
-            active: true,
-        };
+            active: true };
 
         const docRef = await db.collection(COLLECTIONS.ANNOUNCEMENTS).add(announcement);
 
@@ -92,10 +84,9 @@ export async function createAnnouncementAction(data: {
             "announcement"
         );
 
-        return { error: null, success: true as const, announcementId: docRef.id };
-    } catch (error) {
-        logger.error("Announcement creation error:", error);
-        return { success: false as const, error: "Failed to create announcement" };
+        return { error: null, success: true as const, announcementId: docRef.id , data: null };
+    } catch (error) { logger.error("Announcement creation error:", error);
+        return { success: false as const, error: "Failed to create announcement", data: null };
     }
 }
 
@@ -104,8 +95,7 @@ export async function createAnnouncementAction(data: {
  */
 export async function getActiveAnnouncementsAction(
     targetAudience: string = "all"
-): Promise<Announcement[]> {
-    try {
+): Promise<Announcement[]> { try {
         const now = new Date();
 
         const q = db.collection(COLLECTIONS.ANNOUNCEMENTS).where("active", "==", true);
@@ -126,18 +116,15 @@ export async function getActiveAnnouncementsAction(
                     expiresAt: data.expiresAt,
                     createdBy: data.createdBy,
                     createdAt: data.createdAt,
-                    active: data.active,
-                } as Announcement;
+                    active: data.active } as Announcement;
             })
-            .filter((announcement) => {
-                // Filter by target audience
+            .filter((announcement) => { // Filter by target audience
                 if (announcement.targetAudience !== "all" && announcement.targetAudience !== targetAudience) {
                     return false;
                 }
 
                 // Filter by expiry
-                if (announcement.expiresAt) {
-                    const expDate = typeof announcement.expiresAt.toDate === 'function'
+                if (announcement.expiresAt) { const expDate = typeof announcement.expiresAt.toDate === 'function'
                         ? announcement.expiresAt.toDate()
                         : new Date(announcement.expiresAt as string | number | Date);
                     if (expDate.getTime() < now.getTime()) {
@@ -147,8 +134,7 @@ export async function getActiveAnnouncementsAction(
 
                 return true;
             });
-    } catch (error) {
-        logger.error("Failed to fetch announcements:", error);
+    } catch (error) { logger.error("Failed to fetch announcements:", error);
         return [];
     }
 }
@@ -159,16 +145,16 @@ export async function getActiveAnnouncementsAction(
 export async function deactivateAnnouncementAction(
     announcementId: string,
     adminId: string
-): Promise<{ error: string | null, success: boolean;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
         const announcementRef = db.collection(COLLECTIONS.ANNOUNCEMENTS).doc(announcementId);
 
-        await announcementRef.update({
-            active: false,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        await announcementRef.update({ active: false,
+            updatedAt: FieldValue.serverTimestamp() });
 
         await logAdminAction(
             "announcement_deactivated",
@@ -177,18 +163,16 @@ export async function deactivateAnnouncementAction(
             "announcement"
         );
 
-        return { error: null, success: true as const };
-    } catch (error) {
-        logger.error("Deactivation error:", error);
-        return { success: false as const, error: "Failed to deactivate announcement" };
+        return { error: null, success: true as const , data: null };
+    } catch (error) { logger.error("Deactivation error:", error);
+        return { success: false as const, error: "Failed to deactivate announcement", data: null };
     }
 }
 
 /**
  * Create banner
  */
-export async function createBannerAction(data: {
-    title: string;
+export async function createBannerAction(data: { title: string;
     message: string;
     type: "promotional" | "informational" | "alert";
     link?: string;
@@ -197,13 +181,13 @@ export async function createBannerAction(data: {
     startDate: string;
     endDate: string;
     position: "top" | "bottom" | "popup";
-    adminId: string;
-}): Promise<{ error: string | null, success: boolean; bannerId?: string }> {
-    try {
+    adminId: string; }): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
-        const banner: Omit<Banner, "id"> = {
-            title: data.title,
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
+        const banner: Omit<Banner, "id"> = { title: data.title,
             message: data.message,
             type: data.type,
             link: data.link,
@@ -214,8 +198,7 @@ export async function createBannerAction(data: {
             position: data.position,
             createdBy: data.adminId,
             createdAt: FieldValue.serverTimestamp(),
-            active: true,
-        };
+            active: true };
 
         const docRef = await db.collection(COLLECTIONS.BANNERS).add(banner);
 
@@ -226,18 +209,16 @@ export async function createBannerAction(data: {
             "banner"
         );
 
-        return { error: null, success: true as const, bannerId: docRef.id };
-    } catch (error) {
-        logger.error("Banner creation error:", error);
-        return { success: false as const, error: "Failed to create banner" };
+        return { error: null, success: true as const, bannerId: docRef.id , data: null };
+    } catch (error) { logger.error("Banner creation error:", error);
+        return { success: false as const, error: "Failed to create banner", data: null };
     }
 }
 
 /**
  * Get active banners
  */
-export async function getActiveBannersAction(): Promise<Banner[]> {
-    try {
+export async function getActiveBannersAction(): Promise<Banner[]> { try {
         const now = new Date();
 
         const q = db.collection(COLLECTIONS.BANNERS).where("active", "==", true);
@@ -260,16 +241,13 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
                     position: data.position,
                     createdBy: data.createdBy,
                     createdAt: data.createdAt,
-                    active: data.active,
-                } as Banner;
+                    active: data.active } as Banner;
             })
-            .filter((banner) => {
-                const start = new Date(banner.startDate);
+            .filter((banner) => { const start = new Date(banner.startDate);
                 const end = new Date(banner.endDate);
                 return now >= start && now <= end;
             });
-    } catch (error) {
-        logger.error("Failed to fetch banners:", error);
+    } catch (error) { logger.error("Failed to fetch banners:", error);
         return [];
     }
 }
@@ -280,16 +258,16 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
 export async function deactivateBannerAction(
     bannerId: string,
     adminId: string
-): Promise<{ error: string | null, success: boolean;  }> {
-    try {
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required", data: null };
         const bannerRef = db.collection(COLLECTIONS.BANNERS).doc(bannerId);
 
-        await bannerRef.update({
-            active: false,
-            updatedAt: FieldValue.serverTimestamp(),
-        });
+        await bannerRef.update({ active: false,
+            updatedAt: FieldValue.serverTimestamp() });
 
         await logAdminAction(
             "banner_deactivated",
@@ -298,9 +276,8 @@ export async function deactivateBannerAction(
             "banner"
         );
 
-        return { error: null, success: true as const };
-    } catch (error) {
-        logger.error("Deactivation error:", error);
-        return { success: false as const, error: "Failed to deactivate banner" };
+        return { error: null, success: true as const , data: null };
+    } catch (error) { logger.error("Deactivation error:", error);
+        return { success: false as const, error: "Failed to deactivate banner", data: null };
     }
 }

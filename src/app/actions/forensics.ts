@@ -6,22 +6,21 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
-interface ScanResult {
-    module: string;
+interface ScanResult { module: string;
     check: string;
     status: "pass" | "fail" | "warning";
     details: string;
-    affectedIds: string[];
-}
+    affectedIds: string[]; }
 
-export async function runForensicScanAction(): Promise<{ error: string | null, success: boolean; results: ScanResult[];  }> {
-    try {
+export async function runForensicScanAction(): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> { try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         // Strict Admin Check
-        if (!session?.user?.roles?.includes("super_admin") && (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) {
-            return { success: false, results: [], error: "Unauthorized: Admin access required" };
+        if (!session?.user?.roles?.includes("super_admin") && (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) { return { success: false as const, results: [], error: "Unauthorized: Admin access required", data: null };
         }
 
         const results: ScanResult[] = [];
@@ -34,8 +33,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
         // CHECK: Ghost Users (Auth users without Firestore profile)
         // Note: Listing all auth users is expensive, limit to 100 for this check or iterate if needed.
         // For safety, we'll scan the top 100 most recent users.
-        try {
-            const listUsersResult = await adminAuth.listUsers(100);
+        try { const listUsersResult = await adminAuth.listUsers(100);
             const authUsers = listUsersResult.users;
             const ghostUserIds: string[] = [];
 
@@ -53,8 +51,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned recent 100 Auth users. Found ${ghostUserIds.length} ghosts.`,
                 affectedIds: ghostUserIds
             });
-        } catch (e: any) {
-            results.push({ module: "Auth", check: "Ghost User Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Auth", check: "Ghost User Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // ============================================================================
@@ -62,8 +59,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
         // ============================================================================
 
         // CHECK: Orphaned Products (Seller does not exist)
-        try {
-            const productsSnapshot = await db.collection(COLLECTIONS.PRODUCTS).limit(200).get(); // Sample check
+        try { const productsSnapshot = await db.collection(COLLECTIONS.PRODUCTS).limit(200).get(); // Sample check
             const orphanedProductIds: string[] = [];
 
             for (const doc of productsSnapshot.docs) {
@@ -83,13 +79,11 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned ${productsSnapshot.size} products. Found ${orphanedProductIds.length} orphans.`,
                 affectedIds: orphanedProductIds
             });
-        } catch (e: any) {
-            results.push({ module: "Marketplace", check: "Orphaned Product Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Marketplace", check: "Orphaned Product Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // CHECK: Contact Drift (Profile Phone vs Verified Phone)
-        try {
-            const verifiedSellersSnapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+        try { const verifiedSellersSnapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("status", "==", "approved")
                 .limit(100)
                 .get();
@@ -119,8 +113,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 affectedIds: driftedIds
             });
 
-        } catch (e: any) {
-            results.push({ module: "Marketplace", check: "Contact Drift Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Marketplace", check: "Contact Drift Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // ============================================================================
@@ -148,8 +141,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 }
 
                 // Age Check
-                if (dob) {
-                    const birthDate = new Date(dob);
+                if (dob) { const birthDate = new Date(dob);
                     const today = new Date();
                     let age = today.getFullYear() - birthDate.getFullYear();
                     const m = today.getMonth() - birthDate.getMonth();
@@ -169,8 +161,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned ${waveParticipantsQuery.size} participants. Found ${ineligibleIds.length} ineligible.`,
                 affectedIds: ineligibleIds
             });
-        } catch (e: any) {
-            results.push({ module: "WAVE", check: "Eligibility Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "WAVE", check: "Eligibility Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // ============================================================================
@@ -179,8 +170,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
 
         // CHECK: Financial Reconciliation (Transactions vs Balance)
         // Note: This is expensive. We'll sample 20 members.
-        try {
-            const coopMembersQuery = await db.collection(COLLECTIONS.USERS)
+        try { const coopMembersQuery = await db.collection(COLLECTIONS.USERS)
                 .where("roles", "array-contains", "cooperative_member")
                 .limit(20)
                 .get();
@@ -203,8 +193,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                     const amount = tx.data().amount || 0;
                     if (type === "deposit" || type === "contribution" || type === "loan_repayment_excess") {
                         calculatedBalance += amount;
-                    } else if (type === "withdrawal") {
-                        calculatedBalance -= amount;
+                    } else if (type === "withdrawal") { calculatedBalance -= amount;
                     }
                 });
 
@@ -221,8 +210,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned 20 random members. Found ${balanceMismatches.length} balance mismatches.`,
                 affectedIds: balanceMismatches
             });
-        } catch (e: any) {
-            results.push({ module: "Cooperative", check: "Financial Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Cooperative", check: "Financial Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // ============================================================================
@@ -230,8 +218,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
         // ============================================================================
 
         // CHECK: Verification Fraud (Badge without Document)
-        try {
-            const verifiedFarmersQuery = await db.collection(COLLECTIONS.USERS)
+        try { const verifiedFarmersQuery = await db.collection(COLLECTIONS.USERS)
                 .where("farmNationProfile.isVerified", "==", true)
                 .limit(50)
                 .get();
@@ -259,8 +246,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned 50 verified farmers. Found ${fraudIds.length} without proof.`,
                 affectedIds: fraudIds
             });
-        } catch (e: any) {
-            results.push({ module: "Farm Nation", check: "Verification Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Farm Nation", check: "Verification Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // ============================================================================
@@ -293,8 +279,7 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned ${activeWindows.size} active windows. Found ${breachedIds.length} over-funded.`,
                 affectedIds: breachedIds
             });
-        } catch (e: any) {
-            results.push({ module: "Export", check: "Cap Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Export", check: "Cap Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
         // ============================================================================
@@ -326,14 +311,12 @@ export async function runForensicScanAction(): Promise<{ error: string | null, s
                 details: `Scanned 50 paid enrollments. Found ${freeRideIds.length} with missing refs.`,
                 affectedIds: freeRideIds
             });
-        } catch (e: any) {
-            results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
+        } catch (e: any) { results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
-        return { error: null, success: true as const, results };
+        return { error: null, success: true as const, results , data: null };
 
-    } catch (error: any) {
-        logger.error("Forensic scan failed:", error);
-        return { success: false as const, results: [], error: error.message };
+    } catch (error: any) { logger.error("Forensic scan failed:", error);
+        return { success: false as const, results: [], error: error.message, data: null };
     }
 }
