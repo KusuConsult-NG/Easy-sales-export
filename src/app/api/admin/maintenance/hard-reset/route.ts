@@ -19,10 +19,7 @@ export async function GET() {
         // 1. Purge Next.js Layout Cache
         revalidatePath("/", "layout");
         
-        // 2. Purge Shared Module Tags
-        revalidateTag("module-registration-stats");
-        
-        // 3. Purge Redis Analytics Cache
+        // 2. Purge Redis Analytics Cache
         await invalidateAdminGlobalStats();
 
         return NextResponse.json({ 
