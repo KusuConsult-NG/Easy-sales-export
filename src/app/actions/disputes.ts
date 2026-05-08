@@ -317,39 +317,42 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
             resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt } as any;
 
         // Fetch profiles for detail view
-        const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.buyerId).get();
-        const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.sellerId).get();
-
-        if (buyerDoc.exists) {
-            const bData = buyerDoc.data()!;
-            disputeData.buyerDetails = {
-                firstName: bData.firstName,
-                lastName: bData.lastName,
-                email: bData.email,
-                phoneNumber: bData.phoneNumber || bData.phone || "N/A",
-                bankDetails: bData.bankDetails || {
-                    bankName: bData.bankName || bData.bankAccount?.bankName || "N/A",
-                    accountNumber: bData.accountNumber || bData.bankAccountNumber || bData.bankAccount?.accountNumber || "N/A",
-                    accountName: bData.accountName || bData.bankAccountName || bData.bankAccount?.accountName || "N/A",
-                    bankCode: bData.bankCode || bData.bankAccount?.bankCode || "N/A"
-                }
-            };
+        if (dispute.buyerId) {
+            const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.buyerId).get();
+            if (buyerDoc.exists) {
+                const bData = buyerDoc.data()!;
+                disputeData.buyerDetails = {
+                    firstName: bData.firstName,
+                    lastName: bData.lastName,
+                    email: bData.email,
+                    phoneNumber: bData.phoneNumber || bData.phone || "N/A",
+                    bankDetails: bData.bankDetails || {
+                        bankName: bData.bankName || bData.bankAccount?.bankName || "N/A",
+                        accountNumber: bData.accountNumber || bData.bankAccount?.accountNumber || "N/A",
+                        accountName: bData.accountName || bData.bankAccountName || bData.bankAccount?.accountName || "N/A",
+                        bankCode: bData.bankCode || bData.bankAccount?.bankCode || "N/A"
+                    }
+                };
+            }
         }
 
-        if (sellerDoc.exists) {
-            const sData = sellerDoc.data()!;
-            disputeData.sellerDetails = {
-                firstName: sData.firstName,
-                lastName: sData.lastName,
-                email: sData.email,
-                phoneNumber: sData.phoneNumber || sData.phone || "N/A",
-                bankDetails: sData.bankDetails || {
-                    bankName: sData.bankName || sData.bankAccount?.bankName || "N/A",
-                    accountNumber: sData.accountNumber || sData.bankAccountNumber || sData.bankAccount?.accountNumber || "N/A",
-                    accountName: sData.accountName || sData.bankAccountName || sData.bankAccount?.accountName || "N/A",
-                    bankCode: sData.bankCode || sData.bankAccount?.bankCode || "N/A"
-                }
-            };
+        if (dispute.sellerId) {
+            const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(dispute.sellerId).get();
+            if (sellerDoc.exists) {
+                const sData = sellerDoc.data()!;
+                disputeData.sellerDetails = {
+                    firstName: sData.firstName,
+                    lastName: sData.lastName,
+                    email: sData.email,
+                    phoneNumber: sData.phoneNumber || sData.phone || "N/A",
+                    bankDetails: sData.bankDetails || {
+                        bankName: sData.bankName || sData.bankAccount?.bankName || "N/A",
+                        accountNumber: sData.accountNumber || sData.bankAccountNumber || sData.bankAccount?.accountNumber || "N/A",
+                        accountName: sData.accountName || sData.bankAccountName || sData.bankAccount?.accountName || "N/A",
+                        bankCode: sData.bankCode || sData.bankAccount?.bankCode || "N/A"
+                    }
+                };
+            }
         }
 
         return { success: true as const, error: null, data: { dispute: disputeData } };
