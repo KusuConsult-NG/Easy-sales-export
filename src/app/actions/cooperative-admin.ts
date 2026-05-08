@@ -405,7 +405,7 @@ async function _updateMemberStatusAction(
                 logger.error('Cooperative approval email failed (non-blocking):', emailError);
             }
         }
-        return { error: null, success: true as const, data: { message: "Member status updated" }, meta: null };
+        return { error: null, success: true as const, data: null, meta: null };
     } catch (error) {
         logger.error("Update member status error:", {
             userId: sessionResult?.session?.user?.id,
@@ -837,7 +837,7 @@ export async function approveWithdrawalAction(
             logger.error("[approveWithdrawalAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { error: null, success: true as const, data: { message: "Withdrawal approved" }, meta: null };
+        return { error: null, success: true as const, data: null, meta: null };
 
     } catch (error: any) {
         logger.error("Approve withdrawal error:", error);
@@ -959,7 +959,7 @@ export async function rejectWithdrawalAction(
             logger.error("[rejectWithdrawalAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { error: null, success: true as const, data: { message: "Withdrawal rejected" }, meta: null };
+        return { error: null, success: true as const, data: null, meta: null };
 
     } catch (error: any) {
         logger.error("Reject withdrawal error:", error);

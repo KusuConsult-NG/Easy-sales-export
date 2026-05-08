@@ -123,7 +123,7 @@ export async function getExportRequestStatsAction(): Promise<{ success: true; er
             col.where("status", "==", "completed").count().get(),
         ]);
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { total: totalSnap.data().count || 0, pending: pendingSnap.data().count || 0, inTransit: inTransitSnap.data().count || 0, delivered: deliveredSnap.data().count || 0, completed: completedSnap.data().count || 0 } };
     } catch (error: any) { logger.error("Get export request stats error:", error);
         return { success: false as const, error: "Failed to fetch export stats", data: null };
     }
@@ -150,7 +150,7 @@ export async function getExportCatalogStatsAction(): Promise<{ success: true; er
             .count()
             .get();
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { totalProducts: snap.data().count || 0 } };
     } catch (error: any) { logger.error("Get export catalog stats error:", error);
         return { success: false as const, error: "Failed to fetch catalog stats", data: null };
     }

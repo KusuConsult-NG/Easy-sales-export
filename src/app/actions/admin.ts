@@ -1806,23 +1806,18 @@ async function _requestExportApplicationRevisionAction(
     }
 }
 
-async function _getExportApplicationsStatsAction(): Promise<{
-    error: null, success: boolean;
-    data?: {
-        pending: number;
-        approved: number;
-        rejected: number;
-        resubmitted: number;
-    };
-}> {
+async function _getExportApplicationsStatsAction(): Promise<
+    | { success: true; error: null; data: { pending: number; approved: number; rejected: number; resubmitted: number } }
+    | { success: false; error: string; data: null }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
+        if (!session?.user?.id) return { success: false as const, error: "Not authenticated" , data: null };
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , data: null };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -1872,7 +1867,7 @@ async function _getExportApplicationsStatsAction(): Promise<{
         return payload;
     } catch (error) {
         logger.error("Get export application stats error:", error);
-        return { success: false as const, error: "Failed to fetch export stats" };
+        return { success: false as const, error: "Failed to fetch export stats", data: null };
     }
 }
 async function _getStandardExportApplicationsAction(options: {
@@ -3204,17 +3199,17 @@ export const rejectWaveApplicationAction = _rejectWaveApplicationAction;
  * Admin: Server-side COUNT aggregations for the seller verifications dashboard.
  * Returns accurate totals independent of pagination limits.
  */
-export async function getAdminSellerStatsAction(): Promise<{
-    error: null, success: boolean;
-    stats?: { total: number; pending: number; approved: number; rejected: number };
-}> {
+export async function getAdminSellerStatsAction(): Promise<
+    | { success: true; error: null; stats: { total: number; pending: number; approved: number; rejected: number } }
+    | { success: false; error: string; stats: null }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , stats: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , stats: null };
         }
 
         const col = db.collection(COLLECTIONS.SELLER_VERIFICATIONS);
@@ -3236,7 +3231,7 @@ export async function getAdminSellerStatsAction(): Promise<{
         };
     } catch (error: any) {
         logger.error("getAdminSellerStatsAction error:", error);
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message , stats: null };
     }
 }
 
@@ -3530,8 +3525,7 @@ async function _onboardLegacyMemberAction(
 
         return { 
             error: null, success: true as const, 
-            message: `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`,
-            data: null 
+            message: `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
         };
 
     } catch (error: any) {

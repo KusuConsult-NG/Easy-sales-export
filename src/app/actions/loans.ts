@@ -349,17 +349,17 @@ export async function getAdminLoanApplicationsExportAction(options: {
  * Admin: Server-side COUNT aggregations for the loan applications dashboard.
  * Returns accurate totals independent of pagination limits.
  */
-export async function getAdminLoanStatsAction(): Promise<{
-    error: null, success: boolean;
-    stats?: { total: number; pending: number; approved: number; rejected: number };
-}> {
+export async function getAdminLoanStatsAction(): Promise<
+    | { success: true; error: null; stats: { total: number; pending: number; approved: number; rejected: number } }
+    | { success: false; error: string; stats: null }
+> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , stats: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" , stats: null };
         }
 
         const col = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
@@ -382,7 +382,7 @@ export async function getAdminLoanStatsAction(): Promise<{
         };
     } catch (error: any) {
         logger.error("getAdminLoanStatsAction error:", error);
-        return { success: false as const, error: error.message };
+        return { success: false as const, error: error.message , stats: null };
     }
 }
 
