@@ -121,7 +121,7 @@ export async function bookExportSlotAction(data: { windowId: string;
         if (new Date() > new Date(windowData.endDate)) { return { success: false as const, data: null, error: "Export window has expired", meta: null };
         }
 
-        if (windowData.currentVolume + data.volume > windowData.targetVolume) { return { error: "Action failed", success: false as const, data: null, meta: null, error: `Only ${windowData.targetVolume - windowData.currentVolume }kg available` };
+        if (windowData.currentVolume + data.volume > windowData.targetVolume) { return { success: false as const, data: null, meta: null, error: `Only ${windowData.targetVolume - windowData.currentVolume }kg available` };
         }
 
         const totalCost = data.volume * windowData.slotPrice;

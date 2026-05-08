@@ -76,7 +76,11 @@ export default function InAppBroadcastPage() {
         setPreview(null);
         setResult(null);
         const res = await previewInAppBroadcastAction(buildFilters());
-        setPreview(res);
+        if (res.success) {
+            setPreview(res.data);
+        } else {
+            setResult({ success: false, delivered: 0, error: res.error });
+        }
         setLoadingPreview(false);
     };
 
@@ -104,7 +108,11 @@ export default function InAppBroadcastPage() {
             link.trim() || undefined,
             linkText.trim() || undefined
         );
-        setResult(res);
+        if (res.success) {
+            setResult({ success: true, delivered: res.data.delivered });
+        } else {
+            setResult({ success: false, delivered: 0, error: res.error });
+        }
         setSending(false);
     };
 

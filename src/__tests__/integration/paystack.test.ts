@@ -31,10 +31,10 @@ describe('Paystack Integration', () => {
             const result = await getBankList();
 
             if (result.success && result.banks) {
-                const bankNames = result.banks.map(b => b.name.toLowerCase());
+                const bankNames = (result.banks as any[]).map((b: any) => b.name.toLowerCase());
 
                 // Check for some major banks
-                const hasMajorBank = bankNames.some(name =>
+                const hasMajorBank = bankNames.some((name: string) =>
                     name.includes('access') ||
                     name.includes('gtbank') ||
                     name.includes('zenith') ||

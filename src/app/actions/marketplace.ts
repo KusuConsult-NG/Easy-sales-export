@@ -1312,7 +1312,7 @@ async function _resubmitSellerVerificationAction(
         } catch (err) { logger.error("Failed to invalidate cache after Seller resubmission:", err);
         }
 
-        return { error: null,  success: true as const, data: null };
+        return { error: null,  success: true as const, data: { message: "Verification resubmitted" } };
     } catch (error: any) { logger.error('resubmitSellerVerificationAction error:', {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -1386,7 +1386,7 @@ async function _updateSellerBadge(
         const { notifyBadgeUpdated } = await import("@/lib/marketplace-notifications");
         await notifyBadgeUpdated({ sellerId, granted: grant });
 
-        return { error: null,  success: true as const, data: null };
+        return { error: null,  success: true as const, data: { message: "Badge updated" } };
     } catch (error: any) {
         logger.error(`Badge ${grant ? "grant" : "revoke"} error:`, { adminUserId,
             sellerId,
@@ -1495,7 +1495,7 @@ async function _updateSellerCategoryAction(
             }
         });
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { message: "Category updated" } };
     } catch (error) { logger.error("updateSellerCategoryAction error:", {
             userId: sessionResult?.session?.user?.id,
             sellerId,

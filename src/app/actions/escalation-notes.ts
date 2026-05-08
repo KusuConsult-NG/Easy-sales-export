@@ -19,11 +19,11 @@ export interface EscalationNote { id: string;
 export async function addEscalationNoteAction(
     disputeId: string,
     text: string
-): Promise<{ success: boolean; data?: { noteId: string }; error?: string }> { if (!text.trim()) return { success: false as const, error: "Note text is required", data: null };
-    if (text.length > 2000) return { success: false as const, error: "Note too long (max 2000 chars)", data: null };
+): Promise<{ success: boolean; data?: { noteId: string }; error?: string }> { if (!text.trim()) return { success: false as const, error: "Note text is required" };
+    if (text.length > 2000) return { success: false as const, error: "Note too long (max 2000 chars)" };
 
     try { const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: null };
+        if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: undefined };
         const adminId = (adminCheck as { userId: string }).userId;
 
         // Fetch the admin's display name
@@ -46,8 +46,8 @@ export async function addEscalationNoteAction(
             targetType: "dispute",
             metadata: { noteAdded: true, noteId: noteRef.id } });
 
-        return { success: true as const, error: null, data: null };
-    } catch (error: any) { return { success: false as const, error: error.message, data: null };
+        return { success: true as const, data: { noteId: noteRef.id } };
+    } catch (error: any) { return { success: false as const, error: error.message, data: undefined };
     }
 }
 
@@ -60,7 +60,7 @@ export async function getEscalationNotesAction(
     | { success: false; error: string; data?: null; meta?: any }
 > { try {
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: null };
+        if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: undefined };
 
         const snap = await db
             .collection(COLLECTIONS.DISPUTES)
@@ -72,7 +72,7 @@ export async function getEscalationNotesAction(
         const notes: EscalationNote[] = snap.docs.map(doc => ({ id: doc.id,
             ...(doc.data() as Omit<EscalationNote, "id">) }));
 
-        return { error: null,  success: true as const, data: null };
-    } catch (error: any) { return { success: false as const, error: error.message, data: null };
+        return { error: null,  success: true as const, data: { notes } };
+    } catch (error: any) { return { success: false as const, error: error.message, data: undefined };
     }
 }

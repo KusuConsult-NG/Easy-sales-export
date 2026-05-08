@@ -21,7 +21,9 @@ import { revalidatePath } from "next/cache";
 
 // Type definitions for action return states
 type ActionErrorState = { error: string;
-    success: false; };
+    success: false;
+    data?: null;
+    meta?: null; };
 
 type WaveSuccessState = { error: null;
     success: true;
@@ -53,7 +55,7 @@ export async function submitWaveApplicationAction(
 ): Promise<WaveApplicationState> { try {
         // Get authenticated user
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         // Extract and validate form data
@@ -70,7 +72,7 @@ export async function submitWaveApplicationAction(
         const validatedData = waveApplicationSchema.parse(applicationData);
 
         // Double-check gender enforcement at server level
-        if (validatedData.gender !== "female") { return { error: "WAVE Program is exclusively for female entrepreneurs", success: false as const, data: null };
+        if (validatedData.gender !== "female") { return { error: "WAVE Program is exclusively for female entrepreneurs", success: false as const };
         }
 
         // Generate application ID
@@ -84,16 +86,16 @@ export async function submitWaveApplicationAction(
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
 
-        return { error: null, success: true as const, message: "Application submitted successfully! We'll review it within 1 week.", applicationId , data: null };
+        return { error: null, success: true as const, message: "Application submitted successfully! We'll review it within 1 week.", applicationId  };
     } catch (error: any) { logger.error("WAVE application error:", error);
 
         if (error.name === "ZodError") {
             const zodError = error as ZodError;
             const firstError = zodError.issues[0];
-            return { error: firstError?.message || "Please fill in all required fields correctly", success: false as const, data: null };
+            return { error: firstError?.message || "Please fill in all required fields correctly", success: false as const };
         }
 
-        return { error: "Failed to submit application. Please try again.", success: false as const, data: null };
+        return { error: "Failed to submit application. Please try again.", success: false as const };
     }
 }
 
@@ -124,7 +126,7 @@ export async function enrollInCourseAction(
         const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
         const existingEnrollment = await enrollmentRef.get();
 
-        if (existingEnrollment.exists) { return { error: "You are already enrolled in this course", success: false as const, data: null };
+        if (existingEnrollment.exists) { return { error: "You are already enrolled in this course", success: false as const };
         }
 
         // Save enrollment to Firestore
@@ -146,14 +148,14 @@ export async function enrollInCourseAction(
                 students: FieldValue.increment(1) });
         }
 
-        return { error: null, success: true as const, message: "Enrollment successful! Check your email for course access details.", enrollmentId , data: null };
+        return { error: null, success: true as const, message: "Enrollment successful! Check your email for course access details.", enrollmentId  };
     } catch (error: any) { logger.error("Enrollment error:", error);
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const, data: null };
+            return { error: "Please fill in all required fields correctly", success: false as const };
         }
 
-        return { error: "Failed to enroll. Please try again.", success: false as const, data: null };
+        return { error: "Failed to enroll. Please try again.", success: false as const };
     }
 }
 
@@ -171,7 +173,7 @@ export async function submitWithdrawalAction(
         const { session } = sessionResult;
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
-        if (!idempotencyKey) { return { error: "Missing security token. Please refresh the page.", success: false as const, data: null };
+        if (!idempotencyKey) { return { error: "Missing security token. Please refresh the page.", success: false as const };
         }
 
         // Extract and validate form data
@@ -258,17 +260,17 @@ export async function submitWithdrawalAction(
             error: null,
             success: true as const,
             message: `Withdrawal request submitted! Reference: ${withdrawalId}`,
-            data: { withdrawalId }
+            withdrawalId
         };
     } catch (error: any) { logger.error("Withdrawal error:", error);
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const, data: null };
+            return { error: "Please fill in all required fields correctly", success: false as const };
         }
 
-        if (error.message.includes("balance")) { return { error: error.message, success: false as const, data: null };
+        if (error.message.includes("balance")) { return { error: error.message, success: false as const };
         }
 
-        return { error: "Failed to submit withdrawal request. Please try again.", success: false as const, data: null };
+        return { error: "Failed to submit withdrawal request. Please try again.", success: false as const };
     }
 }

@@ -40,15 +40,15 @@ export type EscrowStatus = { totalLocked: number;
 
 type DashboardActionState = { error: string | null;
     success: boolean;
-    data?: DashboardStats; };
+    data?: DashboardStats | null; };
 
 type ActivityActionState = { error: string | null;
     success: boolean;
-    data?: RecentActivity; };
+    data?: RecentActivity | null; };
 
 type EscrowActionState = { error: string | null;
     success: boolean;
-    data?: EscrowStatus; };
+    data?: EscrowStatus | null; };
 
 // ============================================
 // Dashboard Stats Action
@@ -144,7 +144,17 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             }
         }
 
-        return { error: null, success: true as const, data: null };
+                const stats: DashboardStats = {
+            totalExports,
+            activeOrders,
+            totalEscrow,
+            cooperativeSavings,
+            academyEnrollments,
+            onboardingCompleted: userData?.onboardingCompleted || false
+        };
+
+        return { error: null, success: true as const, data: stats };
+
     } catch (error: any) { logger.error("Dashboard stats error:", error);
         return { error: "Failed to fetch dashboard stats", success: false as const, data: null };
     }
@@ -259,7 +269,15 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
         // Sort upcoming releases by date
         upcomingReleases.sort((a, b) => a.releaseDate.getTime() - b.releaseDate.getTime());
 
-        return { error: null, success: true as const, data: null };
+                const escrow: EscrowStatus = {
+            totalLocked,
+            pendingRelease,
+            nextReleaseDate,
+            upcomingReleases
+        };
+
+        return { error: null, success: true as const, data: escrow };
+
     } catch (error: any) { logger.error("Escrow status error:", error);
         return { error: "Failed to fetch escrow status", success: false as const, data: null };
     }

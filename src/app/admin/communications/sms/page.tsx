@@ -106,11 +106,15 @@ export default function SmsBroadcastPage() {
         toast.loading("Finding recipients...", { id: "sms-preview" });
         try {
             const res = await previewSmsBroadcastAction(buildFilters());
-            setPreview(res);
-            if (res.count === 0) {
-                toast.error("No valid recipients found.", { id: "sms-preview" });
+            if (res.success) {
+                setPreview(res.data);
+                if (res.data.count === 0) {
+                    toast.error("No valid recipients found.", { id: "sms-preview" });
+                } else {
+                    toast.success(`Found ${res.data.count} recipients.`, { id: "sms-preview" });
+                }
             } else {
-                toast.success(`Found ${res.count} recipients.`, { id: "sms-preview" });
+                toast.error(res.error || "Failed to estimate recipients.", { id: "sms-preview" });
             }
         } catch (e: any) {
             toast.error(e.message || "Failed to estimate recipients.", { id: "sms-preview" });
@@ -135,11 +139,13 @@ export default function SmsBroadcastPage() {
         toast.loading(`Sending SMS to ${preview.count} users...`, { id: "sms-send", duration: 100000 });
         try {
             const res = await sendSmsBroadcastAction(buildFilters(), message.trim());
-            setResult(res);
             if (res.success) {
-                 toast.success(`Complete: Sent ${res.sent}, Failed ${res.failed}`, { id: "sms-send", duration: 5000 });
+                const resultData = { success: true, ...res.data };
+                setResult(resultData);
+                toast.success(`Complete: Sent ${res.data.sent}, Failed ${res.data.failed}`, { id: "sms-send", duration: 5000 });
             } else {
-                 toast.error(`Broadcast Error: ${res.error}`, { id: "sms-send", duration: 8000 });
+                setResult({ success: false, error: res.error, sent: 0, failed: 0, skipped: 0 });
+                toast.error(`Broadcast Error: ${res.error}`, { id: "sms-send", duration: 8000 });
             }
         } catch (e: any) {
             toast.error(e.message || "A critical error occurred while sending.", { id: "sms-send" });

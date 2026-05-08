@@ -179,9 +179,12 @@ export default function BroadcastComposePage() {
         setEstimating(true);
         const res = await previewBroadcastAction(buildFilters());
         setEstimating(false);
-        if (res.error) { showToast(res.error, "error"); return; }
-        setRecipientCount(res.count);
-        setRecipientSample(res.sample);
+        if (!res.success) { 
+            showToast(res.error || "Failed to estimate recipients", "error"); 
+            return; 
+        }
+        setRecipientCount(res.data.count);
+        setRecipientSample(res.data.sample);
     };
 
     async function handleSend() {

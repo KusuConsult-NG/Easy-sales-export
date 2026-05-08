@@ -189,7 +189,7 @@ export default function AdminLoansPage() {
                 "Interest Rate", "Duration (months)", "Monthly Payment (₦)",
                 "Purpose", "Status", "Applied Date"
             ];
-            const rows = exportData.map(a => [
+            const rows = exportData.map((a: any) => [
                 a.fullName || "", a.userEmail || "", a.phone || "", a.state || "", a.lga || "",
                 a.tier || "", a.amount,
                 `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
@@ -198,7 +198,7 @@ export default function AdminLoansPage() {
             ]);
             const csv = [
                 headers.join(","),
-                ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+                ...rows.map((r: any) => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
             ].join("\n");
             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
             const url = URL.createObjectURL(blob);

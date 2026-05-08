@@ -13,7 +13,7 @@ export async function diagnoseBroadcastAction(): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { error: "Action failed", success: false as const, usersCollectionName: COLLECTIONS.USERS, totalUserDocs: 0, usersWithEmail: 0, sampleFields: [], error: sessionResult.error, data: null };
+        if ('error' in sessionResult) return { success: false as const, usersCollectionName: COLLECTIONS.USERS, totalUserDocs: 0, usersWithEmail: 0, sampleFields: [], error: sessionResult.error, data: null };
 
         const db = getAdminDb();
         const collectionName = COLLECTIONS.USERS;
@@ -36,6 +36,6 @@ export async function diagnoseBroadcastAction(): Promise<
         const totalCount = countSnap.data().count;
 
         return { error: null, success: true as const, projectId: process.env.FIREBASE_PROJECT_ID || "(not set)", usersCollectionName: collectionName, totalUserDocs: totalCount, usersWithEmail, sampleFields , data: null };
-    } catch (error: any) { return { error: "Action failed", success: false as const, usersCollectionName: COLLECTIONS.USERS, totalUserDocs: 0, usersWithEmail: 0, sampleFields: [], error: error.message, data: null };
+    } catch (error: any) { return { success: false as const, usersCollectionName: COLLECTIONS.USERS, totalUserDocs: 0, usersWithEmail: 0, sampleFields: [], error: error.message, data: null };
     }
 }

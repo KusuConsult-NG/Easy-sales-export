@@ -18,7 +18,7 @@ function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
 
 export type ActionState = 
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };;
+    | { success: false; error: string; data?: null | any; meta?: any; [key: string]: any };
 
 export async function initializeContributionPaymentAction(
     amount: number
@@ -27,14 +27,14 @@ export async function initializeContributionPaymentAction(
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
-        if (!session?.user) { return { error: 'Authentication required', success: false as const, data: null };
+        if (!session?.user) { return { error: 'Authentication required', success: false as const, data: undefined };
         }
 
         // Validate amount
-        if (amount < 1000) { return { error: 'Minimum contribution is ₦1, 000', success: false as const, data: null };
+        if (amount < 1000) { return { error: 'Minimum contribution is ₦1, 000', success: false as const, data: undefined };
         }
 
-        if (amount > 1000000) { return { error: 'Maximum contribution is ₦1, 000, 000', success: false as const, data: null };
+        if (amount > 1000000) { return { error: 'Maximum contribution is ₦1, 000, 000', success: false as const, data: undefined };
         }
 
         // Initialize payment with Paystack (Paystack generates the reference)
@@ -50,7 +50,7 @@ export async function initializeContributionPaymentAction(
         return { error: null, success: true as const, data: {
                 authorizationUrl, reference } };
     } catch (error: any) { logger.error('Payment initialization error:', error);
-        return { error: error.message || 'Failed to initialize payment', success: false as const, data: null };
+        return { error: error.message || 'Failed to initialize payment', success: false as const, data: undefined };
     }
 }
 
@@ -65,11 +65,11 @@ export async function verifyContributionPaymentAction(
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
-        if (!session?.user) { return { error: 'Authentication required', success: false as const, data: null };
+        if (!session?.user) { return { error: 'Authentication required', success: false as const, data: undefined };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
-        if (!rateLimitResult.success) { return { success: false as const, error: "Too many payment verification attempts. Please try again later.", data: null };
+        if (!rateLimitResult.success) { return { success: false as const, error: "Too many payment verification attempts. Please try again later.", data: undefined };
         }
 
         // Import here to avoid circular dependency
@@ -84,7 +84,7 @@ export async function verifyContributionPaymentAction(
         const processedRef = doc(db, 'processedPayments', reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists()) { return { error: 'Payment has already been processed', success: false as const, data: null };
+        if (existingPayment.exists()) { return { error: 'Payment has already been processed', success: false as const, data: undefined };
         }
 
         // Verify payment with Paystack
@@ -101,15 +101,15 @@ export async function verifyContributionPaymentAction(
         const expectedAmount = verification.data.metadata?.amount;
 
         // User ID verification
-        if (userId !== session.user.id) { return { error: 'Payment verification failed: User mismatch', success: false as const, data: null };
+        if (userId !== session.user.id) { return { error: 'Payment verification failed: User mismatch', success: false as const, data: undefined };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
-        if (amountInNaira < 1000 || amountInNaira > 1000000) { return { error: 'Invalid payment amount', success: false as const, data: null };
+        if (amountInNaira < 1000 || amountInNaira > 1000000) { return { error: 'Invalid payment amount', success: false as const, data: undefined };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
-        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) { return { error: 'Payment amount mismatch', success: false as const, data: null };
+        if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) { return { error: 'Payment amount mismatch', success: false as const, data: undefined };
         }
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
@@ -188,7 +188,7 @@ export async function verifyContributionPaymentAction(
                 paymentReference: reference },
             details: `Contribution of ₦${amountInNaira.toLocaleString()} processed successfully` });
 
-        return { error: null, success: true as const, message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString() } has been recorded.`, data: null
+        return { error: null, success: true as const, message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString() } has been recorded.`, data: undefined
         };
     } catch (error: any) { // 🔒 SECURITY FIX #2: Sanitized error logging
         logger.error('[Payment Verification Error]', {
@@ -196,6 +196,6 @@ export async function verifyContributionPaymentAction(
             action: 'verifyContribution',
             reference });
 
-        return { error: 'Payment verification failed. Please contact support with reference: ' + reference, success: false as const, data: null };
+        return { error: 'Payment verification failed. Please contact support with reference: ' + reference, success: false as const, data: undefined };
     }
 }

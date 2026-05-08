@@ -186,7 +186,7 @@ export default function AdminWaveApplicationsPage() {
                 "State", "LGA", "NIN", "BVN", "Voter Card",
                 "Bank Name", "Account Number", "Status", "Applied Date"
             ];
-            const rows = exportData.map(app => [
+            const rows = exportData.map((app: any) => [
                 app.id, app.data.surname || "", app.data.firstName || "",
                 app.user.email || "", app.data.phone || "",
                 app.data.stateOfResidence || "", app.data.lgaOfResidence || "",

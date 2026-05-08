@@ -94,8 +94,8 @@ export default function FarmNationApplicationsPage() {
             return {
                 success: true,
                 data: result.data || [],
-                hasMore: !!result.hasMore,
-                lastDocId: result.lastDocId,
+                hasMore: !!result.meta?.hasMore,
+                lastDocId: result.meta?.lastDocId,
             };
         },
         limit: 20,

@@ -44,7 +44,7 @@ async function _getUserEscrowTransactions() { let sessionResult;
                 releaseRequestedAt: (data.releaseRequestedAt as Timestamp)?.toDate() };
         });
 
-        return { success: true as const, error: null, data: null };
+        return { success: true as const, error: null, data: transactions };
     } catch (error: any) { logger.error("Get escrow transactions error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -116,7 +116,14 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { error: null, success: true as const, data: null
+        return { 
+            success: true as const, 
+            error: null, 
+            data: { 
+                transactions,
+                lastDocId: nextCursor,
+                hasMore: !!nextCursor
+            } 
         };
     } catch (error: any) { logger.error("Get all escrow transactions admin error:", {
             userId: sessionResult?.session?.user?.id,

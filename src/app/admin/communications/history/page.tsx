@@ -154,8 +154,8 @@ export default function BroadcastHistoryPage() {
         setError(null);
         const res = await getBroadcastHistoryAction();
         setLoading(false);
-        if (res.error) { setError(res.error); return; }
-        setLogs(res.logs);
+        if (!res.success) { setError(res.error || "Failed to load history"); return; }
+        setLogs(res.data);
     };
 
      

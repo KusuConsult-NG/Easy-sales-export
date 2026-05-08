@@ -22,7 +22,8 @@ async function requireSuperAdmin() { const sessionResult = await requireSession(
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 export interface ChatSessionsResult { sessions: ChatSessionRow[];
-    hasMore: boolean; }
+    hasMore: boolean;
+    error?: string; }
 
 export async function getChatSessionsAction(
     filters: ChatSessionFilters = {}
@@ -35,7 +36,8 @@ export async function getChatSessionsAction(
 }
 
 export interface ChatThreadResult { messages: ChatbotMessageRow[];
-    session: ChatSessionRow | null; }
+    session: ChatSessionRow | null;
+    error?: string; }
 
 export async function getChatThreadAction(
     sessionId: string
@@ -48,7 +50,7 @@ export async function getChatThreadAction(
     }
 }
 
-export interface ResolveSessionResult { error: null, success: boolean; }
+export interface ResolveSessionResult { error: string | null; success: boolean; data?: null; }
 
 export async function resolveSessionAction(
     sessionId: string
@@ -69,8 +71,8 @@ export async function resolveSessionAction(
             `Admin resolved chatbot session ${sessionId}`
         );
 
-        return { error: null, success: true as const , data: null };
-    } catch (err: any) { return { success: false as const, error: err.message, data: null };
+        return { error: null, success: true as const };
+    } catch (err: any) { return { success: false as const, error: err.message };
     }
 }
 

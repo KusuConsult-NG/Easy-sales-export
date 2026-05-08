@@ -228,7 +228,14 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { error: null, success: true as const, data: null
+        return { 
+            success: true as const, 
+            error: null, 
+            data: { 
+                disputes, 
+                lastDocId: nextCursor, 
+                hasMore: !!nextCursor 
+            } 
         };
     } catch (error) { logger.error("Get admin disputes error:", {
             userId: sessionResult?.session?.user?.id,
@@ -270,7 +277,7 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
             updatedAt: (dispute.updatedAt as unknown as Timestamp)?.toDate ? (dispute.updatedAt as unknown as Timestamp).toDate() : dispute.updatedAt,
             resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt } as Dispute;
 
-        return { error: null, success: true as const, data: null };
+        return { success: true as const, error: null, data: { dispute: disputeData } };
     } catch (error) { logger.error("Get dispute error:", {
             disputeId,
             userId: sessionResult?.session?.user?.id,

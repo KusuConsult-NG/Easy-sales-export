@@ -48,8 +48,8 @@ export default function EscrowManagementPage() {
         setProcessingId(transactionId);
         try {
             const result = await releaseFarmNationEscrowAction(transactionId);
-            if (result.success) {
-                alert(result.message);
+            if (result.success && result.data) {
+                alert(result.data.message);
                 loadTransactions();
             } else {
                 alert("Error: " + result.error);

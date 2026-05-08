@@ -295,7 +295,7 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
             return { success: false as const, data: null, error: `Invalid State: "${validatedData.state }"`, meta: null };
         }
         if (!isValidLGA(validatedData.state, validatedData.lga)) { 
-            return { success: false as const, error: `Invalid LGA: "${validatedData.lga }" in ${validatedData.state}`, meta: null };
+            return { success: false as const, error: `Invalid LGA: "${validatedData.lga }" in ${validatedData.state}`, data: null, meta: null };
         }
 
         // Create property

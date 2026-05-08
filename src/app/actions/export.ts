@@ -34,7 +34,9 @@ export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/firestore";
 
 type ActionErrorState = { error: string;
-    success: false; };
+    success: false;
+    data?: null;
+    meta?: null; };
 
 
 
@@ -151,7 +153,7 @@ export async function createExportWindowAction(
 
         return { error: null, success: true as const, message: `Export window created successfully! Order ID: ${finalOrderId }`,
             meta: null
-        , data: null };
+        , data: { orderId: finalOrderId } };
     } catch (error: any) { logger.error("Create export window error:", error);
 
         if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance")) {
@@ -277,7 +279,7 @@ export async function updateExportWindowAction(
         await exportRef.update({ ...cleanData,
             updatedAt: FieldValue.serverTimestamp() });
 
-        return { error: null, success: true as const, meta: null , data: null };
+        return { error: null, success: true as const, meta: null , data: { message: "Export window updated" } };
     } catch (error: any) { logger.error("Update export window error:", error);
         return { error: "Failed to update export window", success: false as const, meta: null };
     }
@@ -426,8 +428,7 @@ export async function submitExportOnboardingAction(
         if (existingStatus === 'pending_approval' || existingStatus === 'under_review') { return { success: false as const, error: "Your previous application is still being processed.", meta: null
  };
         }
-        if (existingStatus === 'approved') { return { error: "Action failed", success: false as const, data: undefined, error: "You are already registered for Export.", meta: null
- };
+        if (existingStatus === 'approved') { return { success: false as const, data: undefined, error: "You are already registered for Export.", meta: null };
         }
 
         // Extract Data
@@ -515,7 +516,7 @@ export async function submitExportOnboardingAction(
 
         return { error: null, success: true as const,
             meta: null
-        , data: null };
+        , data: { message: "Onboarding submitted" } };
     } catch (error: any) { logger.error("Submit export onboarding error:", error);
         return { error: "Failed to submit onboarding application", success: false as const, data: undefined, meta: null };
     }
@@ -645,7 +646,12 @@ export async function getUserExportStatsAction() { try {
         if (portfolioDoc.exists) { const data = portfolioDoc.data()!;
              return { error: null, success: true as const,
                  meta: null
-             , data: null };
+             , data: {
+                 totalInvested: data.totalInvested || 0,
+                 activeInvestments: data.activeInvestments || 0,
+                 totalReturns: data.totalReturns || 0,
+                 pendingReturns: data.pendingReturns || 0
+             } };
         }
 
         // Fallback if no portfolio exists yet
@@ -858,7 +864,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<
         revalidatePath("/dashboard/export");
         revalidatePath(`/export/windows/${exportId}`);
 
-        return { error: null, success: true as const , data: null };
+        return { error: null, success: true as const , data: { message: "Investment verified" } };
 
     } catch (error: any) { logger.error("Verify export investment error:", error);
         return { success: false as const, error: "Failed to verify investment"};
@@ -950,7 +956,7 @@ export async function extendEscrowAction(
             metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
         });
 
-        return { error: null,  success: true as const , data: null };
+        return { error: null,  success: true as const , data: { message: "Escrow extended" } };
     } catch (error: any) { logger.error("Extend escrow error:", error);
         return { success: false as const, error: error.message};
     }
@@ -983,7 +989,7 @@ export async function getExportApplicationAction(): Promise<
             return bTime - aTime;
         });
         const data = sortedDocs[0];
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: data };
     } catch (error) { logger.error('getExportApplicationAction error:', error);
         return { success: false as const, error: 'Failed to fetch application'};
     }
@@ -1052,7 +1058,7 @@ export async function requestExportRevisionAction(
         } catch (emailError) { logger.error('Export revision email failed (non-blocking):', emailError);
         }
 
-        return { error: null, success: true as const , data: null };
+        return { error: null, success: true as const , data: { message: "Revision requested" } };
     } catch (error) { logger.error('requestExportRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision'};
     }
@@ -1119,7 +1125,7 @@ export async function approveExportApplicationAction(
         } catch (emailError) { logger.error('Export approval email failed (non-blocking):', emailError);
         }
 
-        return { error: null, success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: { message: "Application approved" }, meta: null };
     } catch (error) { logger.error('approveExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to approve application', meta: null };
     }
@@ -1188,7 +1194,7 @@ export async function resubmitExportApplicationAction(
         } catch (err) { logger.error("Failed to invalidate cache after Export application resubmission:", err);
         }
 
-        return { error: null, success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: { message: "Application resubmitted" }, meta: null };
     } catch (error) { logger.error('resubmitExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to resubmit application', meta: null };
     }

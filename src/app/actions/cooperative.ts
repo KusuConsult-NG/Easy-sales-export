@@ -119,7 +119,7 @@ async function _initiateCooperativePaymentAction(
 
         return { error: null,  success: true as const,
             meta: null
-        , data: null };
+        , data: { message: "Action successful" } };
 
     } catch (error) { logger.error("Initiate cooperative payment failed:", {
             tier,
@@ -342,7 +342,7 @@ export async function registerCooperativeMemberAction(
 
         return { error: null, success: true as const,
             meta: null
-        , data: null };
+        , data: { message: "Action successful" } };
     } catch (error) { logger.error("Membership registration failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -434,7 +434,7 @@ export async function joinCooperativeAction(
 
         return { error: null, success: true as const,
             meta: null
-        , data: null };
+        , data: { message: "Action successful" } };
     } catch (error) { logger.error("Join cooperative failed:", {
             cooperativeId,
             error: error instanceof Error ? error.message : String(error)
@@ -525,8 +525,7 @@ async function _makeContributionAction(
 
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");
-
-        return { error: null, success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: { message: "Contribution successful" }, meta: null };
     } catch (error) { logger.error("Contribution failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -597,7 +596,7 @@ async function _submitWithdrawalAction(
         revalidatePath("/cooperatives/withdrawals");
         return { error: null,  success: true as const,
             meta: null
-        , data: null };
+        , data: { message: "Action successful" } };
     } catch (error) { logger.error("Withdrawal error:", {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -664,7 +663,7 @@ async function _getUserTierAction(): Promise<{ success: true; error: null; data:
     | { success: false; error: string; data: null }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: "Action failed", success: false as const, data: { tier: null, totalContributions: 0 } };
+        if (!sessionResult.session) return { error: "Action failed", success: false as const, data: null };
         const { session } = sessionResult;
 
         const membershipRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
@@ -686,7 +685,7 @@ async function _getUserTierAction(): Promise<{ success: true; error: null; data:
     } catch (error) { logger.error("Failed to get user tier:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Action failed", success: false as const, data: { tier: null, totalContributions: 0 } };
+        return { error: "Action failed", success: false as const, data: null };
     }
 }
 export const getUserTierAction = withFlexibleSafeAction("getUserTierAction", _getUserTierAction);
@@ -850,7 +849,7 @@ async function _applyForLoanAction(
 
         return { error: null, success: true as const,
             meta: null
-        , data: null };
+        , data: { message: "Action successful" } };
 
     } catch (error) { logger.error("Loan application failed:", {
             error: error instanceof Error ? error.message : String(error)
@@ -922,7 +921,7 @@ async function _createFixedSavingsAction(
                 createdAt: FieldValue.serverTimestamp() });
         });
 
-        return { error: null, success: true as const, data: null  };
+        return { error: null, success: true as const, data: { message: "Fixed savings plan created" }  };
     } catch (error) { logger.error("Fixed savings creation failed:", {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -947,7 +946,7 @@ async function _getDirectoryMembersAction(): Promise<
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
         const { session } = sessionResult;
         // Allow any logged in user? Or just admin? Assuming members can view directory.
-        if (!session?.user) { return { error: "Unauthorized", success: false as const, data: [] };
+        if (!session?.user) { return { error: "Unauthorized", success: false as const, data: null };
         }
 
         const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
@@ -977,7 +976,7 @@ async function _getDirectoryMembersAction(): Promise<
             })
             .filter(Boolean); // Remove nulls (corrupted)
 
-        return { error: null, success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: members, meta: null };
 
     } catch (error) { logger.error("Failed to fetch directory:", {
             error: error instanceof Error ? error.message : String(error)
@@ -1015,7 +1014,7 @@ export async function getCooperativeApplicationAction(): Promise<
             return bTime - aTime;
         });
         const data = sortedDocs[0];
-        return { error: null, success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: data, meta: null };
     } catch (error) { logger.error('getCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -1210,7 +1209,7 @@ export async function updatePassportPhotoAction(
 
         revalidatePath("/cooperatives/id-card");
 
-        return { error: null, success: true as const, data: null, meta: null };
+        return { error: null, success: true as const, data: { message: "Passport photo updated" }, meta: null };
     } catch (error) { logger.error("updatePassportPhotoAction error:", error);
         return { success: false as const, error: "Failed to update passport photo. Please try again.", data: null };
     }
@@ -1239,7 +1238,7 @@ export async function validateCooperativeInviteAction(
         if (data.status !== "pending") { return { success: false as const, error: "This invitation has already been used or revoked.", data: null };
         }
 
-        return { error: null, success: true as const, data: null,
+        return { error: null, success: true as const, data: { message: "Invite valid" },
             meta: null
         };
 

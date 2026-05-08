@@ -93,8 +93,15 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
         
         logger.info(`[Broadcast] Clean Sweep complete. Original Docs: ${snapshot.size}, Unique Recipients: ${uniqueList.length}`);
 
-        return { error: null, success: true as const, recipients: uniqueList, count: uniqueList.length, originalDocCount: snapshot.size
- , data: null };
+        return { 
+            success: true as const, 
+            error: null, 
+            data: { 
+                recipients: uniqueList, 
+                count: uniqueList.length, 
+                originalDocCount: snapshot.size 
+            } 
+        };
 
     } catch (error) { logger.error("[Broadcast] List generation failed:", error);
         return { success: false as const, error: "Failed to generate broadcast list.", data: null };
@@ -108,13 +115,20 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
 export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { const listResult = await getCleanBroadcastListAction(broadcastData);
-    if (!listResult.success) {
-        return { success: false as const, error: listResult.error || "Failed to estimate recipients", count: null, sample: [], data: null };
+> {
+    const listResult = await getCleanBroadcastListAction(broadcastData);
+    if (!listResult.success || !listResult.data) {
+        return { success: false as const, error: listResult.error || "Failed to estimate recipients", data: null };
     }
     
-    return { error: null, success: true as const, count: listResult.count ?? null, sample: listResult.recipients?.slice(0, 5) || []
- , data: null };
+    return { 
+        success: true as const, 
+        error: null, 
+        data: { 
+            count: listResult.data.count, 
+            sample: listResult.data.recipients?.slice(0, 5) || [] 
+        } 
+    };
 }
 
 /**
@@ -150,8 +164,9 @@ export async function getBroadcastHistoryAction(): Promise<
             } as BroadcastLog;
         });
         
-        return { success: true as const, logs, error: null };
-    } catch (error: any) { return { success: false as const, logs: [], error: error.message || "Failed to fetch history", data: null };
+        return { success: true as const, error: null, data: logs };
+    } catch (error: any) { 
+        return { success: false as const, error: error.message || "Failed to fetch history", data: null };
     }
 }
 
@@ -159,9 +174,10 @@ export async function getBroadcastHistoryAction(): Promise<
  * Collect Recipients
  * (Required by Send API)
  */
-export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> { const result = await getCleanBroadcastListAction(filters);
-    if (result.success && result.recipients) {
-        return result.recipients;
+export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> { 
+    const result = await getCleanBroadcastListAction(filters);
+    if (result.success && result.data?.recipients) {
+        return result.data.recipients;
     }
     return [];
 }
