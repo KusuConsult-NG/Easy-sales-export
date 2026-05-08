@@ -21,21 +21,31 @@ export async function diagnoseBroadcastAction(): Promise<
         // Get a small sample of users
         const snap = await db.collection(collectionName).limit(5).get();
         
-        let usersWithEmail = 0;
         let sampleFields: string[] = [];
-        
-        snap.forEach((doc) => { const data = doc.data();
+        snap.forEach((doc) => {
             if (sampleFields.length === 0) {
-                sampleFields = Object.keys(data);
+                sampleFields = Object.keys(doc.data());
             }
-            if (data.email) usersWithEmail++;
         });
 
-        // Get total count
-        const countSnap = await db.collection(collectionName).count().get();
-        const totalCount = countSnap.data().count;
+        // 1. Check total users count using aggregation (fast)
+        const totalCountSnapshot = await db.collection(collectionName).count().get();
+        const totalUserDocs = totalCountSnapshot.data().count;
 
-        return { error: null, success: true as const, projectId: process.env.FIREBASE_PROJECT_ID || "(not set)", usersCollectionName: collectionName, totalUserDocs: totalCount, usersWithEmail, sampleFields , data: null };
+        // 2. Check users with email count (fast)
+        const emailCountSnapshot = await db.collection(collectionName).where("email", ">", "").count().get();
+        const usersWithEmail = emailCountSnapshot.data().count;
+
+        return { 
+            error: null, 
+            success: true as const, 
+            projectId: process.env.FIREBASE_PROJECT_ID || "(not set)", 
+            usersCollectionName: collectionName, 
+            totalUserDocs, 
+            usersWithEmail, 
+            sampleFields, 
+            data: null 
+        };
     } catch (error: any) { return { success: false as const, usersCollectionName: COLLECTIONS.USERS, totalUserDocs: 0, usersWithEmail: 0, sampleFields: [], error: error.message, data: null };
     }
 }

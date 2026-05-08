@@ -157,6 +157,7 @@ export default function BroadcastComposePage() {
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ sent: number; failed: number } | null>(null);
     const [diagResult, setDiagResult] = useState<string | null>(null);
+    const [diagnosing, setDiagnosing] = useState(false);
 
     const isSellerAudience = ["sellers", "wholesale_sellers", "retail_sellers"].includes(audience);
     const hasModuleStatus = audience in MODULE_STATUS_OPTIONS;
@@ -464,12 +465,19 @@ export default function BroadcastComposePage() {
                             </button>
                             <button
                                 onClick={async () => {
-                                    const r = await diagnoseBroadcastAction();
-                                    setDiagResult(JSON.stringify(r, null, 2));
+                                    if (diagnosing) return;
+                                    setDiagnosing(true);
+                                    try {
+                                        const r = await diagnoseBroadcastAction();
+                                        setDiagResult(JSON.stringify(r, null, 2));
+                                    } finally {
+                                        setDiagnosing(false);
+                                    }
                                 }}
-                                className="px-4 py-3 border border-amber-300 bg-amber-50 text-amber-800 font-semibold rounded-xl hover:bg-amber-100 transition text-xs"
+                                disabled={diagnosing}
+                                className="px-4 py-3 border border-amber-300 bg-amber-50 text-amber-800 font-semibold rounded-xl hover:bg-amber-100 transition text-xs flex items-center gap-2"
                             >
-                                🔍 Diagnose
+                                {diagnosing ? <Loader2 className="w-3 h-3 animate-spin" /> : "🔍"} Diagnose
                             </button>
                         </div>
 
