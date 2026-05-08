@@ -6,6 +6,33 @@ import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
 import { isAdmin } from '@/lib/admin-permissions';
 
+export type BroadcastAudience =
+    | "all"
+    | "pending_applicants"
+    | "unpaid_applicants"
+    | "abandoned_failed_transactions"
+    | "csv_upload"
+    | "marketplace_onboarded"
+    | "buyers"
+    | "sellers"
+    | "wholesale_sellers"
+    | "retail_sellers"
+    | "cooperative_members"
+    | "wave_applicants"
+    | "wave_briefing_registrants"
+    | "academy_users"
+    | "farm_nation_users"
+    | "export_users";
+
+export interface BroadcastFilters {
+    audience: BroadcastAudience;
+    state?: string;
+    sellerStatus?: "pending" | "approved" | "suspended";
+    moduleStatus?: string;
+    farmNationRole?: "buyer" | "seller" | "both";
+    csvEmails?: string[];
+}
+
 /**
  * High-Assurance Broadcast List Generator
  * 
@@ -80,8 +107,8 @@ export async function previewBroadcastAction(broadcastData: any) {
     
     return {
         success: true,
-        previewCount: listResult.count,
-        sampleRecipients: listResult.recipients?.slice(0, 5)
+        count: listResult.count,
+        sample: listResult.recipients?.slice(0, 5)
     };
 }
 
