@@ -372,7 +372,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<
         );
 
         return {
-            error: undefined,
+            error: null,
             success: true as const,
             data: applications,
         };

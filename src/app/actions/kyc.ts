@@ -71,7 +71,7 @@ export async function verifyBVNAction(payload: {
         logger.info('BVN verification started [QOREID BYPASSED]', { userId, bvn: bvn.slice(0, 4) + '***' });
 
         // BYPASS QOREID: Automatically grant success and match
-        const result = { success: true as const, isMatch: true, error: undefined };
+        const result = { success: true as const, isMatch: true, error: null };
 
         // Persist result to Firestore regardless of match outcome
         await atomicUpdateUser(userId, {
@@ -140,7 +140,7 @@ export async function verifyNINAction(payload: {
         logger.info('NIN verification started [QOREID BYPASSED]', { userId, nin: nin.slice(0, 4) + '***' });
 
         // BYPASS QOREID: Automatically grant success and match
-        const result = { success: true as const, isMatch: true, error: undefined };
+        const result = { success: true as const, isMatch: true, error: null };
 
         // Persist result to Firestore regardless of match outcome
         await atomicUpdateUser(userId, {

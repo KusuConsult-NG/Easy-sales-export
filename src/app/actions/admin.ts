@@ -3044,7 +3044,7 @@ async function _getStandardSellerVerificationsAction(
             };
         });
 
-        return { success: true as const, data: standardForms, error: undefined, meta: { lastDocId: nextCursorId } };
+        return { success: true as const, data: standardForms, error: null, meta: { lastDocId: nextCursorId } };
     } catch (error) {
         logger.error("Get standard seller verifications error:", error);
         return { success: false as const, error: "Failed to fetch normalized applications", meta: null };

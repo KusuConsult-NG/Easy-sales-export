@@ -57,7 +57,7 @@ export async function sendResetEmailAction(
             // For security, don't reveal if email exists or not
             return {
                 success: true as const,
-                error: undefined
+                error: null
             };
         }
 
@@ -128,7 +128,7 @@ export async function sendResetEmailAction(
 
         return {
             success: true as const,
-            error: undefined
+            error: null
         };
     } catch (error) {
         logger.error('Failed to send reset email:', error);
@@ -203,7 +203,7 @@ export async function resetPasswordAction(
 
         return {
             success: true as const,
-            error: undefined
+            error: null
         };
     } catch (error) {
         logger.error('Password reset failed:', error);
