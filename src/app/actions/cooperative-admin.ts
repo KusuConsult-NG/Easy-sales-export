@@ -55,8 +55,7 @@ async function getAdminScope(userId: string, userRoles: string[]): Promise<strin
 // ADMIN DASHBOARD STATS
 // ============================================================================
 
-async function _getCooperativeStatsAction(): Promise<{
-    error: null, success: true;
+async function _getCooperativeStatsAction(): Promise<{ error: string | null, success: boolean, 
     meta?: any;
     data: {
         stats: {
@@ -80,10 +79,8 @@ async function _getCooperativeStatsAction(): Promise<{
             totalMembersCount?: number;
         }
     };
-    error: null;
 } | {
-    success: false;
-    error: string;
+    
     data?: null;
     meta?: null;
 }> {
@@ -266,7 +263,6 @@ async function _getAllMembersAction(options?: {
     error: null, success: true | false;
     meta?: any;
     data?: { members: any[] };
-    error?: string;
 }> {
     let sessionResult;
     try {
@@ -476,7 +472,6 @@ async function _getAllTransactionsAction(options?: {
         reference?: string;
         metadata?: Record<string, unknown>;
     }> };
-    error?: string;
 }> {
     let sessionResult;
     try {
@@ -609,7 +604,6 @@ export async function getContributionReportsAction(options?: {
             monthlyTrend: Array<{ month: string; amount: number }>;
         }
     };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -750,7 +744,6 @@ export async function getRecentActivityAction(): Promise<{
         timestamp: string;
         userId?: string;
     }> };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

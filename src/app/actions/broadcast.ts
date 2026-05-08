@@ -117,14 +117,11 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
  * Preview Broadcast Action
  * (Required by Communications UI)
  */
-export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{
-    error: null, success: true;
+export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{ error: string | null, success: boolean, 
     count: number | null;
     sample: any[];
-    error: null;
 } | {
-    success: false;
-    error: string;
+    
     count: null;
     sample: any[];
 }> {
@@ -150,14 +147,10 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
  * Get Broadcast History
  * (Required by Communications UI)
  */
-export async function getBroadcastHistoryAction(): Promise<{
-    error: null, success: true;
+export async function getBroadcastHistoryAction(): Promise<{ error: string | null, success: boolean, 
     logs: BroadcastLog[];
-    error: null;
 } | {
-    error: "Action failed", success: false;
     logs: BroadcastLog[];
-    error: string;
 }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)

@@ -5,37 +5,37 @@ actions_dir = "/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/app/act
 
 def cleanup_duplicates(filepath):
     with open(filepath, 'r') as f:
-        lines = f.readlines()
+        content = f.read()
     
-    new_lines = []
     modified = False
+    # Use a more robust regex to find duplicate error in Promise or interface blocks
+    # We look for blocks like: Promise<{ ... error: ... error: ... }>
     
-    # We'll look for Promise<{ ... }> blocks or return { ... } blocks
-    # and find duplicate error keys.
-    
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        
-        # Check for error: null, success: ... AND error: ... on the same line
-        if 'error: null, success:' in line and 'error?:' in line:
-            # signature case like: Promise<{ error: null, success: true | false; ... error?: string }>
-            # Remove the duplicate error?
-            line = line.replace('error?: string', '')
-            line = line.replace('error?: string;', '')
-            # Ensure error is correctly typed
-            line = line.replace('error: null', 'error: string | null')
-            modified = True
-            
-        # Check for multiple error keys on adjacent lines
-        if i > 0 and 'error: null, success:' in line and 'error?: string' in lines[i-1]:
-            # Signature case across lines
-            lines[i-1] = "" # Remove the duplicate
-            line = line.replace('error: null', 'error: string | null')
-            modified = True
+    def fix_block(match):
+        block = match.group(0)
+        if block.count('error:') > 1:
+            # We have a duplicate.
+            # 1. Remove error?: string or error?: string | null
+            new_block = re.sub(r'error\??:\s*(string\s*\|\s*null|string|null);?\s*,?\s*', '', block)
+            # 2. Ensure one error: string | null is present
+            if 'success: true | false' in new_block:
+                new_block = new_block.replace('success: true | false', 'error: string | null, success: boolean')
+            elif 'success: boolean' in new_block:
+                new_block = new_block.replace('success: boolean', 'error: string | null, success: boolean')
+            else:
+                # Add it at the start of the block
+                new_block = re.sub(r'(\{|Promise<\{)', r'\1 error: string | null,', new_block)
+            return new_block
+        return block
 
-        new_lines.append(line)
-        i += 1
+    # Match blocks like Promise<{ ... }> or type ... = { ... }
+    new_content = re.sub(r'(Promise<\{[^{}]*\}>|type\s+\w+\s*=\s*\{[^{}]*\})', fix_block, content, flags=re.DOTALL)
+    
+    if new_content != content:
+        with open(filepath, 'w') as f:
+            f.write(new_content)
+        return True
+    return False
 
     if modified:
         with open(filepath, 'w') as f:

@@ -53,7 +53,6 @@ function sanitizeForSerialization(obj: unknown): unknown {
 export async function getPendingContentAction(): Promise<{
     error: null, success: true | false;
     data?: PendingContentItem[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

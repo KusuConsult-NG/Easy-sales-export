@@ -219,7 +219,6 @@ export async function getAdminLoanApplicationsAction(options: {
 } = {}): Promise<{
     error: null, success: true | false;
     data?: LoanApplication[];
-    error?: string;
     lastDocId?: string;
     hasMore?: boolean;
 }> {
@@ -288,7 +287,6 @@ export async function getAdminLoanApplicationsExportAction(options: {
 }): Promise<{
     error: null, success: true | false;
     data?: any[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -356,7 +354,6 @@ export async function getAdminLoanApplicationsExportAction(options: {
 export async function getAdminLoanStatsAction(): Promise<{
     error: null, success: true | false;
     stats?: { total: number; pending: number; approved: number; rejected: number };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

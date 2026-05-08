@@ -1133,7 +1133,6 @@ export async function getExportApplicationAction(): Promise<{
     error: null, success: true | false;
     data?: any;
     revisionNote?: string;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

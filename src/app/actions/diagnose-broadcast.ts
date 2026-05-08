@@ -15,7 +15,6 @@ export async function diagnoseBroadcastAction(): Promise<{
     totalUserDocs: number;
     usersWithEmail: number;
     sampleFields: string[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireAdmin();

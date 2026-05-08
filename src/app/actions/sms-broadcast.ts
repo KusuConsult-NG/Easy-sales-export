@@ -53,7 +53,6 @@ export interface SmsFilters {
 export interface SmsBroadcastPreview {
     count: number;
     sample: { name: string; phone: string }[];
-    error?: string;
 }
 
 export interface SmsBroadcastResult {
@@ -62,7 +61,6 @@ export interface SmsBroadcastResult {
     failed: number;
     skipped: number;
     logId?: string;
-    error?: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

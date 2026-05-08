@@ -386,12 +386,10 @@ export async function getPendingAcademyApplicationsAction(): Promise<
 async function _getAcademyEnrollmentsAction(options?: {
     limit?: number;
     search?: string;
-}): Promise<{
-    error: null, success: true | false;
-    meta?: any;
-    data?: { enrollments: any[] };
-    error?: string;
-}> {
+}): Promise<
+    | { success: true; error: null; data: { enrollments: any[] }; meta?: any }
+    | { success: false; error: string; data?: null; meta?: any }
+> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -440,7 +438,6 @@ export const getAcademyEnrollmentsAction = withFlexibleSafeAction("getAcademyEnr
 async function _getAcademyInstructorsAction(): Promise<{
     error: null, success: true | false;
     data?: any[];
-    error?: string;
 }> {
     let sessionResult;
     try {
@@ -479,7 +476,6 @@ async function _getAcademyCoursesAction(options?: {
     error: null, success: true | false;
     meta?: any;
     data?: { courses: any[] };
-    error?: string;
 }> {
     let sessionResult;
     try {
@@ -542,7 +538,6 @@ async function _getAcademyStatsAction(): Promise<{
             courseRatings: number;
         }
     };
-    error?: string;
 }> {
     let sessionResult;
     try {
@@ -658,7 +653,6 @@ async function _getAcademyApplicationStatsAction(): Promise<{
             rejected: number;
         }
     };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

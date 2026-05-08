@@ -297,7 +297,6 @@ export async function getDashboardStatsAction(options?: {
 
 export interface FinancialOverview {
     error: null, success: true | false;
-    error?: string;
     totalRevenue: number;
     totalEscrowVolume: number;
     totalLoansDisbursed: number;

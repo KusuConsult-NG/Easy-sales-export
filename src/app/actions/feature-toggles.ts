@@ -100,7 +100,6 @@ export async function updateFeatureToggle(
 export async function getAllFeatureToggles(): Promise<{
     error: null, success: true | false;
     data?: FeatureToggle[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

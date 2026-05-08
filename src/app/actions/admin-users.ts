@@ -15,7 +15,6 @@ import { createNotificationAction } from "@/app/actions/notifications";
 export async function getAdminUsersAction(): Promise<{
     error: null, success: true | false;
     admins?: { id: string; name: string; email: string; role: string }[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

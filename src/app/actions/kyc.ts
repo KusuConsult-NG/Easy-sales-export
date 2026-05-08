@@ -22,7 +22,6 @@ import { invalidateUserCache } from '@/lib/cache-invalidation';
 export interface KYCVerificationResult {
     error: null, success: true | false;
     isMatch?: boolean;
-    error?: string;
     /** Populated when names don't match — helps user see what name is on record */
     hint?: string;
 }

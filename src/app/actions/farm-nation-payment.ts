@@ -19,7 +19,6 @@ function nairaToKobo(naira: number): number {
 
 export interface PaymentInitState {
     error: null, success: true | false;
-    error?: string | null;
     data?: {
         authorizationUrl: string;
         reference: string;
@@ -134,7 +133,6 @@ export async function initializePropertyPaymentAction(
  */
 export async function verifyPropertyPaymentAction(reference: string): Promise<{
     error: null, success: true | false;
-    error?: string;
     message?: string;
     propertyId?: string;
 }> {

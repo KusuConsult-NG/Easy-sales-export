@@ -12,12 +12,10 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface SendResetEmailState {
     error: null, success: true | false;
-    error?: string;
 }
 
 export interface ResetPasswordState {
     error: null, success: true | false;
-    error?: string;
 }
 
 /**

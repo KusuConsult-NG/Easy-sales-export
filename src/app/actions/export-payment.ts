@@ -15,7 +15,6 @@ function nairaToKobo(naira: number): number {
 
 export interface PaymentInitState {
     error: null, success: true | false;
-    error?: string | null;
     meta?: any;
     data?: {
         authorizationUrl: string;

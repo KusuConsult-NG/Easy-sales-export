@@ -57,14 +57,12 @@ export interface InAppBroadcastFilters {
 export interface InAppBroadcastPreview {
     count: number;
     sample: { name: string; userId: string }[];
-    error?: string;
 }
 
 export interface InAppBroadcastResult {
     error: null, success: true | false;
     delivered: number;
     logId?: string;
-    error?: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

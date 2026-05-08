@@ -57,7 +57,6 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
 export async function getWalletAction(): Promise<{
     error: null, success: true | false;
     wallet?: Wallet;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -80,7 +79,6 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
     error: null, success: true | false;
     authorizationUrl?: string;
     reference?: string;
-    error?: string;
 }> {
     // Deposits are disabled per request
     const isFundingEnabled = false;
@@ -156,7 +154,6 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
 export async function confirmWalletFundingAction(reference: string): Promise<{
     error: null, success: true | false;
     newBalance?: number;
-    error?: string;
 }> {
     try {
         // Verify with Paystack
@@ -425,7 +422,6 @@ export async function getWalletTransactionsAction(options?: {
     error: null, success: true | false;
     transactions?: WalletTransaction[];
     hasMore?: boolean;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -613,7 +609,6 @@ export async function getAdminWalletWithdrawalsAction(options: {
 } = {}): Promise<{
     error: null, success: true | false;
     data?: any[];
-    error?: string;
     lastDocId?: string;
     hasMore?: boolean;
 }> {

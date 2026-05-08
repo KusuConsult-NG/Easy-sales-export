@@ -1120,7 +1120,6 @@ async function _getDirectoryMembersAction(): Promise<{
     error: null, success: true | false;
     meta?: any;
     data?: any;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -1181,7 +1180,6 @@ export async function getCooperativeApplicationAction(): Promise<{
     meta?: any;
     data?: any;
     revisionNote?: string;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -1331,7 +1329,6 @@ export async function getCooperativeMemberIdCardAction(): Promise<{
     error: null, success: true | false;
     meta?: any;
     data?: MemberIdCardData;
-    error?: string;
     reason?: "payment_required" | "pending_approval" | "not_member";
 }> {
     try {

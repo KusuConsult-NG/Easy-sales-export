@@ -117,7 +117,6 @@ export async function createExportCatalogAction(productData: any): Promise<{ err
 
 export async function getExportRequestStatsAction(): Promise<{
     error: null, success: true | false;
-    error?: string;
     data?: {
         total: number;
         pending: number;
@@ -167,7 +166,6 @@ export async function getExportRequestStatsAction(): Promise<{
 
 export async function getExportCatalogStatsAction(): Promise<{
     error: null, success: true | false;
-    error?: string;
     data?: {
         totalProducts: number;
     };

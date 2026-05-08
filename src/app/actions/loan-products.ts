@@ -27,7 +27,6 @@ export async function getAdminLoanProductsAction(options: {
 } = {}): Promise<{
     error: null, success: true | false;
     data?: LoanProduct[];
-    error?: string;
     lastDocId?: string;
     hasMore?: boolean;
 }> {

@@ -42,7 +42,6 @@ export async function getFlaggedReviewsAction(options?: {
 }): Promise<{
     error: null, success: true | false;
     data?: FlaggedReview[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

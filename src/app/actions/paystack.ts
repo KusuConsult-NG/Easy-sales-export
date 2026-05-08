@@ -34,7 +34,6 @@ interface VerifyAccountResponse {
 export interface BankVerificationResult {
     error: null, success: true | false;
     accountName?: string;
-    error?: string;
 }
 
 /**

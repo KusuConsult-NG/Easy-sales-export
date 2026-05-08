@@ -844,7 +844,6 @@ async function _initiateAcademyPaymentAction(
 ): Promise<{
     error: null, success: true | false;
     data?: { paymentUrl: string };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -927,7 +926,6 @@ export const initiateAcademyPaymentAction = withFlexibleSafeAction("initiateAcad
 async function _verifyAcademyPaymentAction(reference: string): Promise<{
     error: null, success: true | false;
     data?: any;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

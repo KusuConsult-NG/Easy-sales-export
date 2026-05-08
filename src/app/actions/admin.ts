@@ -1814,7 +1814,6 @@ async function _getExportApplicationsStatsAction(): Promise<{
         rejected: number;
         resubmitted: number;
     };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -3208,7 +3207,6 @@ export const rejectWaveApplicationAction = _rejectWaveApplicationAction;
 export async function getAdminSellerStatsAction(): Promise<{
     error: null, success: true | false;
     stats?: { total: number; pending: number; approved: number; rejected: number };
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();

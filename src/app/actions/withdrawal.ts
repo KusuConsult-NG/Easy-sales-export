@@ -23,7 +23,6 @@ interface WithdrawalRequestData {
 
 interface ActionState {
     error: null, success: true | false;
-    error?: string | null;
     message?: string;
 }
 

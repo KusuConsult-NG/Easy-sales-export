@@ -9,13 +9,11 @@ import { serializeDocs } from '@/lib/firestore-serialize';
 
 export interface SendBulkEmailState {
     error: null, success: true | false;
-    error?: string;
     recipientCount?: number;
 }
 
 export interface CreateAnnouncementState {
     error: null, success: true | false;
-    error?: string;
     id?: string;
 }
 
@@ -215,11 +213,10 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
     }
 }
 
-export type GetEmailHistoryState = {
-    error: null, success: true;
+export type GetEmailHistoryState = { error: string | null,
+    success: true;
     history: any[];
-    error: null;
-} | {
+    } | {
     success: false;
     error: string;
     history?: undefined;

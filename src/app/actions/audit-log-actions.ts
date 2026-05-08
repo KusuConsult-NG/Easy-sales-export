@@ -21,16 +21,13 @@ export async function getAuditLogsAction(filters: {
     endDate?: string;
     limit?: number;
     lastDocId?: string;
-}): Promise<{ 
-    error: null, success: true; 
+}): Promise<{ error: string | null, success: boolean,  
     data: AuditLogEntry[]; 
     logs: AuditLogEntry[]; 
-    error: null; 
     lastDocId?: string; 
     hasMore?: boolean 
 } | { 
-    success: false; 
-    error: string; 
+    
     data?: AuditLogEntry[]; 
     logs?: AuditLogEntry[]; 
     lastDocId?: undefined; 
@@ -182,18 +179,15 @@ export async function exportAuditLogsCSV(filters: {
 /**
  * Get audit log statistics
  */
-export async function getAuditStatsAction(days: number = 30): Promise<{
-    error: null, success: true;
+export async function getAuditStatsAction(days: number = 30): Promise<{ error: string | null, success: boolean, 
     stats: {
         totalLogs: number;
         bySeverity: { info: number; warning: number; critical: number };
         topActions: { action: string; count: number }[];
         topUsers: { userId: string; userEmail: string; count: number }[];
     };
-    error: null;
 } | {
-    success: false;
-    error: string;
+    
     stats?: undefined;
 }> {
     try {

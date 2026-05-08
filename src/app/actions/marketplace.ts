@@ -185,7 +185,6 @@ export interface SellerVerificationFormData {
 
 export interface SellerVerificationState {
     error: null, success: true | false;
-    error?: string;
     data?: {
         verificationId: string;
     };
@@ -534,7 +533,6 @@ export interface ProductFormData {
 
 export interface ProductActionState {
     error: null, success: true | false;
-    error?: string;
     data?: {
         productId: string;
     };

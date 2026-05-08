@@ -214,9 +214,9 @@ export async function getPostLoginRedirect(email: string) {
     } catch (error: any) {
         logger.error('[getPostLoginRedirect] Error determining redirect', { email, error: error.message });
         return {
-            error: "Action failed", success: false as const,
+            success: false as const,
             redirectUrl: '/dashboard',
-            error: error.message
+            error: error.message || "Action failed"
         };
     }
 }

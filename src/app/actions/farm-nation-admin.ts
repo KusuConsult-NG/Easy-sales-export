@@ -60,7 +60,6 @@ async function _getFarmNationRegistrantsAction(options: {
     error: null, success: true | false;
     data?: any;
     meta?: any;
-    error?: string;
 }> {
     let sessionResult;
     try {
@@ -301,7 +300,6 @@ async function _getFarmNationVerificationStatsAction(): Promise<{
             rejected: number;
         };
     };
-    error?: string;
 }> {
     let sessionResult;
     try {

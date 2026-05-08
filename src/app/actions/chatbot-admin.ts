@@ -27,7 +27,6 @@ async function requireSuperAdmin() {
 export interface ChatSessionsResult {
     sessions: ChatSessionRow[];
     hasMore: boolean;
-    error?: string;
 }
 
 export async function getChatSessionsAction(
@@ -45,7 +44,6 @@ export async function getChatSessionsAction(
 export interface ChatThreadResult {
     messages: ChatbotMessageRow[];
     session: ChatSessionRow | null;
-    error?: string;
 }
 
 export async function getChatThreadAction(
@@ -63,7 +61,6 @@ export async function getChatThreadAction(
 
 export interface ResolveSessionResult {
     error: null, success: true | false;
-    error?: string;
 }
 
 export async function resolveSessionAction(

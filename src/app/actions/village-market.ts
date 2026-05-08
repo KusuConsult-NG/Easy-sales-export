@@ -335,7 +335,6 @@ export async function getAdminVillageMarketEventsAction(options: {
 } = {}): Promise<{
     error: null, success: true | false;
     data?: VillageMarketEvent[];
-    error?: string;
     lastDocId?: string;
     hasMore?: boolean;
 }> {

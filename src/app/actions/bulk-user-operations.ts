@@ -28,7 +28,6 @@ export async function bulkSuspendUsersAction(
     error: null, success: true | false;
     suspended: number;
     failed: string[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -156,7 +155,6 @@ export async function bulkActivateUsersAction(
     error: null, success: true | false;
     activated: number;
     failed: string[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -265,7 +263,6 @@ export async function bulkAssignRolesAction(
     error: null, success: true | false;
     updated: number;
     failed: string[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -377,7 +374,6 @@ export async function bulkDeleteUsersAction(
     error: null, success: true | false;
     deleted: number;
     failed: string[];
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -515,7 +511,6 @@ export async function createImpersonationTokenAction(
     error: null, success: true | false;
     token?: string;
     expiresAt?: string;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -606,7 +601,6 @@ export async function exportUserDataAction(
 ): Promise<{
     error: null, success: true | false;
     data?: any;
-    error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
