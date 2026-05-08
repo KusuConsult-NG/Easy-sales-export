@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { logger } from '@/lib/logger';
 import { AlertOctagon, RotateCcw, Home } from 'lucide-react';
 import Link from 'next/link';
+import { HardLogoutButton } from '@/components/auth/HardLogoutButton';
 
 export default function AdminError({
     error,
@@ -30,22 +31,26 @@ export default function AdminError({
                 {error.message || "An critical error occurred in the admin dashboard. This event has been logged."}
             </p>
 
-            <div className="flex gap-4">
-                <button
-                    onClick={reset}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                    <RotateCcw className="w-4 h-4" />
-                    Retry System
-                </button>
+            <div className="flex flex-col gap-4 items-center">
+                <div className="flex gap-4">
+                    <button
+                        onClick={reset}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
+                    >
+                        <RotateCcw className="w-4 h-4" />
+                        Retry System
+                    </button>
 
-                <Link
-                    href="/admin/settings"
-                    className="flex items-center gap-2 px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-                >
-                    <Home className="w-4 h-4" />
-                    Return to Dashboard
-                </Link>
+                    <Link
+                        href="/admin/settings"
+                        className="flex items-center gap-2 px-5 py-2.5 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                    >
+                        <Home className="w-4 h-4" />
+                        Return to Dashboard
+                    </Link>
+                </div>
+                
+                <HardLogoutButton variant="secondary" />
             </div>
 
             {error.digest && (

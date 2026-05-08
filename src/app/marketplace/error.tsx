@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
+import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
 
 export default function ErrorBoundary({
     error,
@@ -25,19 +26,22 @@ export default function ErrorBoundary({
                 <p className="text-slate-500 mb-8 text-sm leading-relaxed">
                     We encountered an unexpected error while loading this section. Our technical team has been notified.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    <button
-                        onClick={() => reset()}
-                        className="px-6 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
-                    >
-                        Try again
-                    </button>
-                    <button
-                        onClick={() => window.location.href = '/'}
-                        className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
-                    >
-                        Return Home
-                    </button>
+                <div className="flex flex-col gap-3 justify-center items-center">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full">
+                        <button
+                            onClick={() => reset()}
+                            className="flex-1 px-6 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
+                        >
+                            Try again
+                        </button>
+                        <button
+                            onClick={() => window.location.href = '/'}
+                            className="flex-1 px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
+                        >
+                            Return Home
+                        </button>
+                    </div>
+                    <HardLogoutButton variant="ghost" />
                 </div>
             </div>
         </div>

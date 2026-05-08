@@ -476,22 +476,25 @@ async function _getAllTransactionsAction(options?: {
             ...doc.data(),
         }));
 
-        const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(Boolean))];
+        const userIds = [...new Set(rawDocs.map((d: any) => d.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
         const userNameMap = new Map<string, string>();
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 100) {
-            const batch = userIds.slice(i, i + 100);
-            const refs = batch.map(uid => db.collection(COLLECTIONS.USERS).doc(uid));
-            userPromises.push(
-                db.getAll(...refs).then(userDocs => {
-                    userDocs.forEach(doc => {
-                        if (doc.exists) {
-                            const data = doc.data();
-                            userNameMap.set(doc.id, data?.fullName || data?.displayName || data?.email || doc.id);
-                        }
-                    });
-                }).catch(() => {})
-            );
+            const batchIds = userIds.slice(i, i + 100);
+            const refs = batchIds.map(uid => db.collection(COLLECTIONS.USERS).doc(uid));
+            
+            if (refs.length > 0) {
+                userPromises.push(
+                    db.getAll(...refs).then(userDocs => {
+                        userDocs.forEach(doc => {
+                            if (doc.exists) {
+                                const data = doc.data();
+                                userNameMap.set(doc.id, data?.fullName || data?.displayName || data?.email || doc.id);
+                            }
+                        });
+                    }).catch(err => logger.error(`[CoopAdmin] Failed to fetch batch users ${i}-${i + 100}`, err))
+                );
+            }
         }
         await Promise.all(userPromises);
 

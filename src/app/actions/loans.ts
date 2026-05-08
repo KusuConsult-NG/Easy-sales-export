@@ -306,22 +306,25 @@ export async function getAdminLoanApplicationsExportAction(options: {
         const snapshot = await query.limit(5000).get();
         const loans = serializeDocs(snapshot.docs) as any[];
 
-        const userIds = [...new Set(loans.map(loan => loan.userId))];
+        const userIds = [...new Set(loans.map(loan => loan.userId).filter(id => id && typeof id === 'string' && id.trim().length > 0))];
         const userMap = new Map<string, any>();
 
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 100) {
-            const batch = userIds.slice(i, i + 100);
-            const refs = batch.map(id => db.collection(COLLECTIONS.USERS).doc(id));
-            userPromises.push(
-                db.getAll(...refs).then(userDocs => {
-                    userDocs.forEach(doc => {
-                        if (doc.exists) {
-                            userMap.set(doc.id, doc.data());
-                        }
-                    });
-                }).catch(err => logger.error("Failed to fetch batch users for loan export", err))
-            );
+            const batchIds = userIds.slice(i, i + 100);
+            const refs = batchIds.map(id => db.collection(COLLECTIONS.USERS).doc(id));
+            
+            if (refs.length > 0) {
+                userPromises.push(
+                    db.getAll(...refs).then(userDocs => {
+                        userDocs.forEach(doc => {
+                            if (doc.exists) {
+                                userMap.set(doc.id, doc.data());
+                            }
+                        });
+                    }).catch(err => logger.error(`[LoansExport] Failed to fetch batch users ${i}-${i + 100}`, err))
+                );
+            }
         }
         await Promise.all(userPromises);
 

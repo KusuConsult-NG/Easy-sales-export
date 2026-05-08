@@ -69,14 +69,20 @@ function normalisePhone(raw: string | undefined | null): string | null { if (!ra
     if (p.length < 10) return null;
     return p; }
 
-async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) { const compact = Array.from(new Set(userIds.filter(Boolean)));
+async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
+    const compact = Array.from(new Set(userIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)));
     const map = new Map<string, any>();
     for (let i = 0; i < compact.length; i += 100) {
-        const batch = compact.slice(i, i + 100).map((id) => db.collection(COLLECTIONS.USERS).doc(id));
-        if (batch.length === 0) continue;
-        const snaps = await db.getAll(...batch);
-        for (const snap of snaps) {
-            if (snap.exists) map.set(snap.id, snap.data());
+        const batchIds = compact.slice(i, i + 100);
+        const batchRefs = batchIds.map((id) => db.collection(COLLECTIONS.USERS).doc(id));
+        if (batchRefs.length === 0) continue;
+        try {
+            const snaps = await db.getAll(...batchRefs);
+            for (const snap of snaps) {
+                if (snap.exists) map.set(snap.id, snap.data());
+            }
+        } catch (err) {
+            logger.error(`[SmsBroadcast] Failed to resolve users batch ${i}-${i + 100}`, err);
         }
     }
     return map;

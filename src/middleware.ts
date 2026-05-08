@@ -82,9 +82,30 @@ const authMiddleware = auth((req: any) => {
     return response;
 });
 
-export default async function proxy(req: any, event: any) {
+export default async function middleware(req: any, event: any) {
     const res = await authMiddleware(req, event);
     
+    // ── 4. Zombie Session Recovery ───────────────────────────────────────────
+    // If the user has a session cookie but NextAuth redirected us to login (res.status 30x),
+    // it means the token is invalid/expired (Zombie Session). We clear it to break the loop.
+    const hasSessionCookie = req.cookies.has("authjs.session-token") || 
+                           req.cookies.has("__Secure-authjs.session-token") ||
+                           req.cookies.has("next-auth.session-token") ||
+                           req.cookies.has("__Secure-next-auth.session-token");
+
+    if (hasSessionCookie && res && res.status >= 300 && res.status <= 399) {
+        const location = res.headers.get("location");
+        if (location && (location.includes("/auth/login") || location.includes("/login"))) {
+            const domain = ".easysalesexport.com";
+            const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
+            
+            tokenNames.forEach(name => {
+                res.cookies.set(name, "", { domain, expires: new Date(0), path: "/" });
+                res.cookies.set(name, "", { expires: new Date(0), path: "/" });
+            });
+        }
+    }
+
     // Explicit bypass for Admin Login to prevent NextAuth session-collision redirects
     if (req.nextUrl.pathname === "/auth/login/admin" && res && res.status >= 300 && res.status <= 399) {
         const nextRes = NextResponse.next();

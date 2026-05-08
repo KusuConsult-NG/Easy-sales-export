@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
+import { HardLogoutButton } from '@/components/auth/HardLogoutButton';
 
 export default function GlobalError({
     error,
@@ -34,21 +35,25 @@ export default function GlobalError({
                             {error.message || "An unexpected error occurred. Please try again."}
                         </p>
 
-                        <div className="flex gap-3">
-                            <button
-                                onClick={reset}
-                                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                                Try Again
-                            </button>
-                            <Link
-                                href="/"
-                                className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
-                            >
-                                <Home className="w-4 h-4" />
-                                Go Home
-                            </Link>
+                        <div className="flex flex-col gap-3">
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={reset}
+                                    className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    Try Again
+                                </button>
+                                <Link
+                                    href="/"
+                                    className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+                                >
+                                    <Home className="w-4 h-4" />
+                                    Go Home
+                                </Link>
+                            </div>
+
+                            <HardLogoutButton className="mt-2" />
                         </div>
 
                         {error.digest && (

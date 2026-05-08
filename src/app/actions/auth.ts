@@ -12,6 +12,8 @@ import { logger } from '@/lib/logger';
 import { LEGACY_ROLE_MAP, type LegacyRole, type UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { ZodError } from "zod";
+import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 
@@ -337,7 +339,44 @@ export async function registerAction(prevState: any, formData: FormData) { const
     }
 }
 
-export async function logoutAction() { await signOut({ redirectTo: "/auth/login" });
+export async function logoutAction() { 
+    try {
+        const cookieStore = await cookies();
+        const domain = ".easysalesexport.com";
+        
+        // Explicitly clear the token from the ROOT domain so all modules lose it
+        // We clear both standard and secure token names used in auth.config.ts
+        const tokenNames = ['authjs.session-token', '__Secure-authjs.session-token', 'next-auth.session-token', '__Secure-next-auth.session-token'];
+        
+        for (const name of tokenNames) {
+            cookieStore.set(name, "", {
+                domain,
+                expires: new Date(0),
+                path: "/",
+            });
+            // Also clear without explicit domain to be sure
+            cookieStore.set(name, "", {
+                expires: new Date(0),
+                path: "/",
+            });
+        }
+
+        // Clear CSRF tokens too to be safe
+        const csrfNames = ['authjs.csrf-token', '__Host-authjs.csrf-token', 'next-auth.csrf-token', '__Host-next-auth.csrf-token'];
+        for (const name of csrfNames) {
+            cookieStore.set(name, "", {
+                expires: new Date(0),
+                path: "/",
+            });
+        }
+
+        // Revalidate root to clear server-side caches
+        revalidatePath('/');
+    } catch (e) {
+        logger.error('[logoutAction] Error clearing cookies', e);
+    }
+
+    await signOut({ redirectTo: "/auth/login" });
 }
 
 /**
