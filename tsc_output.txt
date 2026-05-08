@@ -1,0 +1,479 @@
+src/__tests__/integration/paystack.test.ts(18,27): error TS2339: Property 'banks' does not exist on type 'ActionResponse<any>'.
+  Property 'banks' does not exist on type '{ success: false; error: string; data: null; }'.
+src/__tests__/integration/paystack.test.ts(19,41): error TS2339: Property 'banks' does not exist on type 'ActionResponse<any>'.
+  Property 'banks' does not exist on type '{ success: false; error: string; data: null; }'.
+src/__tests__/integration/paystack.test.ts(21,24): error TS2339: Property 'banks' does not exist on type 'ActionResponse<any>'.
+  Property 'banks' does not exist on type '{ success: false; error: string; data: null; }'.
+src/__tests__/integration/paystack.test.ts(21,40): error TS2339: Property 'banks' does not exist on type 'ActionResponse<any>'.
+  Property 'banks' does not exist on type '{ success: false; error: string; data: null; }'.
+src/__tests__/integration/paystack.test.ts(22,42): error TS2339: Property 'banks' does not exist on type 'ActionResponse<any>'.
+  Property 'banks' does not exist on type '{ success: false; error: string; data: null; }'.
+src/__tests__/integration/paystack.test.ts(33,42): error TS2339: Property 'banks' does not exist on type '{ success: true; error: null; data: any; }'.
+src/__tests__/integration/paystack.test.ts(34,42): error TS2339: Property 'banks' does not exist on type '{ success: true; error: null; data: any; }'.
+src/__tests__/integration/paystack.test.ts(34,52): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/__tests__/integration/paystack.test.ts(37,53): error TS7006: Parameter 'name' implicitly has an 'any' type.
+src/app/academy/[courseId]/lesson/[lessonId]/page.tsx(88,62): error TS7006: Parameter 'l' implicitly has an 'any' type.
+src/app/academy/[courseId]/lesson/[lessonId]/page.tsx(138,62): error TS7006: Parameter 'l' implicitly has an 'any' type.
+src/app/academy/[courseId]/quiz/[moduleId]/page.tsx(70,48): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/academy/setup/page.tsx(64,93): error TS2339: Property 'profile' does not exist on type '{ firstName: string; lastName: string; version: any; }'.
+src/app/academy/setup/page.tsx(65,50): error TS2339: Property 'profile' does not exist on type '{ firstName: string; lastName: string; version: any; }'.
+src/app/actions/academy-admin.ts(411,44): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(442,44): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(491,40): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(595,38): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(638,49): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(700,42): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(850,53): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-admin.ts(875,39): error TS2304: Cannot find name 'withFlexibleSafeAction'.
+src/app/actions/academy-payment.ts(78,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type 'PaymentInitState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ authorizationUrl: string; reference: string; }'.
+src/app/actions/academy.ts(804,9): error TS2322: Type '{ success: false; data: never[]; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'never[]' is not assignable to type 'null | undefined'.
+src/app/actions/academy.ts(856,37): error TS2322: Type '{ success: false; error: string; }' is not assignable to type '{ success: true; error: null; data: { paymentUrl: string; }; } | { success: false; error: string; data: null; }'.
+  Property 'data' is missing in type '{ success: false; error: string; }' but required in type '{ success: false; error: string; data: null; }'.
+src/app/actions/academy.ts(915,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { paymentUrl: string; }; } | { success: false; error: string; data: null; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ paymentUrl: string; }'.
+src/app/actions/academy.ts(1407,9): error TS2322: Type '{ success: false; data: { courses: never[]; }; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type '{ courses: never[]; }' is not assignable to type 'null | undefined'.
+src/app/actions/academy.ts(1613,9): error TS2322: Type '{ success: false; data: { streak: number; }; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type '{ streak: number; }' is not assignable to type 'null | undefined'.
+src/app/actions/admin-analytics.ts(145,69): error TS2339: Property 'totalUsers' does not exist on type 'never'.
+src/app/actions/admin-analytics.ts(146,76): error TS2339: Property 'totalTransactions' does not exist on type 'never'.
+src/app/actions/admin-analytics.ts(147,71): error TS2339: Property 'totalRevenue' does not exist on type 'never'.
+src/app/actions/admin-analytics.ts(148,75): error TS2339: Property 'totalPending' does not exist on type 'never'.
+src/app/actions/admin-analytics.ts(332,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin-analytics.ts(337,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(1820,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(1822,67): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(1825,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(1875,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(3213,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(3217,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/admin.ts(3534,13): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ error: null; success: true; message: string; }'.
+src/app/actions/audit.ts(78,50): error TS7006: Parameter 'log' implicitly has an 'any' type.
+src/app/actions/briefing-admin.ts(72,73): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/briefing-admin.ts(72,168): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ cursor: string | null; hasMore: boolean; totalCount?: number | undefined; }'.
+src/app/actions/briefing-admin.ts(80,64): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/briefing-admin.ts(80,148): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ cursor: string | null; hasMore: boolean; totalCount?: number | undefined; }'.
+src/app/actions/briefing-admin.ts(191,55): error TS2322: Type 'null' is not assignable to type 'BriefingRegistration[] | undefined'.
+src/app/actions/briefing-admin.ts(191,111): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ cursor: string | null; hasMore: boolean; totalCount?: number | undefined; }'.
+src/app/actions/briefing-admin.ts(191,126): error TS1117: An object literal cannot have multiple properties with the same name.
+src/app/actions/briefing-admin.ts(191,126): error TS2322: Type 'null' is not assignable to type 'BriefingRegistration[] | undefined'.
+src/app/actions/briefing-admin.ts(203,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/briefing-admin.ts(203,117): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ cursor: string | null; hasMore: boolean; totalCount?: number | undefined; }'.
+src/app/actions/briefing.ts(108,9): error TS2322: Type '{ success: true; error: null; }' is not assignable to type 'ActionResponse<void>'.
+  Property 'data' is missing in type '{ success: true; error: null; }' but required in type '{ success: true; error: null; data: void; }'.
+src/app/actions/chatbot-admin.ts(33,65): error TS2353: Object literal may only specify known properties, and 'error' does not exist in type 'ChatSessionsResult'.
+src/app/actions/chatbot-admin.ts(47,64): error TS2353: Object literal may only specify known properties, and 'error' does not exist in type 'ChatThreadResult'.
+src/app/actions/chatbot-admin.ts(72,56): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ResolveSessionResult'.
+src/app/actions/chatbot-admin.ts(73,80): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ResolveSessionResult'.
+src/app/actions/cooperative-admin.ts(90,37): error TS2322: Type '{ success: false; error: string; }' is not assignable to type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' is missing in type '{ success: false; error: string; }' but required in type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; }'.
+src/app/actions/cooperative-admin.ts(93,13): error TS2322: Type '{ success: false; error: string; }' is not assignable to type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' is missing in type '{ success: false; error: string; }' but required in type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; }'.
+src/app/actions/cooperative-admin.ts(97,13): error TS2322: Type '{ success: false; error: string; }' is not assignable to type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' is missing in type '{ success: false; error: string; }' but required in type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; }'.
+src/app/actions/cooperative-admin.ts(249,9): error TS2322: Type '{ success: false; error: string; }' is not assignable to type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' is missing in type '{ success: false; error: string; }' but required in type '{ error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; suspendedMembers: number; totalContributions: number; ... 11 more ...; totalMembersCount?: number | undefined; }; }; }'.
+src/app/actions/cooperative-admin.ts(270,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(273,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(277,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(339,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(479,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(482,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(486,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(583,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(610,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(613,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(618,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(730,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(750,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(753,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(758,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(788,43): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/cooperative-admin.ts(1118,9): error TS2741: Property 'error' is missing in type '{ success: true; data: { message: string; }; meta: null; }' but required in type '{ error: string | null; success: boolean; meta?: any; data?: any; }'.
+src/app/actions/cooperative-admin.ts(1139,37): error TS2322: Type 'PaginatedAdminResponse<never>' is not assignable to type '{ error: string | null; success: boolean; data: any[]; hasMore: boolean; lastDocId?: string | undefined; meta?: any; }'.
+  Types of property 'error' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string | null'.
+      Type 'undefined' is not assignable to type 'string | null'.
+src/app/actions/cooperative-admin.ts(1141,33): error TS2322: Type 'PaginatedAdminResponse<never>' is not assignable to type '{ error: string | null; success: boolean; data: any[]; hasMore: boolean; lastDocId?: string | undefined; meta?: any; }'.
+  Types of property 'error' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string | null'.
+      Type 'undefined' is not assignable to type 'string | null'.
+src/app/actions/cooperative-admin.ts(1145,13): error TS2322: Type 'PaginatedAdminResponse<never>' is not assignable to type '{ error: string | null; success: boolean; data: any[]; hasMore: boolean; lastDocId?: string | undefined; meta?: any; }'.
+  Types of property 'error' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string | null'.
+      Type 'undefined' is not assignable to type 'string | null'.
+src/app/actions/cooperative-admin.ts(1264,9): error TS2322: Type 'PaginatedAdminResponse<{ id: any; user: { id: any; name: any; email: any; phone: any; dob: any; address: any; state: any; lga: any; }; status: any; data: any; }>' is not assignable to type '{ error: string | null; success: boolean; data: any[]; hasMore: boolean; lastDocId?: string | undefined; meta?: any; }'.
+  Types of property 'error' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string | null'.
+      Type 'undefined' is not assignable to type 'string | null'.
+src/app/actions/cooperative-admin.ts(1267,9): error TS2322: Type 'PaginatedAdminResponse<never>' is not assignable to type '{ error: string | null; success: boolean; data: any[]; hasMore: boolean; lastDocId?: string | undefined; meta?: any; }'.
+  Types of property 'error' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string | null'.
+      Type 'undefined' is not assignable to type 'string | null'.
+src/app/actions/cooperative-payment.ts(30,31): error TS2322: Type '{ error: string; success: false; data: null; }' is not assignable to type 'ActionState & { data?: { authorizationUrl: string; reference: string; } | undefined; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type 'undefined'.
+src/app/actions/cooperative-payment.ts(34,30): error TS2322: Type '{ error: string; success: false; data: null; }' is not assignable to type 'ActionState & { data?: { authorizationUrl: string; reference: string; } | undefined; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type 'undefined'.
+src/app/actions/cooperative-payment.ts(37,33): error TS2322: Type '{ error: string; success: false; data: null; }' is not assignable to type 'ActionState & { data?: { authorizationUrl: string; reference: string; } | undefined; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type 'undefined'.
+src/app/actions/cooperative-payment.ts(53,9): error TS2322: Type '{ error: any; success: false; data: null; }' is not assignable to type 'ActionState & { data?: { authorizationUrl: string; reference: string; } | undefined; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type 'undefined'.
+src/app/actions/cooperative.ts(120,9): error TS2322: Type '{ error: null; success: true; meta: null; data: null; }' is not assignable to type 'MembershipRegistrationState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; paymentUrl?: string | undefined; }'.
+src/app/actions/cooperative.ts(343,9): error TS2322: Type '{ error: null; success: true; meta: null; data: null; }' is not assignable to type 'MembershipRegistrationState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; paymentUrl?: string | undefined; }'.
+src/app/actions/cooperative.ts(435,9): error TS2322: Type '{ error: null; success: true; meta: null; data: null; }' is not assignable to type 'JoinCooperativeState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/cooperative.ts(529,9): error TS2322: Type '{ error: null; success: true; data: null; meta: null; }' is not assignable to type 'MakeContributionState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/cooperative.ts(598,9): error TS2322: Type '{ error: null; success: true; meta: null; data: null; }' is not assignable to type 'WithdrawalActionState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/cooperative.ts(667,37): error TS2322: Type '{ error: string; success: false; data: { tier: null; totalContributions: number; }; }' is not assignable to type '{ success: true; error: null; data: { tier: "Member" | null; totalContributions: number; }; } | { success: false; error: string; data: null; }'.
+  Types of property 'data' are incompatible.
+    Type '{ tier: null; totalContributions: number; }' is not assignable to type 'null'.
+src/app/actions/cooperative.ts(689,9): error TS2322: Type '{ error: string; success: false; data: { tier: null; totalContributions: number; }; }' is not assignable to type '{ success: true; error: null; data: { tier: "Member" | null; totalContributions: number; }; } | { success: false; error: string; data: null; }'.
+  Types of property 'data' are incompatible.
+    Type '{ tier: null; totalContributions: number; }' is not assignable to type 'null'.
+src/app/actions/cooperative.ts(851,9): error TS2322: Type '{ error: null; success: true; meta: null; data: null; }' is not assignable to type 'LoanApplicationState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/cooperative.ts(925,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type 'FixedSavingsState'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/cooperative.ts(950,31): error TS2322: Type '{ error: string; success: false; data: never[]; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'never[]' is not assignable to type 'null | undefined'.
+src/app/actions/dashboard.ts(63,105): error TS2322: Type 'null' is not assignable to type 'DashboardStats | undefined'.
+src/app/actions/dashboard.ts(147,55): error TS2322: Type 'null' is not assignable to type 'DashboardStats | undefined'.
+src/app/actions/dashboard.ts(149,85): error TS2322: Type 'null' is not assignable to type 'DashboardStats | undefined'.
+src/app/actions/dashboard.ts(159,105): error TS2322: Type 'null' is not assignable to type 'RecentActivity | undefined'.
+src/app/actions/dashboard.ts(207,85): error TS2322: Type 'null' is not assignable to type 'RecentActivity | undefined'.
+src/app/actions/dashboard.ts(217,105): error TS2322: Type 'null' is not assignable to type 'EscrowStatus | undefined'.
+src/app/actions/dashboard.ts(262,55): error TS2322: Type 'null' is not assignable to type 'EscrowStatus | undefined'.
+src/app/actions/dashboard.ts(264,83): error TS2322: Type 'null' is not assignable to type 'EscrowStatus | undefined'.
+src/app/actions/diagnose-broadcast.ts(16,192): error TS1117: An object literal cannot have multiple properties with the same name.
+src/app/actions/diagnose-broadcast.ts(39,181): error TS1117: An object literal cannot have multiple properties with the same name.
+src/app/actions/escalation-notes.ts(22,163): error TS2322: Type 'null' is not assignable to type '{ noteId: string; } | undefined'.
+src/app/actions/escalation-notes.ts(23,104): error TS2322: Type 'null' is not assignable to type '{ noteId: string; } | undefined'.
+src/app/actions/escalation-notes.ts(26,95): error TS2322: Type 'null' is not assignable to type '{ noteId: string; } | undefined'.
+src/app/actions/escalation-notes.ts(49,42): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+src/app/actions/escalation-notes.ts(49,55): error TS2322: Type 'null' is not assignable to type '{ noteId: string; } | undefined'.
+src/app/actions/escalation-notes.ts(50,84): error TS2322: Type 'null' is not assignable to type '{ noteId: string; } | undefined'.
+src/app/actions/escalation-notes.ts(75,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { notes: EscalationNote[]; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ notes: EscalationNote[]; }'.
+src/app/actions/escrow.ts(127,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { escrowId: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ escrowId: string; }'.
+src/app/actions/escrow.ts(229,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/escrow.ts(297,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/escrow.ts(391,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/escrow.ts(488,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { disputeId: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ disputeId: string; }'.
+src/app/actions/escrow.ts(600,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/escrow.ts(677,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/escrow.ts(721,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/escrow.ts(740,37): error TS2322: Type '{ success: false; data: never[]; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'never[]' is not assignable to type 'null | undefined'.
+src/app/actions/escrow.ts(745,32): error TS2322: Type '{ success: false; data: never[]; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'never[]' is not assignable to type 'null | undefined'.
+src/app/actions/escrow.ts(750,13): error TS2322: Type '{ success: false; data: never[]; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'never[]' is not assignable to type 'null | undefined'.
+src/app/actions/escrow.ts(761,9): error TS2322: Type '{ success: false; data: never[]; error: string; }' is not assignable to type '{ [key: string]: any; success: true; error: null; data?: any; meta?: any; } | { [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'never[]' is not assignable to type 'null | undefined'.
+src/app/actions/export-admin.ts(126,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { total: number; pending: number; inTransit: number; delivered: number; completed: number; }; } | { success: false; error: string; data: null; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ total: number; pending: number; inTransit: number; delivered: number; completed: number; }'.
+src/app/actions/export-admin.ts(153,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { totalProducts: number; }; } | { success: false; error: string; data: null; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ totalProducts: number; }'.
+src/app/actions/export-aggregation.ts(124,163): error TS1117: An object literal cannot have multiple properties with the same name.
+src/app/actions/export.ts(73,136): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(75,124): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(79,125): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(154,11): error TS2322: Type 'null' is not assignable to type '{ orderId: string; }'.
+src/app/actions/export.ts(158,69): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(161,131): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(164,103): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(179,99): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(185,102): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(190,220): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(246,77): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/export.ts(429,121): error TS1117: An object literal cannot have multiple properties with the same name.
+src/app/actions/farm-nation-admin.ts(15,105): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ success: false; error: string; }'.
+src/app/actions/farm-nation-admin.ts(17,141): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ success: false; error: string; }'.
+src/app/actions/farm-nation-admin.ts(38,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; data: { stats: { totalApplications: number; }; }; } | { success: false; error: string; }'.
+  Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; data: { stats: { totalApplications: number; }; }; }'.
+    Types of property 'data' are incompatible.
+      Type 'null' is not assignable to type '{ stats: { totalApplications: number; }; }'.
+src/app/actions/farm-nation-admin.ts(43,87): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ success: false; error: string; }'.
+src/app/actions/farm-nation-admin.ts(285,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { stats: { total: number; pending: number; verified: number; rejected: number; }; }; } | { success: false; error: string; data: null; }'.
+  Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { stats: { total: number; pending: number; verified: number; rejected: number; }; }; }'.
+    Types of property 'data' are incompatible.
+      Type 'null' is not assignable to type '{ stats: { total: number; pending: number; verified: number; rejected: number; }; }'.
+src/app/actions/farm-nation.ts(318,69): error TS2552: Cannot find name 'requests'. Did you mean 'Request'?
+src/app/actions/loans.ts(110,47): error TS2322: Type 'string | undefined' is not assignable to type 'string | null'.
+  Type 'undefined' is not assignable to type 'string | null'.
+src/app/actions/loans.ts(358,71): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/loans.ts(362,47): error TS2322: Type 'string' is not assignable to type 'null'.
+src/app/actions/loans.ts(376,13): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ error: null; success: boolean; stats?: { total: number; pending: number; approved: number; rejected: number; } | undefined; }'.
+src/app/actions/marketplace.ts(1315,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/marketplace.ts(1389,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/marketplace.ts(1498,9): error TS2322: Type '{ error: null; success: true; data: null; }' is not assignable to type '{ success: true; error: null; data: { message: string; }; meta?: any; } | { success: false; error: string; data?: null | undefined; meta?: any; }'.
+  Types of property 'data' are incompatible.
+    Type 'null' is not assignable to type '{ message: string; }'.
+src/app/actions/platform.ts(56,105): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(73,147): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(87,150): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'WaveSuccessState'.
+src/app/actions/platform.ts(93,125): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(96,101): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(127,126): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(149,149): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'EnrollmentSuccessState'.
+src/app/actions/platform.ts(153,102): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(156,89): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(174,125): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(261,13): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'WithdrawalSuccessState'.
+src/app/actions/platform.ts(266,102): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(269,106): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/actions/platform.ts(272,108): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type 'ActionErrorState'.
+src/app/admin/academy/[courseId]/page.tsx(78,67): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/admin/academy/applications/page.tsx(376,49): error TS7006: Parameter 'res' implicitly has an 'any' type.
+src/app/admin/chatbot/[sessionId]/page.tsx(32,24): error TS2339: Property 'error' does not exist on type 'ChatThreadResult'.
+src/app/admin/chatbot/[sessionId]/page.tsx(32,50): error TS2339: Property 'error' does not exist on type 'ChatThreadResult'.
+src/app/admin/chatbot/page.tsx(79,29): error TS2339: Property 'error' does not exist on type 'ChatSessionsResult'.
+src/app/admin/chatbot/page.tsx(79,60): error TS2339: Property 'error' does not exist on type 'ChatSessionsResult'.
+src/app/admin/communications/in-app/page.tsx(79,20): error TS2345: Argument of type 'InAppBroadcastPreview' is not assignable to parameter of type 'SetStateAction<{ count: number; sample: { name: string; userId: string; }[]; } | null>'.
+  Type '{ success: false; error: string; data: null; }' is not assignable to type 'SetStateAction<{ count: number; sample: { name: string; userId: string; }[]; } | null>'.
+src/app/admin/communications/in-app/page.tsx(107,19): error TS2345: Argument of type 'InAppBroadcastResult' is not assignable to parameter of type 'SetStateAction<{ success: boolean; delivered: number; error?: string | undefined; } | null>'.
+  Type '{ success: false; error: string; data: null; }' is not assignable to type 'SetStateAction<{ success: boolean; delivered: number; error?: string | undefined; } | null>'.
+    Property 'delivered' is missing in type '{ success: false; error: string; data: null; }' but required in type '{ success: boolean; delivered: number; error?: string | undefined; }'.
+src/app/admin/communications/sms/page.tsx(109,24): error TS2345: Argument of type 'SmsBroadcastPreview' is not assignable to parameter of type 'SetStateAction<{ count: number; sample: { name: string; phone: string; }[]; } | null>'.
+  Type '{ success: false; error: string; data: null; }' is not assignable to type 'SetStateAction<{ count: number; sample: { name: string; phone: string; }[]; } | null>'.
+src/app/admin/communications/sms/page.tsx(110,21): error TS2339: Property 'count' does not exist on type 'SmsBroadcastPreview'.
+  Property 'count' does not exist on type '{ success: false; error: string; data: null; }'.
+src/app/admin/communications/sms/page.tsx(113,44): error TS2339: Property 'count' does not exist on type 'SmsBroadcastPreview'.
+  Property 'count' does not exist on type '{ success: false; error: string; data: null; }'.
+src/app/admin/communications/sms/page.tsx(138,23): error TS2345: Argument of type 'SmsBroadcastResult' is not assignable to parameter of type 'SetStateAction<{ success: boolean; sent: number; failed: number; skipped: number; error?: string | undefined; } | null>'.
+  Type '{ success: false; error: string; data: null; }' is not assignable to type 'SetStateAction<{ success: boolean; sent: number; failed: number; skipped: number; error?: string | undefined; } | null>'.
+    Type '{ success: false; error: string; data: null; }' is missing the following properties from type '{ success: boolean; sent: number; failed: number; skipped: number; error?: string | undefined; }': sent, failed, skipped
+src/app/admin/communications/sms/page.tsx(140,54): error TS2339: Property 'sent' does not exist on type '{ success: true; error: null; data: { sent: number; failed: number; skipped: number; logId?: string | undefined; }; }'.
+src/app/admin/communications/sms/page.tsx(140,74): error TS2339: Property 'failed' does not exist on type '{ success: true; error: null; data: { sent: number; failed: number; skipped: number; logId?: string | undefined; }; }'.
+src/app/admin/cooperatives/dashboard/page.tsx(56,26): error TS2339: Property 'success' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'success' does not exist on type '{ data?: null | undefined; meta?: null | undefined; }'.
+src/app/admin/cooperatives/dashboard/page.tsx(56,46): error TS2339: Property 'data' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' does not exist on type '{ success: false; error: string; }'.
+src/app/admin/cooperatives/dashboard/page.tsx(57,35): error TS2339: Property 'data' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' does not exist on type '{ success: false; error: string; }'.
+src/app/admin/cooperatives/loans/page.tsx(192,41): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/admin/cooperatives/loans/page.tsx(201,29): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/cooperatives/loans/page.tsx(201,40): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/cooperatives/members/page.tsx(129,21): error TS2339: Property 'success' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'success' does not exist on type '{ data?: null | undefined; meta?: null | undefined; }'.
+src/app/admin/cooperatives/members/page.tsx(129,36): error TS2339: Property 'data' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' does not exist on type '{ success: false; error: string; }'.
+src/app/admin/cooperatives/members/page.tsx(130,30): error TS2339: Property 'data' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' does not exist on type '{ success: false; error: string; }'.
+src/app/admin/cooperatives/transactions/page.tsx(80,41): error TS2339: Property 'success' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'success' does not exist on type '{ data?: null | undefined; meta?: null | undefined; }'.
+src/app/admin/cooperatives/transactions/page.tsx(80,64): error TS2339: Property 'data' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' does not exist on type '{ success: false; error: string; }'.
+src/app/admin/cooperatives/transactions/page.tsx(81,56): error TS2339: Property 'data' does not exist on type '{ success: false; error: string; } | { error: string | null; success: boolean; meta?: any; data: { stats: { totalMembers: number; paidMembers: number; activeMembers: number; pendingMembers: number; ... 13 more ...; totalMembersCount?: number | undefined; }; }; } | { ...; }'.
+  Property 'data' does not exist on type '{ success: false; error: string; }'.
+src/app/admin/escrow/page.tsx(25,42): error TS2339: Property 'transactions' does not exist on type 'never'.
+src/app/admin/escrow/page.tsx(26,42): error TS2339: Property 'transactions' does not exist on type 'never'.
+src/app/admin/farm-nation/applications/page.tsx(143,60): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/farm-nation/land-verification/page.tsx(142,41): error TS7006: Parameter 'v' implicitly has an 'any' type.
+src/app/admin/farm-nation/land-verification/page.tsx(152,29): error TS7006: Parameter 'r' implicitly has an 'any' type.
+src/app/admin/farm-nation/land-verification/page.tsx(152,40): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/marketplace/disputes/[id]/page.tsx(101,64): error TS2339: Property 'dispute' does not exist on type 'never'.
+src/app/admin/marketplace/disputes/[id]/page.tsx(107,43): error TS2339: Property 'dispute' does not exist on type 'never'.
+src/app/admin/marketplace/disputes/[id]/page.tsx(108,42): error TS2339: Property 'dispute' does not exist on type 'never'.
+src/app/admin/marketplace/disputes/[id]/page.tsx(115,62): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/admin/marketplace/disputes/[id]/page.tsx(116,47): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/admin/marketplace/disputes/[id]/page.tsx(117,54): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/admin/wave/applications/page.tsx(189,41): error TS7006: Parameter 'app' implicitly has an 'any' type.
+src/app/admin/wave/applications/page.tsx(199,29): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/app/admin/wave/applications/page.tsx(199,44): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/admin/wave/members/page.tsx(168,29): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/app/auth/forgot-password/page.tsx(13,5): error TS2322: Type 'undefined' is not assignable to type 'string | null'.
+src/app/auth/reset-password/page.tsx(14,5): error TS2322: Type 'undefined' is not assignable to type 'string | null'.
+src/app/cooperatives/(member)/dashboard/page.tsx(58,38): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/cooperatives/(member)/dashboard/page.tsx(59,40): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/cooperatives/(member)/my-loans/page.tsx(62,41): error TS7006: Parameter 'inst' implicitly has an 'any' type.
+src/app/cooperatives/(member)/my-loans/page.tsx(63,42): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+src/app/cooperatives/(member)/my-loans/page.tsx(63,47): error TS7006: Parameter 'inst' implicitly has an 'any' type.
+src/app/cooperatives/(member)/my-loans/page.tsx(66,63): error TS7006: Parameter 'inst' implicitly has an 'any' type.
+src/app/cooperatives/(member)/my-loans/page.tsx(71,65): error TS7006: Parameter 'inst' implicitly has an 'any' type.
+src/app/dashboard/disputes/new/page.tsx(77,48): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/dashboard/disputes/new/page.tsx(78,38): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/dashboard/reviews/new/page.tsx(48,48): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/dashboard/reviews/new/page.tsx(49,38): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/dashboard/reviews/new/page.tsx(51,33): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/dashboard/reviews/new/page.tsx(52,54): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/escrow/page.tsx(201,44): error TS2339: Property 'transactions' does not exist on type 'never'.
+src/app/escrow/page.tsx(202,41): error TS2339: Property 'transactions' does not exist on type 'never'.
+src/app/export/buyer/cart/payment-callback/page.tsx(31,45): error TS2339: Property 'orderId' does not exist on type 'never'.
+src/app/export/payment/callback/page.tsx(31,45): error TS2339: Property 'message' does not exist on type '{ investmentId: string; }'.
+src/app/farm-nation/(member)/dashboard/page.tsx(69,52): error TS2339: Property 'stats' does not exist on type 'never'.
+src/app/farm-nation/(member)/dashboard/page.tsx(70,42): error TS2339: Property 'stats' does not exist on type 'never'.
+src/app/farm-nation/my-properties/page.tsx(30,48): error TS2339: Property 'listings' does not exist on type 'never'.
+src/app/farm-nation/my-properties/page.tsx(31,43): error TS2339: Property 'listings' does not exist on type 'never'.
+src/app/farm-nation/my-purchases/page.tsx(46,48): error TS2339: Property 'requests' does not exist on type 'Record<string, unknown>[] | { requests: Record<string, unknown>[]; }'.
+  Property 'requests' does not exist on type 'Record<string, unknown>[]'.
+src/app/farm-nation/my-purchases/page.tsx(48,42): error TS2339: Property 'requests' does not exist on type 'Record<string, unknown>[] | { requests: Record<string, unknown>[]; }'.
+  Property 'requests' does not exist on type 'Record<string, unknown>[]'.
+src/app/farm-nation/my-purchases/page.tsx(64,40): error TS2339: Property 'message' does not exist on type 'never'.
+src/app/land/verify/page.tsx(35,32): error TS2339: Property 'listings' does not exist on type 'never'.
+src/app/loans/apply/page.tsx(14,59): error TS2339: Property 'loanId' does not exist on type 'never'.
+src/app/loans/approve/page.tsx(33,29): error TS2339: Property 'loans' does not exist on type 'never'.
+src/app/loans/page.tsx(31,29): error TS2339: Property 'loans' does not exist on type 'never'.
+src/app/marketplace/buyer/dashboard/page.tsx(40,62): error TS2339: Property 'stats' does not exist on type 'never'.
+src/app/marketplace/buyer/dashboard/page.tsx(41,42): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/buyer/dashboard/page.tsx(44,64): error TS2339: Property 'orders' does not exist on type 'never'.
+src/app/marketplace/buyer/dashboard/page.tsx(46,49): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/buyer/dashboard/page.tsx(52,74): error TS2339: Property 'products' does not exist on type 'never'.
+src/app/marketplace/buyer/dashboard/page.tsx(54,59): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/[id]/page.tsx(35,42): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/[id]/page.tsx(36,35): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/page.tsx(49,48): error TS2339: Property 'orders' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/page.tsx(50,52): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/page.tsx(50,87): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/page.tsx(51,34): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/buyer/orders/page.tsx(52,37): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/checkout/page.tsx(77,40): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/checkout/page.tsx(143,34): error TS2339: Property 'authorizationUrl' does not exist on type 'never'.
+src/app/marketplace/checkout/page.tsx(144,51): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/orders/[id]/page.tsx(29,48): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/orders/[id]/page.tsx(30,38): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/page.tsx(31,51): error TS2339: Property 'products' does not exist on type 'never'.
+src/app/marketplace/payment/callback/page.tsx(33,45): error TS2339: Property 'message' does not exist on type '{ orderId: any; }'.
+src/app/marketplace/product/[id]/page.tsx(50,48): error TS2339: Property 'product' does not exist on type 'never'.
+src/app/marketplace/product/[id]/page.tsx(51,40): error TS2339: Property 'product' does not exist on type 'never'.
+src/app/marketplace/products/[id]/page.tsx(30,52): error TS2339: Property 'product' does not exist on type 'never'.
+src/app/marketplace/products/[id]/page.tsx(31,39): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/sell/create/page.tsx(63,59): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(action: (state: { success: boolean; }) => { success: boolean; } | Promise<{ success: boolean; }>, initialState: { success: boolean; }, permalink?: string | undefined): [state: { ...; }, dispatch: () => void, isPending: boolean]', gave the following error.
+    Argument of type '(prevState: ProductActionState, formData: FormData) => Promise<{ success: false; error: string; } | ProductActionState>' is not assignable to parameter of type '(state: { success: boolean; }) => { success: boolean; } | Promise<{ success: boolean; }>'.
+      Target signature provides too few arguments. Expected 2 or more, but got 1.
+  Overload 2 of 2, '(action: (state: { success: boolean; }, payload: FormData) => { success: boolean; } | Promise<{ success: boolean; }>, initialState: { success: boolean; }, permalink?: string | undefined): [state: ...]', gave the following error.
+    Argument of type '(prevState: ProductActionState, formData: FormData) => Promise<{ success: false; error: string; } | ProductActionState>' is not assignable to parameter of type '(state: { success: boolean; }, payload: FormData) => { success: boolean; } | Promise<{ success: boolean; }>'.
+      Types of parameters 'prevState' and 'state' are incompatible.
+        Type '{ success: boolean; }' is not assignable to type 'ProductActionState'.
+          Property 'error' is missing in type '{ success: boolean; }' but required in type '{ [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+src/app/marketplace/sell/create/page.tsx(100,20): error TS2554: Expected 0 arguments, but got 1.
+src/app/marketplace/sell/page.tsx(33,40): error TS2339: Property 'message' does not exist on type 'never'.
+src/app/marketplace/sell/page.tsx(60,43): error TS2339: Property 'products' does not exist on type 'never'.
+src/app/marketplace/seller/dashboard/page.tsx(46,58): error TS2339: Property 'orders' does not exist on type 'never'.
+src/app/marketplace/seller/dashboard/page.tsx(48,52): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/dashboard/page.tsx(49,32): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/marketplace/seller/dashboard/page.tsx(49,35): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/app/marketplace/seller/dashboard/page.tsx(58,62): error TS2339: Property 'products' does not exist on type 'never'.
+src/app/marketplace/seller/dashboard/page.tsx(60,56): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/dashboard/page.tsx(61,32): error TS7006: Parameter 'a' implicitly has an 'any' type.
+src/app/marketplace/seller/dashboard/page.tsx(61,35): error TS7006: Parameter 'b' implicitly has an 'any' type.
+src/app/marketplace/seller/orders/[id]/page.tsx(35,42): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/seller/orders/[id]/page.tsx(36,35): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/seller/orders/[id]/page.tsx(37,44): error TS2339: Property 'order' does not exist on type 'never'.
+src/app/marketplace/seller/orders/[id]/page.tsx(57,40): error TS2339: Property 'message' does not exist on type 'never'.
+src/app/marketplace/seller/orders/page.tsx(48,48): error TS2339: Property 'orders' does not exist on type 'never'.
+src/app/marketplace/seller/orders/page.tsx(49,52): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/orders/page.tsx(49,87): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/orders/page.tsx(50,34): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/orders/page.tsx(51,37): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/products/page.tsx(53,48): error TS2339: Property 'products' does not exist on type 'never'.
+src/app/marketplace/seller/products/page.tsx(54,54): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/products/page.tsx(54,91): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/products/page.tsx(55,34): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/seller/products/page.tsx(56,37): error TS2339: Property 'data' does not exist on type 'never'.
+src/app/marketplace/verify/page.tsx(47,59): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(action: (state: { success: boolean; }) => { success: boolean; } | Promise<{ success: boolean; }>, initialState: { success: boolean; }, permalink?: string | undefined): [state: { ...; }, dispatch: () => void, isPending: boolean]', gave the following error.
+    Argument of type '(prevState: SellerVerificationState, formData: FormData) => Promise<{ success: false; error: string; } | SellerVerificationState>' is not assignable to parameter of type '(state: { success: boolean; }) => { success: boolean; } | Promise<{ success: boolean; }>'.
+      Target signature provides too few arguments. Expected 2 or more, but got 1.
+  Overload 2 of 2, '(action: (state: { success: boolean; }, payload: FormData) => { success: boolean; } | Promise<{ success: boolean; }>, initialState: { success: boolean; }, permalink?: string | undefined): [state: ...]', gave the following error.
+    Argument of type '(prevState: SellerVerificationState, formData: FormData) => Promise<{ success: false; error: string; } | SellerVerificationState>' is not assignable to parameter of type '(state: { success: boolean; }, payload: FormData) => { success: boolean; } | Promise<{ success: boolean; }>'.
+      Types of parameters 'prevState' and 'state' are incompatible.
+        Type '{ success: boolean; }' is not assignable to type 'SellerVerificationState'.
+          Property 'error' is missing in type '{ success: boolean; }' but required in type '{ [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+src/app/profile/page.tsx(65,48): error TS2339: Property 'profile' does not exist on type '{ firstName: string; lastName: string; version: any; }'.
+src/app/profile/page.tsx(66,39): error TS2339: Property 'profile' does not exist on type '{ firstName: string; lastName: string; version: any; }'.
+src/app/vendor/orders/page.tsx(31,40): error TS2339: Property 'orders' does not exist on type 'never'.
+src/app/vendor/overview/page.tsx(39,62): error TS2339: Property 'stats' does not exist on type '{ today: { orders: number; revenue: number; }; thisWeek: { orders: number; revenue: number; }; thisMonth: { orders: number; revenue: number; }; allTime: { orders: number; revenue: number; }; }'.
+src/app/vendor/overview/page.tsx(40,67): error TS2339: Property 'trends' does not exist on type '{ date: string; revenue: number; orders: number; }[]'.
+src/app/vendor/overview/page.tsx(41,69): error TS2339: Property 'products' does not exist on type '{ productId: string; productName: string; totalSold: number; totalRevenue: number; }[]'.
+src/app/vendor/overview/page.tsx(42,74): error TS2339: Property 'stats' does not exist on type '{ totalProducts: number; activeProducts: number; outOfStock: number; lowStock: number; lowStockProducts: { id: string; name: string; stock: number; reorderLevel: number; }[]; }'.
+src/app/vendor/overview/page.tsx(43,73): error TS2339: Property 'insights' does not exist on type '{ totalRevenue: number; pendingPayouts: number; completedTransactions: number; averageOrderValue: number; revenueByCategory: { category: string; revenue: number; }[]; }'.
+src/app/vendor/overview/page.tsx(44,74): error TS2339: Property 'activities' does not exist on type 'any[]'.
+src/app/vendor/page.tsx(47,62): error TS2339: Property 'stats' does not exist on type '{ today: { orders: number; revenue: number; }; thisWeek: { orders: number; revenue: number; }; thisMonth: { orders: number; revenue: number; }; allTime: { orders: number; revenue: number; }; }'.
+src/app/vendor/page.tsx(48,59): error TS2339: Property 'stats' does not exist on type '{ totalProducts: number; activeProducts: number; outOfStock: number; lowStock: number; lowStockProducts: { id: string; name: string; stock: number; reorderLevel: number; }[]; }'.
+src/app/vendor/page.tsx(49,61): error TS2339: Property 'activities' does not exist on type 'any[]'.
+src/app/vendor/products/page.tsx(32,42): error TS2339: Property 'products' does not exist on type 'never'.
+src/app/vendor/products/page.tsx(65,40): error TS2339: Property 'message' does not exist on type 'never'.
+src/app/wave/application/steps/CivicStatusStep.tsx(54,113): error TS2339: Property 'details' does not exist on type 'never'.
+src/components/ai/AISidebar.tsx(56,41): error TS2339: Property 'suggestions' does not exist on type 'never'.
+src/components/ai/AISidebar.tsx(85,44): error TS2339: Property 'response' does not exist on type 'never'.
+src/components/ai/AISidebar.tsx(88,28): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/ai/AISidebar.tsx(91,34): error TS2339: Property 'data' does not exist on type 'never'.
+src/components/loans/RepaymentSchedule.tsx(23,62): error TS7006: Parameter 'inst' implicitly has an 'any' type.
+src/components/modals/QuoteRequestModal.tsx(56,40): error TS2339: Property 'message' does not exist on type 'never'.
+src/components/modals/StatusUpdateModal.tsx(32,44): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(action: (state: UpdateExportStatusState) => UpdateExportStatusState | Promise<UpdateExportStatusState>, initialState: UpdateExportStatusState, permalink?: string | undefined): [state: ...]', gave the following error.
+    Argument of type '(prevState: UpdateExportStatusState, formData: FormData) => Promise<UpdateExportStatusState>' is not assignable to parameter of type '(state: UpdateExportStatusState) => UpdateExportStatusState | Promise<UpdateExportStatusState>'.
+      Target signature provides too few arguments. Expected 2 or more, but got 1.
+  Overload 2 of 2, '(action: (state: UpdateExportStatusState, payload: FormData) => UpdateExportStatusState | Promise<UpdateExportStatusState>, initialState: UpdateExportStatusState, permalink?: string | undefined): [state: ...]', gave the following error.
+    Argument of type 'UpdateExportStatusState' is not assignable to parameter of type 'UpdateExportStatusState'.
+      Type '{ error: string | null; success: false; data: null; meta: null; }' is not assignable to type 'UpdateExportStatusState'.
+        Type '{ error: string | null; success: false; data: null; meta: null; }' is not assignable to type '{ [key: string]: any; success: false; error: string; data?: null | undefined; meta?: any; }'.
+          Types of property 'error' are incompatible.
+            Type 'string | null' is not assignable to type 'string'.
+              Type 'null' is not assignable to type 'string'.
+src/components/onboarding/BankAccountVerification.tsx(56,42): error TS2339: Property 'banks' does not exist on type '{ success: true; error: null; data: any; }'.
+src/components/onboarding/BankAccountVerification.tsx(57,33): error TS2339: Property 'banks' does not exist on type '{ success: true; error: null; data: any; }'.
+src/components/onboarding/BankAccountVerification.tsx(101,44): error TS2339: Property 'accountName' does not exist on type '{ success: true; error: null; data: { accountName: string; }; }'.
+src/components/onboarding/BankAccountVerification.tsx(109,43): error TS2339: Property 'accountName' does not exist on type '{ success: true; error: null; data: { accountName: string; }; }'.
+src/components/onboarding/KYCForm.tsx(185,42): error TS2339: Property 'isMatch' does not exist on type '{ success: true; error: null; data: { [key: string]: any; isMatch: boolean; }; }'.
+src/components/onboarding/KYCForm.tsx(190,50): error TS2339: Property 'isMatch' does not exist on type '{ success: true; error: null; data: { [key: string]: any; isMatch: boolean; }; }'.
+src/components/shared/BankAccountVerification.tsx(59,60): error TS2339: Property 'banks' does not exist on type '{ success: true; error: null; data: any; }'.
+src/components/shared/BankAccountVerification.tsx(66,49): error TS2339: Property 'banks' does not exist on type '{ success: true; error: null; data: any; }'.
+src/components/shared/BankAccountVerification.tsx(67,17): error TS7006: Parameter 'bank' implicitly has an 'any' type.
+src/components/shared/BankAccountVerification.tsx(77,44): error TS2339: Property 'accountName' does not exist on type '{ success: true; error: null; data: { accountName: string; }; }'.
+src/components/shared/BankAccountVerification.tsx(84,41): error TS2339: Property 'accountName' does not exist on type '{ success: true; error: null; data: { accountName: string; }; }'.
+src/lib/cache-invalidation.ts(88,13): error TS2554: Expected 2 arguments, but got 1.
+src/lib/safe-action.ts(107,63): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ success: false; error: string; }'.
+src/lib/safe-action.ts(121,17): error TS2353: Object literal may only specify known properties, and 'data' does not exist in type '{ success: false; error: string; }'.

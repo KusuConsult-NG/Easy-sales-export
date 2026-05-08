@@ -516,15 +516,32 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             if (cached) return cached;
         } catch (e) {}
 
-        const [coursesSnap, studentsSnap, enrollmentsSnap] = await Promise.all([
+        const [coursesSnap, studentsSnap, enrollmentsSnap, registrationSnap] = await Promise.all([
             db.collection(COLLECTIONS.ACADEMY_COURSES).count().get(),
             db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "academy_student").count().get(),
             db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).count().get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("type", "==", "academy_registration").get(),
         ]);
 
         const totalCourses = coursesSnap.data().count;
         const totalStudents = studentsSnap.data().count;
         const totalEnrollments = enrollmentsSnap.data().count;
+
+        const registrationStats: Record<string, { count: number, revenue: number }> = {
+            foundation: { count: 0, revenue: 0 },
+            standard: { count: 0, revenue: 0 },
+            elite: { count: 0, revenue: 0 },
+        };
+
+        registrationSnap.docs.forEach(doc => {
+            const data = doc.data();
+            const plan = (data.plan || "foundation").toLowerCase();
+            const amount = Number(data.amount) || 0;
+            if (registrationStats[plan]) {
+                registrationStats[plan].count++;
+                registrationStats[plan].revenue += amount;
+            }
+        });
 
         const activeEnrollmentsSnap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
             .where("status", "==", "active").count().get();
@@ -534,12 +551,12 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             .where("status", "==", "completed").count().get();
         const completedCourses = completedCoursesSnap.data().count;
 
-        const revenueSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+        const courseRevenueSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
             .where("type", "==", "academy_course_purchase")
             .where("status", "==", "completed")
             .get();
 
-        let totalRevenue = 0;
+        let totalCourseRevenue = 0;
         let monthlyRevenue = 0;
         let previousMonthRevenue = 0;
 
@@ -548,10 +565,10 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-        revenueSnap.docs.forEach(doc => {
+        courseRevenueSnap.docs.forEach(doc => {
             const p = doc.data();
             const amount = Number(p.amount) || 0;
-            totalRevenue += amount;
+            totalCourseRevenue += amount;
 
             const date = p.createdAt?.toDate ? p.createdAt.toDate() : new Date(p.createdAt);
             if (date >= thirtyDaysAgo) {
@@ -560,6 +577,9 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
                 previousMonthRevenue += amount;
             }
         });
+
+        const totalRegistrationRevenue = Object.values(registrationStats).reduce((acc, curr) => acc + curr.revenue, 0);
+        const totalRevenue = totalCourseRevenue + totalRegistrationRevenue;
 
         const revenueGrowth = previousMonthRevenue > 0
             ? ((monthlyRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
@@ -576,9 +596,12 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
                     activeEnrollments,
                     completedCourses,
                     totalRevenue,
+                    totalCourseRevenue,
+                    totalRegistrationRevenue,
+                    registrationStats,
                     monthlyRevenue,
                     revenueGrowth,
-                    courseRatings: 0 // Placeholder or actual calculation
+                    courseRatings: 0
                 }
             }
         };

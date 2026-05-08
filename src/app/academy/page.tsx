@@ -2,6 +2,7 @@ import { ArrowRight, BookOpen, Users, Award, Clock, TrendingUp, GraduationCap, C
 import Link from "next/link";
 import Image from "next/image";
 import BackToHub from "@/components/common/BackToHub";
+import { ACADEMY_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -11,29 +12,14 @@ export const metadata: Metadata = {
 
 export default function AcademyLandingPage() {
 
-    const programTiers = [
-        {
-            title: "Foundation Program",
-            price: "₦25,000",
-            description: "Essential knowledge for starting your agro-export journey correctly.",
-            features: ["Export fundamentals", "Agro-business structure", "Basic market access strategy"],
-            highlight: false
-        },
-        {
-            title: "Standard Program",
-            price: "₦50,000",
-            description: "Deep dive into strategies, compliance, and scaling your operations.",
-            features: ["Advanced export strategies", "Comprehensive compliance training", "Cooperative opportunity positioning"],
-            highlight: true
-        },
-        {
-            title: "Elite Program",
-            price: "₦100,000",
-            description: "The complete playbook for high-level execution and dominance.",
-            features: ["Full ecosystem mastery", "Direct market linkages", "Priority positioning strategy"],
-            highlight: false
-        }
-    ];
+    const programTiers = Object.values(ACADEMY_CONFIG.plans).map(plan => ({
+        title: plan.name,
+        price: `${CURRENCY_CONFIG.symbol}${plan.fee.toLocaleString()}`,
+        description: plan.description,
+        features: [...plan.features],
+        highlight: plan.highlight,
+        id: plan.id
+    }));
 
     const learningObjectives = [
         {

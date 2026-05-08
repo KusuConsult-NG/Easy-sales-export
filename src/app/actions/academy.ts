@@ -14,6 +14,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
+import { ACADEMY_CONFIG } from "@/lib/constants";
 
 /**
  * Check Academy application status for current user
@@ -854,16 +855,16 @@ async function _initiateAcademyPaymentAction(
             return { error: "Payment system not configured", success: false as const , data: null };
         }
 
-        let amount = 25000; // Default to Foundation
+        let amount = ACADEMY_CONFIG.plans.foundation.fee; // Default to Foundation
         let planToStore = plan;
 
         if (plan === "foundation") {
-            amount = 25000;
+            amount = ACADEMY_CONFIG.plans.foundation.fee;
         } else if (plan === "standard" || (plan as string) === "advanced") {
-            amount = 50000;
+            amount = ACADEMY_CONFIG.plans.standard.fee;
             planToStore = "standard";
         } else if (plan === "elite") {
-            amount = 100000;
+            amount = ACADEMY_CONFIG.plans.elite.fee;
         }
 
         const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -952,6 +953,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                 userId: session.user.id,
                 amount: paidAmount,
                 type: "academy_registration",
+                plan: metadata.plan || "foundation",
                 reference,
             });
 

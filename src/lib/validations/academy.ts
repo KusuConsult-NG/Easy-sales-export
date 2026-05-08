@@ -13,7 +13,7 @@ export const AcademyApplicationSchema = z.object({
     fullName: z.string().default(""),
     phone: z.string().default(""),
     state: z.string().default(""),
-    plan: z.enum(["standard", "premium", "elite"]).default("standard"),
+    plan: z.enum(["foundation", "standard", "elite"]).default("foundation"),
     status: z.enum(["pending", "approved", "rejected", "enrolled"]).default("pending"),
     paymentStatus: z.enum(["pending", "completed", "failed"]).default("pending"),
     paymentReference: z.string().optional(),

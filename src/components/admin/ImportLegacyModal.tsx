@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Mail, Loader2, CheckCircle, GraduationCap, ShieldCheck, User } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { onboardLegacyMemberAction } from "@/app/actions/admin";
+import { ACADEMY_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 interface ImportLegacyModalProps {
     isOpen: boolean;
@@ -175,9 +176,11 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
                                             onChange={(e) => setFormData({...formData, academyPlan: e.target.value as any})}
                                             className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
-                                            <option value="foundation">Foundation (₦25,000 Value)</option>
-                                            <option value="standard">Standard (₦50,000 Value)</option>
-                                            <option value="elite">Elite (₦100,000 Value)</option>
+                                            {Object.values(ACADEMY_CONFIG.plans).map(plan => (
+                                                <option key={plan.id} value={plan.id}>
+                                                    {plan.name} ({CURRENCY_CONFIG.symbol}{plan.fee.toLocaleString()} Value)
+                                                </option>
+                                            ))}
                                         </select>
                                     </div>
                                 )}
