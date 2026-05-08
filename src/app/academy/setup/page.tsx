@@ -61,8 +61,8 @@ export default function AcademyOnboardingPage() {
             try {
                 // 1. Load structured name from Firestore root (NOT from JWT split)
                 const profileResult = await getUserProfileAction();
-                if (profileResult.success && "data" in profileResult && profileResult.data?.profile) {
-                    const p = profileResult.data.profile;
+                if (profileResult.success && profileResult.data) {
+                    const p = profileResult.data as any;
                     setResolvedFirstName(p.firstName || "");
                     setResolvedLastName(p.lastName || "");
                     setResolvedOtherName(p.otherName || "");

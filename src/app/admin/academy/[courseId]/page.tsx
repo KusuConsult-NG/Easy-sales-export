@@ -75,7 +75,7 @@ export default function CourseManagerPage() {
                 const data = dataReq.data;
                 setCourse(data);
                 // Cast the modules to include the optional UI state properties
-                const processedModules = (data.modules || []).map(m => ({ ...m, isExpanded: false })) as CourseModuleWithState[];
+                const processedModules = (data.modules || []).map((m: CourseModule) => ({ ...m, isExpanded: false })) as CourseModuleWithState[];
                 setModules(processedModules.sort((a, b) => a.order - b.order));
                 setCourseDetailsForm({
                     title: data.title || "",

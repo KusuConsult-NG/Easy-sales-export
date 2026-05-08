@@ -734,7 +734,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<ActionResponse<any>> {
+} = {}): Promise<ActionResponse<any> & { lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };

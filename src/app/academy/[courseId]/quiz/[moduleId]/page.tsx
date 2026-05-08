@@ -67,7 +67,7 @@ export default function QuizPage(props: QuizPageProps) {
 
         // Find module and quiz
         // eslint-disable-next-line @next/next/no-assign-module-variable
-        const module = courseData.modules.find(m => m.id === moduleId);
+        const module = courseData.modules.find((m: CourseModule) => m.id === moduleId);
 
         setCourse(courseData);
         setCurrentModule(module || null);
@@ -105,8 +105,8 @@ export default function QuizPage(props: QuizPageProps) {
             percentage
         );
 
-        if (result.success) {
-            setPassed(result.data?.passed || false);
+        if (result.success && result.data) {
+            setPassed(result.data.passed || false);
             setQuizCompleted(true);
         } else {
             showToast(result.error || "Failed to submit quiz", "error");

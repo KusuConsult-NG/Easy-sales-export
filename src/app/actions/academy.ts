@@ -601,7 +601,7 @@ async function _submitQuizScoreAction(
     moduleId: string,
     score: number,
     expectedVersion?: number
-): Promise<ActionResponse<null>> {
+): Promise<ActionResponse<{ passed: boolean }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
@@ -651,7 +651,7 @@ async function _submitQuizScoreAction(
             t.set(progressRef, progress);
         });
 
-        return { success: true, error: null, data: null };
+        return { success: true, error: null, data: { passed: userPassed } };
     } catch (error) {
         logger.error("Quiz submission error:", {
             userId,
@@ -826,204 +826,6 @@ export interface AcademyApplicationData {
 const ACADEMY_REGISTRATION_FEE = 0; // Registration is now free, users pay only for tiers
 
 /**
- * Initiate academy onboarding payment (must pay before submitting application)
- */
-async function _initiateAcademyPaymentAction(
-    plan?: "foundation" | "standard" | "elite" | "advanced"
-): Promise<
-    | { success: true; error: null; data: { paymentUrl: string } }
-    | { success: false; error: string; data: null }
-> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
-        const { session } = sessionResult;
-        if (!session?.user) {
-            return { error: "You must be logged in", success: false as const , data: null };
-        }
-
-        const userId = session.user.id;
-
-        // Check if already paid
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        if (userDoc.data()?.serviceRegistrations?.academy?.paymentStatus === "completed") {
-            return { error: "You have already paid. Please proceed to complete your application.", success: false as const , data: null };
-        }
-
-        const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-        if (!paystackSecretKey) {
-            return { error: "Payment system not configured", success: false as const , data: null };
-        }
-
-        let amount = ACADEMY_CONFIG.plans.foundation.fee; // Default to Foundation
-        let planToStore = plan;
-
-        if (plan === "foundation") {
-            amount = ACADEMY_CONFIG.plans.foundation.fee;
-        } else if (plan === "standard" || (plan as string) === "advanced") {
-            amount = ACADEMY_CONFIG.plans.standard.fee;
-            planToStore = "standard";
-        } else if (plan === "elite") {
-            amount = ACADEMY_CONFIG.plans.elite.fee;
-        }
-
-        const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${paystackSecretKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                email: session.user.email,
-                amount: amount * 100, // Kobo
-                metadata: {
-                    userId,
-                    purpose: "academy_registration",
-                    plan: planToStore,
-                },
-                callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/academy/payment/callback`,
-            }),
-        });
-
-        if (!paystackResponse.ok) {
-            return { error: "Failed to initialize payment", success: false as const , data: null };
-        }
-
-        const paystackData = await paystackResponse.json();
-
-        if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return { error: "Failed to generate payment link", success: false as const , data: null };
-        }
-
-        return {
-            error: null, success: true as const, data: { paymentUrl: paystackData.data.authorization_url } };
-    } catch (error) {
-        logger.error("Academy payment init failed:", {
-            plan,
-            error: error instanceof Error ? error.message : String(error)
-        });
-        return { error: "Failed to initiate payment", success: false as const , data: null };
-    }
-}
-export const initiateAcademyPaymentAction = withFlexibleSafeAction("initiateAcademyPaymentAction", _initiateAcademyPaymentAction);
-
-/**
- * Verify academy registration payment callback
- */
-async function _verifyAcademyPaymentAction(reference: string): Promise<ActionResponse<null>> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
-        const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false as const, error: "Authentication required", data: null };
-
-        const verify = await verifyPaystackPayment(reference);
-        if (!verify.status || verify.data.status !== "success") {
-            return { success: false as const, error: "Payment verification failed", data: null };
-        }
-
-        const metadata = verify.data.metadata;
-        if (metadata.purpose !== "academy_registration") {
-            return { success: false as const, error: "Invalid payment type", data: null };
-        }
-
-        const paidAmount = verify.data.amount / 100;
-        const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-
-        // 🔒 ATOMIC TRANSACTION: Update user and record ledger entries
-        await db.runTransaction(async (transaction) => {
-            const tProcessedDoc = await transaction.get(processedRef);
-            if (tProcessedDoc.exists) {
-                throw new Error("Payment already processed");
-            }
-
-            // Update user registration status
-            transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
-                "serviceRegistrations.academy.paymentStatus": "completed",
-                "serviceRegistrations.academy.paymentReference": reference,
-                "serviceRegistrations.academy.paymentAmount": paidAmount,
-                "serviceRegistrations.academy.plan": metadata.plan || "registration",
-                "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
-                "updatedAt": FieldValue.serverTimestamp(),
-            });
-
-            // Mark payment as processed
-            transaction.set(processedRef, {
-                processedAt: FieldValue.serverTimestamp(),
-                userId: session.user.id,
-                amount: paidAmount,
-                type: "academy_registration",
-                plan: metadata.plan || "foundation",
-                reference,
-            });
-
-            // Global Ledger Record
-            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
-            transaction.set(globalTxRef, {
-                id: reference,
-                userId: session.user.id,
-                type: "academy_registration",
-                module: "academy",
-                amount: paidAmount,
-                currency: "NGN",
-                status: "completed",
-                date: FieldValue.serverTimestamp(),
-                reference,
-                description: "Academy registration fee"
-            });
-        });
-
-        return { success: true, error: null, data: null };
-    } catch (error) {
-        logger.error("Academy payment verification error:", {
-            reference,
-            error: error instanceof Error ? error.message : String(error)
-        });
-        return { success: false as const, error: "Failed to verify payment", data: null };
-    }
-}
-export const verifyAcademyPaymentAction = withFlexibleSafeAction("verifyAcademyPaymentAction", _verifyAcademyPaymentAction);
-
-/**
- * Check if user has paid for academy registration
- */
-async function _getAcademyPaymentStatusAction(): Promise<ActionResponse<any>> {
-    try {
-        const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
-        const { session } = sessionResult;
-        if (!session?.user?.id) return { error: null, success: true as const, data: "unpaid" };
-
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const userData = userDoc.data();
-
-        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed") {
-            return { error: null, success: true as const, data: "paid" };
-        }
-
-        // ── AUTHORITATIVE FALLBACK ──────────────────────────────────────
-        const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-            .where("userId", "==", session.user.id)
-            .where("type", "==", "academy_registration")
-            .where("status", "==", "completed")
-            .limit(1)
-            .get();
-
-        if (!paymentsSnap.empty) {
-            return { error: null, success: true as const, data: "paid" };
-        }
-
-        return { error: null, success: true as const, data: "unpaid" };
-    } catch (error) {
-        logger.error("Check academy payment status error:", {
-            error: error instanceof Error ? error.message : String(error)
-        });
-        return { error: null, success: true as const, data: "unpaid" };
-    }
-}
-export const getAcademyPaymentStatusAction = withFlexibleSafeAction("getAcademyPaymentStatusAction", _getAcademyPaymentStatusAction);
-
-/**
  * Submit Academy learner application
  */
 async function _submitAcademyApplicationAction(
@@ -1148,7 +950,7 @@ export const submitAcademyApplicationAction = withFlexibleSafeAction("submitAcad
  * ADMIN ACTIONS
  */
 
-async function _createCourseAction(data: any): Promise<ActionResponse<null>> {
+async function _createCourseAction(data: any): Promise<ActionResponse<{ id: string }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
@@ -1189,7 +991,7 @@ async function _createCourseAction(data: any): Promise<ActionResponse<null>> {
 
         revalidatePath("/admin/academy", "page");
 
-        return { success: true, error: null, data: null };
+        return { success: true, error: null, data: { id: docRef.id } };
     } catch (error) {
         logger.error("Create course error:", {
             error: error instanceof Error ? error.message : String(error)

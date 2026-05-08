@@ -77,6 +77,7 @@ export function withSafeAction<TArgs extends any[], TReturn>(
                 success: false,
                 error: errorMessage,
                 data: null as any,
+                meta: null
             };
         }
     };
@@ -89,8 +90,8 @@ export function withSafeAction<TArgs extends any[], TReturn>(
 export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
     actionName: string,
     actionFn: (...args: TArgs) => Promise<TReturn>
-): (...args: TArgs) => Promise<TReturn | { success: false; error: string; data: null }> {
-    return async (...args: TArgs): Promise<TReturn | { success: false; error: string; data: null }> => {
+): (...args: TArgs) => Promise<TReturn | { success: false; error: string; data: null; meta?: any }> {
+    return async (...args: TArgs): Promise<TReturn | { success: false; error: string; data: null; meta?: any }> => {
         try {
             return await actionFn(...args);
         } catch (error: any) {
@@ -121,6 +122,7 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
                 success: false,
                 error: errorMessage,
                 data: null as any,
+                meta: null
             };
         }
     };

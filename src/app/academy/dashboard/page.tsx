@@ -6,7 +6,7 @@ import { Award, BookOpen, Clock, TrendingUp, Calendar, Download, Loader2 } from 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { checkAcademyPaymentStatusAction } from "@/app/actions/academy";
+import { checkAcademyPaymentStatusAction } from "@/app/actions/academy-payment";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 
 type CourseProgress = {

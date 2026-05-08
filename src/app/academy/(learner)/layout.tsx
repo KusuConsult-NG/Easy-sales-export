@@ -32,7 +32,7 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
             redirectPath = "/academy/setup";
         } else {
             // Enforce Payment Integrity Gate
-            const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
+            const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy-payment");
             const payStatus = await checkAcademyPaymentStatusAction();
             if (payStatus.data === "unpaid") {
                 const { isAdmin } = await import("@/lib/admin-permissions");

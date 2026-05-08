@@ -85,7 +85,7 @@ export default function LessonPage(props: LessonPageProps) {
                 let foundModule: CourseModule | null = null;
 
                 for (const courseModule of courseData.modules) {
-                    const lesson = courseModule.lessons.find(l => l.id === lessonId);
+                    const lesson = courseModule.lessons.find((l: Lesson) => l.id === lessonId);
                     if (lesson) {
                         foundLesson = lesson;
                         foundModule = courseModule;
@@ -135,7 +135,7 @@ export default function LessonPage(props: LessonPageProps) {
                 let foundModule: CourseModule | null = null;
 
                 for (const courseModule of courseData.modules) {
-                    const lesson = courseModule.lessons.find(l => l.id === lessonId);
+                    const lesson = courseModule.lessons.find((l: Lesson) => l.id === lessonId);
                     if (lesson) {
                         foundLesson = lesson;
                         foundModule = courseModule;
