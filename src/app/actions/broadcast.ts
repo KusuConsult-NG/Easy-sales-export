@@ -103,12 +103,20 @@ export async function getCleanBroadcastListAction() {
  */
 export async function previewBroadcastAction(broadcastData: any) {
     const listResult = await getCleanBroadcastListAction();
-    if (!listResult.success) return listResult;
+    if (!listResult.success) {
+        return { 
+            success: false, 
+            error: listResult.error || "Failed to estimate recipients",
+            count: undefined,
+            sample: undefined
+        };
+    }
     
     return {
         success: true,
         count: listResult.count,
-        sample: listResult.recipients?.slice(0, 5)
+        sample: listResult.recipients?.slice(0, 5),
+        error: undefined
     };
 }
 
