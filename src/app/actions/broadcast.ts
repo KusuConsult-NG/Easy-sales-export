@@ -91,7 +91,7 @@ export async function previewBroadcastAction(broadcastData: any) {
  */
 export async function getBroadcastHistoryAction() {
     try {
-        const snapshot = await db.collection(COLLECTIONS.ADMIN_AUDIT_LOGS)
+        const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
             .where("action", "==", "telemetry_broadcast_sent")
             .orderBy("timestamp", "desc")
             .limit(20)

@@ -27,7 +27,7 @@ export async function POST(req: Request) {
         }
 
         // 1. Log to Central Hub Audit Log
-        await db.collection(COLLECTIONS.ADMIN_AUDIT_LOGS).add({
+        await db.collection(COLLECTIONS.AUDIT_LOGS).add({
             userId: session.user.id,
             moduleId,
             action: `telemetry_${event}`,
