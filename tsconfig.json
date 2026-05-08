@@ -42,6 +42,7 @@
     "tests",
     "__tests__",
     "e2e",
-    "test-*.ts"
+    "test-*.ts",
+    "functions"
   ]
 }

@@ -69,3 +69,53 @@ export async function getCleanBroadcastListAction() {
         return { success: false, error: "Failed to generate broadcast list." };
     }
 }
+
+/**
+ * Preview Broadcast Action
+ * (Required by Communications UI)
+ */
+export async function previewBroadcastAction(broadcastData: any) {
+    const listResult = await getCleanBroadcastListAction();
+    if (!listResult.success) return listResult;
+    
+    return {
+        success: true,
+        previewCount: listResult.count,
+        sampleRecipients: listResult.recipients?.slice(0, 5)
+    };
+}
+
+/**
+ * Get Broadcast History
+ * (Required by Communications UI)
+ */
+export async function getBroadcastHistoryAction() {
+    try {
+        const snapshot = await db.collection(COLLECTIONS.ADMIN_AUDIT_LOGS)
+            .where("action", "==", "telemetry_broadcast_sent")
+            .orderBy("timestamp", "desc")
+            .limit(20)
+            .get();
+            
+        const history = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+        
+        return { success: true, history };
+    } catch (error) {
+        return { success: false, error: "Failed to fetch history" };
+    }
+}
+
+/**
+ * Collect Recipients
+ * (Required by Send API)
+ */
+export async function collectRecipients() {
+    const result = await getCleanBroadcastListAction();
+    if (result.success) {
+        return result.recipients;
+    }
+    return [];
+}
