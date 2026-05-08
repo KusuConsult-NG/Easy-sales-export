@@ -51,7 +51,22 @@ export default function CooperativeDashboardPage() {
     }, [membershipStatus]);
 
     async function loadData() {
-
+        try {
+            setLoading(true);
+            const result = await getDashboardDataAction();
+            if (result.success) {
+                setMembership(result.membership);
+                setTransactions(result.transactions);
+            } else {
+                setError(result.error);
+            }
+        } catch (error) {
+            logger.error("Failed to load cooperative dashboard data", error);
+            setError("Failed to load dashboard data. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }
 
     const getActivityIcon = (type: string) => {
         switch (type) {
