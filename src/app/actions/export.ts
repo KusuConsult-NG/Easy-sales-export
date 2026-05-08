@@ -40,14 +40,14 @@ import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/fire
 
 type ActionErrorState = {
     error: string;
-    success: false as const
+    success: false;
 };
 
 
 
 type CreateExportSuccessState = {
     error: null;
-    success: true as const
+    success: true;
     message: string;
     data: { orderId: string };
     meta: null;
@@ -55,7 +55,7 @@ type CreateExportSuccessState = {
 
 type UpdateStatusSuccessState = {
     error: null;
-    success: true as const
+    success: true;
     message: string;
     data: null;
     meta: null;
@@ -63,7 +63,7 @@ type UpdateStatusSuccessState = {
 
 type GetExportsSuccessState = {
     error: null;
-    success: true as const
+    success: true;
     data: ExportWindow[];
     meta: { cursor: string | null; hasMore: boolean } | null;
 };
@@ -83,7 +83,7 @@ export async function createExportWindowAction(
 ): Promise<CreateExportActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
+        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in to create an export window", success: false as const };

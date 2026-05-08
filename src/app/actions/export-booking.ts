@@ -23,7 +23,7 @@ export async function createBookingAction(data: CreateBookingData) {
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false as const, data: null, error: 'Not authenticated', meta: null };
+            return { success: false, data: null, error: 'Not authenticated', meta: null };
         }
 
         // Validate input

@@ -69,7 +69,7 @@ export async function createAnnouncementAction(data: {
 }): Promise<{ error: string | null, success: boolean; announcementId?: string }> {
     try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
         const announcement: Omit<Announcement, "id"> = {
             title: data.title,
             content: data.content,

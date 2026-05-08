@@ -24,26 +24,26 @@ import { revalidatePath } from "next/cache";
 // Type definitions for action return states
 type ActionErrorState = {
     error: string;
-    success: false as const
+    success: false;
 };
 
 type WaveSuccessState = {
     error: null;
-    success: true as const
+    success: true;
     message: string;
     applicationId: string;
 };
 
 type EnrollmentSuccessState = {
     error: null;
-    success: true as const
+    success: true;
     message: string;
     enrollmentId: string;
 };
 
 type WithdrawalSuccessState = {
     error: null;
-    success: true as const
+    success: true;
     message: string;
     withdrawalId: string;
 };
@@ -64,7 +64,7 @@ export async function submitWaveApplicationAction(
     try {
         // Get authenticated user
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         // Extract and validate form data

@@ -40,8 +40,8 @@ import { atomicUpdateUser } from "@/lib/services/userService";
  */
 
 type ActionState =
-    | { error: string; success: false as const }
-    | { error: null; success: true as const message: string };
+    | { error: string; success: false }
+    | { error: null; success: true; message: string };
 
 
 
@@ -1149,7 +1149,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             const roles = session?.user?.roles ?? [];
@@ -2560,7 +2560,7 @@ async function _editApplicationAction(params: {
 }): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {

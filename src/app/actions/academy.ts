@@ -181,7 +181,7 @@ export async function getCoursesAction(
 
         const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
-        return { error: null, success: true as const, data: courses, meta: { lastDocId: newLastDocId } };
+        return { error: null, success: true, data: courses, meta: { lastDocId: newLastDocId } };
     } catch (error) {
         logger.error("Failed to fetch courses:", {
             error: error instanceof Error ? error.message : String(error)
@@ -1332,7 +1332,7 @@ export interface EnrolledCourseWithDetails {
 export async function getEnrolledCoursesWithDetailsAction(): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized' };
+        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized' };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Authentication required" };
 
@@ -1411,7 +1411,7 @@ export async function saveQuizAction(
 ): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized' };
+        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized' };
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin")) {
             return { success: false as const, error: "Unauthorized: Admin access required" };

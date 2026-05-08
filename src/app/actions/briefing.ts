@@ -54,7 +54,7 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
 
         if (!validationResult.success) {
             const firstError = validationResult.error.issues[0]?.message || "Invalid submission data";
-            return { success: false as const, error: firstError };
+            return { success: false, error: firstError };
         }
 
         const validData = validationResult.data!;

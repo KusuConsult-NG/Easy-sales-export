@@ -9,7 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { revalidatePath } from "next/cache";
 
 type UpdateExportStatusState =
-    | { error: string | null; success: false as const; data: null; meta: null }
+    | { error: string | null; success: false; data: null; meta: null }
     | { error: null; success: true as const; data: { message: string }; meta: null };
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
@@ -23,7 +23,7 @@ export async function updateExportStatusAction(
 ): Promise<UpdateExportStatusState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error?.error || "Unauthorized", success: false as const, data: null, meta: null };
+        if (!sessionResult.session) return { error: sessionResult.error?.error || "Unauthorized", success: false, data: null, meta: null };
         const { session } = sessionResult;
 
         const exportId = formData.get("exportId") as string;

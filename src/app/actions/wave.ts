@@ -119,7 +119,7 @@ const waveApplicationSchema = z.object({
 export async function checkWaveStatusAction(): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized" };
 
@@ -663,7 +663,7 @@ export interface ShipmentTracking {
 export async function getShipmentTrackingAction(userId: string): Promise<{ error: string | null, success: boolean; data?: ShipmentTracking[]; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized" };
 
@@ -832,7 +832,7 @@ export interface MemberEarnings {
 export async function calculateEarningsAction(userId: string): Promise<{ error: string | null, success: boolean; data?: MemberEarnings; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
@@ -937,7 +937,7 @@ export async function generateCertificateAction(
 ): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         // Check admin role

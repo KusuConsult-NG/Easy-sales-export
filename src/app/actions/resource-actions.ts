@@ -35,7 +35,7 @@ export interface WaveResource {
 export async function uploadResourceAction(formData: FormData): Promise<{ error: string | null, success: boolean; data?: any; meta?: any;  }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {

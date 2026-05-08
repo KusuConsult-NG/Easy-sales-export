@@ -18,8 +18,8 @@ import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/li
  */
 
 type ActionState =
-    | { error: string; success: false as const; data?: null; meta?: null }
-    | { error: null; success: true as const; data: { message: string }; meta?: null };
+    | { error: string; success: false; data?: null; meta?: null }
+    | { error: null; success: true; data: { message: string }; meta?: null };
 
 /**
  * Approve Academy Learner Application

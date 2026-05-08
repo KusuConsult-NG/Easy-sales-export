@@ -65,7 +65,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
         // 1. Security Check: Only admins can generate broadcast lists
         const { session } = await requireSession();
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized. Admin access required." };
+            return { success: false, error: "Unauthorized. Admin access required." };
         }
 
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);

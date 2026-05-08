@@ -43,7 +43,7 @@ export async function uploadCertificateAction(
 ): Promise<{ error: string | null, success: boolean; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
             return { success: false as const, error: "Unauthorized" };

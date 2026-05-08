@@ -50,7 +50,7 @@ export async function submitLoanApplicationAction(formData: {
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== formData.userId) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false, error: "Unauthorized" };
         }
 
         // ===== TIER VALIDATION =====
@@ -631,7 +631,7 @@ export async function getRepaymentScheduleAction(
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
-            return { success: false as const, error: "Loan not found" };
+            return { success: false, error: "Loan not found" };
         }
 
         const loanData = loanDoc.data() as LoanApplication;

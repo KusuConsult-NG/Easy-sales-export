@@ -25,11 +25,11 @@ export interface AuditLog {
 }
 
 type LogAuditState =
-    | { error: string; success: false as const }
+    | { error: string; success: false }
     | { error: null; success: true as const };
 
 type GetAuditLogsState =
-    | { error: string; success: false as const; data: null }
+    | { error: string; success: false; data: null }
     | { error: null; success: true as const; data: AuditLog[] };
 
 /**

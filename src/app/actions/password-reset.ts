@@ -37,7 +37,7 @@ export async function sendResetEmailAction(
         const rawEmail = formData.get('email') as string;
 
         if (!rawEmail) {
-            return { success: false as const, error: 'Email is required' };
+            return { success: false, error: 'Email is required' };
         }
         
         const email = rawEmail.trim().toLowerCase();

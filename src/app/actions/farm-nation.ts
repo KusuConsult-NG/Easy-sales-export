@@ -135,7 +135,7 @@ export async function getPropertiesAction(filters?: {
         const lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
         return {
-            error: null, success: true as const,
+            error: null, success: true,
             data: { properties },
             meta: { cursor: lastDoc?.id || null, hasMore: snapshot.docs.length === pageSize }
         };
@@ -1239,7 +1239,7 @@ export interface FarmNationDashboardStats {
 export async function getFarmNationDashboardStatsAction() {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized', meta: null };
+        if (!sessionResult.session) return { success: false, data: null, error: 'Unauthorized', meta: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, data: null, error: 'Unauthorized', meta: null };
 

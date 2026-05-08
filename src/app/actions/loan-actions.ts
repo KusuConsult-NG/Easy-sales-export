@@ -23,7 +23,7 @@ export async function submitLoanApplication(
     data: z.infer<typeof loanApplicationSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {

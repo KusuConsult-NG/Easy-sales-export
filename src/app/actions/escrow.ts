@@ -87,7 +87,7 @@ async function _createEscrowAction(data: {
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) {
-            return { success: false as const, error: (sessionResult.error as any)?.error ?? "Session expired" };
+            return { success: false, error: (sessionResult.error as any)?.error ?? "Session expired" };
         }
         const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== data.buyerId) {

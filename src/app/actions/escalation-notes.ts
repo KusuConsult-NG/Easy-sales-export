@@ -22,7 +22,7 @@ export async function addEscalationNoteAction(
     disputeId: string,
     text: string
 ): Promise<{ success: boolean; data?: { noteId: string }; error?: string }> {
-    if (!text.trim()) return { success: false as const, error: "Note text is required" };
+    if (!text.trim()) return { success: false, error: "Note text is required" };
     if (text.length > 2000) return { success: false as const, error: "Note too long (max 2000 chars)" };
 
     try {

@@ -329,7 +329,7 @@ export interface FinancialOverview {
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     const sessionResult = await requireSession();
     if (!sessionResult.session) {
-        return { success: false as const, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
+        return { success: false, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
     const { session } = sessionResult;
 

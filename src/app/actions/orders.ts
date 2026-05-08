@@ -48,7 +48,7 @@ async function _createOrderAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         const userId = session.user.id;

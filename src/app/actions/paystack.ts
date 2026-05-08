@@ -42,7 +42,7 @@ export interface BankVerificationResult {
 export async function getBankList(): Promise<{ error: string | null, success: boolean; banks?: Bank[];  }> {
     try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 

@@ -57,7 +57,7 @@ export async function createExportWindowAction(data: {
 }) {
     try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
 
         const window: Omit<ExportWindow, "id"> = {
             title: data.title,

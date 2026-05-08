@@ -19,12 +19,12 @@ function nairaToKobo(naira: number): number {
 }
 
 export type ActionState = {
-    success: true as const
+    success: true;
     error: null;
     message?: string;
     data?: any;
 } | {
-    success: false as const
+    success: false;
     error: string;
     message?: string;
     data?: any;

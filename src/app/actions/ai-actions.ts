@@ -42,7 +42,7 @@ export async function sendAIMessage(
     data: z.infer<typeof aiChatMessageSchema>
 ) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
     const { session } = sessionResult;
 
     try {

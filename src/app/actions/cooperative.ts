@@ -60,7 +60,7 @@ async function _initiateCooperativePaymentAction(
 ): Promise<MembershipRegistrationState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
             return { error: "You must be logged in", success: false as const };

@@ -79,7 +79,7 @@ async function _getProductsAction(filters?: ProductFilters) {
             products = products.filter(product => product.category === filters.category);
         }
 
-        return { error: null, success: true as const, data: { products: serializeValue(products) } };
+        return { error: null, success: true, data: { products: serializeValue(products) } };
     } catch (error) {
         logger.error("Get products error:", {
             userId: sessionResult?.session?.user?.id,

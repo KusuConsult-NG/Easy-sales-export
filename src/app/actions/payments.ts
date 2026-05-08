@@ -46,7 +46,7 @@ export async function createPaymentRecordAction(data: {
 }): Promise<{ error: string | null, success: boolean; paymentId?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
 
         const payment: Omit<PaymentRecord, "id"> = {
             ...data,

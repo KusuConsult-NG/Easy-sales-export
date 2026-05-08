@@ -95,7 +95,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  */
 export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
     const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required" };
+    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
     try {
         const recipients = formData.get('recipients') as string;
         const subject = formData.get('subject') as string;
@@ -214,10 +214,10 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
 }
 
 export type GetEmailHistoryState = { error: string | null,
-    success: true as const
+    success: true ;
     history: any[];
     } | {
-    success: false as const
+    success: false;
     error: string;
     history?: undefined;
 };

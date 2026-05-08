@@ -82,7 +82,7 @@ export async function resolveSessionAction(
             `Admin resolved chatbot session ${sessionId}`
         );
 
-        return { error: null, success: true as const };
+        return { error: null, success: true };
     } catch (err: any) {
         return { success: false as const, error: err.message };
     }

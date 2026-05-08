@@ -77,7 +77,7 @@ export async function getBriefingRegistrationsAction(
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
-            return { success: false as const, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
+            return { success: false, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
         }
         const { session } = sessionResult;
 
