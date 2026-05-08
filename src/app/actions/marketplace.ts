@@ -224,12 +224,6 @@ async function _submitSellerVerificationAction(
                 accountName: formData.get("accountName") as string,
                 bankCode: formData.get("bankCode") as string 
             },
-            bankDetails: {
-                accountNumber: formData.get("accountNumber") as string,
-                bankName: formData.get("bankName") as string,
-                accountName: formData.get("accountName") as string,
-                bankCode: formData.get("bankCode") as string 
-            },
             address: { 
                 street: formData.get("street") as string,
                 city: formData.get("city") as string,
