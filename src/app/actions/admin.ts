@@ -2329,7 +2329,7 @@ async function _getAcademyApplicationsAction(
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
         // --- HYDRATION END ---
 
-        const applications = rawApplications.map(app => {
+        const applications = rawApplications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const submittedRaw = app.submittedAt;
             const reviewedRaw = app.reviewedAt;
