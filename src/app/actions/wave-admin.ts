@@ -930,6 +930,20 @@ async function _processWaveWithdrawalAction(data: {
                     ...(transactionReference ? { transactionReference } : {}),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
+
+                // Clear the lock on user doc
+                const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
+                tx.update(userRef, {
+                    'serviceRegistrations.wave.hasPendingWithdrawal': false,
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+
+                // Update Wallet Transaction
+                const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
+                tx.update(walletTxnRef, {
+                    status: "completed",
+                    updatedAt: FieldValue.serverTimestamp()
+                });
             } else if (action === "reject") {
                 if (currentStatus !== "pending") {
                     throw new Error("Only pending withdrawals can be rejected");
@@ -940,6 +954,21 @@ async function _processWaveWithdrawalAction(data: {
                     processedAt: FieldValue.serverTimestamp(),
                     ...(adminNotes ? { adminNotes } : {}),
                     updatedAt: FieldValue.serverTimestamp(),
+                });
+
+                // Clear the lock on user doc AND restore the balance
+                const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
+                tx.update(userRef, {
+                    'serviceRegistrations.wave.hasPendingWithdrawal': false,
+                    'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(withdrawalData.amount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+
+                // Update Wallet Transaction
+                const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
+                tx.update(walletTxnRef, {
+                    status: "rejected",
+                    updatedAt: FieldValue.serverTimestamp()
                 });
             } else if (action === "approve") {
                 if (currentStatus !== "pending") {
@@ -1015,8 +1044,10 @@ async function _processWaveWithdrawalAction(data: {
             }
 
             // PHASE 3: FINAL COMMIT
-            // Payout succeeded! Mark as completed.
-            await ref.update({
+            // Payout succeeded! Mark as completed and clear user lock.
+            const batch = db.batch();
+            
+            batch.update(ref, {
                 status: "completed",
                 completedBy: session.user.id,
                 completedAt: FieldValue.serverTimestamp(),
@@ -1025,6 +1056,22 @@ async function _processWaveWithdrawalAction(data: {
                 payoutError: null,
                 updatedAt: FieldValue.serverTimestamp(),
             });
+
+            // Clear the lock on user doc
+            const userRef = db.collection(COLLECTIONS.USERS).doc(withdrawalData.userId);
+            batch.update(userRef, {
+                'serviceRegistrations.wave.hasPendingWithdrawal': false,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // Update Wallet Transaction
+            const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
+            batch.update(walletTxnRef, {
+                status: "completed",
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            await batch.commit();
 
             // Invalidate cache
             if (withdrawalData?.userId) {

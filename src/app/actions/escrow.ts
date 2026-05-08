@@ -333,18 +333,54 @@ async function _releaseEscrowAction(
 
             const data = escrowDoc.data() as EscrowTransaction;
             if (data.status !== "funded") {
-                throw new Error(
-                    `Invalid state transition: expected 'funded', got '${data.status}'`
-                );
+                throw new Error(`Invalid state transition: expected 'funded', got '${data.status}'`);
             }
 
             escrowData = data;
 
-            tx.update(escrowRef, { status: "released",
+            // 1. Update Escrow Status
+            tx.update(escrowRef, { 
+                status: "released",
                 releasedAt: FieldValue.serverTimestamp(),
                 releasedBy: adminId,
                 updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
+                _version: FieldValue.increment(1) 
+            });
+
+            // 2. Credit Seller's Wallet
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
+            const walletSnap = await tx.get(walletRef);
+            
+            if (!walletSnap.exists) {
+                tx.set(walletRef, {
+                    userId: data.sellerId,
+                    balance: data.amount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                tx.update(walletRef, {
+                    balance: FieldValue.increment(data.amount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // 3. Record in Global Ledger
+            const txId = `ESCROW-RELEASE-${escrowId.substring(0, 8)}`;
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            tx.set(txRef, {
+                id: txId,
+                userId: data.sellerId,
+                type: "escrow_payout",
+                module: "escrow",
+                amount: data.amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: escrowId,
+                description: `Escrow Payout for "${data.productName}"`
+            });
         });
 
         if (escrowData) { const tx = escrowData as EscrowTransaction;
@@ -526,27 +562,68 @@ async function _resolveDisputeAction(
             if (!disputeDoc.exists) throw new Error("Dispute not found");
 
             const data = disputeDoc.data() as Dispute;
-
             if (!["open", "under_review"].includes(data.status)) {
-                throw new Error(
-                    `Cannot resolve: dispute is already '${data.status}'`
-                );
+                throw new Error(`Cannot resolve: dispute is already '${data.status}'`);
             }
 
             escrowId = data.escrowId;
             disputeData = data;
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId!);
+            const escrowDoc = await tx.get(escrowRef);
+            if (!escrowDoc.exists) throw new Error("Escrow transaction not found");
+            const escrowData = escrowDoc.data() as EscrowTransaction;
 
-            // Atomic: resolve dispute + update escrow in one commit
-            tx.update(disputeRef, { status: "resolved",
+            // 1. Resolve dispute
+            tx.update(disputeRef, { 
+                status: "resolved",
                 resolution,
                 resolvedBy: adminId,
-                resolvedAt: FieldValue.serverTimestamp() });
+                resolvedAt: FieldValue.serverTimestamp() 
+            });
 
-            tx.update(escrowRef, { status: outcome === "release_seller" ? "released" : "refunded",
+            // 2. Update escrow status
+            const finalStatus = outcome === "release_seller" ? "released" : "refunded";
+            tx.update(escrowRef, { 
+                status: finalStatus,
                 releasedBy: adminId,
-                [outcome === "release_seller" ? "releasedAt" : "refundedAt"]:
-                    FieldValue.serverTimestamp() });
+                [outcome === "release_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp() 
+            });
+
+            // 3. Financial Action (Wallet Credit/Refund)
+            const targetId = outcome === "release_seller" ? escrowData.sellerId : escrowData.buyerId;
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
+            const walletSnap = await tx.get(walletRef);
+
+            if (!walletSnap.exists) {
+                tx.set(walletRef, {
+                    userId: targetId,
+                    balance: escrowData.amount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                tx.update(walletRef, {
+                    balance: FieldValue.increment(escrowData.amount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // 4. Record in Global Ledger
+            const txId = `DISPUTE-RES-${disputeId.substring(0, 8)}`;
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            tx.set(txRef, {
+                id: txId,
+                userId: targetId,
+                type: outcome === "release_seller" ? "dispute_payout" : "dispute_refund",
+                module: "escrow",
+                amount: escrowData.amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: escrowId,
+                description: `Dispute Resolution (${outcome}) for "${escrowData.productName}"`
+            });
         });
 
         await createAdminAuditLog({ action: "dispute_resolved",

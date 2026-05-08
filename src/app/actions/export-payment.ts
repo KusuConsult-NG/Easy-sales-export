@@ -8,6 +8,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getBaseUrl } from "@/lib/server-utils";
+import { getExchangeRates } from "@/lib/system-settings";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -29,7 +30,7 @@ export interface ExportBuyerDetails { companyName: string;
     shippingTerm: string;
     additionalNotes: string; }
 
-const USD_TO_NGN_RATE = 1650; // TODO: Fetch dynamically in a real app
+// const USD_TO_NGN_RATE = 1650; // REMOVED: Now fetched dynamically
 
 export async function initializeExportOrderPaymentAction(
     cartItems: ExportCartItemInput[],
@@ -75,7 +76,8 @@ export async function initializeExportOrderPaymentAction(
             });
         }
 
-        const totalNGN = totalUSD * USD_TO_NGN_RATE;
+        const { usdToNgn } = await getExchangeRates();
+        const totalNGN = totalUSD * usdToNgn;
 
         const baseUrl = await getBaseUrl();
         const callbackUrl = `${baseUrl}/export/buyer/cart/payment-callback`;
@@ -103,7 +105,7 @@ export async function initializeExportOrderPaymentAction(
             items: validatedItems,
             totalUSD,
             totalNGN,
-            exchangeRate: USD_TO_NGN_RATE,
+            exchangeRate: usdToNgn,
             paymentReference: reference,
             paymentStatus: "pending",
             status: "pending_payment",
@@ -196,8 +198,14 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
                 description: `Export Order #${orderData.orderId}`
             });
             
-            // TODO: In a production setting, we would decrement the global catalog stock here
-            // using `transaction.update(productRef, { availableQuantity: FieldValue.increment(-quantity) })`
+            // Decrement global catalog stock
+            for (const item of orderData.items) {
+                const productRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(item.productId);
+                transaction.update(productRef, { 
+                    availableQuantity: FieldValue.increment(-item.quantityMT),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
         });
 
         // Notify Admins

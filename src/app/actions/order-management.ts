@@ -183,9 +183,44 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
             const sellerData = sellerDoc.data();
 
             let sellerAmount = 0;
+            let isWaveMember = false;
+            const roles = (sellerData?.roles || []) as string[];
+            if (roles.includes("wave_participant") || roles.includes("wave")) {
+                isWaveMember = true;
+            }
 
-            if (sellerData?.bankAccountNumber && sellerData?.bankCode) { const platformCommissionRate = 0.025;
+            if (sellerData?.bankAccountNumber && sellerData?.bankCode) {
+                const platformCommissionRate = 0.025;
                 sellerAmount = Math.floor(currentOrder.totalAmount * (1 - platformCommissionRate));
+            }
+
+            // PHASE 2: WAVE LEDGER SYNC (IF APPLICABLE)
+            if (isWaveMember) {
+                const waveCommissionRate = 0.05; // 5% as per wave.ts
+                const earningsAmount = Math.floor(currentOrder.totalAmount * waveCommissionRate);
+                
+                // Increment persistent balance on user doc
+                transaction.update(sellerRef, {
+                    'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(earningsAmount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+
+                // Create Wallet Transaction for the credit record
+                const txnId = `WAVE-CR-${orderId}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+                const txnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(txnId);
+                transaction.set(txnRef, {
+                    walletId: currentOrder.sellerId,
+                    userId: currentOrder.sellerId,
+                    type: "credit",
+                    module: "wave",
+                    amount: earningsAmount,
+                    description: `WAVE Earnings Credit - Order ${orderId}`,
+                    status: "completed",
+                    reference: orderId,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: 0
+                });
             }
 
             return { sellerAmount, sellerData, currentOrder };

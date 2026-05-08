@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
+import { isAdmin } from "@/lib/role-utils";
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -778,39 +779,47 @@ export interface MemberEarnings { memberId: string;
 /**
  * Calculate member earnings from sales
  */
-async function _calculateEarningsAction(userId: string): Promise<ActionResponse<any>> {
+async function _calculateEarningsAction(userId: string): Promise<ActionResponse<MemberEarnings>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
+        if (session.user.id !== userId && (!isAdmin(session.user.roles))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+        const userData = userDoc.data();
+        const waveReg = userData?.serviceRegistrations?.wave;
+
+        // Source of Truth: Persistent Balance
+        let availableBalance = waveReg?.waveEarningsBalance;
+
+        // Heavy calculation for Transaction History and Initial Backfill
         const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerId", "==", userId)
             .get();
 
         const commissionRate = 0.05;
-
         let totalSales = 0;
         let totalEarnings = 0;
         let pendingAmount = 0;
-        let paidAmount = 0;
-        const transactions: MemberEarnings["transactions"] = [];
+        let calculatedPaidAmount = 0;
+        const transactions: any[] = [];
 
         snapshot.docs.forEach(doc => {
             const order = doc.data();
             const saleAmount = order.totalAmount || 0;
             const commission = saleAmount * commissionRate;
-            const isPaid = order.paymentStatus === "paid";
+            const isPaid = order.paymentStatus === "paid" || order.status === "completed";
 
             totalSales += saleAmount;
             totalEarnings += commission;
 
             if (isPaid) {
-                paidAmount += commission;
+                calculatedPaidAmount += commission;
             } else {
                 pendingAmount += commission;
             }
@@ -828,13 +837,22 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             .where("userId", "==", userId)
             .where("status", "in", ["pending", "approved", "approved_pending_payout", "completed"])
             .get();
+        
         let withdrawnAmount = 0;
         withdrawalsSnap.docs.forEach(doc => {
             const w = doc.data();
             withdrawnAmount += (w.amount || 0);
         });
 
-        const availableBalance = Math.max(0, paidAmount - withdrawnAmount);
+        // AUTO-BACKFILL: If persistent balance is missing, initialize it
+        if (availableBalance === undefined) {
+            availableBalance = Math.max(0, calculatedPaidAmount - withdrawnAmount);
+            await userRef.update({
+                'serviceRegistrations.wave.waveEarningsBalance': availableBalance,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+            logger.info(`Backfilled WAVE earnings balance for user ${userId}: ${availableBalance}`);
+        }
 
         const result: MemberEarnings = {
             memberId: userId,
@@ -842,12 +860,17 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
             totalEarnings,
             commissionRate,
             pendingAmount,
-            paidAmount: availableBalance,
+            paidAmount: availableBalance, // Use the persistent source
             totalWithdrawn: withdrawnAmount,
             transactions: transactions
                 .sort((a: any, b: any) => b.date.getTime() - a.date.getTime())
                 .map(t => ({
                     ...t,
+                    date: t.date.toISOString()
+                }))
+        };
+
+        return { error: null, success: true as const, data: result };
                     date: t.date.toISOString() as any
                 }))
         };
@@ -1103,6 +1126,13 @@ async function _withdrawEarningsAction(
     amount: number
 ): Promise<ActionResponse<null>> {
     try {
+        // WAVE withdrawals are currently disabled
+        return { 
+            success: false as const, 
+            error: "WAVE earnings withdrawals are currently disabled for maintenance. Please try again later.", 
+            data: null 
+        };
+
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
@@ -1116,46 +1146,82 @@ async function _withdrawEarningsAction(
 
         const userId = session.user.id;
 
-        const earnings = await calculateEarningsAction(userId);
-        if ((earnings.data?.paidAmount || 0) < amount) {
-            return { success: false as const, error: "Insufficient available balance", data: null };
+        // PHASE 1: Balance Calculation (Snapshot)
+        // Note: We calculate before the transaction because Firestore queries are not supported inside transactions in Node SDK.
+        // The transactional lock (hasPendingWithdrawal) prevents race conditions.
+        const earnings = await _calculateEarningsAction(userId);
+        if (!earnings.success || (earnings.data?.paidAmount || 0) < amount) {
+            return { success: false as const, error: earnings.error || "Insufficient available balance", data: null };
         }
 
-        const existingSnap = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
-            .where("userId", "==", userId)
-            .where("status", "==", "pending")
-            .limit(1)
-            .get();
+        const withdrawalId = `WAVE-WD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const withdrawalRef = db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId);
+        const walletTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(withdrawalId);
 
-        if (!existingSnap.empty) {
-            return { success: false as const, error: "You have a pending withdrawal request. Please wait for it to be processed.", data: null };
-        }
+        // PHASE 2: ATOMIC RESERVATION
+        await db.runTransaction(async (transaction) => {
+            const userSnap = await transaction.get(userRef);
+            const userData = userSnap.data();
 
-        const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+            // Check if there is already a pending request
+            const hasPending = userData?.serviceRegistrations?.wave?.hasPendingWithdrawal;
+            if (hasPending) {
+                throw new Error("You already have a pending withdrawal request. Please wait for it to be processed.");
+            }
 
-        await db.collection(COLLECTIONS.WAVE_WITHDRAWALS).doc(withdrawalId).set({
-            withdrawalId,
-            userId,
-            userEmail: session.user.email,
-            amount,
-            status: "pending",
-            requestedAt: FieldValue.serverTimestamp(),
-            processedAt: null,
-            createdAt: FieldValue.serverTimestamp()
+            // Create WAVE Withdrawal Record
+            transaction.set(withdrawalRef, {
+                withdrawalId,
+                userId,
+                userEmail: session.user.email,
+                amount,
+                status: "pending",
+                requestedAt: FieldValue.serverTimestamp(),
+                processedAt: null,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: 0
+            });
+
+            // Align with Wallet Ledger System
+            transaction.set(walletTxnRef, {
+                walletId: userId,
+                userId,
+                type: "withdrawal",
+                module: "wave",
+                amount: -amount, // Negative for withdrawal
+                description: `WAVE Earnings Withdrawal - ${withdrawalId}`,
+                status: "pending",
+                reference: withdrawalId,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: 0
+            });
+
+            // Set Lock Flag and Debit Balance on User Document
+            transaction.update(userRef, {
+                'serviceRegistrations.wave.hasPendingWithdrawal': true,
+                'serviceRegistrations.wave.waveEarningsBalance': FieldValue.increment(-amount),
+                'serviceRegistrations.wave.lastWithdrawalRequestedAt': FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
         });
 
+        // AUDIT LOG
         await createAdminAuditLog({
             action: "user_update",
             userId,
             targetId: withdrawalId,
             targetType: "wave_withdrawal",
-            metadata: { amount }
+            metadata: { amount, action: "withdrawal_requested" },
+            details: `WAVE earnings withdrawal of ₦${amount.toLocaleString()} requested.`
         });
 
         return { success: true as const, error: null, data: null };
     } catch (error: any) {
         logger.error("Withdraw earnings error:", error);
-        return { success: false as const, error: "Failed to submit withdrawal request", data: null };
+        return { success: false as const, error: error.message || "Failed to submit withdrawal request", data: null };
     }
 }
 export const withdrawEarningsAction = withFlexibleSafeAction("withdrawEarningsAction", _withdrawEarningsAction);

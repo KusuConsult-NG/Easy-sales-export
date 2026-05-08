@@ -61,17 +61,21 @@ async function _verifyBVNAction(payload: { bvn: string;
         const result = { success: true as const, isMatch: true, error: null };
 
         // Persist result to Firestore regardless of match outcome
-        await atomicUpdateUser(userId, { 'kyc.bvn': bvn,
+        await atomicUpdateUser(userId, { 
+            'kyc.bvn': bvn,
             'kyc.bvnVerified': result.success && result.isMatch,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.bvnStatus': result.success
                 ? (result.isMatch ? 'verified' : 'mismatch')
-                : 'failed' });
+                : 'failed'
+        });
 
-        if (!result.success) { return { success: false as const, error: result.error || 'BVN verification failed', data: null };
+        if (!result.success) { 
+            return { success: false as const, error: result.error || 'BVN verification failed', data: null };
         }
 
-        if (!result.isMatch) { return { success: false, error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.', data: null };
+        if (!result.isMatch) { 
+            return { success: false, error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.', data: null };
         }
 
         // Update overall KYC status if BVN now verified
@@ -81,7 +85,8 @@ async function _verifyBVNAction(payload: { bvn: string;
 
         logger.info('BVN verified successfully', { userId });
         return { success: true, error: null, data: { isMatch: true } };
-    } catch (error: any) { logger.error('BVN verification action error', error);
+    } catch (error: any) { 
+        logger.error('BVN verification action error', error);
         return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
@@ -103,13 +108,16 @@ async function _verifyNINAction(payload: { nin: string;
 
         const { nin, firstName, lastName } = payload;
 
-        if (!nin || !/^\d{11}$/.test(nin)) { return { success: false as const, error: 'NIN must be exactly 11 digits', data: null };
+        if (!nin || !/^\d{11}$/.test(nin)) { 
+            return { success: false as const, error: 'NIN must be exactly 11 digits', data: null };
         }
-        if (!firstName || !lastName) { return { success: false as const, error: 'First name and last name are required for NIN verification', data: null };
+        if (!firstName || !lastName) { 
+            return { success: false as const, error: 'First name and last name are required for NIN verification', data: null };
         }
 
         // Guard: reject obviously fake / placeholder NIN patterns server-side
-        if (isObviouslyFakeId(nin)) { logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
+        if (isObviouslyFakeId(nin)) { 
+            logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
             return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
@@ -119,17 +127,21 @@ async function _verifyNINAction(payload: { nin: string;
         const result = { success: true as const, isMatch: true, error: null };
 
         // Persist result to Firestore regardless of match outcome
-        await atomicUpdateUser(userId, { 'kyc.nin': nin,
+        await atomicUpdateUser(userId, { 
+            'kyc.nin': nin,
             'kyc.ninVerified': result.success && result.isMatch,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.ninStatus': result.success
                 ? (result.isMatch ? 'verified' : 'mismatch')
-                : 'failed' });
+                : 'failed'
+        });
 
-        if (!result.success) { return { success: false as const, error: result.error || 'NIN verification failed', data: null };
+        if (!result.success) { 
+            return { success: false as const, error: result.error || 'NIN verification failed', data: null };
         }
 
-        if (!result.isMatch) { return { success: false, error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.', data: null };
+        if (!result.isMatch) { 
+            return { success: false, error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.', data: null };
         }
 
         // Update overall KYC status if NIN now verified

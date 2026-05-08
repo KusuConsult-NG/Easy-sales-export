@@ -151,30 +151,40 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        // Update user
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({ 
-            "serviceRegistrations.farmNation.status": "approved",
-            "serviceRegistrations.farmNation.paymentStatus": "completed",
-            "serviceRegistrations.farmNation.approvedAt": FieldValue.serverTimestamp(),
-            "serviceRegistrations.farmNation.approvedBy": session.user.id,
-            roles: FieldValue.arrayUnion("farmer")
-        });
+        // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
+        await db.runTransaction(async (transaction) => {
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where("userId", "==", userId)
+                .orderBy("submittedAt", "desc")
+                .limit(1);
+            
+            const [userDoc, appSnap] = await Promise.all([
+                transaction.get(userRef),
+                appQuery.get()
+            ]);
 
-        // ── SYNC AUTHORITATIVE RECORD ──────
-        const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-            .where("userId", "==", userId)
-            .orderBy("submittedAt", "desc")
-            .limit(1)
-            .get();
+            if (!userDoc.exists) throw new Error("User not found");
 
-        if (!appSnap.empty) { 
-            await appSnap.docs[0].ref.update({
-                status: "approved",
-                approvedAt: FieldValue.serverTimestamp(),
-                approvedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp()
+            // Update user
+            transaction.update(userRef, { 
+                "serviceRegistrations.farmNation.status": "approved",
+                "serviceRegistrations.farmNation.paymentStatus": "completed",
+                "serviceRegistrations.farmNation.approvedAt": FieldValue.serverTimestamp(),
+                "serviceRegistrations.farmNation.approvedBy": session.user.id,
+                roles: FieldValue.arrayUnion("farmer")
             });
-        }
+
+            // Update application
+            if (!appSnap.empty) { 
+                transaction.update(appSnap.docs[0].ref, {
+                    status: "approved",
+                    approvedAt: FieldValue.serverTimestamp(),
+                    approvedBy: session.user.id,
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+        });
 
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
@@ -190,30 +200,39 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
         const { session } = sessionResult;
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({ 
-            "serviceRegistrations.farmNation.status": "rejected",
-            "serviceRegistrations.farmNation.rejectionReason": reason,
-            "serviceRegistrations.farmNation.rejectedAt": FieldValue.serverTimestamp(),
-            "serviceRegistrations.farmNation.rejectedBy": session.user.id,
-            roles: FieldValue.arrayRemove("farmer") 
-        });
+        // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
+        await db.runTransaction(async (transaction) => {
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where("userId", "==", userId)
+                .orderBy("submittedAt", "desc")
+                .limit(1);
+            
+            const [userDoc, appSnap] = await Promise.all([
+                transaction.get(userRef),
+                appQuery.get()
+            ]);
 
-        // ── SYNC AUTHORITATIVE RECORD ──────
-        const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-            .where("userId", "==", userId)
-            .orderBy("submittedAt", "desc")
-            .limit(1)
-            .get();
+            if (!userDoc.exists) throw new Error("User not found");
 
-        if (!appSnap.empty) { 
-            await appSnap.docs[0].ref.update({
-                status: "rejected",
-                rejectionReason: reason,
-                rejectedAt: FieldValue.serverTimestamp(),
-                rejectedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp()
+            transaction.update(userRef, { 
+                "serviceRegistrations.farmNation.status": "rejected",
+                "serviceRegistrations.farmNation.rejectionReason": reason,
+                "serviceRegistrations.farmNation.rejectedAt": FieldValue.serverTimestamp(),
+                "serviceRegistrations.farmNation.rejectedBy": session.user.id,
+                roles: FieldValue.arrayRemove("farmer") 
             });
-        }
+
+            if (!appSnap.empty) { 
+                transaction.update(appSnap.docs[0].ref, {
+                    status: "rejected",
+                    rejectionReason: reason,
+                    rejectedAt: FieldValue.serverTimestamp(),
+                    rejectedBy: session.user.id,
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+        });
 
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
@@ -421,32 +440,40 @@ async function _initiatePropertyPurchaseAction(
             return { success: false as const, error: "Cooperative membership required. Please complete your cooperative registration.", data: null, meta: null };
         }
 
-        // Create purchase request
-        const purchaseRequest = { 
-            propertyId,
-            propertyName: property.name,
-            propertyPrice: property.price,
-            propertyType: property.type,
-            buyerId: session.user.id,
-            buyerName: buyerInfo.fullName,
-            buyerEmail: buyerInfo.email,
-            buyerPhone: buyerInfo.phone,
-            purpose: buyerInfo.purpose,
-            sellerId: property.ownerId,
-            sellerName: property.ownerName,
-            status: "pending_payment",
-            escrowAmount: property.price,
-            escrowStatus: "pending",
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() 
-        };
+        // ── EXECUTE PURCHASE IN A TRANSACTION ──────
+        await db.runTransaction(async (transaction) => {
+            const propSnap = await transaction.get(propertyRef);
+            if (!propSnap.exists) throw new Error("Property not found");
+            
+            const propData = propSnap.data() as Property;
+            if (propData.status !== "available") throw new Error("Property is no longer available");
 
-        await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).add(purchaseRequest);
+            // Create purchase request record
+            const purchaseRequestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc();
+            transaction.set(purchaseRequestRef, { 
+                propertyId,
+                propertyName: propData.name,
+                propertyPrice: propData.price,
+                propertyType: propData.type,
+                buyerId: session.user.id,
+                buyerName: buyerInfo.fullName,
+                buyerEmail: buyerInfo.email,
+                buyerPhone: buyerInfo.phone,
+                purpose: buyerInfo.purpose,
+                sellerId: propData.ownerId,
+                sellerName: propData.ownerName,
+                status: "pending_payment",
+                escrowAmount: propData.price,
+                escrowStatus: "pending",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp() 
+            });
 
-        // Mark property as pending
-        await propertyRef.update({ 
-            status: "pending",
-            updatedAt: FieldValue.serverTimestamp() 
+            // Mark property as pending
+            transaction.update(propertyRef, { 
+                status: "pending",
+                updatedAt: FieldValue.serverTimestamp() 
+            });
         });
 
         return { error: null, success: true as const, meta: null, data: null };
@@ -528,21 +555,32 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
             return { success: false as const, error: "Can only cancel pending payment requests", data: null, meta: null };
         }
 
-        // Update request status
-        await requestRef.update({ 
-            status: "cancelled",
-            escrowStatus: "refunded",
-            cancelledAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() 
-        });
+        // ── EXECUTE CANCELLATION IN A TRANSACTION ──────
+        await db.runTransaction(async (transaction) => {
+            const reqSnap = await transaction.get(requestRef);
+            if (!reqSnap.exists) throw new Error("Purchase request not found");
+            
+            const reqData = reqSnap.data();
+            if (reqData?.buyerId !== session.user.id) throw new Error("Unauthorized");
+            if (reqData?.status !== "pending_payment") throw new Error("Can only cancel pending payment requests");
 
-        // Mark property as available again
-        if (requestData?.propertyId) { 
-            await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(requestData.propertyId).update({
-                status: "available",
+            // Update request status
+            transaction.update(requestRef, { 
+                status: "cancelled",
+                escrowStatus: "refunded",
+                cancelledAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() 
             });
-        }
+
+            // Mark property as available again
+            if (reqData?.propertyId) { 
+                const pRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(reqData.propertyId);
+                transaction.update(pRef, {
+                    status: "available",
+                    updatedAt: FieldValue.serverTimestamp() 
+                });
+            }
+        });
 
         return { error: null, success: true as const, meta: null, data: null };
     } catch (error: any) { 
@@ -738,57 +776,59 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
             roles.push("farmer");
         }
 
-        // Update user document in Firestore - separate top-level and nested updates
-        await db.collection(COLLECTIONS.USERS).doc(userId).set(
-            { 
+        // ── EXECUTE ONBOARDING IN A TRANSACTION ──────
+        await db.runTransaction(async (transaction) => {
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const appRef = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc();
+
+            // Prepare names
+            const fullName = [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+                .filter(Boolean).join(" ").trim();
+
+            // Update user document
+            transaction.set(userRef, { 
                 farmNation: {
                     role: data.role,
                     profile: {
                         ...data.profile,
-                        fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
-                            .filter(Boolean).join(" ").trim() 
+                        fullName
                     },
                     interests: data.interests,
                     onboardingCompletedAt: new Date().toISOString(),
                     termsAcceptedAt: new Date().toISOString() 
                 },
                 roles: FieldValue.arrayUnion(...roles),
+                // Dot notation for serviceRegistrations
+                "serviceRegistrations.farmNation": {
+                    status: "pending",
+                    paymentStatus: "completed",
+                    role: data.role,
+                    completedAt: FieldValue.serverTimestamp(),
+                    submittedAt: FieldValue.serverTimestamp()
+                },
+                firstName: data.profile.firstName,
+                lastName: data.profile.lastName,
+                otherName: data.profile.otherName || null,
+                fullName,
+                phone: data.profile.phone,
+                stateOfOrigin: data.profile.state,
+                lga: data.profile.lga,
+                residentialAddress: data.profile.address,
                 updatedAt: FieldValue.serverTimestamp() 
-            },
-            { merge: true }
-        );
-        // Dot notation update for serviceRegistrations to prevent wiping other modules
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({ 
-            "serviceRegistrations.farmNation.status": "pending",
-            "serviceRegistrations.farmNation.paymentStatus": "completed",
-            "serviceRegistrations.farmNation.role": data.role,
-            "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
-            "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
-            // Sync KYC name fields for Admin Communication Hub & admin portal
-            firstName: data.profile.firstName,
-            lastName: data.profile.lastName,
-            otherName: data.profile.otherName || null,
-            fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
-                .filter(Boolean).join(" ").trim(),
-            // Sync other PII for Communication Hub
-            phone: data.profile.phone,
-            stateOfOrigin: data.profile.state,
-            lga: data.profile.lga,
-            residentialAddress: data.profile.address 
-        });
+            }, { merge: true });
 
-        // ── AUTHORITATIVE RECORD: Create dedicated application document ──────
-        // This ensures the status guard has a source of truth independent of profile sync.
-        await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).add({ 
-            userId,
-            userEmail: session.user.email,
-            role: data.role,
-            profile: data.profile,
-            interests: data.interests,
-            status: "pending",
-            submittedAt: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() 
+            // Create authoritative record
+            transaction.set(appRef, { 
+                userId,
+                userEmail: session.user.email,
+                role: data.role,
+                profile: data.profile,
+                interests: data.interests,
+                status: "pending",
+                submittedAt: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp() 
+            });
         });
 
         try { 

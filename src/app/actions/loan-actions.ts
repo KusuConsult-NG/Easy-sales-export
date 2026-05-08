@@ -206,16 +206,56 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
             const loanDoc = await transaction.get(loanRef);
             if (!loanDoc.exists) throw new Error("Loan application not found");
 
-            const currentStatus = loanDoc.data()?.status;
+            const loanData = loanDoc.data();
+            const currentStatus = loanData?.status;
             if (currentStatus !== LoanStatus.APPROVED) {
                 throw new Error(`Loan must be APPROVED before disbursement. Current status: ${currentStatus}`);
             }
 
+            const userId = loanData?.userId;
+            const amount = loanData?.amount || 0;
+
+            // ── UPDATE LOAN RECORD ──────
             transaction.update(loanRef, { status: LoanStatus.DISBURSED,
                 disbursedAt: FieldValue.serverTimestamp(),
                 disbursedBy: session.user.id,
                 disbursementNotes,
                 updatedAt: FieldValue.serverTimestamp() });
+
+            // ── CREDIT USER WALLET ──────
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(userId);
+            const walletDoc = await transaction.get(walletRef);
+            
+            if (!walletDoc.exists) {
+                transaction.set(walletRef, {
+                    userId,
+                    balance: amount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                transaction.update(walletRef, {
+                    balance: FieldValue.increment(amount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // ── RECORD IN GLOBAL LEDGER ──────
+            const txId = `LOAN-DISB-${loanId.substring(0, 8)}`;
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            transaction.set(txRef, {
+                id: txId,
+                userId,
+                type: "loan_disbursement",
+                module: "loans",
+                amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: loanId,
+                description: `Loan Disbursement for Application #${loanId.substring(0, 8)}`
+            });
         });
 
         // 🚀 POST-COMMIT SIDE EFFECTS (Non-blocking)
@@ -282,5 +322,74 @@ export async function getLoanStatistics() { const sessionResult = await requireS
 
         return { error: null, success: true as const, data: stats };
     } catch (error) { return { success: false as const, error: "Failed to fetch loan statistics", data: null };
+    }
+}
+
+/**
+ * Process a loan repayment from the user's wallet
+ */
+export async function processLoanRepaymentAction(loanId: string, amount: number) {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    const { session } = sessionResult;
+
+    try {
+        const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
+        const walletRef = db.collection(COLLECTIONS.WALLETS).doc(session.user.id);
+
+        await db.runTransaction(async (transaction) => {
+            const [loanDoc, walletDoc] = await Promise.all([
+                transaction.get(loanRef),
+                transaction.get(walletRef)
+            ]);
+
+            if (!loanDoc.exists) throw new Error("Loan application not found");
+            if (!walletDoc.exists) throw new Error("User wallet not found");
+
+            const loanData = loanDoc.data();
+            const walletData = walletDoc.data();
+
+            if (loanData?.userId !== session.user.id) throw new Error("Unauthorized repayment");
+            if (loanData?.status !== LoanStatus.DISBURSED) throw new Error("Loan is not in a repayable state");
+            
+            if ((walletData?.balance || 0) < amount) throw new Error("Insufficient wallet balance for repayment");
+
+            // ── DEBIT WALLET ──────
+            transaction.update(walletRef, {
+                balance: FieldValue.increment(-amount),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // ── UPDATE LOAN STATUS ──────
+            // For simplicity, we mark as REPAID if it's the full amount. 
+            // In a complex system, we'd track balance.
+            const isFullRepayment = amount >= (loanData?.amount || 0);
+            transaction.update(loanRef, {
+                status: isFullRepayment ? LoanStatus.REPAID : LoanStatus.DISBURSED,
+                repaidAmount: FieldValue.increment(amount),
+                repaidAt: isFullRepayment ? FieldValue.serverTimestamp() : null,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // ── RECORD IN GLOBAL LEDGER ──────
+            const txId = `LOAN-REPAY-${Date.now()}-${session.user.id.substring(0, 5)}`;
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            transaction.set(txRef, {
+                id: txId,
+                userId: session.user.id,
+                type: "loan_repayment",
+                module: "loans",
+                amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: loanId,
+                description: `Loan Repayment for Application #${loanId.substring(0, 8)}`
+            });
+        });
+
+        return { error: null, success: true as const, data: null };
+    } catch (error: any) {
+        return { success: false as const, error: error.message || "Failed to process loan repayment" };
     }
 }

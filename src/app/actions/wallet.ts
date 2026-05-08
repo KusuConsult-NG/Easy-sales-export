@@ -80,11 +80,12 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
-    // Deposits are disabled per request
-    const isFundingEnabled = false;
-    if (!isFundingEnabled) {
-        return { success: false as const, error: "Wallet deposits are currently disabled." , data: null };
-    }
+    // Wallet operations are currently disabled
+    return { 
+        success: false as const, 
+        error: "Wallet deposits are currently disabled for maintenance. Please try again later." , 
+        data: null 
+    };
 
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
@@ -340,6 +341,13 @@ export async function withdrawFromWalletAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
     try {
+        // Wallet operations are currently disabled
+        return { 
+            success: false as const, 
+            error: "Wallet withdrawals are currently disabled for maintenance. Please try again later.", 
+            data: null 
+        };
+
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
             return { success: false as const, error: "Invalid withdrawal amount" };
         }
