@@ -1,3 +1,7 @@
+/**
+ * Last Hardened: 2026-05-09 (Reconciliation Sync)
+ */
+
 "use server";
 
 import { db } from "@/lib/firebase-admin";
