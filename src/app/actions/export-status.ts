@@ -9,8 +9,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { revalidatePath } from "next/cache";
 
 type UpdateExportStatusState =
-    | { error: string | null; success: false as const; data: null; meta: null }
-    | { error: null; success: true as const; data: { message: string }; meta: null };
+    | { error: string | null; success: false; data: null; meta: null }
+    | { error: null; success: true; data: { message: string }; meta: null };
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
 

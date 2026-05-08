@@ -43,12 +43,12 @@ export async function initializePropertyPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         // Validate amount
         if (amount < 10000) {
-            return { error: "Minimum property purchase is ₦10,000", success: false as const };
+            return { error: "Minimum property purchase is ₦10,000", success: false };
         }
 
         // Check if property exists and is available
@@ -56,18 +56,18 @@ export async function initializePropertyPaymentAction(
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
-            return { error: "Property not found", success: false as const };
+            return { error: "Property not found", success: false };
         }
 
         const propertyData = propertyDoc.data()!;
 
         if (propertyData.status !== "available") {
-            return { error: "Property is no longer available", success: false as const };
+            return { error: "Property is no longer available", success: false };
         }
 
         // Buyer cannot purchase their own property
         if (propertyData.ownerId === session.user.id) {
-            return { error: "You cannot purchase your own property", success: false as const };
+            return { error: "You cannot purchase your own property", success: false };
         }
 
         // Initialize payment with Paystack
@@ -144,7 +144,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
@@ -183,7 +183,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 
         // Verify user match
         if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false as const };
+            return { error: "Payment verification failed: User mismatch", success: false };
         }
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);

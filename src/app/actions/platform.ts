@@ -24,26 +24,26 @@ import { revalidatePath } from "next/cache";
 // Type definitions for action return states
 type ActionErrorState = {
     error: string;
-    success: false as const;
+    success: false;
 };
 
 type WaveSuccessState = {
     error: null;
-    success: true as const;
+    success: true;
     message: string;
     applicationId: string;
 };
 
 type EnrollmentSuccessState = {
     error: null;
-    success: true as const;
+    success: true;
     message: string;
     enrollmentId: string;
 };
 
 type WithdrawalSuccessState = {
     error: null;
-    success: true as const;
+    success: true;
     message: string;
     withdrawalId: string;
 };
@@ -121,7 +121,7 @@ export async function submitWaveApplicationAction(
             };
         }
 
-        return { error: "Failed to submit application. Please try again.", success: false as const };
+        return { error: "Failed to submit application. Please try again.", success: false };
     }
 }
 
@@ -156,7 +156,7 @@ export async function enrollInCourseAction(
         const existingEnrollment = await enrollmentRef.get();
 
         if (existingEnrollment.exists) {
-            return { error: "You are already enrolled in this course", success: false as const };
+            return { error: "You are already enrolled in this course", success: false };
         }
 
         // Save enrollment to Firestore
@@ -192,10 +192,10 @@ export async function enrollInCourseAction(
         logger.error("Enrollment error:", error);
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const };
+            return { error: "Please fill in all required fields correctly", success: false };
         }
 
-        return { error: "Failed to enroll. Please try again.", success: false as const };
+        return { error: "Failed to enroll. Please try again.", success: false };
     }
 }
 
@@ -215,7 +215,7 @@ export async function submitWithdrawalAction(
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
         if (!idempotencyKey) {
-            return { error: "Missing security token. Please refresh the page.", success: false as const };
+            return { error: "Missing security token. Please refresh the page.", success: false };
         }
 
         // Extract and validate form data
@@ -319,13 +319,13 @@ export async function submitWithdrawalAction(
         logger.error("Withdrawal error:", error);
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const };
+            return { error: "Please fill in all required fields correctly", success: false };
         }
 
         if (error.message.includes("balance")) {
-            return { error: error.message, success: false as const };
+            return { error: error.message, success: false };
         }
 
-        return { error: "Failed to submit withdrawal request. Please try again.", success: false as const };
+        return { error: "Failed to submit withdrawal request. Please try again.", success: false };
     }
 }

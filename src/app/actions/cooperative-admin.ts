@@ -56,7 +56,7 @@ async function getAdminScope(userId: string, userRoles: string[]): Promise<strin
 // ============================================================================
 
 async function _getCooperativeStatsAction(): Promise<{
-    success: true as const;
+    success: true;
     meta?: any;
     data: {
         stats: {
@@ -82,7 +82,7 @@ async function _getCooperativeStatsAction(): Promise<{
     };
     error: null;
 } | {
-    success: false as const;
+    success: false;
     error: string;
     data?: null;
     meta?: null;

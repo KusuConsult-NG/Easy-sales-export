@@ -116,7 +116,7 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
             logger.error(`[WAVE Briefing] Email system error for ${emailToStore}:`, emailError);
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("[WAVE Briefing] Registration error:", error);
         const msg = typeof error === 'string' ? error : (error?.message || "Registration failed");

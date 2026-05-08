@@ -116,7 +116,7 @@ async function submitForVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Verification submission error:", error);
         return { success: false as const, error: "Failed to submit for verification" };
@@ -165,7 +165,7 @@ export async function verifyLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Land verification error:", error);
         return { success: false as const, error: "Failed to verify listing" };
@@ -217,7 +217,7 @@ export async function rejectLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Land rejection error:", error);
         return { success: false as const, error: "Failed to reject listing" };
@@ -482,7 +482,7 @@ export async function submitLandInquiryAction(data: {
             details: `Inquiry for ${data.listingTitle}`,
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Submit inquiry error:", error);
         return { success: false as const, error: error.message || "Failed to send message" };
@@ -560,7 +560,7 @@ export async function deleteLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Land deletion error:", error);
         return { success: false as const, error: "Failed to delete listing" };

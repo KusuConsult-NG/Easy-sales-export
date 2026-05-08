@@ -44,12 +44,12 @@ export async function initializeEnrollmentPaymentAction(
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         // Validate amount
         if (amount < 1000) {
-            return { error: "Minimum enrollment fee is ₦1,000", success: false as const };
+            return { error: "Minimum enrollment fee is ₦1,000", success: false };
         }
 
         // Check if already enrolled
@@ -57,7 +57,7 @@ export async function initializeEnrollmentPaymentAction(
         const existingEnrollment = await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).get();
 
         if (existingEnrollment.exists) {
-            return { error: "You are already enrolled in this course", success: false as const };
+            return { error: "You are already enrolled in this course", success: false };
         }
 
         // Initialize payment with Paystack
@@ -122,7 +122,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
@@ -161,7 +161,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         // Verify user match
         if (metadata.userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false as const };
+            return { error: "Payment verification failed: User mismatch", success: false };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation against REAL course price

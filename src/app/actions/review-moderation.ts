@@ -141,7 +141,7 @@ export async function approveReviewAction(
             metadata: { productId: reviewDoc.data()?.productId },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Failed to approve review:", error);
         return { success: false as const, error: error.message || "Failed to approve review" };
@@ -222,7 +222,7 @@ export async function deleteReviewAction(
             },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Failed to delete review:", error);
         return { success: false as const, error: error.message || "Failed to delete review" };
@@ -292,7 +292,7 @@ export async function suspendReviewerAction(
             logger.error("Cache invalidation failed after user suspension", err);
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Failed to suspend reviewer:", error);
         return { success: false as const, error: error.message || "Failed to suspend user" };

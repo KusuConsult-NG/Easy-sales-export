@@ -244,7 +244,7 @@ export async function deleteResourceAction(resourceId: string): Promise<{ succes
             targetType: "wave_resource",
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Delete resource error:", error);
         return { success: false as const, error: error.message || "Failed to delete resource" };
@@ -295,7 +295,7 @@ export async function updateResourceAction(
             targetType: "wave_resource",
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Update resource error:", error);
         return { success: false as const, error: error.message || "Failed to update resource" };

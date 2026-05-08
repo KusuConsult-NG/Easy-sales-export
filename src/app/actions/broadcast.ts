@@ -118,12 +118,12 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
  * (Required by Communications UI)
  */
 export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{
-    success: true as const;
+    success: true;
     count: number | null;
     sample: any[];
     error: null;
 } | {
-    success: false as const;
+    success: false;
     error: string;
     count: null;
     sample: any[];
@@ -151,11 +151,11 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
  * (Required by Communications UI)
  */
 export async function getBroadcastHistoryAction(): Promise<{
-    success: true as const;
+    success: true;
     logs: BroadcastLog[];
     error: null;
 } | {
-    success: false as const;
+    success: false;
     logs: BroadcastLog[];
     error: string;
 }> {

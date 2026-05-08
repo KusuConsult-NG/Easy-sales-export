@@ -9,14 +9,14 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
-async function _getFarmNationStatsAction(): Promise<{ success: true as const; data: { stats: { totalApplications: number } } } | { success: false as const; error: string }> {
+async function _getFarmNationStatsAction(): Promise<{ success: true; data: { stats: { totalApplications: number } } } | { success: false; error: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false as const };
+            return { error: "Unauthorized: Permission required", success: false };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -69,7 +69,7 @@ async function _getFarmNationRegistrantsAction(options: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false as const };
+            return { error: "Unauthorized: Permission required", success: false };
         }
 
         const pageSize = options.search ? 2000 : (options.limit || 20);
@@ -153,7 +153,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ success: true as const; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false as const; error: string }> {
+} = {}): Promise<{ success: true; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false; error: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();

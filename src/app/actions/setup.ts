@@ -45,7 +45,7 @@ export async function setupTestCooperativeAction() {
         const memberDoc = await memberRef.get();
 
         if (memberDoc.exists) {
-            return { error: "You are already a member of this cooperative", success: false as const };
+            return { error: "You are already a member of this cooperative", success: false };
         }
 
         // Add user as member with initial savings
@@ -84,6 +84,6 @@ export async function setupTestCooperativeAction() {
         };
     } catch (error: any) {
         logger.error("Setup test cooperative error:", error);
-        return { error: `Failed to setup cooperative: ${error.message}`, success: false as const };
+        return { error: `Failed to setup cooperative: ${error.message}`, success: false };
     }
 }

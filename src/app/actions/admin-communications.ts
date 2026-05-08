@@ -216,11 +216,11 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
 }
 
 export type GetEmailHistoryState = {
-    success: true as const;
+    success: true;
     history: any[];
     error: null;
 } | {
-    success: false as const;
+    success: false;
     error: string;
     history?: undefined;
 };

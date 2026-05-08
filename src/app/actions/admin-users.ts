@@ -105,7 +105,7 @@ export async function assignDisputeAction(
             link: `/admin/marketplace/disputes/${disputeId}`,
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         return { success: false as const, error: error.message };
     }

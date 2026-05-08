@@ -217,7 +217,7 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ su
             deletedBy: session.user.id
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Delete export catalog error:", error);
         return { success: false as const, error: "Failed to delete item" };
@@ -297,7 +297,7 @@ export async function reviewExportProductAction(productId: string, action: 'appr
             }
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Review export product error:", error);
         return { success: false as const, error: "Failed to review product" };
@@ -373,7 +373,7 @@ export async function updateAdminExportOrderStatusAction(
 
         await orderRef.update(updateData);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Failed to update export order status:", error);
         return { success: false as const, error: "Failed to update export order status" };

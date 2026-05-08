@@ -473,7 +473,7 @@ export async function approveLoanAction(
             },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Loan approval error:", error);
         return { success: false as const, error: "Failed to approve loan" };
@@ -526,7 +526,7 @@ export async function rejectLoanAction(
             },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Loan rejection error:", error);
         return { success: false as const, error: "Failed to reject loan" };
@@ -601,7 +601,7 @@ export async function disburseLoanAction(
             linkText: "View Loan",
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Loan disbursement error:", error);
         return { success: false as const, error: error.message || "Failed to disburse loan" };

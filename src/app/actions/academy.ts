@@ -355,7 +355,7 @@ export async function verifyCoursePaymentAction(reference: string): Promise<{ su
         revalidatePath("/dashboard/academy");
         revalidatePath(`/academy/courses/${courseId}`);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Course payment verification error:", {
             reference,
@@ -579,7 +579,7 @@ async function _completeLessonAction(
             }
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Lesson completion error:", {
             userId,
@@ -863,7 +863,7 @@ async function _initiateAcademyPaymentAction(
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized' };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+            return { error: "You must be logged in", success: false };
         }
 
         const userId = session.user.id;
@@ -871,12 +871,12 @@ async function _initiateAcademyPaymentAction(
         // Check if already paid
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (userDoc.data()?.serviceRegistrations?.academy?.paymentStatus === "completed") {
-            return { error: "You have already paid. Please proceed to complete your application.", success: false as const };
+            return { error: "You have already paid. Please proceed to complete your application.", success: false };
         }
 
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
         if (!paystackSecretKey) {
-            return { error: "Payment system not configured", success: false as const };
+            return { error: "Payment system not configured", success: false };
         }
 
         let amount = 25000; // Default to Foundation
@@ -910,13 +910,13 @@ async function _initiateAcademyPaymentAction(
         });
 
         if (!paystackResponse.ok) {
-            return { error: "Failed to initialize payment", success: false as const };
+            return { error: "Failed to initialize payment", success: false };
         }
 
         const paystackData = await paystackResponse.json();
 
         if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return { error: "Failed to generate payment link", success: false as const };
+            return { error: "Failed to generate payment link", success: false };
         }
 
         return {
@@ -928,7 +928,7 @@ async function _initiateAcademyPaymentAction(
             plan,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to initiate payment", success: false as const };
+        return { error: "Failed to initiate payment", success: false };
     }
 }
 export const initiateAcademyPaymentAction = withFlexibleSafeAction("initiateAcademyPaymentAction", _initiateAcademyPaymentAction);
@@ -1002,7 +1002,7 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<{
             });
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Academy payment verification error:", {
             reference,
@@ -1249,7 +1249,7 @@ export async function updateCourseAction(courseId: string, data: Partial<Course>
 
         revalidatePath("/admin/academy", "page");
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Update course error:", {
             courseId,
@@ -1285,7 +1285,7 @@ export async function updateCourseModulesAction(courseId: string, modules: Cours
 
         revalidatePath("/admin/academy", "page");
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Update modules error:", {
             courseId,
@@ -1317,7 +1317,7 @@ export async function deleteCourseAction(courseId: string): Promise<{ success: t
 
         revalidatePath("/admin/academy", "page");
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Delete course error:", {
             courseId,
@@ -1456,7 +1456,7 @@ export async function saveQuizAction(
             createdAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("saveQuizAction error:", {
             quizId,
@@ -1528,12 +1528,12 @@ export async function logLessonActivityAction(): Promise<{ success: true | false
                 lastUpdated: FieldValue.serverTimestamp(),
             }, { merge: true });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("logLessonActivityAction error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const };
+        return { success: false };
     }
 }
 
@@ -1688,7 +1688,7 @@ async function _requestAcademyRevisionAction(
             }
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error('requestAcademyRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision' };
@@ -1766,7 +1766,7 @@ async function _approveAcademyApplicationAction(
             }
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error('approveAcademyApplicationAction error:', error);
         return { success: false as const, error: 'Failed to approve application' };
@@ -1834,7 +1834,7 @@ async function _resubmitAcademyApplicationAction(
             });
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error('resubmitAcademyApplicationAction error:', error);
         return { success: false as const, error: 'Failed to resubmit application' };

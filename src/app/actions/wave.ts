@@ -522,7 +522,7 @@ export async function enrollInWaveAction(userId: string): Promise<{ success: tru
             targetType: "wave_enrollment",
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("WAVE enrollment error:", error);
         return { success: false as const, error: "Failed to enroll in WAVE program" };
@@ -735,7 +735,7 @@ export async function updateShipmentStatusAction(
 
         await shipmentRef.update(updateData);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Update shipment error:", error);
         return { success: false as const, error: error.message };
@@ -795,10 +795,10 @@ export async function syncShipmentWithCarrierAction(shipmentId: string): Promise
                 lastSyncedAt: FieldValue.serverTimestamp()
             });
 
-            return { success: true as const };
+            return { success: true };
         }
 
-        return { success: true as const }; // No updates found
+        return { success: true }; // No updates found
     } catch (error: any) {
         logger.error("Sync shipment error:", error);
         return { success: false as const, error: error.message };
@@ -1081,7 +1081,7 @@ export async function incrementResourceDownloadAction(
             downloads: FieldValue.increment(1)
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Increment download error:", error);
         return { success: false as const, error: error.message };
@@ -1140,7 +1140,7 @@ export async function registerForTrainingAction(
             targetType: "training_registration",
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Training registration error:", error);
         return { success: false as const, error: error.message || "Failed to register for training" };
@@ -1339,7 +1339,7 @@ export async function requestWaveRevisionAction(
             metadata: { action: 'revision_requested', reason },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error('requestWaveRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision' };
@@ -1401,7 +1401,7 @@ export async function resubmitWaveApplicationAction(
             metadata: { action: 'application_resubmitted' },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error('resubmitWaveApplicationAction error:', error);
         return { success: false as const, error: 'Failed to resubmit application' };

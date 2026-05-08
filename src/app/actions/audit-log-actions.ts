@@ -22,14 +22,14 @@ export async function getAuditLogsAction(filters: {
     limit?: number;
     lastDocId?: string;
 }): Promise<{ 
-    success: true as const; 
+    success: true; 
     data: AuditLogEntry[]; 
     logs: AuditLogEntry[]; 
     error: null; 
     lastDocId?: string; 
     hasMore?: boolean 
 } | { 
-    success: false as const; 
+    success: false; 
     error: string; 
     data?: AuditLogEntry[]; 
     logs?: AuditLogEntry[]; 
@@ -119,7 +119,7 @@ export async function exportAuditLogsCSV(filters: {
     severity?: AuditSeverity;
     startDate?: string;
     endDate?: string;
-}): Promise<{ success: true as const; csv: string; error: null } | { success: false as const; error: string; csv?: undefined }> {
+}): Promise<{ success: true; csv: string; error: null } | { success: false; error: string; csv?: undefined }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -182,7 +182,7 @@ export async function exportAuditLogsCSV(filters: {
  * Get audit log statistics
  */
 export async function getAuditStatsAction(days: number = 30): Promise<{
-    success: true as const;
+    success: true;
     stats: {
         totalLogs: number;
         bySeverity: { info: number; warning: number; critical: number };
@@ -191,7 +191,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
     };
     error: null;
 } | {
-    success: false as const;
+    success: false;
     error: string;
     stats?: undefined;
 }> {

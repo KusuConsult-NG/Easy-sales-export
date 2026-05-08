@@ -90,7 +90,7 @@ export async function createAdminLoanProductAction(data: Omit<LoanProduct, "id">
             metadata: { name: data.name }
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Create loan product error:", error);
         return { success: false as const, error: error.message };
@@ -116,7 +116,7 @@ export async function updateAdminLoanProductAction(productId: string, data: Part
             metadata: { ...data }
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Update loan product error:", error);
         return { success: false as const, error: error.message };
@@ -146,7 +146,7 @@ export async function deleteAdminLoanProductAction(productId: string) {
             metadata: { name: doc.data()?.name }
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Delete loan product error:", error);
         return { success: false as const, error: error.message };

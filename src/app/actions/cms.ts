@@ -177,7 +177,7 @@ export async function deactivateAnnouncementAction(
             "announcement"
         );
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Deactivation error:", error);
         return { success: false as const, error: "Failed to deactivate announcement" };
@@ -298,7 +298,7 @@ export async function deactivateBannerAction(
             "banner"
         );
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Deactivation error:", error);
         return { success: false as const, error: "Failed to deactivate banner" };

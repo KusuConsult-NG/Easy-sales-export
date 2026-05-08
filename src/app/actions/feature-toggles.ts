@@ -87,7 +87,7 @@ export async function updateFeatureToggle(
             details: `Feature '${featureName}' ${enabled ? "enabled" : "disabled"}`,
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Failed to update feature toggle:", error);
         return { success: false as const, error: error.message || "Failed to update toggle" };

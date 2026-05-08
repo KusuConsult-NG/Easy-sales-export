@@ -63,7 +63,7 @@ async function _initiateCooperativePaymentAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+            return { error: "You must be logged in", success: false };
         }
 
         const userId = session.user.id;
@@ -77,10 +77,10 @@ async function _initiateCooperativePaymentAction(
         if (memberDoc.exists) {
             const data = memberDoc.data();
             if (data?.membershipStatus === "active") {
-                return { error: "You are already an active cooperative member.", success: false as const };
+                return { error: "You are already an active cooperative member.", success: false };
             }
             if (data?.paymentStatus === "completed") {
-                return { error: "You have already paid. Please proceed to onboarding.", success: false as const };
+                return { error: "You have already paid. Please proceed to onboarding.", success: false };
             }
         }
 
@@ -99,7 +99,7 @@ async function _initiateCooperativePaymentAction(
         // Initialize Paystack
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
         if (!paystackSecretKey) {
-            return { error: "Payment system not configured", success: false as const };
+            return { error: "Payment system not configured", success: false };
         }
 
         const paystackResponse = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -123,13 +123,13 @@ async function _initiateCooperativePaymentAction(
         });
 
         if (!paystackResponse.ok) {
-            return { error: "Failed to initialize payment", success: false as const };
+            return { error: "Failed to initialize payment", success: false };
         }
 
         const paystackData = await paystackResponse.json();
 
         if (!paystackData.status || !paystackData.data?.authorization_url) {
-            return { error: "Failed to generate payment link", success: false as const };
+            return { error: "Failed to generate payment link", success: false };
         }
 
         // Save reference
@@ -149,7 +149,7 @@ async function _initiateCooperativePaymentAction(
             tier,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to initiate payment", success: false as const };
+        return { error: "Failed to initiate payment", success: false };
     }
 }
 export const initiateCooperativePaymentAction = withFlexibleSafeAction("initiateCooperativePaymentAction", _initiateCooperativePaymentAction);
@@ -166,7 +166,7 @@ export async function registerCooperativeMemberAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in to register", success: false as const };
+            return { error: "You must be logged in to register", success: false };
         }
 
         const userId = session.user.id;
@@ -184,22 +184,22 @@ export async function registerCooperativeMemberAction(
 
         if (inviteToken) {
             if (existingMember.exists && memberData?.onboardingCompleted) {
-                 return { error: "You have already completed onboarding.", success: false as const };
+                 return { error: "You have already completed onboarding.", success: false };
             }
             // Validate the token to allow bypassing payment
             const inviteRes = await validateCooperativeInviteAction(inviteToken);
             if (!inviteRes.success) {
-                return { error: inviteRes.error || "Invalid invitation token", success: false as const };
+                return { error: inviteRes.error || "Invalid invitation token", success: false };
             }
             isLegacyImport = true;
         } else {
             // Legacy check
             if (!existingMember.exists) {
-                return { error: "No membership record found. Please complete payment first.", success: false as const };
+                return { error: "No membership record found. Please complete payment first.", success: false };
             }
 
             if (memberData?.onboardingCompleted) {
-                return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const };
+                return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false };
             }
 
             // 🔒 Verify Payment Status (Authoritative)
@@ -270,10 +270,10 @@ export async function registerCooperativeMemberAction(
         const emailDoc = coopEmailExists.docs?.[0];
 
         if (!coopPhoneExists.empty && phoneDoc?.id !== userId) {
-            return { error: "A cooperative member with this phone number already exists.", success: false as const };
+            return { error: "A cooperative member with this phone number already exists.", success: false };
         }
         if (!coopEmailExists.empty && emailDoc?.id !== userId) {
-            return { error: "A cooperative member with this email address already exists.", success: false as const };
+            return { error: "A cooperative member with this email address already exists.", success: false };
         }
 
         // Update membership record with profile data
@@ -429,7 +429,7 @@ export async function joinCooperativeAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in to join a cooperative", success: false as const };
+            return { error: "You must be logged in to join a cooperative", success: false };
         }
 
         const userId = session.user.id;
@@ -439,7 +439,7 @@ export async function joinCooperativeAction(
         const cooperativeDoc = await cooperativeRef.get();
 
         if (!cooperativeDoc.exists) {
-            return { error: "Cooperative not found", success: false as const };
+            return { error: "Cooperative not found", success: false };
         }
 
         // Check if user is already a member
@@ -450,7 +450,7 @@ export async function joinCooperativeAction(
             .get();
 
         if (!existingMembership.empty) {
-            return { error: "You are already a member of this cooperative", success: false as const };
+            return { error: "You are already a member of this cooperative", success: false };
         }
 
         // Atomic batch: all 3-4 writes committed together so no partial state on crash.
@@ -533,7 +533,7 @@ async function _makeContributionAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in to make a contribution", success: false as const };
+            return { error: "You must be logged in to make a contribution", success: false };
         }
 
         const userId = session.user.id;
@@ -556,7 +556,7 @@ async function _makeContributionAction(
         const { cooperativeId, amount, type } = validationResult.data!;
 
         if (amount <= 0) {
-            return { error: "Contribution amount must be positive", success: false as const };
+            return { error: "Contribution amount must be positive", success: false };
         }
 
         // Verify membership
@@ -567,7 +567,7 @@ async function _makeContributionAction(
             .get();
 
         if (membershipSnapshot.empty) {
-            return { error: "You are not a member of this cooperative", success: false as const };
+            return { error: "You are not a member of this cooperative", success: false };
         }
 
         const membershipDoc = membershipSnapshot.docs[0];
@@ -649,7 +649,7 @@ async function _submitWithdrawalAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+            return { error: "You must be logged in", success: false };
         }
 
         const userId = session.user.id;
@@ -659,13 +659,13 @@ async function _submitWithdrawalAction(
         let bankAccount = null;
 
         if (isNaN(amount) || amount <= 0) {
-            return { error: "Amount must be greater than zero", success: false as const };
+            return { error: "Amount must be greater than zero", success: false };
         }
 
         try {
             bankAccount = bankAccountStr ? JSON.parse(bankAccountStr) : null;
         } catch (e) {
-            return { error: "Invalid bank account details", success: false as const };
+            return { error: "Invalid bank account details", success: false };
         }
 
         await db.runTransaction(async (transaction) => {
@@ -722,7 +722,7 @@ async function _submitWithdrawalAction(
         logger.error("Withdrawal error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "Failed to submit withdrawal", success: false as const };
+        return { error: error instanceof Error ? error.message : "Failed to submit withdrawal", success: false };
     }
 }
 export const submitWithdrawalAction = withFlexibleSafeAction("submitWithdrawalAction", _submitWithdrawalAction);
@@ -730,10 +730,10 @@ export const submitWithdrawalAction = withFlexibleSafeAction("submitWithdrawalAc
 async function _getMembershipAction(): Promise<GetMembershipState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const };
+        if (!sessionResult.session) return { error: sessionResult.error.error, success: false };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+            return { error: "You must be logged in", success: false };
         }
 
         const userId = session.user.id;
@@ -742,7 +742,7 @@ async function _getMembershipAction(): Promise<GetMembershipState> {
             .get();
 
         if (snapshot.empty) {
-            return { error: "No membership found", success: false as const };
+            return { error: "No membership found", success: false };
         }
 
         const doc = snapshot.docs[0];
@@ -753,7 +753,7 @@ async function _getMembershipAction(): Promise<GetMembershipState> {
         logger.error("Get membership error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false as const };
+        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false };
     }
 }
 export const getMembershipAction = withFlexibleSafeAction("getMembershipAction", _getMembershipAction);
@@ -761,10 +761,10 @@ export const getMembershipAction = withFlexibleSafeAction("getMembershipAction",
 async function _getTransactionsAction(): Promise<GetTransactionsState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const };
+        if (!sessionResult.session) return { error: sessionResult.error.error, success: false };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+            return { error: "You must be logged in", success: false };
         }
 
         const userId = session.user.id;
@@ -780,7 +780,7 @@ async function _getTransactionsAction(): Promise<GetTransactionsState> {
         logger.error("Get transactions error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false as const };
+        return { error: error instanceof Error ? error.message : "An unexpected error occurred", success: false };
     }
 }
 export const getTransactionsAction = withFlexibleSafeAction("getTransactionsAction", _getTransactionsAction);
@@ -911,7 +911,7 @@ async function _applyForLoanAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in to apply for a loan", success: false as const };
+            return { error: "You must be logged in to apply for a loan", success: false };
         }
 
         const userId = session.user.id;
@@ -1029,7 +1029,7 @@ async function _createFixedSavingsAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in", success: false as const };
+            return { error: "You must be logged in", success: false };
         }
 
         const userId = session.user.id;
@@ -1050,7 +1050,7 @@ async function _createFixedSavingsAction(
         const { amount, durationMonths } = validationResult.data;
 
         if (amount <= 0) {
-            return { error: "Amount must be positive", success: false as const };
+            return { error: "Amount must be positive", success: false };
         }
 
         // Transactional execution
@@ -1168,7 +1168,7 @@ async function _getDirectoryMembersAction(): Promise<{
         logger.error("Failed to fetch directory:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { error: "Failed to load directory", success: false as const };
+        return { error: "Failed to load directory", success: false };
     }
 }
 export const getDirectoryMembersAction = withFlexibleSafeAction("getDirectoryMembersAction", _getDirectoryMembersAction);

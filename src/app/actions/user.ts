@@ -61,7 +61,7 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
             logger.error("Cache invalidation failed after account deletion", err);
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("[NDPR Compliance] Account deletion error:", error);
         const msg = typeof error === 'string' ? error : (error?.message || "Account deletion failed");

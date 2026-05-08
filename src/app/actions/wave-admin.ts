@@ -105,7 +105,7 @@ async function _updateResourceAction(
             targetId: resourceId,
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Update resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -147,7 +147,7 @@ async function _deleteResourceAction(
             targetId: resourceId,
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Delete resource error:", {
             userId: sessionResult?.session?.user?.id,
@@ -251,7 +251,7 @@ async function _updateTrainingEventAction(
             targetId: eventId,
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Update event error:", {
             userId: sessionResult?.session?.user?.id,
@@ -438,7 +438,7 @@ async function _approveWaveApplicationAction(
             }
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Approve application error:", {
             userId: sessionResult?.session?.user?.id,
@@ -546,7 +546,7 @@ async function _rejectWaveApplicationAction(
             }
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Reject application error:", {
             userId: sessionResult?.session?.user?.id,

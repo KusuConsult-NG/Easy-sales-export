@@ -594,7 +594,7 @@ export async function processWalletWithdrawalAction(
             }
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (err: any) {
         logger.error("processWalletWithdrawalAction error:", err);
         return { success: false as const, error: err.message || "Failed to process withdrawal" };

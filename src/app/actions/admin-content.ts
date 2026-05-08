@@ -158,7 +158,7 @@ export async function approveContentAction(
                 return { success: false as const, error: "Invalid content type" };
         }
 
-        return { success: true as const };
+        return { success: true };
 
     } catch (error: any) {
         logger.error("Approve content error:", error);
@@ -211,7 +211,7 @@ export async function rejectContentAction(
                 return { success: false as const, error: "Invalid content type" };
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Reject content error:", error);
         return { success: false as const, error: error.message };

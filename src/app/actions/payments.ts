@@ -120,7 +120,7 @@ export async function verifyPaymentAction(
         // Handle post-payment actions based on purpose
         await handlePostPaymentActions(paymentData, paymentDoc.id);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Payment verification error:", error);
         return { success: false as const, error: "Failed to verify payment" };

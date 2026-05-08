@@ -178,7 +178,7 @@ export async function deleteCertificateAction(
             },
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Certificate deletion error:", error);
         return { success: false as const, error: "Failed to delete certificate" };
@@ -209,7 +209,7 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
             targetType: "onboarding_completion",
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Failed to complete onboarding:", error);
         return { success: false as const, error: "Failed to complete onboarding" };

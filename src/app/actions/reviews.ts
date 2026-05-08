@@ -104,7 +104,7 @@ export async function createReviewAction(params: {
 
         await db.collection(COLLECTIONS.PRODUCT_REVIEWS).add(reviewData);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Create review error:", error);
         return { success: false as const, error: error.message };
@@ -224,7 +224,7 @@ export async function updateReviewAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Update review error:", error);
         return { success: false as const, error: error.message };
@@ -272,7 +272,7 @@ export async function moderateReviewAction(
 
         await reviewRef.update(updateData);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Moderate review error:", error);
         return { success: false as const, error: error.message };

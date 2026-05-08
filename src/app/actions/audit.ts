@@ -25,12 +25,12 @@ export interface AuditLog {
 }
 
 type LogAuditState =
-    | { error: string; success: false as const }
-    | { error: null; success: true as const };
+    | { error: string; success: false }
+    | { error: null; success: true };
 
 type GetAuditLogsState =
-    | { error: string; success: false as const; data: null }
-    | { error: null; success: true as const; data: AuditLog[] };
+    | { error: string; success: false; data: null }
+    | { error: null; success: true; data: AuditLog[] };
 
 /**
  * Log an audit event
@@ -56,10 +56,10 @@ export async function logAuditAction(
             metadata: details,
         });
 
-        return { error: null, success: true as const };
+        return { error: null, success: true };
     } catch (error: any) {
         logger.error("Audit log error:", error);
-        return { error: "Failed to log audit action", success: false as const };
+        return { error: "Failed to log audit action", success: false };
     }
 }
 

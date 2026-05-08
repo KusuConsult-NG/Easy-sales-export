@@ -1019,7 +1019,7 @@ export async function uploadPropertyDocumentsAction(
             verificationStatus: "pending_review" // Reset verification status if new docs added
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Upload documents error:", error);
         return { success: false as const, error: error.message };

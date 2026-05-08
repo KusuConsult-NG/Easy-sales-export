@@ -177,7 +177,7 @@ export async function joinVillageMarketEventAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (err: any) {
         logger.error("joinVillageMarketEventAction error:", err);
         return { success: false as const, error: err.message || "Failed to join event" };
@@ -292,7 +292,7 @@ export async function updateVillageMarketEventStatusAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (err: any) {
         logger.error("updateVillageMarketEventStatusAction error:", err);
         return { success: false as const, error: err.message || "Failed to update event status" };
@@ -317,7 +317,7 @@ export async function removeFlashSaleProductAction(
         if (doc.data()?.sellerId !== userId) return { success: false as const, error: "Unauthorized" };
 
         await docRef.update({ status: "removed", updatedAt: FieldValue.serverTimestamp() });
-        return { success: true as const };
+        return { success: true };
     } catch (err: any) {
         logger.error("removeFlashSaleProductAction error:", err);
         return { success: false as const, error: err.message || "Failed to remove product" };

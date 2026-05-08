@@ -122,7 +122,7 @@ export async function markNotificationAsReadAction(
             readAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Mark as read error:", error);
         return { success: false as const, error: "Failed to mark as read" };
@@ -140,7 +140,7 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: tr
             .get();
 
         if (snapshot.empty) {
-            return { success: true as const };
+            return { success: true };
         }
 
         const batch = db.batch();
@@ -153,7 +153,7 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: tr
 
         await batch.commit();
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Mark all as read error:", error);
         return { success: false as const, error: "Failed to mark all as read" };

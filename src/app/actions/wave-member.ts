@@ -194,7 +194,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{ s
             downloads: FieldValue.increment(1),
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error("Failed to track resource access:", error);
         return { success: false as const, error: "Failed to track access" };

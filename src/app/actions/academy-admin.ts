@@ -18,8 +18,8 @@ import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/li
  */
 
 type ActionState =
-    | { error: string; success: false as const; data?: null; meta?: null }
-    | { error: null; success: true as const; data: { message: string }; meta?: null };
+    | { error: string; success: false; data?: null; meta?: null }
+    | { error: null; success: true; data: { message: string }; meta?: null };
 
 /**
  * Approve Academy Learner Application
@@ -33,7 +33,7 @@ export async function approveAcademyApplicationAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+            return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
         // 1. Get Application
@@ -41,14 +41,14 @@ export async function approveAcademyApplicationAction(
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false as const };
+            return { error: "Application not found", success: false };
         }
 
         const appData = appDoc.data()!;
         const userId = appData.userId;
 
         if (!userId) {
-            return { error: "Application missing user ID", success: false as const };
+            return { error: "Application missing user ID", success: false };
         }
 
         // Perform atomic updates in a transaction
@@ -153,7 +153,7 @@ export async function approveAcademyApplicationAction(
         };
     } catch (error: any) {
         logger.error("Approve Academy application error:", error);
-        return { error: "Failed to approve application", success: false as const };
+        return { error: "Failed to approve application", success: false };
     }
 }
 
@@ -170,7 +170,7 @@ export async function rejectAcademyApplicationAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+            return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
         // 1. Get Application
@@ -178,7 +178,7 @@ export async function rejectAcademyApplicationAction(
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false as const };
+            return { error: "Application not found", success: false };
         }
 
         const appData = appDoc.data()!;
@@ -274,7 +274,7 @@ export async function rejectAcademyApplicationAction(
         };
     } catch (error: any) {
         logger.error("Reject Academy application error:", error);
-        return { error: "Failed to reject application", success: false as const };
+        return { error: "Failed to reject application", success: false };
     }
 }
 
@@ -293,14 +293,14 @@ export async function updateAcademyApplicationPaymentAction(
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required", success: false as const };
+            return { error: "Unauthorized: Permission required", success: false };
         }
 
         const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { error: "Application not found", success: false as const };
+            return { error: "Application not found", success: false };
         }
 
         const appData = appDoc.data()!;
@@ -343,7 +343,7 @@ export async function updateAcademyApplicationPaymentAction(
         };
     } catch (error: any) {
         logger.error("Update Academy application payment error:", error);
-        return { error: "Failed to update payment status", success: false as const };
+        return { error: "Failed to update payment status", success: false };
     }
 }
 
@@ -362,7 +362,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
-            return { error: "Unauthorized: Permission required - users:update", success: false as const };
+            return { error: "Unauthorized: Permission required - users:update", success: false };
         }
 
         const snapshot = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
@@ -383,7 +383,7 @@ export async function getPendingAcademyApplicationsAction(): Promise<{
         };
     } catch (error: any) {
         logger.error("Get pending Academy applications error:", error);
-        return { error: "Failed to fetch applications", success: false as const };
+        return { error: "Failed to fetch applications", success: false };
     }
 }
 
@@ -950,6 +950,6 @@ export async function logAcademyExportAction(
         return { error: null, success: true as const, data: { message: "Export logged." } };
     } catch (error: any) {
         logger.error("Error logging export:", error);
-        return { error: "An unexpected error occurred", success: false as const };
+        return { error: "An unexpected error occurred", success: false };
     }
 }

@@ -376,7 +376,7 @@ export async function saveKYCProfileAction(payload: {
 
         await invalidateUserCache(userId);
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error('Save KYC profile error', error);
         return { success: false as const, error: error?.message || 'Failed to save KYC profile' };

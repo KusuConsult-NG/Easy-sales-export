@@ -40,14 +40,14 @@ import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/fire
 
 type ActionErrorState = {
     error: string;
-    success: false as const;
+    success: false;
 };
 
 
 
 type CreateExportSuccessState = {
     error: null;
-    success: true as const;
+    success: true;
     message: string;
     data: { orderId: string };
     meta: null;
@@ -55,7 +55,7 @@ type CreateExportSuccessState = {
 
 type UpdateStatusSuccessState = {
     error: null;
-    success: true as const;
+    success: true;
     message: string;
     data: null;
     meta: null;
@@ -63,7 +63,7 @@ type UpdateStatusSuccessState = {
 
 type GetExportsSuccessState = {
     error: null;
-    success: true as const;
+    success: true;
     data: ExportWindow[];
     meta: { cursor: string | null; hasMore: boolean } | null;
 };
@@ -86,12 +86,12 @@ export async function createExportWindowAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "You must be logged in to create an export window", success: false as const };
+            return { error: "You must be logged in to create an export window", success: false };
         }
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
         if (!idempotencyKey) {
-            return { error: "Missing security token. Please refresh the page.", success: false as const };
+            return { error: "Missing security token. Please refresh the page.", success: false };
         }
 
         // Extract and validate form data
@@ -185,14 +185,14 @@ export async function createExportWindowAction(
         logger.error("Create export window error:", error);
 
         if (error.message && error.message.includes("Duplicate") || error.message.includes("Compliance")) {
-            return { error: error.message, success: false as const };
+            return { error: error.message, success: false };
         }
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false as const };
+            return { error: "Please fill in all required fields correctly", success: false };
         }
 
-        return { error: "Failed to create export window. Please try again.", success: false as const };
+        return { error: "Failed to create export window. Please try again.", success: false };
     }
 }
 
@@ -209,25 +209,25 @@ export async function updateExportStatusAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false as const };
+            return { error: "Export window not found", success: false };
         }
 
         const data = exportDoc.data();
         // Verify ownership (unless admin)
         if (data?.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized to update this export", success: false as const };
+            return { error: "Unauthorized to update this export", success: false };
         }
 
         // Prevent duplicate status updates to avoid multiple completion emails
         if (data?.status === newStatus) {
-            return { error: `Status is already ${newStatus}`, success: false as const };
+            return { error: `Status is already ${newStatus}`, success: false };
         }
 
         // Update status
@@ -288,7 +288,7 @@ export async function updateExportStatusAction(
         };
     } catch (error: any) {
         logger.error("Update export status error:", error);
-        return { error: "Failed to update status", success: false as const };
+        return { error: "Failed to update status", success: false };
     }
 }
 
@@ -356,7 +356,7 @@ export async function getExportWindowsAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const userId = session.user.id;
@@ -437,24 +437,24 @@ export async function getExportWindowDetailsAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false as const };
+            return { error: "Export window not found", success: false };
         }
 
         const data = exportDoc.data();
         if (!data) {
-            return { error: "Export window data is missing", success: false as const };
+            return { error: "Export window data is missing", success: false };
         }
 
         // Verify ownership (unless admin)
         if (data.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized to view this export", success: false as const };
+            return { error: "Unauthorized to view this export", success: false };
         }
 
         const exportWindow = serializeDoc<ExportWindow>(exportDoc.id, data);
@@ -467,7 +467,7 @@ export async function getExportWindowDetailsAction(
         };
     } catch (error: any) {
         logger.error("Get export details error:", error);
-        return { error: "Failed to fetch export details", success: false as const };
+        return { error: "Failed to fetch export details", success: false };
     }
 }
 
@@ -491,7 +491,7 @@ export async function submitExportOnboardingAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const userId = session.user.id;
@@ -646,7 +646,7 @@ export async function getUserExportInvestmentsAction(
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const userId = session.user.id;
@@ -763,7 +763,7 @@ export async function getUserExportStatsAction() {
         if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error || "Session expired" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Authentication required", success: false as const };
+            return { error: "Authentication required", success: false };
         }
 
         const userId = session.user.id;
@@ -1020,7 +1020,7 @@ export async function verifyExportInvestmentAction(reference: string): Promise<{
         revalidatePath("/dashboard/export");
         revalidatePath(`/export/windows/${exportId}`);
 
-        return { success: true as const };
+        return { success: true };
 
     } catch (error: any) {
         logger.error("Verify export investment error:", error);
@@ -1122,7 +1122,7 @@ export async function extendEscrowAction(
             metadata: { exportId, days, reason, oldDate: currentReleaseDate, newDate: newReleaseDate }
         });
 
-        return { success: true as const };
+        return { success: true };
     } catch (error: any) {
         logger.error("Extend escrow error:", error);
         return { success: false as const, error: error.message };
@@ -1236,7 +1236,7 @@ export async function requestExportRevisionAction(
             logger.error('Export revision email failed (non-blocking):', emailError);
         }
 
-        return { success: true as const };
+        return { success: true };
     } catch (error) {
         logger.error('requestExportRevisionAction error:', error);
         return { success: false as const, error: 'Failed to request revision' };
