@@ -33,6 +33,22 @@ export interface BroadcastFilters {
     csvEmails?: string[];
 }
 
+export interface BroadcastLog {
+    id: string;
+    subject: string;
+    body: string;
+    audience: BroadcastAudience;
+    status: "done" | "partial" | "sending";
+    channel: "email" | "sms" | "in-app";
+    totalRecipients: number;
+    successCount: number;
+    failCount: number;
+    sentAt: Date;
+    sentBy: string;
+    sentByName: string;
+    filters?: BroadcastFilters;
+}
+
 /**
  * High-Assurance Broadcast List Generator
  * 
@@ -129,7 +145,11 @@ export async function previewBroadcastAction(broadcastData: any): Promise<{
  * Get Broadcast History
  * (Required by Communications UI)
  */
-export async function getBroadcastHistoryAction() {
+export async function getBroadcastHistoryAction(): Promise<{
+    success: boolean;
+    logs: BroadcastLog[];
+    error: string | null;
+}> {
     try {
         const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
             .where("action", "==", "telemetry_broadcast_sent")
@@ -137,14 +157,28 @@ export async function getBroadcastHistoryAction() {
             .limit(20)
             .get();
             
-        const history = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        const logs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                subject: data.metadata?.subject || "No Subject",
+                body: data.metadata?.body || "",
+                audience: data.metadata?.filters?.audience || "all",
+                status: "done",
+                channel: "email",
+                totalRecipients: data.metadata?.count || 0,
+                successCount: data.metadata?.count || 0,
+                failCount: 0,
+                sentAt: data.timestamp?.toDate() || new Date(),
+                sentBy: data.userId,
+                sentByName: data.metadata?.sentByName || "Admin",
+                filters: data.metadata?.filters
+            } as BroadcastLog;
+        });
         
-        return { success: true, history };
-    } catch (error) {
-        return { success: false, error: "Failed to fetch history" };
+        return { success: true, logs, error: null };
+    } catch (error: any) {
+        return { success: false, logs: [], error: error.message || "Failed to fetch history" };
     }
 }
 
