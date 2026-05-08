@@ -870,11 +870,6 @@ async function _calculateEarningsAction(userId: string): Promise<ActionResponse<
                 }))
         };
 
-        return { error: null, success: true as const, data: result };
-                    date: t.date.toISOString() as any
-                }))
-        };
-
         const { serializeValue } = await import("@/lib/firestore-serialize");
         return { error: null, success: true as const, data: serializeValue(result) as any };
     } catch (error) {
