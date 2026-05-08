@@ -10,7 +10,7 @@ import { sendResetEmailAction, type SendResetEmailState } from "@/app/actions/pa
 
 const initialState: SendResetEmailState = {
     success: false,
-    error: undefined
+    error: ""
 };
 
 export default function ForgotPasswordPage() {

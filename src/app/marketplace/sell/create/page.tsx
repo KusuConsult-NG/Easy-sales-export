@@ -21,7 +21,7 @@ import { createProductAction } from "@/app/actions/marketplace";
 import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
 
-const initialState = { success: false };
+const initialState = { success: false as const, error: "", data: null };
 
 const productCategories = [
     // New categories

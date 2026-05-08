@@ -28,8 +28,8 @@ export default function InquiryDetailsPage() {
         async function loadInquiry() {
             if (session?.user?.id) {
                 const result = await getLandInquiryByIdAction(inquiryId);
-                if (result.success && result.inquiry) {
-                    setInquiry(result.inquiry);
+                if (result.success && result.data) {
+                    setInquiry(result.data);
                 } else {
                     setError(result.error || "Inquiry not found");
                 }

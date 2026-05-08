@@ -27,8 +27,8 @@ export default function MyLoansPage() {
     async function loadLoans() {
         setLoading(true);
         const result = await getUserLoanApplications();
-        if (result.success && result.loans) {
-            setLoans(result.loans);
+        if (result.success && result.data) {
+            setLoans(result.data);
         }
         setLoading(false);
     }

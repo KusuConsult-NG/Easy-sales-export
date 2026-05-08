@@ -46,10 +46,11 @@ function NewReviewContent() {
         try {
             const result = await getOrderByIdAction(orderId);
             if (result.success && result.data?.order) {
-                setOrder(result.data.order);
+                const orderData = result.data.order as any as Order;
+                setOrder(orderData);
                 // Auto-select first item if only one
-                if (result.data.order.items.length === 1) {
-                    setSelectedProductId(result.data.order.items[0].productId);
+                if (orderData.items.length === 1) {
+                    setSelectedProductId(orderData.items[0].productId);
                 }
             } else {
                 showToast("Order not found", "error");

@@ -9,6 +9,7 @@ import { AuditActionType } from "@/types/strict";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 
 /**
  * Zod schema for AI chat message
@@ -33,9 +34,10 @@ export interface AIChatMessage { id: string;
  * Send a message to AI and get response
  * Using OpenAI API (requires OPENAI_API_KEY environment variable)
  */
-export async function sendAIMessage(
+async function _sendAIMessage(
     data: z.infer<typeof aiChatMessageSchema>
-) { const sessionResult = await requireSession();
+): Promise<ActionResponse<{ response: string; chatId: string }>> { 
+const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
@@ -85,20 +87,24 @@ export async function sendAIMessage(
                 messageLength: validated.message.length,
                 currentPage: validated.context?.currentPage } });
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { if (error instanceof z.ZodError) {
-            return { success: false as const, error: "Validation error", response: null};
+        return { success: true, error: null, data: { response: aiResponse, chatId: chatRef.id } };
+    } catch (error) { 
+        if (error instanceof z.ZodError) {
+            return { success: false, error: "Validation error", data: null };
         }
         logger.error("AI Chat Error:", error);
-        return { success: false as const, error: "Failed to get AI response. Please try again.", response: null};
+        return { success: false, error: "Failed to get AI response. Please try again.", data: null };
     }
 }
+
+export const sendAIMessage = withSafeAction("sendAIMessage", _sendAIMessage);
 
 /**
  * Get chat history for current user
  */
-export async function getAIChatHistory(maxMessages: number = 20) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+async function _getAIChatHistory(maxMessages: number = 20): Promise<ActionResponse<{ messages: AIChatMessage[] }>> { 
+const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
     try { const chatQuery = db.collection(COLLECTIONS.AI_CHAT_HISTORY).where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
@@ -116,23 +122,29 @@ export async function getAIChatHistory(maxMessages: number = 20) { const session
                 createdAt: (data.createdAt as Timestamp)?.toDate() || new Date() } as AIChatMessage;
         }).reverse(); // Reverse to show oldest first
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch chat history", messages: []};
+        return { success: true, error: null, data: { messages } };
+    } catch (error) { 
+        return { success: false, error: "Failed to fetch chat history", data: null };
     }
 }
+
+export const getAIChatHistory = withSafeAction("getAIChatHistory", _getAIChatHistory);
 
 /**
  * Get context-aware suggestions based on current page
  */
-export async function getAISuggestions(context: { currentPage: string; userRole: string }) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+async function _getAISuggestions(context: { currentPage: string; userRole: string }): Promise<ActionResponse<{ suggestions: string[] }>> { 
+const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
     const { session } = sessionResult;
 
     // Generate contextual suggestions based on page
     const suggestions = generateSuggestions(context.currentPage, context.userRole);
 
-    return { error: null, success: true as const, data: null };
+    return { success: true, error: null, data: { suggestions } };
 }
+
+export const getAISuggestions = withSafeAction("getAISuggestions", _getAISuggestions);
 
 /**
  * Build system prompt based on context

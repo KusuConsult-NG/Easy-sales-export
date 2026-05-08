@@ -15,6 +15,7 @@ import { withSafeAction } from "@/lib/safe-action";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { versionedUpdate } from "@/lib/optimistic-locking";
 import { FieldValue } from "firebase-admin/firestore";
+import { serializeDoc } from "@/lib/firestore-serialize";
 
 // Validation schemas
 const profileUpdateSchema = z.object({ firstName: z.string().max(50).optional(),
@@ -54,14 +55,18 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
 
     const nameSplit = splitName(userData.fullName || "");
 
+    const profile = serializeDoc<any>(userId, userData);
+
     return { 
         error: null, 
         success: true as const, 
         data: {
-            ...userData,
-            firstName: nameSplit.first,
-            lastName: nameSplit.last,
-            version: userData._version || 0
+            profile: {
+                ...profile,
+                firstName: nameSplit.first,
+                lastName: nameSplit.last,
+                version: userData._version || 0
+            }
         }
     };
 });

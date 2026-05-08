@@ -231,7 +231,7 @@ export default function MarketplaceOnboarding() {
                     phone: formData.phone,
                     location: formData.location,
                     bankAccount: formData.bankAccount as any,
-                });
+                } as any);
                 if (result.success) {
                     if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                     router.push("/marketplace/onboarding/pending");
@@ -266,7 +266,7 @@ export default function MarketplaceOnboarding() {
             if (formData.bankAccount) formDataPayload.append("bankAccount", JSON.stringify(formData.bankAccount));
 
             const { submitMarketplaceOnboardingAction } = await import("@/app/actions/marketplace");
-            const result = await submitMarketplaceOnboardingAction(null, formDataPayload);
+            const result = await submitMarketplaceOnboardingAction(formDataPayload);
 
             if (result.success) {
                 // Clear draft on success

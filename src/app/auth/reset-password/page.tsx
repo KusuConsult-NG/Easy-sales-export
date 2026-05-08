@@ -11,7 +11,7 @@ import { resetPasswordAction, type ResetPasswordState } from "@/app/actions/pass
 
 const initialState: ResetPasswordState = {
     success: false,
-    error: undefined
+    error: ""
 };
 
 function ResetPasswordContent() {

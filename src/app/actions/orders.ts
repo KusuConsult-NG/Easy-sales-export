@@ -159,7 +159,8 @@ async function _getOrderByIdAction(orderId: string) { let sessionResult;
         }
 
         const { serializeDoc } = await import("@/lib/firestore-serialize");
-        return { success: true as const, error: null, data: { order: serializeDoc(orderDoc) } };
+        const order = serializeDoc(orderDoc.id, orderDoc.data()) as unknown as Order;
+        return { success: true as const, error: null, data: { order } };
     } catch (error) { logger.error("Get order error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,

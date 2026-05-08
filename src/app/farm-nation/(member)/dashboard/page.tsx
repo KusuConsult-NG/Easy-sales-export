@@ -66,8 +66,8 @@ export default function FarmNationDashboard() {
     useEffect(() => {
         getFarmNationDashboardStatsAction()
             .then((result) => {
-                if (result.success && result.data?.stats) {
-                    setStats(result.data.stats);
+                if (result.success && result.data) {
+                    setStats(result.data);
                 } else {
                     setError(result.error ?? "Failed to load dashboard");
                 }

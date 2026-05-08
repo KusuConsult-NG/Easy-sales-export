@@ -129,13 +129,25 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         setBvnState('loading');
         setBvnError('');
 
-        // Auto-verify since QoreID is not connected
-        setTimeout(() => {
-            setBvnState('verified');
-            const updated = { ...formData, bvnVerified: true };
-            setFormData(updated);
-            onDataChange(updated);
-        }, 500);
+        try {
+            const result = await verifyBVNAction({ bvn, firstName, lastName });
+
+            if (result.success && result.data?.isMatch) {
+                setBvnState('verified');
+                const updated = { ...formData, bvnVerified: true };
+                setFormData(updated);
+                onDataChange(updated);
+            } else if (result.success && !result.data?.isMatch) {
+                setBvnState('mismatch');
+                setBvnError(result.error || "BVN name mismatch. Please check the name on your BVN record.");
+            } else {
+                setBvnState('error');
+                setBvnError(result.error || "BVN verification failed. Please try again.");
+            }
+        } catch (error) {
+            setBvnState('error');
+            setBvnError('Network error or server timeout. Please try again later.');
+        }
     };
 
     async function handleVerifyNIN() {
@@ -156,13 +168,25 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         setNinState('loading');
         setNinError('');
 
-        // Auto-verify since QoreID is not connected
-        setTimeout(() => {
-            setNinState('verified');
-            const updated = { ...formData, ninVerified: true };
-            setFormData(updated);
-            onDataChange(updated);
-        }, 500);
+        try {
+            const result = await verifyNINAction({ nin, firstName, lastName });
+
+            if (result.success && result.data?.isMatch) {
+                setNinState('verified');
+                const updated = { ...formData, ninVerified: true };
+                setFormData(updated);
+                onDataChange(updated);
+            } else if (result.success && !result.data?.isMatch) {
+                setNinState('mismatch');
+                setNinError(result.error || "NIN name mismatch. Please check the name on your NIN record.");
+            } else {
+                setNinState('error');
+                setNinError(result.error || "NIN verification failed. Please try again.");
+            }
+        } catch (error) {
+            setNinState('error');
+            setNinError('Network error or server timeout. Please try again later.');
+        }
     };
 
     async function handleVerifyVotersCard() {
@@ -182,12 +206,12 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
         try {
             const result = await verifyVotersCardAction({ votersCardNumber: votersCard, firstName, lastName });
 
-            if (result.success && result.isMatch) {
+            if (result.success && result.data?.isMatch) {
                 setVotersCardState('verified');
                 const updated = { ...formData, votersCardVerified: true };
                 setFormData(updated);
                 onDataChange(updated);
-            } else if (result.success && !result.isMatch) {
+            } else if (result.success && !result.data?.isMatch) {
                 setVotersCardState('mismatch');
                 setVotersCardError(result.error || "Name mismatch. Please check the name on your Voter's Card record.");
             } else {

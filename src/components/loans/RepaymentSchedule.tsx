@@ -18,9 +18,9 @@ export default function RepaymentSchedule({ loanId, loanAmount, monthlyPayment }
         const fetchSchedule = async () => {
             setLoading(true);
             const result = await getRepaymentScheduleAction(loanId);
-            if (result.success && result.schedule) {
+            if (result.success && result.data?.schedule) {
                 // Update status based on current date
-                const updatedSchedule = result.schedule.map((inst) => {
+                const updatedSchedule = result.data.schedule.map((inst: RepaymentInstallment) => {
                     const now = new Date();
                     const dueDate = new Date(inst.dueDate);
 

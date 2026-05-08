@@ -53,8 +53,9 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
             if (!session?.user) return;
 
             try {
-                const prop = await getPropertyByIdAction(params.id);
-                if (prop) {
+                const result = await getPropertyByIdAction(params.id);
+                if (result.success && result.data) {
+                    const prop = result.data;
                     const location = prop.location || { state: "", lga: "", address: "" };
                     setFormData({
                         title: prop.title || "",
@@ -68,7 +69,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                         features: (prop as any).features || [],
                     });
                 } else {
-                    showToast("Property not found", "error");
+                    showToast(result.error || "Property not found", "error");
                     router.push("/farm-nation/my-properties");
                 }
             } catch (error) {

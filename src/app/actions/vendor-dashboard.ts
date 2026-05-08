@@ -56,7 +56,7 @@ async function _getVendorSalesStatsAction() { let sessionResult;
             }
         });
 
-        return { success: true as const, error: null, data: stats };
+        return { success: true as const, error: null, data: { stats } };
     } catch (error: any) { logger.error("getVendorSalesStatsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -109,7 +109,7 @@ async function _getVendorRevenueTrendsAction() { let sessionResult;
                 orders: dailyData[dateKey]?.orders || 0 });
         }
 
-        return { error: null, success: true as const, data: trends };
+        return { error: null, success: true as const, data: { trends } };
     } catch (error: any) { logger.error("getVendorRevenueTrendsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -158,7 +158,7 @@ async function _getTopSellingProductsAction(limit: number = 5) { let sessionResu
             .sort((a, b) => b.totalRevenue - a.totalRevenue)
             .slice(0, limit);
 
-        return { success: true as const, error: null, data: products };
+        return { success: true as const, error: null, data: { products } };
     } catch (error: any) { logger.error("getTopSellingProductsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -204,7 +204,7 @@ async function _getVendorInventoryStatsAction() { let sessionResult;
         });
 
         stats.lowStockProducts.sort((a, b) => a.stock - b.stock);
-        return { error: null, success: true as const, data: stats };
+        return { error: null, success: true as const, data: { stats } };
     } catch (error: any) { logger.error("getVendorInventoryStatsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -255,7 +255,7 @@ async function _getVendorRevenueInsightsAction() { let sessionResult;
         return { 
             error: null, 
             success: true as const, 
-            data: { totalRevenue, pendingPayouts, completedTransactions, averageOrderValue, revenueByCategory } 
+            data: { insights: { totalRevenue, pendingPayouts, completedTransactions, averageOrderValue, revenueByCategory } } 
         };
     } catch (error: any) { logger.error("getVendorRevenueInsightsAction error:", {
             userId: sessionResult?.session?.user?.id,
@@ -314,7 +314,7 @@ async function _getVendorActivityFeedAction(limit: number = 20) { let sessionRes
         });
 
         activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        return { error: null, success: true as const, data: activities };
+        return { error: null, success: true as const, data: { activities } };
     } catch (error: any) { logger.error("getVendorActivityFeedAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)

@@ -72,45 +72,50 @@ export default function FarmNationOnboardingPage() {
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                const status = await checkFarmNationStatusAction();
-                if (status === "pending" || status === "under_review") {
-                    const params = new URLSearchParams(window.location.search);
-                    const isEditParam = params.get("edit") === "true";
+                const result = await checkFarmNationStatusAction();
+                if (result.success) {
+                    const status = result.data;
+                    if (status === "pending" || status === "under_review") {
+                        const params = new URLSearchParams(window.location.search);
+                        const isEditParam = params.get("edit") === "true";
 
-                    if (isEditParam) {
+                        if (isEditParam) {
+                            const result = await getFarmNationApplicationAction();
+                            if (result.success && result.data?.application) {
+                                setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
+                            }
+                            setIsEditMode(true);
+                            setIsLoading(false);
+                        } else {
+                            // Stay on page — do NOT auto-redirect pending users
+                            setIsLoading(false);
+                        }
+                    } else if (status === "approved" || status === "active") {
+                        router.replace("/farm-nation/properties");
+                    } else if (status === "rejected" || status === "revision_required") {
                         const result = await getFarmNationApplicationAction();
                         if (result.success && result.data?.application) {
                             setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
                         }
-                        setIsEditMode(true);
+                        if (result.data?.rejectionReason) setRejectionReason(result.data.rejectionReason);
+                        setIsRevisionMode(true);
                         setIsLoading(false);
                     } else {
-                        // Stay on page — do NOT auto-redirect pending users
+                        // Restore draft from localStorage for fresh applicants
+                        const userId = session?.user?.id;
+                        if (userId) {
+                            try {
+                                const saved = localStorage.getItem(`farmnation_draft_${userId}`);
+                                if (saved) {
+                                    const parsed = JSON.parse(saved);
+                                    if (parsed.data) setFormData(parsed.data);
+                                    if (parsed.step) setCurrentStepId(parsed.step);
+                                }
+                            } catch { /* non-blocking */ }
+                        }
                         setIsLoading(false);
                     }
-                } else if (status === "approved" || status === "active") {
-                    router.replace("/farm-nation/properties");
-                } else if (status === "rejected" || status === "revision_required") {
-                    const result = await getFarmNationApplicationAction();
-                    if (result.success && result.data?.application) {
-                        setFormData((prev: any) => ({ ...prev, ...result.data!.application }));
-                    }
-                    if (result.data?.rejectionReason) setRejectionReason(result.data.rejectionReason);
-                    setIsRevisionMode(true);
-                    setIsLoading(false);
                 } else {
-                    // Restore draft from localStorage for fresh applicants
-                    const userId = session?.user?.id;
-                    if (userId) {
-                        try {
-                            const saved = localStorage.getItem(`farmnation_draft_${userId}`);
-                            if (saved) {
-                                const parsed = JSON.parse(saved);
-                                if (parsed.data) setFormData(parsed.data);
-                                if (parsed.step) setCurrentStepId(parsed.step);
-                            }
-                        } catch { /* non-blocking */ }
-                    }
                     setIsLoading(false);
                 }
             } catch (error) {

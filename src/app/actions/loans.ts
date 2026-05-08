@@ -9,6 +9,7 @@ import { calculateRepaymentSchedule, isEligibleForLoan, getTierInterestRate } fr
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
+import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 
 export interface LoanApplication {
     id?: string;
@@ -633,12 +634,9 @@ export interface RepaymentInstallment {
 /**
  * Get loan repayment schedule
  */
-export async function getRepaymentScheduleAction(
+async function _getRepaymentScheduleAction(
     loanId: string
-): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+): Promise<ActionResponse<{ schedule: RepaymentInstallment[] }>> { 
     try {
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
@@ -650,8 +648,8 @@ export async function getRepaymentScheduleAction(
         const loanData = loanDoc.data() as LoanApplication;
 
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
-    const { session } = sessionResult;
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
         if (!session?.user?.id || (session.user.id !== loanData.userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
@@ -665,7 +663,7 @@ export async function getRepaymentScheduleAction(
             // Return existing schedule
             const schedule = serializeDocs<RepaymentInstallment>(scheduleSnapshot.docs);
 
-            return { error: null, success: true as const, schedule , data: null };
+            return { error: null, success: true as const, data: { schedule } };
         }
 
         // Generate schedule if not exists
@@ -711,12 +709,14 @@ export async function getRepaymentScheduleAction(
             });
         }
 
-        return { error: null, success: true as const, schedule: installments , data: null };
-    } catch (error) {
+        return { error: null, success: true as const, data: { schedule: installments } };
+    } catch (error) { 
         logger.error("Failed to fetch repayment schedule:", error);
         return { success: false as const, error: "Failed to fetch repayment schedule", data: null };
     }
 }
+
+export const getRepaymentScheduleAction = withSafeAction("getRepaymentScheduleAction", _getRepaymentScheduleAction);
 
 /**
  * Calculate penalty for overdue payment (7-day grace period)

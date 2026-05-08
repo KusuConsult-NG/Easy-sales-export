@@ -8,19 +8,17 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { revalidatePath } from "next/cache";
 
-type UpdateExportStatusState = 
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
+import { withSafeAction, type ActionResponse } from "@/lib/safe-action";
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
 
 /**
  * Server action to update export status
  */
-export async function updateExportStatusAction(
-    prevState: UpdateExportStatusState,
+async function _updateExportStatusAction(
+    prevState: ActionResponse<{ message: string }>,
     formData: FormData
-): Promise<UpdateExportStatusState> { try {
+): Promise<ActionResponse<{ message: string }>> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { error: sessionResult.error?.error || "Unauthorized", success: false as const, data: null, meta: null };
         const { session } = sessionResult;
@@ -54,6 +52,8 @@ export async function updateExportStatusAction(
         return { error: null, success: true as const, data: { message: `Status updated to ${newStatus.replace("_", " ")}` } };
     } catch (error: any) {
         logger.error("Update export status error:", error);
-        return { error: "Failed to update status", success: false as const, data: null, meta: null };
+        return { error: "Failed to update status", success: false as const, data: null };
     }
 }
+
+export const updateExportStatusAction = withSafeAction("updateExportStatusAction", _updateExportStatusAction);

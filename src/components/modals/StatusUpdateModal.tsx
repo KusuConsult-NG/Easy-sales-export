@@ -7,12 +7,11 @@ import Modal from "@/components/ui/Modal";
 import LoadingButton from "@/components/ui/LoadingButton";
 import { useToast } from "@/contexts/ToastContext";
 import { updateExportStatusAction } from "@/app/actions/export-status";
+import type { ActionResponse } from "@/lib/safe-action";
 
-type UpdateExportStatusState =
-    | { error: string | null; success: false; data: null; meta: null }
-    | { error: null; success: true; data: { message: string }; meta: null };
+type UpdateExportStatusState = ActionResponse<{ message: string }>;
 
-const initialState: UpdateExportStatusState = { error: "Initializing...", success: false, data: null, meta: null };
+const initialState: UpdateExportStatusState = { error: "Initializing...", success: false, data: null };
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
 

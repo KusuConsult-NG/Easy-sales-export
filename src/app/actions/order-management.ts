@@ -42,7 +42,7 @@ async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { orders } };
     } catch (error) { logger.error("Get seller orders error:", { 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
@@ -108,7 +108,7 @@ async function _updateOrderStatusAction(
             transaction.update(orderRef, updateData);
         });
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { message: "Order status updated successfully" } };
     } catch (error) { logger.error("Update order status error:", { 
             orderId, 
             newStatus, 
@@ -142,7 +142,7 @@ async function _getBuyerOrdersAction(filters?: { status?: OrderStatus; }) { let 
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { orders } };
     } catch (error) { logger.error("Get buyer orders error:", { 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
@@ -244,7 +244,9 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
         if (data.sellerId !== session.user.id && !isAdmin) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        return { error: null, success: true as const, data: null };
+        const order = serializeDoc<Order>(orderDoc.id, orderDoc.data());
+
+        return { error: null, success: true as const, data: { order } };
     } catch (error) { logger.error("Get order details error:", { 
             orderId, 
             userId: sessionResult?.session?.user?.id,

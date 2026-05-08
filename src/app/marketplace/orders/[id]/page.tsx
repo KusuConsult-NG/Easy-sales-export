@@ -27,7 +27,7 @@ export default function OrderConfirmationPage() {
         try {
             const result = await getOrderByIdAction(orderId);
             if (result.success && result.data?.order) {
-                setOrder(result.data.order as Order);
+                setOrder(result.data.order as any as Order);
             } else {
                 router.push("/marketplace");
             }

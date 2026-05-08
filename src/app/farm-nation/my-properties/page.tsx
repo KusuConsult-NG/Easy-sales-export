@@ -27,8 +27,8 @@ export default function MyPropertiesPage() {
 
         try {
             const result = await getMyLandListings();
-            if (result.success && result.data?.listings) {
-                setProperties(result.data.listings);
+            if (result.success && result.data) {
+                setProperties(result.data);
             }
         } catch (error) {
             logger.error("Failed to load properties:", error);

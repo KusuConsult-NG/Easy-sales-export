@@ -13,7 +13,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { logger } from '@/lib/logger';
 import { requireSession } from '@/lib/session-guard';
-import { ActionResponse } from '@/lib/safe-action';
+import { withSafeAction, type ActionResponse } from '@/lib/safe-action';
 import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { atomicUpdateUser } from '@/lib/services/userService';
 import { invalidateUserCache } from '@/lib/cache-invalidation';
@@ -35,7 +35,7 @@ export interface SubmitKYCPayload { firstName: string;
  * Verify a single BVN against QoreID and save the result to Firestore.
  * Returns isMatch:true only if QoreID confirms the name matches the BVN record.
  */
-export async function verifyBVNAction(payload: { bvn: string;
+async function _verifyBVNAction(payload: { bvn: string;
     firstName: string;
     lastName: string; }): Promise<KYCVerificationResult> { try {
         const sessionResult = await requireSession();
@@ -85,6 +85,7 @@ export async function verifyBVNAction(payload: { bvn: string;
         return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
+export const verifyBVNAction = withSafeAction("verifyBVNAction", _verifyBVNAction);
 
 // ─── Verify NIN ──────────────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ export async function verifyBVNAction(payload: { bvn: string;
  * Verify a single NIN against QoreID (nin-premium endpoint) and save
  * the result to Firestore.
  */
-export async function verifyNINAction(payload: { nin: string;
+async function _verifyNINAction(payload: { nin: string;
     firstName: string;
     lastName: string; }): Promise<KYCVerificationResult> { try {
         const sessionResult = await requireSession();
@@ -142,6 +143,7 @@ export async function verifyNINAction(payload: { nin: string;
         return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
+export const verifyNINAction = withSafeAction("verifyNINAction", _verifyNINAction);
 
 // ─── Verify Voter's Card ─────────────────────────────────────────────────────
 
@@ -150,7 +152,7 @@ export async function verifyNINAction(payload: { nin: string;
  * NOTE: PVC API is highly unreliable, so we allow users to pass this step
  * and defer to manual review.
  */
-export async function verifyVotersCardAction(payload: { votersCardNumber: string;
+async function _verifyVotersCardAction(payload: { votersCardNumber: string;
     firstName: string;
     lastName: string; }): Promise<KYCVerificationResult> { try {
         const sessionResult = await requireSession();
@@ -192,6 +194,7 @@ export async function verifyVotersCardAction(payload: { votersCardNumber: string
         return { success: false as const, error: error?.message || 'An unexpected error occurred', data: null };
     }
 }
+export const verifyVotersCardAction = withSafeAction("verifyVotersCardAction", _verifyVotersCardAction);
 
 // ─── Save KYC Profile (non-verified fields) ───────────────────────────────────
 
@@ -199,7 +202,7 @@ export async function verifyVotersCardAction(payload: { votersCardNumber: string
  * Save personal KYC fields (no ID verification) — fullName, DOB, address etc.
  * Called from the onboarding flow after the form is filled.
  */
-export async function saveKYCProfileAction(payload: { firstName: string;
+async function _saveKYCProfileAction(payload: { firstName: string;
     lastName: string;
     otherNames?: string;
     dateOfBirth: string;
@@ -325,6 +328,7 @@ export async function saveKYCProfileAction(payload: { firstName: string;
         return { success: false as const, error: error?.message || 'Failed to save KYC profile', data: null };
     }
 }
+export const saveKYCProfileAction = withSafeAction("saveKYCProfileAction", _saveKYCProfileAction);
 
 // ─── Internal: Compute overall KYC status ────────────────────────────────────
 

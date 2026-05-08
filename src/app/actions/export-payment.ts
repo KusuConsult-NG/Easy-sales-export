@@ -210,7 +210,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
 
         return { error: null, success: true as const,
             meta: null
-        , data: null };
+        , data: { orderId: orderDoc.id } };
     } catch (error: any) { logger.error('[Export Order Payment Verification Error]', {
             timestamp: new Date().toISOString(),
             action: 'verifyExportOrder',

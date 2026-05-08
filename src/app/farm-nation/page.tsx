@@ -34,14 +34,14 @@ export default function FarmNationLandingPage() {
             try {
                 // Load featured (verified) properties — filter in-memory after load
                 const result = await searchLandListingsAction({ limit: 50 });
-                if (result && result.listings) {
+                if (result.success && result.data?.listings) {
                     // searchLandListingsAction already filters by status='verified'
-                    setFeaturedProperties(result.listings.slice(0, 3));
-                    setTotalCount(result.listings.length);
+                    setFeaturedProperties(result.data.listings.slice(0, 3));
+                    setTotalCount(result.data.listings.length);
 
                     // Count properties by type/category
                     const counts: Record<string, number> = {};
-                    result.listings.forEach((p: any) => {
+                    result.data.listings.forEach((p: any) => {
                         const type = p.category || p.propertyType || "other";
                         counts[type] = (counts[type] || 0) + 1;
                     });

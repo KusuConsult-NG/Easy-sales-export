@@ -47,28 +47,28 @@ export default function MyLoansPage() {
                 const loanApplications = await getUserLoanApplicationsAction(result.data.membership.id);
 
                 // Only show disbursed loans (active loans with repayment schedules)
-                const disbursedLoans = loanApplications.filter(loan => loan.status === "disbursed");
+                const disbursedLoans = loanApplications.filter((loan: any) => loan.status === "disbursed");
 
                 // Fetch repayment schedule for each disbursed loan
                 const loansWithSchedules = await Promise.all(
                     disbursedLoans.map(async (loan) => {
                         const scheduleResult = await getRepaymentScheduleAction(loan.id || "");
 
-                        if (scheduleResult.success && scheduleResult.schedule) {
-                            const schedule = scheduleResult.schedule;
+                        if (scheduleResult.success && scheduleResult.data?.schedule) {
+                            const schedule = scheduleResult.data.schedule;
 
                             // Calculate balance (sum of unpaid installments)
                             const balance = schedule
-                                .filter(inst => inst.status !== "paid")
-                                .reduce((sum, inst) => sum + (inst.totalAmount - inst.paidAmount), 0);
+                                .filter((inst: any) => inst.status !== "paid")
+                                .reduce((sum: number, inst: any) => sum + (inst.totalAmount - inst.paidAmount), 0);
 
                             // Find next unpaid installment
-                            const nextPayment = schedule.find(inst => inst.status === "pending" || inst.status === "partial");
+                            const nextPayment = schedule.find((inst: any) => inst.status === "pending" || inst.status === "partial");
 
                             return {
                                 ...loan,
                                 balance,
-                                repaymentSchedule: schedule.map(inst => ({
+                                repaymentSchedule: schedule.map((inst: any) => ({
                                     date: inst.dueDate,
                                     amount: inst.totalAmount,
                                     paid: inst.status === "paid"
@@ -115,9 +115,9 @@ export default function MyLoansPage() {
         }).format(new Date(date));
     }
 
-    const activeLoans = loans.filter((l) => l.status === "disbursed");
-    const totalBalance = activeLoans.reduce((sum, l) => sum + l.balance, 0);
-    const totalBorrowed = activeLoans.reduce((sum, l) => sum + l.amount, 0);
+    const activeLoans = loans.filter((l: any) => l.status === "disbursed");
+    const totalBalance = activeLoans.reduce((sum: number, l: any) => sum + l.balance, 0);
+    const totalBorrowed = activeLoans.reduce((sum: number, l: any) => sum + l.amount, 0);
 
     if (loading) {
         return (

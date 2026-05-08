@@ -55,26 +55,28 @@ function PropertiesContent() {
                 lastDocId: currentLastDoc,
             });
 
-            // Client-side text search (basic)
-            let filteredResults = result.listings;
-            if (searchTerm) {
-                const lowerTerm = searchTerm.toLowerCase();
-                filteredResults = result.listings.filter(p =>
-                    p.title.toLowerCase().includes(lowerTerm) ||
-                    p.description.toLowerCase().includes(lowerTerm) ||
-                    p.location.lga.toLowerCase().includes(lowerTerm) ||
-                    p.location.address.toLowerCase().includes(lowerTerm)
-                );
-            }
+            if (result.success && result.data) {
+                // Client-side text search (basic)
+                let filteredResults = result.data.listings;
+                if (searchTerm) {
+                    const lowerTerm = searchTerm.toLowerCase();
+                    filteredResults = result.data.listings.filter(p =>
+                        p.title.toLowerCase().includes(lowerTerm) ||
+                        p.description.toLowerCase().includes(lowerTerm) ||
+                        p.location.lga.toLowerCase().includes(lowerTerm) ||
+                        p.location.address.toLowerCase().includes(lowerTerm)
+                    );
+                }
 
-            if (reset) {
-                setProperties(filteredResults);
-            } else {
-                setProperties(prev => [...prev, ...filteredResults]);
-            }
+                if (reset) {
+                    setProperties(filteredResults);
+                } else {
+                    setProperties(prev => [...prev, ...filteredResults]);
+                }
 
-            setLastDocId(result.lastDocId);
-            setHasMore(!!result.lastDocId);
+                setLastDocId(result.data.lastDocId);
+                setHasMore(!!result.data.lastDocId);
+            }
 
         } catch (error) {
             logger.error("Error:", error);

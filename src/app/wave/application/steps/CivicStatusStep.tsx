@@ -45,13 +45,13 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
             const { verifyNINAction } = await import('@/app/actions/kyc');
             const result = await verifyNINAction({ nin: data.nin, firstName: data.firstName, lastName: data.surname });
 
-            if (result.success && 'isMatch' in result && result.isMatch) {
+            if (result.success && result.data?.isMatch) {
                 setNinVerified(true);
                 setNinError("");
                 showToast("NIN Verified Successfully!", "success");
             } else {
                 setNinVerified(false);
-                setNinError('error' in result ? (result.error as string) : ('details' in result ? String(result.details) : "Verification failed"));
+                setNinError(result.error || (result.data as any)?.details || "Verification failed");
             }
         } catch (error) {
             setNinError("An unexpected error occurred during verification");

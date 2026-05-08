@@ -24,7 +24,7 @@ function PaymentCallbackContent() {
 
         async function verify() {
             try {
-                const result = await verifyExportOrderPaymentAction(reference as string);
+                const result = await verifyExportOrderPaymentAction(reference as string) as any;
 
                 if (result.success) {
                     setStatus("success");

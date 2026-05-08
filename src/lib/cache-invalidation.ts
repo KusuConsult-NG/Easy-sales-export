@@ -85,7 +85,7 @@ export async function invalidateServiceCache(userId: string, service?: string): 
         revalidatePath("/", "layout");
         if (service) {
             revalidatePath(`/admin/${service}`, "page");
-            revalidateTag(`module-${service}-stats`);
+            revalidateTag(`module-${service}-stats`, "page");
         }
 
         console.log(`[Cache Invalidation] Cleared ${service || 'service'} cache for: ${userId}`);

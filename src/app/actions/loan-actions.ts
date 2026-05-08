@@ -55,7 +55,7 @@ export async function submitLoanApplication(
         } catch (auditError) { console.error("Failed to log loan creation audit:", auditError);
         }
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { loanId } };
     } catch (error) { if (error instanceof z.ZodError) {
             return { success: false as const, error: "Validation error", details: (error as z.ZodError).issues.map(e => e.message), data: null };
         }
@@ -77,8 +77,8 @@ export async function getUserLoanApplications() { const sessionResult = await re
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch loan applications", loans: [], data: null };
+        return { error: null, success: true as const, data: loans };
+    } catch (error) { return { success: false as const, error: "Failed to fetch loan applications", data: null };
     }
 }
 
@@ -104,8 +104,8 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch loan application", loan: null, data: null };
+        return { error: null, success: true as const, data: loan };
+    } catch (error) { return { success: false as const, error: "Failed to fetch loan application", data: null };
     }
 }
 
@@ -125,8 +125,8 @@ export async function getPendingLoanApplications() { const sessionResult = await
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch pending loans", loans: [], data: null };
+        return { error: null, success: true as const, data: loans };
+    } catch (error) { return { success: false as const, error: "Failed to fetch pending loans", data: null };
     }
 }
 
@@ -280,7 +280,7 @@ export async function getLoanStatistics() { const sessionResult = await requireS
             }
         });
 
-        return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to fetch loan statistics", stats: null, data: null };
+        return { error: null, success: true as const, data: stats };
+    } catch (error) { return { success: false as const, error: "Failed to fetch loan statistics", data: null };
     }
 }

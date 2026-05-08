@@ -75,7 +75,7 @@ function NewDisputePageContent() {
         try {
             const result = await getOrderByIdAction(orderId);
             if (result.success && result.data?.order) {
-                setOrder(result.data.order);
+                setOrder(result.data.order as any as Order);
             } else {
                 showToast("Order not found", "error");
                 router.push("/marketplace/buyer/orders");

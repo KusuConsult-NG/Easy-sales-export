@@ -53,8 +53,8 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             const { getBankList } = await import('@/app/actions/paystack');
             const result = await getBankList();
 
-            if (result.success && result.banks) {
-                setBanks(result.banks);
+            if (result.success && result.data?.banks) {
+                setBanks(result.data.banks);
             } else {
                 setBanksError(result.error || 'Failed to load bank list');
             }

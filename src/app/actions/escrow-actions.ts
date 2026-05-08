@@ -44,7 +44,7 @@ async function _getUserEscrowTransactions() { let sessionResult;
                 releaseRequestedAt: (data.releaseRequestedAt as Timestamp)?.toDate() };
         });
 
-        return { success: true as const, error: null, data: transactions };
+        return { success: true as const, error: null, data: { transactions: transactions as any as EscrowTransaction[] } };
     } catch (error: any) { logger.error("Get escrow transactions error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -101,7 +101,8 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
                 paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,
                 releasedAt: data.releasedAt ? (data.releasedAt as Timestamp).toDate().toISOString() : null,
                 refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
-                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null };
+                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null 
+            } as any;
         });
 
         // Client-side search if specified

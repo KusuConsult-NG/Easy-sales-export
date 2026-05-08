@@ -17,7 +17,7 @@ import {
 import { submitSellerVerificationAction, getSellerVerificationAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
-const initialState = { success: false };
+const initialState = { success: false as const, error: "", data: null };
 
 const nigerianStates = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",

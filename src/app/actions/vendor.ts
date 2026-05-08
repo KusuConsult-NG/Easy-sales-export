@@ -82,7 +82,7 @@ async function _getVendorOrdersAction(filters?: { status?: VendorOrder["status"]
                 updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date() };
         }) as VendorOrder[];
 
-        return { success: true as const, error: null, data: null };
+        return { success: true as const, error: null, data: { orders } };
     } catch (error: any) { logger.error("Get vendor orders error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -128,7 +128,7 @@ async function _updateVendorOrderStatusAction(
             targetType: "vendor_order",
             metadata: { status, trackingNumber } });
 
-        return { error: null,  success: true as const, data: null };
+        return { error: null,  success: true as const, data: { message: "Order status updated successfully" } };
     } catch (error: any) { logger.error("Update vendor order error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,
@@ -169,7 +169,7 @@ async function _getVendorProductsAction(filters?: { status?: VendorProduct["stat
                 updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date() };
         }) as VendorProduct[];
 
-        return { success: true as const, error: null, data: null };
+        return { success: true as const, error: null, data: { products } };
     } catch (error: any) { logger.error("Get vendor products error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -234,7 +234,7 @@ async function _updateVendorProductInventoryAction(
             targetType: "vendor_product",
             metadata: { operation, stockChange, newStock: updatedStock } });
 
-        return { error: null,  success: true as const, data: null };
+        return { error: null,  success: true as const, data: { message: "Inventory updated successfully" } };
     } catch (error: any) { logger.error("Update inventory error:", {
             userId: sessionResult?.session?.user?.id,
             productId,
@@ -275,7 +275,7 @@ async function _toggleVendorProductStatusAction(
                 _version: FieldValue.increment(1) });
         });
 
-        return { success: true as const, error: null, data: null };
+        return { success: true as const, error: null, data: { message: `Product status changed to ${newStatus}` } };
     } catch (error: any) { logger.error("Toggle product status error:", {
             userId: sessionResult?.session?.user?.id,
             productId,
@@ -322,7 +322,7 @@ async function _deleteVendorProductAction(
             metadata: { name: productId }, // productData name is not accessible here easily without returning it from callback
         });
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { message: "Product deleted successfully" } };
     } catch (error: any) { logger.error("Delete vendor product error:", {
             userId: sessionResult?.session?.user?.id,
             productId,

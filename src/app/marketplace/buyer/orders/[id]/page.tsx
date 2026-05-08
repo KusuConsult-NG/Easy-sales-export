@@ -32,8 +32,8 @@ export default function BuyerOrderDetailPage() {
     useEffect(() => {
         if (!id) return;
         getOrderByIdAction(id as string).then((res) => {
-            if (res.success && res.data?.order) {
-                setOrder(res.data.order as Order);
+            if (res.success && res.data && "order" in res.data) {
+                setOrder(res.data.order as unknown as Order);
             } else {
                 setError((res as any).error || "Order not found");
             }

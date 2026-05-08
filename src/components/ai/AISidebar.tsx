@@ -43,7 +43,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
     async function loadChatHistory() {
         const result = await getAIChatHistory(20);
         if (result.success) {
-            setMessages(result.messages || []);
+            setMessages(result.data?.messages || []);
         }
     }
 

@@ -61,7 +61,7 @@ export default function MyPurchasesPage() {
         try {
             const result = await cancelPurchaseRequestAction(requestId);
             if (result.success) {
-                showToast(result.data?.message || "Purchase cancelled successfully", "success");
+                showToast("Purchase cancelled successfully", "success");
                 loadPurchases();
             } else {
                 showToast(result.error || "Failed to cancel purchase", "error");

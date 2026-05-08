@@ -38,10 +38,10 @@ export default function PropertyDetailsPage() {
     async function loadProperty() {
         try {
             const result = await getPropertyByIdAction(propertyId);
-            if (result) {
-                setProperty(result);
+            if (result.success && result.data) {
+                setProperty(result.data);
             } else {
-                setError("Property not found");
+                setError(result.error || "Property not found");
             }
         } catch (error) {
             setError("Failed to load property details");

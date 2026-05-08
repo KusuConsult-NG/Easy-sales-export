@@ -26,10 +26,10 @@ function PaymentCallbackContent() {
             try {
                 const result = await verifyPropertyPaymentAction(reference);
 
-                if (result.success) {
+                if (result.success && result.data) {
                     setStatus("success");
-                    setMessage(result.message || "Property purchase successful!");
-                    setPropertyId(result.propertyId || null);
+                    setMessage(result.data.message || "Property purchase successful!");
+                    setPropertyId(result.data.propertyId || null);
                 } else {
                     setStatus("error");
                     setMessage(result.error || "Payment verification failed");

@@ -24,7 +24,7 @@ function PaymentCallbackContent() {
             }
 
             try {
-                const result = await verifyInvestmentPaymentAction(reference);
+                const result = await verifyInvestmentPaymentAction(reference) as any;
 
                 if (result.success ) {
                     setStatus("success");

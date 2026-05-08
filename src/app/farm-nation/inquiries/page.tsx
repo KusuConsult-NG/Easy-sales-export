@@ -23,8 +23,8 @@ export default function InquiriesPage() {
         async function loadInquiries() {
             if (session?.user?.id) {
                 const result = await getLandInquiriesAction(session.user.id);
-                if (result.success && result.inquiries) {
-                    setInquiries(result.inquiries);
+                if (result.success && result.data) {
+                    setInquiries(result.data);
                 } else {
                     setError(result.error || "Failed to load inquiries");
                 }

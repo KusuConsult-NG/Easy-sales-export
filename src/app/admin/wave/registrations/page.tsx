@@ -132,7 +132,7 @@ export default function BriefingRegistrationsPage() {
 
             const csvContent = [
                 headers.join(","),
-                ...rows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+                ...rows.map((row: any[]) => row.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(","))
             ].join("\n");
 
             const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
