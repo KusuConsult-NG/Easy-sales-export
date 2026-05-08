@@ -197,7 +197,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         const snapshot = await q.get();
         const users = serializeDocs(snapshot.docs);
 
-        const applications = users.filter((user: any) => {
+        let applications = users.filter((user: any) => {
             const status = user.serviceRegistrations?.farmNation?.status || "pending";
             if (options.status && options.status !== "all" && status !== options.status) return false;
             return true;
