@@ -92,7 +92,7 @@ export default function CooperativeDashboardPage() {
         );
     }
 
-    if (!membership && !loading) {
+    if (!membership) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4">
                 <h1 className="text-2xl font-bold text-slate-900">
