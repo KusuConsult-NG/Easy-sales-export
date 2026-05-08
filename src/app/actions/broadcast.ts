@@ -186,9 +186,9 @@ export async function getBroadcastHistoryAction(): Promise<{
  * Collect Recipients
  * (Required by Send API)
  */
-export async function collectRecipients(filters?: BroadcastFilters) {
+export async function collectRecipients(filters?: BroadcastFilters): Promise<any[]> {
     const result = await getCleanBroadcastListAction(filters);
-    if (result.success) {
+    if (result.success && result.recipients) {
         return result.recipients;
     }
     return [];
