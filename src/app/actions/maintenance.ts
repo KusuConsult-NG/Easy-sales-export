@@ -126,7 +126,6 @@ export async function hardResetCacheAction() {
 
     try {
         revalidatePath("/", "layout");
-        revalidateTag("module-registration-stats");
         
         // Clear Redis via helper
         const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
