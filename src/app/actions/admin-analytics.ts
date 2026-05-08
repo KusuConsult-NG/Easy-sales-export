@@ -296,7 +296,8 @@ export async function getDashboardStatsAction(options?: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface FinancialOverview {
-    error: null, success: boolean;
+    error: string | null;
+    success: boolean;
     totalRevenue: number;
     totalEscrowVolume: number;
     totalLoansDisbursed: number;
@@ -329,12 +330,12 @@ export interface FinancialOverview {
 export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
     const sessionResult = await requireSession();
     if (!sessionResult.session) {
-        return { success: false as const, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] , data: null };
+        return { success: false as const, error: "Session expired. Please log in again.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
     const { session } = sessionResult;
 
     if (!isAdmin(session.user.roles)) {
-        return { success: false as const, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] , data: null };
+        return { success: false as const, error: "You do not have admin access to view financial data.", totalRevenue: 0, totalEscrowVolume: 0, totalLoansDisbursed: 0, pendingPayoutAmount: 0, recentTransactions: [], failedTransactions: [] };
     }
 
     const { getCached, setCache } = await import("@/lib/redis");

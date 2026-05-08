@@ -36,7 +36,14 @@ export async function getPlatformMetricsAction() { try {
 
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
         
-        return { error: null, success: true as const, data: null
+        return { 
+            error: null, 
+            success: true as const, 
+            data: {
+                totalRevenue,
+                totalTransactions,
+                totalUsers
+            }
         };
     } catch (error: any) { logger.error("Failed to aggregate platform metrics:", error);
         return { success: false as const, error: error.message, data: null };
@@ -82,7 +89,13 @@ export async function getGlobalPendingApprovalsAction() { try {
 
         const totalPending = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
-        return { error: null, success: true as const, data: null
+        return { 
+            error: null, 
+            success: true as const, 
+            data: {
+                totalPending,
+                counts
+            }
         };
     } catch (error: any) { logger.error("Failed to compute pending approvals:", error);
         return { success: false as const, error: error.message, data: null };
