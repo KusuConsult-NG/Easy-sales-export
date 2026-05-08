@@ -6,7 +6,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 
 /**
