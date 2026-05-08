@@ -60,7 +60,7 @@ export interface BroadcastLog {
  * 
  * @returns A deduplicated, sanitized list of 36,924 recipients.
  */
-export async function getCleanBroadcastListAction() {
+export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
     try {
         // 1. Security Check: Only admins can generate broadcast lists
         const { session } = await requireSession();
@@ -117,13 +117,13 @@ export async function getCleanBroadcastListAction() {
  * Preview Broadcast Action
  * (Required by Communications UI)
  */
-export async function previewBroadcastAction(broadcastData: any): Promise<{
+export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{
     success: boolean;
     count: number | null;
     sample: any[];
     error: string | null;
 }> {
-    const listResult = await getCleanBroadcastListAction();
+    const listResult = await getCleanBroadcastListAction(broadcastData);
     if (!listResult.success) {
         return { 
             success: false, 
@@ -186,8 +186,8 @@ export async function getBroadcastHistoryAction(): Promise<{
  * Collect Recipients
  * (Required by Send API)
  */
-export async function collectRecipients() {
-    const result = await getCleanBroadcastListAction();
+export async function collectRecipients(filters?: BroadcastFilters) {
+    const result = await getCleanBroadcastListAction(filters);
     if (result.success) {
         return result.recipients;
     }
