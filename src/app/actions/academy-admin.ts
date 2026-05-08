@@ -366,7 +366,7 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
         const enrichedApps = applications.map(app => {
-            const uData = userMap.get(app.userId) || {};
+            const uData = userMap.get(app.userId as string) || {};
             const pi = app.personalInfo || {};
             
             // Canonical bankDetails injection
@@ -440,7 +440,7 @@ async function _getAcademyEnrollmentsAction(options?: {
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
         enrollments = enrollments.map(e => {
-            const uData = userMap.get(e.userId) || {};
+            const uData = userMap.get(e.userId as string) || {};
             
             // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {

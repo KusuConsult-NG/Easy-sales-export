@@ -5,6 +5,14 @@
 
 import crypto from 'crypto';
 
+/**
+ * Convert Naira to Kobo (Paystack expects amounts in kobo)
+ */
+export const nairaToKobo = (naira: number | string): number => {
+    const amount = typeof naira === 'string' ? parseFloat(naira) : naira;
+    return Math.round(amount * 100);
+};
+
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 export interface PaystackVerifyResponse {
