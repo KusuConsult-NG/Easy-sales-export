@@ -55,20 +55,20 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
 // ---------------------------------------------------------------------------
 
 export async function getWalletAction(): Promise<{
-    success: boolean;
+    success: true | false;
     wallet?: Wallet;
     error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
         const wallet = await _getOrCreateWallet(userId);
-        return { success: true, wallet };
+        return { success: true as const, wallet };
     } catch (err: any) {
         logger.error("getWalletAction error:", err);
-        return { success: false, error: err.message || "Failed to retrieve wallet" };
+        return { success: false as const, error: err.message || "Failed to retrieve wallet" };
     }
 }
 
@@ -77,7 +77,7 @@ export async function getWalletAction(): Promise<{
 // ---------------------------------------------------------------------------
 
 export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
-    success: boolean;
+    success: true | false;
     authorizationUrl?: string;
     reference?: string;
     error?: string;
@@ -85,16 +85,16 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
     // Deposits are disabled per request
     const isFundingEnabled = false;
     if (!isFundingEnabled) {
-        return { success: false, error: "Wallet deposits are currently disabled." };
+        return { success: false as const, error: "Wallet deposits are currently disabled." };
     }
 
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
-            return { success: false, error: "Minimum wallet funding amount is ₦100" };
+            return { success: false as const, error: "Minimum wallet funding amount is ₦100" };
         }
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
         const userEmail = sessionResult.session.user.email;
 
@@ -123,7 +123,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
 
         const paystackData = await paystackRes.json();
         if (!paystackData.status) {
-            return { success: false, error: paystackData.message || "Paystack initialization failed" };
+            return { success: false as const, error: paystackData.message || "Paystack initialization failed" };
         }
 
         // Create a pending wallet transaction record
@@ -141,11 +141,11 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true, authorizationUrl: paystackData.data.authorization_url,
+        return { success: true as const, authorizationUrl: paystackData.data.authorization_url,
             reference, };
     } catch (err: any) {
         logger.error("fundWalletViaPaystackAction error:", err);
-        return { success: false, error: err.message || "Failed to initiate wallet funding" };
+        return { success: false as const, error: err.message || "Failed to initiate wallet funding" };
     }
 }
 
@@ -154,7 +154,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<{
 // ---------------------------------------------------------------------------
 
 export async function confirmWalletFundingAction(reference: string): Promise<{
-    success: boolean;
+    success: true | false;
     newBalance?: number;
     error?: string;
 }> {
@@ -166,7 +166,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
         const paystackData = await paystackRes.json();
 
         if (!paystackData.status || paystackData.data.status !== "success") {
-            return { success: false, error: "Payment verification failed" };
+            return { success: false as const, error: "Payment verification failed" };
         }
 
         const metadata = paystackData.data.metadata;
@@ -182,7 +182,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
 
         if (txnSnap.empty) {
             // Either already processed or not found — safe to ignore
-            return { success: true, error: "Already processed" };
+            return { success: true as const, error: "Already processed" };
         }
 
         const txnRef = txnSnap.docs[0].ref;
@@ -231,10 +231,10 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
             return updatedBalance;
         });
 
-        return { success: true, newBalance };
+        return { success: true as const, newBalance };
     } catch (err: any) {
         logger.error("confirmWalletFundingAction error:", err);
-        return { success: false, error: err.message || "Failed to confirm funding" };
+        return { success: false as const, error: err.message || "Failed to confirm funding" };
     }
 }
 
@@ -245,15 +245,15 @@ export async function confirmWalletFundingAction(reference: string): Promise<{
 export async function walletCheckoutAction(
     orderId: string,
     amountNGN: number
-): Promise<{ success: boolean; newBalance?: number; error?: string }> {
+): Promise<{ success: true | false; newBalance?: number; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
         // CRITICAL SECURITY FIX: Prevent negative-amount inflation attacks and NaN corruption
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN <= 0) {
-            return { success: false, error: "Invalid checkout amount" };
+            return { success: false as const, error: "Invalid checkout amount" };
         }
 
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
@@ -312,10 +312,10 @@ export async function walletCheckoutAction(
             return updatedBalance;
         });
 
-        return { success: true, newBalance };
+        return { success: true as const, newBalance };
     } catch (err: any) {
         logger.error("walletCheckoutAction error:", err);
-        return { success: false, error: err.message || "Wallet checkout failed" };
+        return { success: false as const, error: err.message || "Wallet checkout failed" };
     }
 }
 
@@ -326,21 +326,21 @@ export async function walletCheckoutAction(
 export async function withdrawFromWalletAction(
     amountNGN: number,
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
-): Promise<{ success: boolean; withdrawalId?: string; error?: string }> {
+): Promise<{ success: true | false; withdrawalId?: string; error?: string }> {
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
-            return { success: false, error: "Invalid withdrawal amount" };
+            return { success: false as const, error: "Invalid withdrawal amount" };
         }
 
         if (amountNGN < MIN_WITHDRAWAL) {
             return {
-                success: false,
+                success: false as const,
                 error: `Minimum withdrawal amount is ₦${MIN_WITHDRAWAL.toLocaleString()}`,
             };
         }
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
@@ -407,10 +407,10 @@ export async function withdrawFromWalletAction(
             logger.error("Withdrawal admin notification failed:", notifErr);
         }
 
-        return { success: true, withdrawalId: result.withdrawalId };
+        return { success: true as const, withdrawalId: result.withdrawalId };
     } catch (err: any) {
         logger.error("withdrawFromWalletAction error:", err);
-        return { success: false, error: err.message || "Withdrawal request failed" };
+        return { success: false as const, error: err.message || "Withdrawal request failed" };
     }
 }
 
@@ -422,14 +422,14 @@ export async function getWalletTransactionsAction(options?: {
     limit?: number;
     startAfter?: string; // Last transaction doc ID for cursor pagination
 }): Promise<{
-    success: boolean;
+    success: true | false;
     transactions?: WalletTransaction[];
     hasMore?: boolean;
     error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
         const pageSize = options?.limit || 20;
@@ -450,10 +450,10 @@ export async function getWalletTransactionsAction(options?: {
         const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
 
         const transactions = serializeDocs<WalletTransaction>(docs);
-        return { success: true, transactions, hasMore };
+        return { success: true as const, transactions, hasMore };
     } catch (err: any) {
         logger.error("getWalletTransactionsAction error:", err);
-        return { success: false, error: err.message || "Failed to fetch transactions" };
+        return { success: false as const, error: err.message || "Failed to fetch transactions" };
     }
 }
 
@@ -465,23 +465,23 @@ export async function processWalletWithdrawalAction(
     transactionId: string,
     action: "approve" | "reject",
     note?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const adminId = sessionResult.session.user.id;
 
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const txnRef = db.collection(TXN_COLLECTION).doc(transactionId);
         const txnSnap = await txnRef.get();
-        if (!txnSnap.exists) return { success: false, error: "Transaction not found" };
+        if (!txnSnap.exists) return { success: false as const, error: "Transaction not found" };
 
         const txnData = txnSnap.data()!;
         if (txnData.status !== "pending") {
-            return { success: false, error: "Transaction is no longer pending" };
+            return { success: false as const, error: "Transaction is no longer pending" };
         }
 
         if (action === "reject") {
@@ -594,10 +594,10 @@ export async function processWalletWithdrawalAction(
             }
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (err: any) {
         logger.error("processWalletWithdrawalAction error:", err);
-        return { success: false, error: err.message || "Failed to process withdrawal" };
+        return { success: false as const, error: err.message || "Failed to process withdrawal" };
     }
 }
 
@@ -611,7 +611,7 @@ export async function getAdminWalletWithdrawalsAction(options: {
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
 } = {}): Promise<{
-    success: boolean;
+    success: true | false;
     data?: any[];
     error?: string;
     lastDocId?: string;
@@ -619,12 +619,12 @@ export async function getAdminWalletWithdrawalsAction(options: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const userId = sessionResult.session.user.id;
 
         // Verify admin
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 25;
@@ -656,13 +656,13 @@ export async function getAdminWalletWithdrawalsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: withdrawals,
             lastDocId: nextCursor,
             hasMore
         };
     } catch (err: any) {
         logger.error("getAdminWalletWithdrawalsAction error:", err);
-        return { success: false, error: err.message || "Failed to fetch withdrawals" };
+        return { success: false as const, error: err.message || "Failed to fetch withdrawals" };
     }
 }

@@ -54,9 +54,9 @@ export default function CooperativeDashboardPage() {
         try {
             setLoading(true);
             const result = await getDashboardDataAction();
-            if (result.success) {
-                setMembership(result.membership);
-                setTransactions(result.transactions);
+            if (result.success && result.data) {
+                setMembership(result.data.membership);
+                setTransactions(result.data.transactions);
             } else {
                 setError(result.error);
             }

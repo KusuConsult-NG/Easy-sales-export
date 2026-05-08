@@ -9,8 +9,8 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { revalidatePath } from "next/cache";
 
 type UpdateExportStatusState =
-    | { error: string | null; success: false; data: null; meta: null }
-    | { error: null; success: true; data: { message: string }; meta: null };
+    | { error: string | null; success: false as const; data: null; meta: null }
+    | { error: null; success: true as const; data: { message: string }; meta: null };
 
 type ExportStatus = "pending" | "in_transit" | "delivered" | "completed";
 
@@ -23,27 +23,27 @@ export async function updateExportStatusAction(
 ): Promise<UpdateExportStatusState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error?.error || "Unauthorized", success: false, data: null, meta: null };
+        if (!sessionResult.session) return { error: sessionResult.error?.error || "Unauthorized", success: false as const, data: null, meta: null };
         const { session } = sessionResult;
 
         const exportId = formData.get("exportId") as string;
         const newStatus = formData.get("status") as ExportStatus;
 
         if (!exportId || !newStatus) {
-            return { error: "Missing required fields", success: false, data: null, meta: null };
+            return { error: "Missing required fields", success: false as const, data: null, meta: null };
         }
 
         const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         const exportDoc = await exportRef.get();
 
         if (!exportDoc.exists) {
-            return { error: "Export window not found", success: false, data: null, meta: null };
+            return { error: "Export window not found", success: false as const, data: null, meta: null };
         }
 
         // Verify ownership (unless admin)
         const exportData = exportDoc.data()!;
         if (exportData.userId !== session.user.id && !session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { error: "Unauthorized to update this export", success: false, data: null, meta: null };
+            return { error: "Unauthorized to update this export", success: false as const, data: null, meta: null };
         }
 
         // Update status
@@ -59,12 +59,12 @@ export async function updateExportStatusAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: { message: `Status updated to ${newStatus.replace("_", " ")}` },
             meta: null
         };
     } catch (error: any) {
         logger.error("Update export status error:", error);
-        return { error: "Failed to update status", success: false, data: null, meta: null };
+        return { error: "Failed to update status", success: false as const, data: null, meta: null };
     }
 }

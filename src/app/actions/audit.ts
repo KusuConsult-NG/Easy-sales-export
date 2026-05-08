@@ -25,12 +25,12 @@ export interface AuditLog {
 }
 
 type LogAuditState =
-    | { error: string; success: false }
-    | { error: null; success: true };
+    | { error: string; success: false as const }
+    | { error: null; success: true as const };
 
 type GetAuditLogsState =
-    | { error: string; success: false; data: null }
-    | { error: null; success: true; data: AuditLog[] };
+    | { error: string; success: false as const; data: null }
+    | { error: null; success: true as const; data: AuditLog[] };
 
 /**
  * Log an audit event
@@ -56,10 +56,10 @@ export async function logAuditAction(
             metadata: details,
         });
 
-        return { error: null, success: true };
+        return { error: null, success: true as const };
     } catch (error: any) {
         logger.error("Audit log error:", error);
-        return { error: "Failed to log audit action", success: false };
+        return { error: "Failed to log audit action", success: false as const };
     }
 }
 
@@ -74,13 +74,13 @@ export async function getAuditLogsAction(
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { error: "Unauthorized: Admin access required", success: false, data: null };
+            return { error: "Unauthorized: Admin access required", success: false as const, data: null };
         }
 
         const result = await coreGetAuditLogsAction({ limit: limitCount });
         
         if (!result.success || !result.logs) {
-            return { error: result.error || "Failed to fetch audit logs", success: false, data: null };
+            return { error: result.error || "Failed to fetch audit logs", success: false as const, data: null };
         }
 
         // Map standard AuditLogEntry to legacy format used by old UI
@@ -106,11 +106,11 @@ export async function getAuditLogsAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: logs,
         };
     } catch (error: any) {
         logger.error("Get audit logs error:", error);
-        return { error: "Failed to fetch audit logs", success: false, data: null };
+        return { error: "Failed to fetch audit logs", success: false as const, data: null };
     }
 }

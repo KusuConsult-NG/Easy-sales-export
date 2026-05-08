@@ -14,7 +14,7 @@ import { revalidatePath } from "next/cache";
  */
 export async function switchModuleAction(moduleId: string) {
     const session = await auth();
-    if (!session?.user) return { success: false, error: "Unauthorized" };
+    if (!session?.user) return { success: false as const, error: "Unauthorized" };
 
     // Note: In NextAuth v5, you can't easily update the server session 
     // without a client-side update() call. This action acts as a trigger.
@@ -27,5 +27,5 @@ export async function switchModuleAction(moduleId: string) {
 
     revalidatePath("/", "layout");
     
-    return { success: true, moduleId };
+    return { success: true as const, moduleId };
 }

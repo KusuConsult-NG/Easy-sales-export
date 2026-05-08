@@ -13,7 +13,7 @@ import { logger } from "@/lib/logger";
  */
 export async function repairDataAction() {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
 
     try {
         const db = getAdminDb();
@@ -61,12 +61,12 @@ export async function repairDataAction() {
         }
 
         return { 
-            success: true, 
+            success: true as const, 
             message: `Healed ${count} payment records and ${walletCount} wallet records.` 
         };
     } catch (error: any) {
         logger.error("[Maintenance] Repair error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -77,7 +77,7 @@ export async function repairDataAction() {
  */
 export async function runConsistencyCheckAction() {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
 
     try {
         const db = getAdminDb();
@@ -100,7 +100,7 @@ export async function runConsistencyCheckAction() {
         });
 
         return {
-            success: true,
+            success: true as const,
             report: {
                 firestoreUserDocs: totalUsers,
                 uniqueEmailsInUsers: emails.size,
@@ -111,7 +111,7 @@ export async function runConsistencyCheckAction() {
             }
         };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -122,7 +122,7 @@ export async function runConsistencyCheckAction() {
  */
 export async function hardResetCacheAction() {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
 
     try {
         revalidatePath("/", "layout");
@@ -131,9 +131,9 @@ export async function hardResetCacheAction() {
         const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
         await invalidateAdminGlobalStats();
 
-        return { success: true, message: "Global cache purge triggered successfully." };
+        return { success: true as const, message: "Global cache purge triggered successfully." };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -143,13 +143,13 @@ export async function hardResetCacheAction() {
  */
 export async function cleanupAbandonedDraftsAction() {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, error: "Unauthorized" };
+    if ("error" in authCheck) return { success: false as const, error: "Unauthorized" };
 
     try {
         const db = getAdminDb();
         // Placeholder for logic to delete old 'draft' applications
-        return { success: true, message: "Draft cleanup executed (Dry run).", count: 0 };
+        return { success: true as const, message: "Draft cleanup executed (Dry run).", count: 0 };
     } catch (error: any) {
-        return { success: false, error: error.message, count: 0 };
+        return { success: false as const, error: error.message, count: 0 };
     }
 }

@@ -13,17 +13,17 @@ import { createNotificationAction } from "@/app/actions/notifications";
  * Fetch all admin and super_admin users — used to populate the assignment dropdown.
  */
 export async function getAdminUsersAction(): Promise<{
-    success: boolean;
+    success: true | false;
     admins?: { id: string; name: string; email: string; role: string }[];
     error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthenticated" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthenticated" };
 
         // Must be an admin to list other admins
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { success: false, error: adminCheck.error };
+        if ("error" in adminCheck) return { success: false as const, error: adminCheck.error };
 
         // Query users who have admin or super_admin in their roles array
         const [adminSnap, superAdminSnap] = await Promise.all([
@@ -47,9 +47,9 @@ export async function getAdminUsersAction(): Promise<{
             });
         }
 
-        return { success: true, admins };
+        return { success: true as const, admins };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -60,24 +60,24 @@ export async function assignDisputeAction(
     disputeId: string,
     assigneeId: string,
     assigneeName: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const adminCheck = await requireAdmin();
-        if ("error" in adminCheck) return { success: false, error: adminCheck.error };
+        if ("error" in adminCheck) return { success: false as const, error: adminCheck.error };
 
         const adminId = (adminCheck as { userId: string }).userId;
 
         // Verify the assignee is an admin
         const assigneeDoc = await db.collection(COLLECTIONS.USERS).doc(assigneeId).get();
-        if (!assigneeDoc.exists) return { success: false, error: "Assignee not found" };
+        if (!assigneeDoc.exists) return { success: false as const, error: "Assignee not found" };
         const assigneeData = assigneeDoc.data();
         if (!hasRole(assigneeData?.roles || [], "admin")) {
-            return { success: false, error: "Assignee is not an admin" };
+            return { success: false as const, error: "Assignee is not an admin" };
         }
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
         const disputeDoc = await disputeRef.get();
-        if (!disputeDoc.exists) return { success: false, error: "Dispute not found" };
+        if (!disputeDoc.exists) return { success: false as const, error: "Dispute not found" };
 
         await disputeRef.update({
             assignedAdminId: assigneeId,
@@ -105,8 +105,8 @@ export async function assignDisputeAction(
             link: `/admin/marketplace/disputes/${disputeId}`,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }

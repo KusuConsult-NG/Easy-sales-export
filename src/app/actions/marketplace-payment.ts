@@ -97,7 +97,7 @@ async function _initializeOrderPaymentAction(
         const userId = session.user.id;
 
         if (deliveryFee < 0) {
-            return { error: "Invalid delivery fee", success: false };
+            return { error: "Invalid delivery fee", success: false as const };
         }
 
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
@@ -107,7 +107,7 @@ async function _initializeOrderPaymentAction(
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         if (totalAmount < fees.minOrderAmount) {
-            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
+            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const };
         }
 
         const { authorizationUrl, reference } = await initializePaystackPayment(
@@ -160,7 +160,7 @@ async function _initializeOrderPaymentAction(
         }
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -173,7 +173,7 @@ async function _initializeOrderPaymentAction(
             cartCount: cartItems.length
         });
         return {
-            success: false,
+            success: false as const,
             error: error instanceof Error ? error.message : "Failed to initialize payment. Please try again.",
         };
     }
@@ -196,7 +196,7 @@ async function _verifyOrderPaymentAction(reference: string) {
         const rateLimitResult = await paymentLimiter.check(userId);
         if (!rateLimitResult.success) {
             return {
-                success: false,
+                success: false as const,
                 error: "Too many payment verification attempts. Please try again later."
             };
         }
@@ -217,7 +217,7 @@ async function _verifyOrderPaymentAction(reference: string) {
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status}. Please contact support if amount was debited.`,
-                success: false,
+                success: false as const,
             };
         }
 
@@ -229,17 +229,17 @@ async function _verifyOrderPaymentAction(reference: string) {
 
         // Verify user match
         if (paystackUserId !== userId) {
-            return { error: "Payment verification failed: User mismatch", success: false };
+            return { error: "Payment verification failed: User mismatch", success: false as const };
         }
 
         const fees = await getPlatformFees();
         if (amountInNaira < fees.minOrderAmount || amountInNaira > fees.maxOrderAmount) {
-            return { error: "Invalid payment amount", success: false };
+            return { error: "Invalid payment amount", success: false as const };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: "Payment amount mismatch", success: false };
+            return { error: "Payment amount mismatch", success: false as const };
         }
 
         // Find order record
@@ -249,7 +249,7 @@ async function _verifyOrderPaymentAction(reference: string) {
             .get();
 
         if (orderQuery.empty) {
-            return { error: "Order record not found", success: false };
+            return { error: "Order record not found", success: false as const };
         }
 
         const orderDoc = orderQuery.docs[0];
@@ -369,7 +369,7 @@ async function _verifyOrderPaymentAction(reference: string) {
         Promise.allSettled(notifPromises).catch((e) => logger.error("[verifyOrderPaymentAction] Notification failed:", { userId, error: e }));
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 message: `Payment secured in Escrow! Order #${orderData.orderId} is now processing.`,
                 orderId: orderData.orderId,
@@ -384,7 +384,7 @@ async function _verifyOrderPaymentAction(reference: string) {
         });
 
         return {
-            success: false,
+            success: false as const,
             error: "Failed to verify payment: " + (error instanceof Error ? error.message : "Unknown error"),
         };
     }
@@ -407,7 +407,7 @@ async function _createBankTransferOrderAction(
         const { session } = sessionResult;
 
         if (deliveryFee < 0) {
-            return { error: "Invalid delivery fee", success: false };
+            return { error: "Invalid delivery fee", success: false as const };
         }
 
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
@@ -416,7 +416,7 @@ async function _createBankTransferOrderAction(
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         if (totalAmount < fees.minOrderAmount) {
-            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false };
+            return { error: `Minimum order amount is ₦${fees.minOrderAmount}`, success: false as const };
         }
 
         const sellerIds = Array.from(new Set(validatedItems.map(item => item.sellerId)));
@@ -468,14 +468,14 @@ async function _createBankTransferOrderAction(
             });
         });
 
-        return { success: true, data: { orderId, orderReference } };
+        return { success: true as const, data: { orderId, orderReference } };
     } catch (error) {
         logger.error("Bank transfer order creation error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
         return {
-            success: false,
+            success: false as const,
             error: error instanceof Error ? error.message : "Failed to create order. Please try again.",
         };
     }
@@ -491,13 +491,13 @@ async function _calculateDeliveryAction(items: CartItem[], location?: any) {
         sessionResult = await requireSession().catch(() => ({ session: null }));
         const fees = await getPlatformFees();
         const fee = calculateDeliveryFee(items, location, fees);
-        return { success: true, data: { fee } };
+        return { success: true as const, data: { fee } };
     } catch (error: any) {
         logger.error("Calculate delivery fee error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, data: { fee: 0 }, error: error.message };
+        return { success: false as const, data: { fee: 0 }, error: error.message };
     }
 }
 export const calculateDeliveryAction = withFlexibleSafeAction("calculateDeliveryAction", _calculateDeliveryAction);
@@ -529,7 +529,7 @@ async function _createPaymentOnDeliveryOrderAction(
         const totalAmount = subtotal + deliveryFee;
 
         if (totalAmount < fees.minOrderAmount) {
-            return { success: false, error: `Minimum order amount is ₦${fees.minOrderAmount}` };
+            return { success: false as const, error: `Minimum order amount is ₦${fees.minOrderAmount}` };
         }
 
         const sellerIds = Array.from(new Set(validatedItems.map((i) => i.sellerId))) as string[];
@@ -537,7 +537,7 @@ async function _createPaymentOnDeliveryOrderAction(
             const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sid).get();
             if (!sellerDoc.data()?.allowsPaymentOnDelivery) {
                 return {
-                    success: false,
+                    success: false as const,
                     error: "One or more sellers in your cart do not offer Payment on Delivery",
                 };
             }
@@ -600,13 +600,13 @@ async function _createPaymentOnDeliveryOrderAction(
         }).catch((e) => logger.error("[POD] Notification error:", e));
 
         revalidatePath("/marketplace/buyer/orders");
-        return { success: true, data: { orderId } };
+        return { success: true as const, data: { orderId } };
     } catch (error) {
         logger.error("createPaymentOnDeliveryOrderAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to create POD order" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to create POD order" };
     }
 }
 export const createPaymentOnDeliveryOrderAction = withFlexibleSafeAction("createPaymentOnDeliveryOrderAction", _createPaymentOnDeliveryOrderAction);

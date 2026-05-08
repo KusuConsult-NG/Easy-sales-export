@@ -13,7 +13,7 @@ export async function submitExportProductAction(productData: any) {
         const { session } = sessionResult;
         
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const dataToSave = { ...productData };
@@ -28,10 +28,10 @@ export async function submitExportProductAction(productData: any) {
             updatedAt: FieldValue.serverTimestamp(),
         });
         
-        return { success: true, data: { id: ref.id } };
+        return { success: true as const, data: { id: ref.id } };
     } catch (error: any) {
         logger.error("Submit export product error:", error);
-        return { success: false, error: "Failed to submit product" };
+        return { success: false as const, error: "Failed to submit product" };
     }
 }
 
@@ -41,7 +41,7 @@ export async function getUserExportProductsAction() {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const userId = session.user.id;
@@ -63,11 +63,11 @@ export async function getUserExportProductsAction() {
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: products
         };
     } catch (error: any) {
         logger.error("Get user export products error:", error);
-        return { error: "Failed to fetch products", success: false };
+        return { error: "Failed to fetch products", success: false as const };
     }
 }

@@ -65,7 +65,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
         // 1. Security Check: Only admins can generate broadcast lists
         const { session } = await requireSession();
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized. Admin access required." };
+            return { success: false as const, error: "Unauthorized. Admin access required." };
         }
 
         logger.info(`[Broadcast] Generating clean list for admin: ${session.user.id}`);
@@ -101,7 +101,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
         logger.info(`[Broadcast] Clean Sweep complete. Original Docs: ${snapshot.size}, Unique Recipients: ${uniqueList.length}`);
 
         return { 
-            success: true, 
+            success: true as const, 
             recipients: uniqueList, 
             count: uniqueList.length,
             originalDocCount: snapshot.size
@@ -109,7 +109,7 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
 
     } catch (error) {
         logger.error("[Broadcast] List generation failed:", error);
-        return { success: false, error: "Failed to generate broadcast list." };
+        return { success: false as const, error: "Failed to generate broadcast list." };
     }
 }
 
@@ -118,15 +118,20 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) {
  * (Required by Communications UI)
  */
 export async function previewBroadcastAction(broadcastData: BroadcastFilters): Promise<{
-    success: boolean;
+    success: true as const;
     count: number | null;
     sample: any[];
-    error: string | null;
+    error: null;
+} | {
+    success: false as const;
+    error: string;
+    count: null;
+    sample: any[];
 }> {
     const listResult = await getCleanBroadcastListAction(broadcastData);
     if (!listResult.success) {
         return { 
-            success: false, 
+            success: false as const, 
             error: listResult.error || "Failed to estimate recipients",
             count: null,
             sample: []
@@ -134,7 +139,7 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
     }
     
     return {
-        success: true,
+        success: true as const,
         count: listResult.count ?? null,
         sample: listResult.recipients?.slice(0, 5) || [],
         error: null
@@ -146,9 +151,13 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
  * (Required by Communications UI)
  */
 export async function getBroadcastHistoryAction(): Promise<{
-    success: boolean;
+    success: true as const;
     logs: BroadcastLog[];
-    error: string | null;
+    error: null;
+} | {
+    success: false as const;
+    logs: BroadcastLog[];
+    error: string;
 }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
@@ -176,9 +185,9 @@ export async function getBroadcastHistoryAction(): Promise<{
             } as BroadcastLog;
         });
         
-        return { success: true, logs, error: null };
+        return { success: true as const, logs, error: null };
     } catch (error: any) {
-        return { success: false, logs: [], error: error.message || "Failed to fetch history" };
+        return { success: false as const, logs: [], error: error.message || "Failed to fetch history" };
     }
 }
 

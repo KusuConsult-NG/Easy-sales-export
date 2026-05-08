@@ -38,14 +38,14 @@ export async function getFeatureToggle(featureName: string): Promise<boolean> {
 export async function updateFeatureToggle(
     featureName: string,
     enabled: boolean
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized: Admin access required" };
+            return { success: false as const, error: "Unauthorized: Admin access required" };
         }
 
         const toggleRef = db.collection(COLLECTIONS.FEATURE_TOGGLES).doc(featureName);
@@ -87,10 +87,10 @@ export async function updateFeatureToggle(
             details: `Feature '${featureName}' ${enabled ? "enabled" : "disabled"}`,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to update feature toggle:", error);
-        return { success: false, error: error.message || "Failed to update toggle" };
+        return { success: false as const, error: error.message || "Failed to update toggle" };
     }
 }
 
@@ -98,7 +98,7 @@ export async function updateFeatureToggle(
  * Get all feature toggles (admin only)
  */
 export async function getAllFeatureToggles(): Promise<{
-    success: boolean;
+    success: true | false;
     data?: FeatureToggle[];
     error?: string;
 }> {
@@ -108,7 +108,7 @@ export async function getAllFeatureToggles(): Promise<{
     const { session } = sessionResult;
 
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized: Admin access required" };
+            return { success: false as const, error: "Unauthorized: Admin access required" };
         }
 
         const togglesRef = db.collection(COLLECTIONS.FEATURE_TOGGLES);
@@ -116,10 +116,10 @@ export async function getAllFeatureToggles(): Promise<{
 
         const toggles = snapshot.docs.map(doc => doc.data() as FeatureToggle);
 
-        return { success: true, data: toggles };
+        return { success: true as const, data: toggles };
     } catch (error: any) {
         logger.error("Failed to get feature toggles:", error);
-        return { success: false, error: error.message || "Failed to fetch toggles" };
+        return { success: false as const, error: error.message || "Failed to fetch toggles" };
     }
 }
 

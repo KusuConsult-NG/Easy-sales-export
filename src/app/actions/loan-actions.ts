@@ -64,16 +64,16 @@ export async function submitLoanApplication(
             console.error("Failed to log loan creation audit:", auditError);
         }
 
-        return { success: true, data: { loanId, userId: session.user.id } };
+        return { success: true as const, data: { loanId, userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
-                success: false,
+                success: false as const,
                 error: "Validation error",
                 details: (error as z.ZodError).issues.map(e => e.message),
             };
         }
-        return { success: false, error: "Failed to submit loan application" };
+        return { success: false as const, error: "Failed to submit loan application" };
     }
 }
 
@@ -93,9 +93,9 @@ export async function getUserLoanApplications() {
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { success: true, data: { loans, } };
+        return { success: true as const, data: { loans, } };
     } catch (error) {
-        return { success: false, error: "Failed to fetch loan applications", loans: [] };
+        return { success: false as const, error: "Failed to fetch loan applications", loans: [] };
     }
 }
 
@@ -112,21 +112,21 @@ export async function getLoanApplication(loanId: string) {
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
-            return { success: false, error: "Loan application not found", loan: null };
+            return { success: false as const, error: "Loan application not found", loan: null };
         }
 
         const data = loanDoc.data()!;
 
         // Check authorization - user can only view their own loans unless admin
         if (data.userId !== session.user.id && !session.user.roles?.includes('admin')) {
-            return { success: false, error: "Unauthorized to view this loan", loan: null };
+            return { success: false as const, error: "Unauthorized to view this loan", loan: null };
         }
 
         const loan = serializeDoc<LoanApplication>(loanDoc.id, data);
 
-        return { success: true, data: { loan, } };
+        return { success: true as const, data: { loan, } };
     } catch (error) {
-        return { success: false, error: "Failed to fetch loan application", loan: null };
+        return { success: false as const, error: "Failed to fetch loan application", loan: null };
     }
 }
 
@@ -138,7 +138,7 @@ export async function getPendingLoanApplications() {
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
-        return { success: false, error: "Unauthorized - Admin only", loans: [] };
+        return { success: false as const, error: "Unauthorized - Admin only", loans: [] };
     }
 
     try {
@@ -149,9 +149,9 @@ export async function getPendingLoanApplications() {
         const snapshot = await loansQuery.get();
         const loans = serializeDocs<LoanApplication>(snapshot.docs);
 
-        return { success: true, data: { loans, } };
+        return { success: true as const, data: { loans, } };
     } catch (error) {
-        return { success: false, error: "Failed to fetch pending loans", loans: [] };
+        return { success: false as const, error: "Failed to fetch pending loans", loans: [] };
     }
 }
 
@@ -165,7 +165,7 @@ export async function approveLoanApplication(
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
-        return { success: false, error: "Unauthorized - Admin only" };
+        return { success: false as const, error: "Unauthorized - Admin only" };
     }
 
     try {
@@ -217,16 +217,16 @@ export async function approveLoanApplication(
             console.error("Failed to log loan approval/rejection audit:", auditError);
         }
 
-        return { success: true, data: { userId: session.user.id } };
+        return { success: true as const, data: { userId: session.user.id } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
-                success: false,
+                success: false as const,
                 error: "Validation error",
                 details: (error as z.ZodError).issues.map(e => e.message),
             };
         }
-        return { success: false, error: "Failed to process loan approval" };
+        return { success: false as const, error: "Failed to process loan approval" };
     }
 }
 
@@ -238,7 +238,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
-        return { success: false, error: "Unauthorized - Admin only" };
+        return { success: false as const, error: "Unauthorized - Admin only" };
     }
 
     try {
@@ -278,9 +278,9 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
             console.error("Failed to log loan disbursement audit:", auditError);
         }
 
-        return { success: true, data: { userId: session.user.id } };
+        return { success: true as const, data: { userId: session.user.id } };
     } catch (error) {
-        return { success: false, error: "Failed to disburse loan" };
+        return { success: false as const, error: "Failed to disburse loan" };
     }
 }
 
@@ -293,7 +293,7 @@ export async function getLoanStatistics() {
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) {
         return {
-            success: false,
+            success: false as const,
             error: "Unauthorized - Admin only",
             stats: null
         };
@@ -340,8 +340,8 @@ export async function getLoanStatistics() {
             }
         });
 
-        return { success: true, data: { stats, } };
+        return { success: true as const, data: { stats, } };
     } catch (error) {
-        return { success: false, error: "Failed to fetch loan statistics", stats: null };
+        return { success: false as const, error: "Failed to fetch loan statistics", stats: null };
     }
 }

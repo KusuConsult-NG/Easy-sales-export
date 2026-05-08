@@ -40,24 +40,24 @@ export async function uploadCertificateAction(
         expiryDate?: string;
         issuer?: string;
     }
-): Promise<{ success: boolean; error?: string; certificateId?: string }> {
+): Promise<{ success: true | false; error?: string; certificateId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
         // Validate file size (10MB max)
         const maxSize = parseInt(process.env.MAX_CERTIFICATE_SIZE_MB || "10", 10) * 1024 * 1024;
         if (file.size > maxSize) {
-            return { success: false, error: `File size exceeds ${maxSize / 1024 / 1024}MB limit` };
+            return { success: false as const, error: `File size exceeds ${maxSize / 1024 / 1024}MB limit` };
         }
 
         // Validate file type
         const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
         if (!allowedTypes.includes(file.type)) {
-            return { success: false, error: "Invalid file type. Only PDF and images are allowed" };
+            return { success: false as const, error: "Invalid file type. Only PDF and images are allowed" };
         }
 
         // Upload to Firebase Storage (Admin SDK)
@@ -93,10 +93,10 @@ export async function uploadCertificateAction(
             },
         });
 
-        return { success: true, certificateId: docRef.id };
+        return { success: true as const, certificateId: docRef.id };
     } catch (error) {
         logger.error("Certificate upload error:", error);
-        return { success: false, error: "Failed to upload certificate" };
+        return { success: false as const, error: "Failed to upload certificate" };
     }
 }
 
@@ -121,26 +121,26 @@ export async function getUserCertificatesAction(userId: string): Promise<Certifi
 export async function deleteCertificateAction(
     certificateId: string,
     userId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
         const certRef = db.collection(COLLECTIONS.CERTIFICATES).doc(certificateId);
         const certDoc = await certRef.get();
 
         if (!certDoc.exists) {
-            return { success: false, error: "Certificate not found" };
+            return { success: false as const, error: "Certificate not found" };
         }
 
         const cert = certDoc.data() as Certificate;
 
         // Verify ownership
         if (cert.userId !== userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         // Delete from Cloud Storage
@@ -178,23 +178,23 @@ export async function deleteCertificateAction(
             },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Certificate deletion error:", error);
-        return { success: false, error: "Failed to delete certificate" };
+        return { success: false as const, error: "Failed to delete certificate" };
     }
 }
 
 /**
  * Mark onboarding as complete
  */
-export async function completeOnboardingAction(userId: string): Promise<{ success: boolean; error?: string }> {
+export async function completeOnboardingAction(userId: string): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
@@ -209,10 +209,10 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
             targetType: "onboarding_completion",
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Failed to complete onboarding:", error);
-        return { success: false, error: "Failed to complete onboarding" };
+        return { success: false as const, error: "Failed to complete onboarding" };
     }
 }
 

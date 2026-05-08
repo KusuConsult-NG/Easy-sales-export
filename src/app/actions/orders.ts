@@ -17,7 +17,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
  */
 
 export interface CreateOrderState {
-    success: boolean;
+    success: true | false;
     error?: string;
     orderId?: string;
     orderIds?: string[];
@@ -144,7 +144,7 @@ async function _createOrderAction(
                 transaction.set(orderRef, orderData);
             }
 
-            return { success: true, data: { orderId: orderIds[0], orderIds } };
+            return { success: true as const, data: { orderId: orderIds[0], orderIds } };
         });
 
     } catch (error) {
@@ -153,7 +153,7 @@ async function _createOrderAction(
             error: error instanceof Error ? error.message : String(error)
         });
         return {
-            success: false,
+            success: false as const,
             error: error instanceof Error ? error.message : "Failed to create order",
         };
     }
@@ -173,24 +173,24 @@ async function _getOrderByIdAction(orderId: string) {
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
         if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
+            return { success: false as const, error: "Order not found" };
         }
 
         const orderData = orderDoc.data();
 
         if (orderData?.buyerId !== session.user.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const { serializeDoc } = await import("@/lib/firestore-serialize");
-        return { success: true, data: { order: serializeDoc<Order>(orderDoc.id, orderData) } };
+        return { success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, orderData) } };
     } catch (error) {
         logger.error("Get order error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 export const getOrderByIdAction = withFlexibleSafeAction("getOrderByIdAction", _getOrderByIdAction);
@@ -229,14 +229,14 @@ async function _updateOrderPaymentAction(
             });
         });
 
-        return { success: true, data: { message: "Payment status updated successfully" } };
+        return { success: true as const, data: { message: "Payment status updated successfully" } };
     } catch (error) {
         logger.error("Update payment error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Update failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Update failed" };
     }
 }
 export const updateOrderPaymentAction = withFlexibleSafeAction("updateOrderPaymentAction", _updateOrderPaymentAction);

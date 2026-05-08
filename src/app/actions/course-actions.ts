@@ -48,18 +48,18 @@ export async function updateLessonProgress(
         // Or auto-complete? The "Honor System" fix is about verification.
         // Let's keep it manual but verified.
 
-        return { success: true, data: { userId: session.user.id,
+        return { success: true as const, data: { userId: session.user.id,
             completed: validated.progressPercent >= 95, } };
     } catch (error) {
         logger.error("Lesson progress error:", error);
         if (error instanceof z.ZodError) {
             return {
-                success: false,
+                success: false as const,
                 error: "Validation error",
                 details: error.issues.map(e => e.message),
             };
         }
-        return { success: false, error: "Failed to update lesson progress" };
+        return { success: false as const, error: "Failed to update lesson progress" };
     }
 }
 
@@ -83,7 +83,7 @@ export async function enrollInCourse(
             .get();
 
         if (!snapshot.empty) {
-            return { success: false, error: "Already enrolled in this course" };
+            return { success: false as const, error: "Already enrolled in this course" };
         }
 
         // Create enrollment
@@ -119,17 +119,17 @@ export async function enrollInCourse(
             },
         });
 
-        return { success: true, data: { enrollmentId: enrollmentRef.id,
+        return { success: true as const, data: { enrollmentId: enrollmentRef.id,
             userId: session.user.id, } };
     } catch (error) {
         if (error instanceof z.ZodError) {
             return {
-                success: false,
+                success: false as const,
                 error: "Validation error",
                 details: error.issues.map((e: any) => e.message),
             };
         }
-        return { success: false, error: "Failed to enroll in course" };
+        return { success: false as const, error: "Failed to enroll in course" };
     }
 }
 
@@ -148,12 +148,12 @@ export async function getCourseProgress(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return { success: true, data: { progress: null, } };
+            return { success: true as const, data: { progress: null, } };
         }
 
         const progressData = snapshot.docs[0].data();
 
-        return { success: true, data: { progress: {
+        return { success: true as const, data: { progress: {
                 id: snapshot.docs[0].id,
                 userId: progressData.userId,
                 courseId: progressData.courseId,
@@ -165,7 +165,7 @@ export async function getCourseProgress(courseId: string) {
             } },
         };
     } catch (error) {
-        return { success: false, error: "Failed to fetch course progress", progress: null };
+        return { success: false as const, error: "Failed to fetch course progress", progress: null };
     }
 }
 
@@ -182,17 +182,17 @@ export async function getLessonProgress(lessonId: string) {
         const doc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
 
         if (!doc.exists) {
-            return { success: true, data: { progress: null } };
+            return { success: true as const, data: { progress: null } };
         }
 
-        return { success: true, data: { progress: doc.data() as {
+        return { success: true as const, data: { progress: doc.data() as {
                 progressPercent: number;
                 lastWatchedSecond: number;
                 completed: boolean; } },
         };
     } catch (error) {
         logger.error("Failed to fetch lesson progress:", error);
-        return { success: false, error: "Failed to fetch lesson progress", progress: null };
+        return { success: false as const, error: "Failed to fetch lesson progress", progress: null };
     }
 }
 
@@ -212,9 +212,9 @@ export async function getUserEnrolledCourses() {
 
         const enrollments = serializeDocs(snapshot.docs);
 
-        return { success: true, data: { courses: enrollments, } };
+        return { success: true as const, data: { courses: enrollments, } };
     } catch (error) {
-        return { success: false, error: "Failed to fetch enrolled courses", courses: [] };
+        return { success: false as const, error: "Failed to fetch enrolled courses", courses: [] };
     }
 }
 
@@ -233,7 +233,7 @@ export async function completeCourse(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return { success: false, error: "No progress record found" };
+            return { success: false as const, error: "No progress record found" };
         }
 
         const progressDoc = snapshot.docs[0];
@@ -255,9 +255,9 @@ export async function completeCourse(courseId: string) {
             },
         });
 
-        return { success: true, data: { userId: session.user.id } };
+        return { success: true as const, data: { userId: session.user.id } };
     } catch (error) {
-        return { success: false, error: "Failed to complete course" };
+        return { success: false as const, error: "Failed to complete course" };
     }
 }
 
@@ -279,7 +279,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             .get();
 
         if (snapshot.empty) {
-            return { success: false, error: "Course not completed yet" };
+            return { success: false as const, error: "Course not completed yet" };
         }
 
         const progressData = snapshot.docs[0].data();
@@ -293,7 +293,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
         if (!certSnapshot.empty) {
             // Return existing certificate
             const existingCert = certSnapshot.docs[0];
-            return { success: true, data: { certificateId: existingCert.id,
+            return { success: true as const, data: { certificateId: existingCert.id,
                 message: "Certificate already generated", } };
         }
 
@@ -335,11 +335,11 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
             },
         });
 
-        return { success: true, data: { certificateId: certificateRef.id,
+        return { success: true as const, data: { certificateId: certificateRef.id,
             message: "Certificate generated successfully", } };
     } catch (error) {
         logger.error("Certificate generation error:", error);
-        return { success: false, error: "Failed to generate certificate" };
+        return { success: false as const, error: "Failed to generate certificate" };
     }
 }
 
@@ -358,12 +358,12 @@ export async function getCourseCertificate(courseId: string) {
             .get();
 
         if (snapshot.empty) {
-            return { success: true, data: { certificate: null, } };
+            return { success: true as const, data: { certificate: null, } };
         }
 
         const certData = snapshot.docs[0].data();
 
-        return { success: true, data: { certificate: {
+        return { success: true as const, data: { certificate: {
                 id: snapshot.docs[0].id,
                 userId: certData.userId,
                 userName: certData.userName,
@@ -374,6 +374,6 @@ export async function getCourseCertificate(courseId: string) {
                 certificateNumber: certData.certificateNumber, } },
         };
     } catch (error) {
-        return { success: false, error: "Failed to fetch certificate", certificate: null };
+        return { success: false as const, error: "Failed to fetch certificate", certificate: null };
     }
 }

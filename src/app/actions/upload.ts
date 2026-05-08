@@ -6,7 +6,7 @@
  * STRATEGY:
  *  1. Validate auth, mime type, and file size
  *  2. Send file to Cloudinary via signed upload API
- *  3. Return { success: true, url } or { success: false, error }
+ *  3. Return { success: true as const, url } or { success: false as const, error }
  *
  * IMPORTANT: Firebase Storage is NOT used. All uploads go to Cloudinary.
  * The old Firebase Storage + Firestore fallback path was removed because:
@@ -31,7 +31,7 @@ const MAX_SIZE_MB = 5;
 // ── Main export ──────────────────────────────────────────────────────────────
 export async function uploadDocumentAction(
     formData: FormData
-): Promise<{ success: boolean; url?: string; error?: string; fallback?: boolean }> {
+): Promise<{ success: true | false; url?: string; error?: string; fallback?: boolean }> {
     try {
         const file = formData.get("file") as File | null;
         const fileName = formData.get("fileName") as string;
@@ -39,13 +39,13 @@ export async function uploadDocumentAction(
         const documentType = formData.get("documentType") as string;
 
         if (!file || !fileName || !mimeType || !documentType) {
-            return { success: false, error: "Missing required upload parameters." };
+            return { success: false as const, error: "Missing required upload parameters." };
         }
 
         // ── Auth check ───────────────────────────────────────────────────────
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
-            return { success: false, error: "Your session has expired. Please log in again." };
+            return { success: false as const, error: "Your session has expired. Please log in again." };
         }
         const { session } = sessionResult;
         const userId = session.user.id;
@@ -53,14 +53,14 @@ export async function uploadDocumentAction(
         // ── Validate mime type ───────────────────────────────────────────────
         const ext = ALLOWED_TYPES[mimeType];
         if (!ext) {
-            return { success: false, error: "Invalid file type. Only JPG, PNG, PDF allowed." };
+            return { success: false as const, error: "Invalid file type. Only JPG, PNG, PDF allowed." };
         }
 
         // ── Size-check ───────────────────────────────────────────────────────
         // size property on File is in bytes natively. 
         const sizeMB = file.size / (1024 * 1024);
         if (sizeMB > MAX_SIZE_MB) {
-            return { success: false, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
+            return { success: false as const, error: `File too large. Max ${MAX_SIZE_MB}MB.` };
         }
         
         logger.info(`[Upload:Start] User:${userId} | Stream Size: ${sizeMB.toFixed(2)}MB`);
@@ -73,7 +73,7 @@ export async function uploadDocumentAction(
         if (!cloudName || !apiKey || !apiSecret) {
             logger.error("[uploadDocumentAction] Cloudinary environment variables not configured");
             return {
-                success: false,
+                success: false as const,
                 error: "Upload service is temporarily unavailable. Please try again later or contact support.",
             };
         }
@@ -105,7 +105,7 @@ export async function uploadDocumentAction(
             const errBody = await response.text();
             logger.error("[uploadDocumentAction] Cloudinary upload failed:", errBody);
             return {
-                success: false,
+                success: false as const,
                 error: "File upload failed. Please check your file and try again.",
             };
         }
@@ -114,12 +114,12 @@ export async function uploadDocumentAction(
         const url: string = result.secure_url;
 
         logger.info(`[uploadDocumentAction] Uploaded to Cloudinary: ${documentType} for user ${userId}`);
-        return { success: true, url };
+        return { success: true as const, url };
 
     } catch (error) {
         logger.error("[uploadDocumentAction] Unexpected error:", error);
         return {
-            success: false,
+            success: false as const,
             error: error instanceof Error ? error.message : "Upload failed. Please try again.",
         };
     }

@@ -57,7 +57,7 @@ export async function createExportWindowAction(data: {
 }) {
     try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error };
 
         const window: Omit<ExportWindow, "id"> = {
             title: data.title,
@@ -87,10 +87,10 @@ export async function createExportWindowAction(data: {
             },
         });
 
-        return { success: true, data: { windowId: docRef.id }, meta: null };
+        return { success: true as const, data: { windowId: docRef.id }, meta: null };
     } catch (error) {
         logger.error("Export window creation error:", error);
-        return { success: false, data: null, error: "Failed to create export window", meta: null };
+        return { success: false as const, data: null, error: "Failed to create export window", meta: null };
     }
 }
 
@@ -104,10 +104,10 @@ export async function getActiveExportWindowsAction() {
         const snapshot = await q.get();
 
         const windows = serializeDocs(snapshot.docs) as unknown as ExportWindow[];
-        return { success: true, data: windows, meta: null };
+        return { success: true as const, data: windows, meta: null };
     } catch (error) {
         logger.error("Failed to fetch export windows:", error);
-        return { success: false, data: [], meta: null, error: "Failed to fetch" };
+        return { success: false as const, data: [], meta: null, error: "Failed to fetch" };
     }
 }
 
@@ -123,28 +123,28 @@ export async function bookExportSlotAction(data: {
 }) {
     try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
 
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
-            return { success: false, data: null, error: "Export window not found", meta: null };
+            return { success: false as const, data: null, error: "Export window not found", meta: null };
         }
 
         const windowData = windowDoc.data() as ExportWindow;
 
         if (windowData.status !== "open") {
-            return { success: false, data: null, error: "Export window is closed", meta: null };
+            return { success: false as const, data: null, error: "Export window is closed", meta: null };
         }
 
         if (new Date() > new Date(windowData.endDate)) {
-            return { success: false, data: null, error: "Export window has expired", meta: null };
+            return { success: false as const, data: null, error: "Export window has expired", meta: null };
         }
 
         if (windowData.currentVolume + data.volume > windowData.targetVolume) {
             return {
-                success: false,
+                success: false as const,
                 data: null,
                 meta: null,
                 error: `Only ${windowData.targetVolume - windowData.currentVolume}kg available`,
@@ -184,10 +184,10 @@ export async function bookExportSlotAction(data: {
             },
         });
 
-        return { success: true, data: { slotId: slotRef.id }, meta: null };
+        return { success: true as const, data: { slotId: slotRef.id }, meta: null };
     } catch (error) {
         logger.error("Slot booking error:", error);
-        return { success: false, data: null, error: "Failed to book export slot", meta: null };
+        return { success: false as const, data: null, error: "Failed to book export slot", meta: null };
     }
 }
 
@@ -197,17 +197,17 @@ export async function bookExportSlotAction(data: {
 export async function getUserExportSlotsAction(userId: string) {
     try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
 
         const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 
         const snapshot = await q.get();
 
         const slots = serializeDocs(snapshot.docs) as unknown as ExportSlot[];
-        return { success: true, data: slots, meta: null };
+        return { success: true as const, data: slots, meta: null };
     } catch (error) {
         logger.error("Failed to fetch export slots:", error);
-        return { success: false, data: [], error: "Fetch failed", meta: null };
+        return { success: false as const, data: [], error: "Fetch failed", meta: null };
     }
 }
 

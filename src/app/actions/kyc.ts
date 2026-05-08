@@ -20,7 +20,7 @@ import { invalidateUserCache } from '@/lib/cache-invalidation';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface KYCVerificationResult {
-    success: boolean;
+    success: true | false;
     isMatch?: boolean;
     error?: string;
     /** Populated when names don't match — helps user see what name is on record */
@@ -49,29 +49,29 @@ export async function verifyBVNAction(payload: {
 }): Promise<KYCVerificationResult> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
         const { session } = sessionResult;
         const userId = session.user!.id;
 
         const { bvn, firstName, lastName } = payload;
 
         if (!bvn || !/^\d{11}$/.test(bvn)) {
-            return { success: false, error: 'BVN must be exactly 11 digits' };
+            return { success: false as const, error: 'BVN must be exactly 11 digits' };
         }
         if (!firstName || !lastName) {
-            return { success: false, error: 'First name and last name are required for BVN verification' };
+            return { success: false as const, error: 'First name and last name are required for BVN verification' };
         }
 
         // Guard: reject obviously fake / placeholder BVN patterns server-side
         if (isObviouslyFakeId(bvn)) {
             logger.warn('[verifyBVNAction] Suspicious BVN submitted', { userId, bvn });
-            return { success: false, error: fakeIdErrorMessage('BVN') };
+            return { success: false as const, error: fakeIdErrorMessage('BVN') };
         }
 
         logger.info('BVN verification started [QOREID BYPASSED]', { userId, bvn: bvn.slice(0, 4) + '***' });
 
         // BYPASS QOREID: Automatically grant success and match
-        const result = { success: true, isMatch: true, error: undefined };
+        const result = { success: true as const, isMatch: true, error: undefined };
 
         // Persist result to Firestore regardless of match outcome
         await atomicUpdateUser(userId, {
@@ -84,11 +84,11 @@ export async function verifyBVNAction(payload: {
         });
 
         if (!result.success) {
-            return { success: false, error: result.error || 'BVN verification failed' };
+            return { success: false as const, error: result.error || 'BVN verification failed' };
         }
 
         if (!result.isMatch) {
-            return { success: true, isMatch: false,
+            return { success: true as const, isMatch: false,
                 error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.' };
         }
 
@@ -98,10 +98,10 @@ export async function verifyBVNAction(payload: {
         await invalidateUserCache(userId);
 
         logger.info('BVN verified successfully', { userId });
-        return { success: true, isMatch: true };
+        return { success: true as const, isMatch: true };
     } catch (error: any) {
         logger.error('BVN verification action error', error);
-        return { success: false, error: error?.message || 'An unexpected error occurred' };
+        return { success: false as const, error: error?.message || 'An unexpected error occurred' };
     }
 }
 
@@ -118,29 +118,29 @@ export async function verifyNINAction(payload: {
 }): Promise<KYCVerificationResult> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const { nin, firstName, lastName } = payload;
 
         if (!nin || !/^\d{11}$/.test(nin)) {
-            return { success: false, error: 'NIN must be exactly 11 digits' };
+            return { success: false as const, error: 'NIN must be exactly 11 digits' };
         }
         if (!firstName || !lastName) {
-            return { success: false, error: 'First name and last name are required for NIN verification' };
+            return { success: false as const, error: 'First name and last name are required for NIN verification' };
         }
 
         // Guard: reject obviously fake / placeholder NIN patterns server-side
         if (isObviouslyFakeId(nin)) {
             logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
-            return { success: false, error: fakeIdErrorMessage('NIN') };
+            return { success: false as const, error: fakeIdErrorMessage('NIN') };
         }
 
         logger.info('NIN verification started [QOREID BYPASSED]', { userId, nin: nin.slice(0, 4) + '***' });
 
         // BYPASS QOREID: Automatically grant success and match
-        const result = { success: true, isMatch: true, error: undefined };
+        const result = { success: true as const, isMatch: true, error: undefined };
 
         // Persist result to Firestore regardless of match outcome
         await atomicUpdateUser(userId, {
@@ -153,11 +153,11 @@ export async function verifyNINAction(payload: {
         });
 
         if (!result.success) {
-            return { success: false, error: result.error || 'NIN verification failed' };
+            return { success: false as const, error: result.error || 'NIN verification failed' };
         }
 
         if (!result.isMatch) {
-            return { success: true, isMatch: false,
+            return { success: true as const, isMatch: false,
                 error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.' };
         }
 
@@ -167,10 +167,10 @@ export async function verifyNINAction(payload: {
         await invalidateUserCache(userId);
 
         logger.info('NIN verified successfully', { userId });
-        return { success: true, isMatch: true };
+        return { success: true as const, isMatch: true };
     } catch (error: any) {
         logger.error('NIN verification action error', error);
-        return { success: false, error: error?.message || 'An unexpected error occurred' };
+        return { success: false as const, error: error?.message || 'An unexpected error occurred' };
     }
 }
 
@@ -188,17 +188,17 @@ export async function verifyVotersCardAction(payload: {
 }): Promise<KYCVerificationResult> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         const { votersCardNumber, firstName, lastName } = payload;
 
         if (!votersCardNumber) {
-            return { success: false, error: "Voter's Card number is required" };
+            return { success: false as const, error: "Voter's Card number is required" };
         }
         if (!firstName || !lastName) {
-            return { success: false, error: "First name and last name are required for Voter's Card verification" };
+            return { success: false as const, error: "First name and last name are required for Voter's Card verification" };
         }
 
         logger.info("Voter's Card verification started", { userId, vin: votersCardNumber.slice(0, 4) + '***' });
@@ -226,10 +226,10 @@ export async function verifyVotersCardAction(payload: {
         logger.info("Voter's Card allowed and bypassed for manual review", { userId });
         
         // Return 100% success to the frontend so KYCForm lets them proceed
-        return { success: true, isMatch: true };
+        return { success: true as const, isMatch: true };
     } catch (error: any) {
         logger.error("Voter's Card verification action error", error);
-        return { success: false, error: error?.message || 'An unexpected error occurred' };
+        return { success: false as const, error: error?.message || 'An unexpected error occurred' };
     }
 }
 
@@ -250,10 +250,10 @@ export async function saveKYCProfileAction(payload: {
     state: string;
     idType?: string;
     idNumber?: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: 'Not authenticated' };
+        if (!sessionResult.session) return { success: false as const, error: 'Not authenticated' };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -376,10 +376,10 @@ export async function saveKYCProfileAction(payload: {
 
         await invalidateUserCache(userId);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error('Save KYC profile error', error);
-        return { success: false, error: error?.message || 'Failed to save KYC profile' };
+        return { success: false as const, error: error?.message || 'Failed to save KYC profile' };
     }
 }
 

@@ -47,13 +47,13 @@ async function _getUserEscrowTransactions() {
             };
         });
 
-        return { success: true, data: { transactions: serializeValue(transactions) as EscrowTransaction[] } };
+        return { success: true as const, data: { transactions: serializeValue(transactions) as EscrowTransaction[] } };
     } catch (error: any) {
         logger.error("Get escrow transactions error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const getUserEscrowTransactions = withFlexibleSafeAction("getUserEscrowTransactions", _getUserEscrowTransactions);
@@ -79,7 +79,7 @@ async function _getAllEscrowTransactionsAdmin(options: {
         const callerDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const callerRoles: string[] = callerDoc.data()?.roles ?? [];
         if (!callerRoles.includes("admin") && !callerRoles.includes("super_admin")) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -130,7 +130,7 @@ async function _getAllEscrowTransactionsAdmin(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: {
                 transactions: serializeValue(transactions) as EscrowTransaction[],
                 lastDocId: nextCursor,
@@ -142,7 +142,7 @@ async function _getAllEscrowTransactionsAdmin(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const getAllEscrowTransactionsAdmin = withFlexibleSafeAction("getAllEscrowTransactionsAdmin", _getAllEscrowTransactionsAdmin);
@@ -233,7 +233,7 @@ async function _updateEscrowStatus(
             }).catch((e) => logger.error("[updateEscrowStatus] Notification failed:", e));
         }
 
-        return { success: true, data: { message: "Escrow status updated successfully" } };
+        return { success: true as const, data: { message: "Escrow status updated successfully" } };
     } catch (error: any) {
         logger.error("Update escrow status error:", {
             userId: sessionResult?.session?.user?.id,
@@ -241,10 +241,10 @@ async function _updateEscrowStatus(
         });
 
         if (error instanceof z.ZodError) {
-            return { success: false, error: "Invalid status value" };
+            return { success: false as const, error: "Invalid status value" };
         }
 
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const updateEscrowStatus = withFlexibleSafeAction("updateEscrowStatus", _updateEscrowStatus);
@@ -264,7 +264,7 @@ async function _createEscrowDispute(
         const userId = session.user.id;
 
         if (!reason.trim() || reason.length < 10 || reason.length > 1000) {
-            return { success: false, error: "Dispute reason must be 10-1000 characters" };
+            return { success: false as const, error: "Dispute reason must be 10-1000 characters" };
         }
 
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
@@ -305,13 +305,13 @@ async function _createEscrowDispute(
             });
         });
 
-        return { success: true, data: { message: "Escrow dispute created successfully" } };
+        return { success: true as const, data: { message: "Escrow dispute created successfully" } };
     } catch (error: any) {
         logger.error("Create escrow dispute error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const createEscrowDispute = withFlexibleSafeAction("createEscrowDispute", _createEscrowDispute);
@@ -329,7 +329,7 @@ async function _releaseEscrowFunds(
         const { session } = sessionResult;
 
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const userId = session.user.id;
@@ -401,13 +401,13 @@ async function _releaseEscrowFunds(
             ]).catch((e) => logger.error("[releaseEscrowFunds] Notifications failed:", e));
         }
 
-        return { success: true, data: { message: "Escrow funds released successfully" } };
+        return { success: true as const, data: { message: "Escrow funds released successfully" } };
     } catch (error: any) {
         logger.error("Release escrow funds error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const releaseEscrowFunds = withFlexibleSafeAction("releaseEscrowFunds", _releaseEscrowFunds);
@@ -425,7 +425,7 @@ async function _refundEscrowToBuyer(
         const { session } = sessionResult;
 
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const userId = session.user.id;
@@ -496,13 +496,13 @@ async function _refundEscrowToBuyer(
             ]).catch((e) => logger.error("[refundEscrowToBuyer] Notifications failed:", e));
         }
 
-        return { success: true, data: { message: "Escrow refunded to buyer successfully" } };
+        return { success: true as const, data: { message: "Escrow refunded to buyer successfully" } };
     } catch (error: any) {
         logger.error("Refund escrow error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const refundEscrowToBuyer = withFlexibleSafeAction("refundEscrowToBuyer", _refundEscrowToBuyer);

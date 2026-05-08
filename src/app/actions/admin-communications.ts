@@ -8,13 +8,13 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { serializeDocs } from '@/lib/firestore-serialize';
 
 export interface SendBulkEmailState {
-    success: boolean;
+    success: true | false;
     error?: string;
     recipientCount?: number;
 }
 
 export interface CreateAnnouncementState {
-    success: boolean;
+    success: true | false;
     error?: string;
     id?: string;
 }
@@ -97,7 +97,7 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
  */
 export async function sendBulkEmailAction(prevState: SendBulkEmailState, formData: FormData): Promise<SendBulkEmailState> {
     const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
+    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required" };
     try {
         const recipients = formData.get('recipients') as string;
         const subject = formData.get('subject') as string;
@@ -106,14 +106,14 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         logger.info(`[AdminComms] sendBulkEmailAction — recipients: '${recipients}', subject: '${subject?.substring(0, 50)}', body length: ${body?.length || 0}`);
 
         if (!recipients || !subject || !body) {
-            return { success: false, error: 'All fields are required' };
+            return { success: false as const, error: 'All fields are required' };
         }
 
         // Get recipient emails
         const emails = await getRecipientEmails(recipients);
 
         if (emails.length === 0) {
-            return { success: false, error: 'No recipients found for this segment' };
+            return { success: false as const, error: 'No recipients found for this segment' };
         }
 
         // Send email via Resend
@@ -151,7 +151,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
         }
 
         if (hasError && successfulSends === 0) {
-            return { success: false, error: lastError };
+            return { success: false as const, error: lastError };
         }
 
         // Log email in database
@@ -167,11 +167,11 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
             error: hasError ? lastError : null
         });
 
-        return { success: true, recipientCount: emails.length };
+        return { success: true as const, recipientCount: emails.length };
     } catch (error: any) {
         logger.error('Failed to send bulk email:', error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || 'Failed to send email. Please try again.'
         };
     }
@@ -183,7 +183,7 @@ export async function sendBulkEmailAction(prevState: SendBulkEmailState, formDat
  */
 export async function createAnnouncementAction(prevState: CreateAnnouncementState, formData: FormData): Promise<CreateAnnouncementState> {
     const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
+    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required" };
     try {
 
         const title = formData.get('title') as string;
@@ -191,7 +191,7 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
         const priority = formData.get('priority') as string;
 
         if (!title || !message || !priority) {
-            return { success: false, error: 'All fields are required' };
+            return { success: false as const, error: 'All fields are required' };
         }
 
         // Create announcement in database
@@ -205,28 +205,32 @@ export async function createAnnouncementAction(prevState: CreateAnnouncementStat
             updatedAt: FieldValue.serverTimestamp()
         });
 
-        return { success: true, id: announcementRef.id };
+        return { success: true as const, id: announcementRef.id };
     } catch (error) {
         logger.error('Failed to create announcement:', error);
         return {
-            success: false,
+            success: false as const,
             error: 'Failed to create announcement. Please try again.'
         };
     }
 }
 
-export interface GetEmailHistoryState {
-    success: boolean;
-    history?: any[];
-    error?: string;
-}
+export type GetEmailHistoryState = {
+    success: true as const;
+    history: any[];
+    error: null;
+} | {
+    success: false as const;
+    error: string;
+    history?: undefined;
+};
 
 /**
  * Fetch admin email send history from Firestore (email_history collection)
  */
 export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
     const adminCheck = await requireAdmin();
-    if ("error" in adminCheck) return { success: false, error: "Unauthorized: admin role required" };
+    if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required" };
     try {
 
         const snapshot = await db.collection(COLLECTIONS.EMAIL_HISTORY)
@@ -236,9 +240,9 @@ export async function getEmailHistoryAction(): Promise<GetEmailHistoryState> {
 
         const history = serializeDocs(snapshot.docs) as any[];
 
-        return { success: true, history };
+        return { success: true as const, history, error: null };
     } catch (error) {
         logger.error('Failed to fetch email history:', error);
-        return { success: false, error: 'Failed to load email history' };
+        return { success: false as const, error: 'Failed to load email history' };
     }
 }

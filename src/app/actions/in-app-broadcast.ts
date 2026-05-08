@@ -61,7 +61,7 @@ export interface InAppBroadcastPreview {
 }
 
 export interface InAppBroadcastResult {
-    success: boolean;
+    success: true | false;
     delivered: number;
     logId?: string;
     error?: string;
@@ -387,13 +387,13 @@ export async function sendInAppBroadcastAction(
     linkText?: string
 ): Promise<InAppBroadcastResult> {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, delivered: 0, error: "Unauthorized: admin role required" };
+    if ("error" in authCheck) return { success: false as const, delivered: 0, error: "Unauthorized: admin role required" };
     try {
         const db = getAdminDb();
         const recipients = await collectRecipientUserIds(filters);
 
         if (recipients.length === 0) {
-            return { success: false, delivered: 0, error: "No recipients matched the selected filters." };
+            return { success: false as const, delivered: 0, error: "No recipients matched the selected filters." };
         }
 
         let delivered = 0;
@@ -438,8 +438,8 @@ export async function sendInAppBroadcastAction(
             status: "done",
         });
 
-        return { success: true, delivered, logId: logRef.id };
+        return { success: true as const, delivered, logId: logRef.id };
     } catch (error: any) {
-        return { success: false, delivered: 0, error: error.message };
+        return { success: false as const, delivered: 0, error: error.message };
     }
 }

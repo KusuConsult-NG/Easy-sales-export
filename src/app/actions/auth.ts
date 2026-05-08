@@ -140,7 +140,7 @@ export async function getPostLoginRedirect(email: string) {
             // they MUST change their password on first login.
             if ((userData as any).requiresPasswordChange) {
                 logger.info(`[getPostLoginRedirect] User ${email} requires password change, redirecting to security setup`);
-                return { success: true, data: { redirectUrl: '/auth/reset-legacy-password' } };
+                return { success: true as const, data: { redirectUrl: '/auth/reset-legacy-password' } };
             }
 
             if (hasAdminRole) {
@@ -159,7 +159,7 @@ export async function getPostLoginRedirect(email: string) {
                 }
 
                 logger.info(`[getPostLoginRedirect] User ${email} has admin privileges, redirecting to ${adminRedirect}`);
-                return { success: true, data: { redirectUrl: adminRedirect } };
+                return { success: true as const, data: { redirectUrl: adminRedirect } };
             }
 
             // CRITICAL: Check application status and redirect accordingly
@@ -191,13 +191,13 @@ export async function getPostLoginRedirect(email: string) {
 
                 if (directDashboard) {
                     logger.info(`[getPostLoginRedirect] User ${email} approved for '${firstApprovedKey}', direct redirect to: ${directDashboard}`);
-                    return { success: true, data: { redirectUrl: directDashboard } };
+                    return { success: true as const, data: { redirectUrl: directDashboard } };
                 }
 
                 // Fallback for unknown modules: use role-based primary app
                 const primaryApp = getPrimaryApp(userRoles);
                 logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${primaryApp}`);
-                return { success: true, data: { redirectUrl: primaryApp } };
+                return { success: true as const, data: { redirectUrl: primaryApp } };
             }
 
             // 2. Check for pending applications
@@ -206,16 +206,16 @@ export async function getPostLoginRedirect(email: string) {
             // 
             // Fallback for pending users AND new users: route directly to the User Dashboard
             logger.info(`[getPostLoginRedirect] User ${email} has no active apps, directing to default dashboard`);
-            return { success: true, data: { redirectUrl: '/dashboard' } };
+            return { success: true as const, data: { redirectUrl: '/dashboard' } };
         }
 
         // User has no applications yet — go to dashboard instead of /auth/get-started
         logger.info(`[getPostLoginRedirect] No applications found, redirecting to dashboard`, { email });
-        return { success: true, data: { redirectUrl: '/dashboard' } };
+        return { success: true as const, data: { redirectUrl: '/dashboard' } };
     } catch (error: any) {
         logger.error('[getPostLoginRedirect] Error determining redirect', { email, error: error.message });
         return {
-            success: false,
+            success: false as const,
             redirectUrl: '/dashboard',
             error: error.message
         };
@@ -225,7 +225,7 @@ export async function getPostLoginRedirect(email: string) {
 // DEPRECATED: Old Server Action Login
 // Keeping a stub for type safety if needed, but logic moved to client
 export async function loginAction(prevState: any, formData: FormData) {
-    return { error: "Please use client-side login", success: false };
+    return { error: "Please use client-side login", success: false as const };
 }
 
 export async function registerAction(prevState: any, formData: FormData) {
@@ -239,7 +239,7 @@ export async function registerAction(prevState: any, formData: FormData) {
         const rateLimitResult = await loginLimiter.check(ip);
         if (!rateLimitResult.success) {
             return {
-                success: false,
+                success: false as const,
                 error: "Too many registration attempts. Please try again later.",
                 redirectUrl: "",
             };
@@ -264,7 +264,7 @@ export async function registerAction(prevState: any, formData: FormData) {
             if (!phoneCheck.empty) {
                 return {
                     error: "An account with this phone number already exists. Please log in instead.",
-                    success: false,
+                    success: false as const,
                     redirectUrl: "",
                 };
             }
@@ -352,7 +352,7 @@ export async function registerAction(prevState: any, formData: FormData) {
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT
         // Server-side signIn in Server Actions causes race conditions with cookies.
         // We return success, and the client component calls signIn() via NextAuth client SDK.
-        return { success: true, redirectUrl, error: "" };
+        return { success: true as const, redirectUrl, error: "" };
     } catch (error: any) {
         // Re-throw redirect errors to allow Next.js to handle navigation
         if (error && typeof error === 'object' && 'digest' in error &&
@@ -366,25 +366,25 @@ export async function registerAction(prevState: any, formData: FormData) {
         if (error instanceof ZodError) {
             const zodError = error as ZodError;
             const errorMessage = zodError.issues?.map(e => e.message).join(", ") || "Validation error";
-            return { error: errorMessage, success: false, redirectUrl: "" };
+            return { error: errorMessage, success: false as const, redirectUrl: "" };
         }
 
         // Handle Firebase auth errors
         if (error.code === "auth/email-already-in-use") {
-            return { error: "An account with this email already exists", success: false, redirectUrl: "" };
+            return { error: "An account with this email already exists", success: false as const, redirectUrl: "" };
         }
         if (error.code === "auth/weak-password") {
-            return { error: "Password is too weak", success: false, redirectUrl: "" };
+            return { error: "Password is too weak", success: false as const, redirectUrl: "" };
         }
         if (error.code === "auth/invalid-email") {
-            return { error: "Invalid email address", success: false, redirectUrl: "" };
+            return { error: "Invalid email address", success: false as const, redirectUrl: "" };
         }
 
         if (error instanceof Error) {
-            return { error: error.message, success: false, redirectUrl: "" };
+            return { error: error.message, success: false as const, redirectUrl: "" };
         }
 
-        return { error: "Registration failed. Please try again", success: false, redirectUrl: "" };
+        return { error: "Registration failed. Please try again", success: false as const, redirectUrl: "" };
     }
 }
 
@@ -399,11 +399,11 @@ export async function logoutAction() {
 export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const session = await auth();
         if (!session?.user?.id || !session.user.email) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         // Verify current password via REST API
@@ -420,7 +420,7 @@ export async function changePasswordAction(
         if (!verifyRes.ok) {
             const errorData = await verifyRes.json();
             logger.error("Failed to verify current password", errorData);
-            return { success: false, error: "Incorrect current password." };
+            return { success: false as const, error: "Incorrect current password." };
         }
 
         // Update to new password via Admin SDK
@@ -428,9 +428,9 @@ export async function changePasswordAction(
             password: newPassword
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Error changing password:", error);
-        return { success: false, error: error.message || "An unexpected error occurred. Please try again." };
+        return { success: false as const, error: error.message || "An unexpected error occurred. Please try again." };
     }
 }

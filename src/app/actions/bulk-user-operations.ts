@@ -25,7 +25,7 @@ export async function bulkSuspendUsersAction(
     reason: string,
     duration?: number // days, undefined = permanent
 ): Promise<{
-    success: boolean;
+    success: true | false;
     suspended: number;
     failed: string[];
     error?: string;
@@ -36,7 +36,7 @@ export async function bulkSuspendUsersAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) {
             return {
-                success: false,
+                success: false as const,
                 suspended: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:suspend",
@@ -44,12 +44,12 @@ export async function bulkSuspendUsersAction(
         }
 
         if (!userIds || userIds.length === 0) {
-            return { success: false, suspended: 0, failed: [], error: "No users selected" };
+            return { success: false as const, suspended: 0, failed: [], error: "No users selected" };
         }
 
         if (userIds.length > 100) {
             return {
-                success: false,
+                success: false as const,
                 suspended: 0,
                 failed: userIds,
                 error: "Cannot suspend more than 100 users at once",
@@ -58,7 +58,7 @@ export async function bulkSuspendUsersAction(
 
         if (!reason || reason.trim().length < 10) {
             return {
-                success: false,
+                success: false as const,
                 suspended: 0,
                 failed: userIds,
                 error: "Suspension reason must be at least 10 characters",
@@ -134,12 +134,12 @@ export async function bulkSuspendUsersAction(
             logger.error("[bulkSuspendUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true, suspended: suspendedCount,
+        return { success: true as const, suspended: suspendedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk suspend users:", error);
         return {
-            success: false,
+            success: false as const,
             suspended: 0,
             failed: userIds,
             error: error.message || "Failed to suspend users",
@@ -153,7 +153,7 @@ export async function bulkSuspendUsersAction(
 export async function bulkActivateUsersAction(
     userIds: string[]
 ): Promise<{
-    success: boolean;
+    success: true | false;
     activated: number;
     failed: string[];
     error?: string;
@@ -164,7 +164,7 @@ export async function bulkActivateUsersAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return {
-                success: false,
+                success: false as const,
                 activated: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:update",
@@ -172,12 +172,12 @@ export async function bulkActivateUsersAction(
         }
 
         if (!userIds || userIds.length === 0) {
-            return { success: false, activated: 0, failed: [], error: "No users selected" };
+            return { success: false as const, activated: 0, failed: [], error: "No users selected" };
         }
 
         if (userIds.length > 100) {
             return {
-                success: false,
+                success: false as const,
                 activated: 0,
                 failed: userIds,
                 error: "Cannot activate more than 100 users at once",
@@ -241,12 +241,12 @@ export async function bulkActivateUsersAction(
             logger.error("[bulkActivateUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true, activated: activatedCount,
+        return { success: true as const, activated: activatedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk activate users:", error);
         return {
-            success: false,
+            success: false as const,
             activated: 0,
             failed: userIds,
             error: error.message || "Failed to activate users",
@@ -262,7 +262,7 @@ export async function bulkAssignRolesAction(
     rolesToAdd: string[],
     rolesToRemove: string[]
 ): Promise<{
-    success: boolean;
+    success: true | false;
     updated: number;
     failed: string[];
     error?: string;
@@ -273,7 +273,7 @@ export async function bulkAssignRolesAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
             return {
-                success: false,
+                success: false as const,
                 updated: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:assign_roles",
@@ -281,12 +281,12 @@ export async function bulkAssignRolesAction(
         }
 
         if (!userIds || userIds.length === 0) {
-            return { success: false, updated: 0, failed: [], error: "No users selected" };
+            return { success: false as const, updated: 0, failed: [], error: "No users selected" };
         }
 
         if (userIds.length > 100) {
             return {
-                success: false,
+                success: false as const,
                 updated: 0,
                 failed: userIds,
                 error: "Cannot update more than 100 users at once",
@@ -296,7 +296,7 @@ export async function bulkAssignRolesAction(
         // Prevent removing admin role via bulk operation
         if (rolesToRemove.includes("admin") || rolesToRemove.includes("super_admin")) {
             return {
-                success: false,
+                success: false as const,
                 updated: 0,
                 failed: userIds,
                 error: "Cannot remove admin roles via bulk operation",
@@ -354,12 +354,12 @@ export async function bulkAssignRolesAction(
             }
         );
 
-        return { success: true, updated: updatedCount,
+        return { success: true as const, updated: updatedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk assign roles:", error);
         return {
-            success: false,
+            success: false as const,
             updated: 0,
             failed: userIds,
             error: error.message || "Failed to update user roles",
@@ -374,7 +374,7 @@ export async function bulkDeleteUsersAction(
     userIds: string[],
     reason: string
 ): Promise<{
-    success: boolean;
+    success: true | false;
     deleted: number;
     failed: string[];
     error?: string;
@@ -385,7 +385,7 @@ export async function bulkDeleteUsersAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
             return {
-                success: false,
+                success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Unauthorized: Permission required - users:delete (super_admin only)",
@@ -393,12 +393,12 @@ export async function bulkDeleteUsersAction(
         }
 
         if (!userIds || userIds.length === 0) {
-            return { success: false, deleted: 0, failed: [], error: "No users selected" };
+            return { success: false as const, deleted: 0, failed: [], error: "No users selected" };
         }
 
         if (userIds.length > 50) {
             return {
-                success: false,
+                success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Cannot delete more than 50 users at once",
@@ -407,7 +407,7 @@ export async function bulkDeleteUsersAction(
 
         if (!reason || reason.trim().length < 10) {
             return {
-                success: false,
+                success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Deletion reason must be at least 10 characters",
@@ -417,7 +417,7 @@ export async function bulkDeleteUsersAction(
         // Prevent self-deletion
         if (userIds.includes(session.user.id || "")) {
             return {
-                success: false,
+                success: false as const,
                 deleted: 0,
                 failed: userIds,
                 error: "Cannot delete your own account",
@@ -489,12 +489,12 @@ export async function bulkDeleteUsersAction(
             logger.error("[bulkDeleteUsersAction] Post-commit side effects failed:", sideEffectError);
         }
 
-        return { success: true, deleted: deletedCount,
+        return { success: true as const, deleted: deletedCount,
             failed: failedIds };
     } catch (error: any) {
         logger.error("Failed to bulk delete users:", error);
         return {
-            success: false,
+            success: false as const,
             deleted: 0,
             failed: userIds,
             error: error.message || "Failed to delete users",
@@ -512,7 +512,7 @@ export async function createImpersonationTokenAction(
     reason: string,
     durationMinutes: number = 30
 ): Promise<{
-    success: boolean;
+    success: true | false;
     token?: string;
     expiresAt?: string;
     error?: string;
@@ -523,21 +523,21 @@ export async function createImpersonationTokenAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:impersonate")) {
             return {
-                success: false,
+                success: false as const,
                 error: "Unauthorized: Permission required - users:impersonate (super_admin only)",
             };
         }
 
         if (!reason || reason.trim().length < 20) {
             return {
-                success: false,
+                success: false as const,
                 error: "Impersonation reason must be at least 20 characters (for audit compliance)",
             };
         }
 
         if (durationMinutes < 5 || durationMinutes > 120) {
             return {
-                success: false,
+                success: false as const,
                 error: "Duration must be between 5 and 120 minutes",
             };
         }
@@ -547,7 +547,7 @@ export async function createImpersonationTokenAction(
         const targetUserDoc = await targetUserRef.get();
 
         if (!targetUserDoc.exists) {
-            return { success: false, error: "Target user not found" };
+            return { success: false as const, error: "Target user not found" };
         }
 
         const targetUserData = targetUserDoc.data();
@@ -555,7 +555,7 @@ export async function createImpersonationTokenAction(
 
         if (targetRoles.includes("admin") || targetRoles.includes("super_admin")) {
             return {
-                success: false,
+                success: false as const,
                 error: "Cannot impersonate admin users",
             };
         }
@@ -587,12 +587,12 @@ export async function createImpersonationTokenAction(
             }
         );
 
-        return { success: true, token: impersonationRef.id,
+        return { success: true as const, token: impersonationRef.id,
             expiresAt: expiresAt.toISOString() };
     } catch (error: any) {
         logger.error("Failed to create impersonation token:", error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || "Failed to create impersonation token",
         };
     }
@@ -604,7 +604,7 @@ export async function createImpersonationTokenAction(
 export async function exportUserDataAction(
     userId: string
 ): Promise<{
-    success: boolean;
+    success: true | false;
     data?: any;
     error?: string;
 }> {
@@ -614,7 +614,7 @@ export async function exportUserDataAction(
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             return {
-                success: false,
+                success: false as const,
                 error: "Unauthorized: Permission required - users:read",
             };
         }
@@ -623,7 +623,7 @@ export async function exportUserDataAction(
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { success: false, error: "User not found" };
+            return { success: false as const, error: "User not found" };
         }
 
         const userData = userDoc.data();
@@ -702,13 +702,13 @@ export async function exportUserDataAction(
         );
 
         return {
-            success: true,
+            success: true as const,
             data: userDataExport,
         };
     } catch (error: any) {
         logger.error("Failed to export user data:", error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || "Failed to export user data",
         };
     }

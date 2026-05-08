@@ -20,7 +20,7 @@ export async function getDashboardDataAction() {
     const { session } = sessionResult;
         if (!session?.user) {
             return {
-                success: false,
+                success: false as const,
                 error: "Not authenticated",
             };
         }
@@ -57,7 +57,7 @@ export async function getDashboardDataAction() {
         if (membershipSnapshot.empty) {
             logger.warn(`[getDashboardData] No membership found in ${COLLECTIONS.COOPERATIVE_MEMBERS} for user: ${userId}`);
             return {
-                success: false,
+                success: false as const,
                 error: `No cooperative membership found for ${userId}`,
             };
         }
@@ -81,7 +81,7 @@ export async function getDashboardDataAction() {
         }).slice(0, 10); // Keep only recent 10
 
         return {
-            success: true,
+            success: true as const,
             data: { membership, transactions },
             meta: null,
             error: null
@@ -91,7 +91,7 @@ export async function getDashboardDataAction() {
     } catch (error) {
         logger.error("Dashboard data fetch error:", error);
         return {
-            success: false,
+            success: false as const,
             error: error instanceof Error ? error.message : "Failed to load dashboard data",
         };
     }

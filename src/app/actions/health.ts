@@ -20,14 +20,14 @@ export interface HealthReport {
     issues: HealthIssue[];
 }
 
-export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ success: boolean, data?: HealthReport, error?: string }> {
+export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{ success: true | false, data?: HealthReport, error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized access" };
+            return { success: false as const, error: "Unauthorized access" };
         }
 
         const db = getAdminDb();
@@ -92,7 +92,7 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
         });
 
         return {
-             success: true,
+             success: true as const,
              data: {
                  totalScanned: usersSnap.size,
                  anomaliesFound: issues.length,
@@ -101,6 +101,6 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<{
         };
 
     } catch (e: any) {
-        return { success: false, error: e.message };
+        return { success: false as const, error: e.message };
     }
 }

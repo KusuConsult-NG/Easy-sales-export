@@ -18,12 +18,17 @@ function nairaToKobo(naira: number): number {
     return Math.round(naira * 100);
 }
 
-export interface ActionState {
-    success: boolean;
-    error?: string | null;
+export type ActionState = {
+    success: true as const;
+    error: null;
     message?: string;
     data?: any;
-}
+} | {
+    success: false as const;
+    error: string;
+    message?: string;
+    data?: any;
+};
 
 export async function initializeContributionPaymentAction(
     amount: number
@@ -34,16 +39,16 @@ export async function initializeContributionPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: 'Authentication required', success: false };
+            return { error: 'Authentication required', success: false as const };
         }
 
         // Validate amount
         if (amount < 1000) {
-            return { error: 'Minimum contribution is ₦1,000', success: false };
+            return { error: 'Minimum contribution is ₦1,000', success: false as const };
         }
 
         if (amount > 1000000) {
-            return { error: 'Maximum contribution is ₦1,000,000', success: false };
+            return { error: 'Maximum contribution is ₦1,000,000', success: false as const };
         }
 
         // Initialize payment with Paystack (Paystack generates the reference)
@@ -60,7 +65,7 @@ export async function initializeContributionPaymentAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -70,7 +75,7 @@ export async function initializeContributionPaymentAction(
         logger.error('Payment initialization error:', error);
         return {
             error: error.message || 'Failed to initialize payment',
-            success: false
+            success: false as const
         };
     }
 }
@@ -88,13 +93,13 @@ export async function verifyContributionPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: 'Authentication required', success: false };
+            return { error: 'Authentication required', success: false as const };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
         if (!rateLimitResult.success) {
             return {
-                success: false,
+                success: false as const,
                 error: "Too many payment verification attempts. Please try again later."
             };
         }
@@ -134,17 +139,17 @@ export async function verifyContributionPaymentAction(
 
         // User ID verification
         if (userId !== session.user.id) {
-            return { error: 'Payment verification failed: User mismatch', success: false };
+            return { error: 'Payment verification failed: User mismatch', success: false as const };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
         if (amountInNaira < 1000 || amountInNaira > 1000000) {
-            return { error: 'Invalid payment amount', success: false };
+            return { error: 'Invalid payment amount', success: false as const };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: 'Payment amount mismatch', success: false };
+            return { error: 'Payment amount mismatch', success: false as const };
         }
 
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
@@ -238,7 +243,7 @@ export async function verifyContributionPaymentAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             message: `Payment successful! Your contribution of ₦${amountInNaira.toLocaleString()} has been recorded.`,
             data: {
                 currentTotal: result.currentTotal,
@@ -256,7 +261,7 @@ export async function verifyContributionPaymentAction(
 
         return {
             error: 'Payment verification failed. Please contact support with reference: ' + reference,
-            success: false,
+            success: false as const,
         };
     }
 }

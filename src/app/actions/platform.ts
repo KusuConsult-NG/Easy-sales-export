@@ -24,26 +24,26 @@ import { revalidatePath } from "next/cache";
 // Type definitions for action return states
 type ActionErrorState = {
     error: string;
-    success: false;
+    success: false as const;
 };
 
 type WaveSuccessState = {
     error: null;
-    success: true;
+    success: true as const;
     message: string;
     applicationId: string;
 };
 
 type EnrollmentSuccessState = {
     error: null;
-    success: true;
+    success: true as const;
     message: string;
     enrollmentId: string;
 };
 
 type WithdrawalSuccessState = {
     error: null;
-    success: true;
+    success: true as const;
     message: string;
     withdrawalId: string;
 };
@@ -86,7 +86,7 @@ export async function submitWaveApplicationAction(
         if (validatedData.gender !== "female") {
             return {
                 error: "WAVE Program is exclusively for female entrepreneurs",
-                success: false,
+                success: false as const,
             };
         }
 
@@ -105,7 +105,7 @@ export async function submitWaveApplicationAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             message: "Application submitted successfully! We'll review it within 1 week.",
             applicationId,
         };
@@ -117,11 +117,11 @@ export async function submitWaveApplicationAction(
             const firstError = zodError.issues[0];
             return {
                 error: firstError?.message || "Please fill in all required fields correctly",
-                success: false,
+                success: false as const,
             };
         }
 
-        return { error: "Failed to submit application. Please try again.", success: false };
+        return { error: "Failed to submit application. Please try again.", success: false as const };
     }
 }
 
@@ -156,7 +156,7 @@ export async function enrollInCourseAction(
         const existingEnrollment = await enrollmentRef.get();
 
         if (existingEnrollment.exists) {
-            return { error: "You are already enrolled in this course", success: false };
+            return { error: "You are already enrolled in this course", success: false as const };
         }
 
         // Save enrollment to Firestore
@@ -184,7 +184,7 @@ export async function enrollInCourseAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             message: "Enrollment successful! Check your email for course access details.",
             enrollmentId,
         };
@@ -192,10 +192,10 @@ export async function enrollInCourseAction(
         logger.error("Enrollment error:", error);
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false };
+            return { error: "Please fill in all required fields correctly", success: false as const };
         }
 
-        return { error: "Failed to enroll. Please try again.", success: false };
+        return { error: "Failed to enroll. Please try again.", success: false as const };
     }
 }
 
@@ -215,7 +215,7 @@ export async function submitWithdrawalAction(
 
         const idempotencyKey = formData.get("idempotencyKey") as string;
         if (!idempotencyKey) {
-            return { error: "Missing security token. Please refresh the page.", success: false };
+            return { error: "Missing security token. Please refresh the page.", success: false as const };
         }
 
         // Extract and validate form data
@@ -311,7 +311,7 @@ export async function submitWithdrawalAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             message: `Withdrawal request submitted! Reference: ${withdrawalId}`,
             withdrawalId,
         };
@@ -319,13 +319,13 @@ export async function submitWithdrawalAction(
         logger.error("Withdrawal error:", error);
 
         if (error.name === "ZodError") {
-            return { error: "Please fill in all required fields correctly", success: false };
+            return { error: "Please fill in all required fields correctly", success: false as const };
         }
 
         if (error.message.includes("balance")) {
-            return { error: error.message, success: false };
+            return { error: error.message, success: false as const };
         }
 
-        return { error: "Failed to submit withdrawal request. Please try again.", success: false };
+        return { error: "Failed to submit withdrawal request. Please try again.", success: false as const };
     }
 }

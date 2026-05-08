@@ -25,7 +25,7 @@ export async function getAdminLoanProductsAction(options: {
     limit?: number;
     lastDocId?: string;
 } = {}): Promise<{
-    success: boolean;
+    success: true | false;
     data?: LoanProduct[];
     error?: string;
     lastDocId?: string;
@@ -33,11 +33,11 @@ export async function getAdminLoanProductsAction(options: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
         
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 20;
@@ -60,24 +60,24 @@ export async function getAdminLoanProductsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: products,
             lastDocId: nextCursor,
             hasMore
         };
     } catch (error: any) {
         logger.error("Failed to fetch admin loan products:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
 export async function createAdminLoanProductAction(data: Omit<LoanProduct, "id">) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         
         if (!sessionResult.session.user.roles?.includes("admin") && !sessionResult.session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const newDocRef = await db.collection(COLLECTIONS.LOAN_PRODUCTS).add(data);
@@ -90,20 +90,20 @@ export async function createAdminLoanProductAction(data: Omit<LoanProduct, "id">
             metadata: { name: data.name }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Create loan product error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
 export async function updateAdminLoanProductAction(productId: string, data: Partial<LoanProduct>) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         
         if (!sessionResult.session.user.roles?.includes("admin") && !sessionResult.session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         await db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId).update(data as any);
@@ -116,25 +116,25 @@ export async function updateAdminLoanProductAction(productId: string, data: Part
             metadata: { ...data }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Update loan product error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
 export async function deleteAdminLoanProductAction(productId: string) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         
         if (!sessionResult.session.user.roles?.includes("admin") && !sessionResult.session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const docRef = db.collection(COLLECTIONS.LOAN_PRODUCTS).doc(productId);
         const doc = await docRef.get();
-        if (!doc.exists) return { success: false, error: "Product not found" };
+        if (!doc.exists) return { success: false as const, error: "Product not found" };
 
         await docRef.delete();
         
@@ -146,9 +146,9 @@ export async function deleteAdminLoanProductAction(productId: string) {
             metadata: { name: doc.data()?.name }
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Delete loan product error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }

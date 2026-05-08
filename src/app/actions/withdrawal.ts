@@ -22,7 +22,7 @@ interface WithdrawalRequestData {
 }
 
 interface ActionState {
-    success: boolean;
+    success: true | false;
     error?: string | null;
     message?: string;
 }
@@ -48,7 +48,7 @@ async function _submitWithdrawalRequestAction(
 
         if (!validation.success) {
             return {
-                success: false,
+                success: false as const,
                 error: validation.error.issues[0]?.message || "Invalid withdrawal data",
             };
         }
@@ -129,7 +129,7 @@ async function _submitWithdrawalRequestAction(
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             message: `Withdrawal request for ₦${validatedData.amount.toLocaleString()} submitted successfully`,
         };
     } catch (error: any) {
@@ -139,7 +139,7 @@ async function _submitWithdrawalRequestAction(
         });
         return {
             error: error.message || 'Failed to submit withdrawal request',
-            success: false,
+            success: false as const,
         };
     }
 }

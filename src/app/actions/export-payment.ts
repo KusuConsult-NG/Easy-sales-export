@@ -14,7 +14,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    success: boolean;
+    success: true | false;
     error?: string | null;
     meta?: any;
     data?: {
@@ -52,11 +52,11 @@ export async function initializeExportOrderPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false, data: undefined, meta: null };
+            return { error: "Authentication required", success: false as const, data: undefined, meta: null };
         }
 
         if (!cartItems.length) {
-            return { error: "Cart is empty", success: false, data: undefined, meta: null };
+            return { error: "Cart is empty", success: false as const, data: undefined, meta: null };
         }
 
         let totalUSD = 0;
@@ -66,13 +66,13 @@ export async function initializeExportOrderPaymentAction(
         for (const item of cartItems) {
             const productDoc = await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(item.productId).get();
             if (!productDoc.exists) {
-                return { error: `Product not found: ${item.productId}`, success: false, data: undefined, meta: null };
+                return { error: `Product not found: ${item.productId}`, success: false as const, data: undefined, meta: null };
             }
             const productData = productDoc.data()!;
             
             // Allow only active products
             if (!productData.isActive) {
-                return { error: `Product ${productData.name} is not available for purchase`, success: false, data: undefined, meta: null };
+                return { error: `Product ${productData.name} is not available for purchase`, success: false as const, data: undefined, meta: null };
             }
 
             const pricePerMT = productData.pricePerMT || 0;
@@ -124,7 +124,7 @@ export async function initializeExportOrderPaymentAction(
         });
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -134,7 +134,7 @@ export async function initializeExportOrderPaymentAction(
     } catch (error: any) {
         logger.error("Export Order payment initialization error:", error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || "Failed to initialize payment.",
             data: undefined,
             meta: null
@@ -149,7 +149,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false, data: null, meta: null };
+            return { error: "Authentication required", success: false as const, data: null, meta: null };
         }
 
         // Double-payment protection
@@ -159,7 +159,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
-                success: false, data: null, meta: null
+                success: false as const, data: null, meta: null
             };
         }
 
@@ -169,7 +169,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status || 'failed'}. Please contact support if amount was debited.`,
-                success: false, data: null, meta: null
+                success: false as const, data: null, meta: null
             };
         }
 
@@ -180,7 +180,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
 
         // Verify user match
         if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false, data: null, meta: null };
+            return { error: "Payment verification failed: User mismatch", success: false as const, data: null, meta: null };
         }
 
         // Find the pending order
@@ -190,7 +190,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
             .get();
 
         if (orderQuery.empty) {
-            return { error: "Export Order record not found", success: false, data: null, meta: null };
+            return { error: "Export Order record not found", success: false as const, data: null, meta: null };
         }
 
         const orderDoc = orderQuery.docs[0];
@@ -251,7 +251,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         }
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 message: "Export order payment verified successfully.",
                 orderId: orderData.orderId,
@@ -267,7 +267,7 @@ export async function verifyExportOrderPaymentAction(reference: string) {
         });
 
         return {
-            success: false,
+            success: false as const,
             data: null,
             meta: null,
             error: "Failed to verify export order payment. Please contact support.",
@@ -292,16 +292,16 @@ export async function initializeInvestmentPaymentAction(
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false, data: undefined, meta: null };
+            return { error: "Authentication required", success: false as const, data: undefined, meta: null };
         }
 
         // Validate amount
         if (investmentAmount < 50000) {
-            return { error: "Minimum investment is ₦50,000", success: false, data: undefined, meta: null };
+            return { error: "Minimum investment is ₦50,000", success: false as const, data: undefined, meta: null };
         }
 
         if (investmentAmount > 10000000) {
-            return { error: "Maximum investment is ₦10,000,000", success: false, data: undefined, meta: null };
+            return { error: "Maximum investment is ₦10,000,000", success: false as const, data: undefined, meta: null };
         }
 
         // Check if export window exists and is open
@@ -309,16 +309,16 @@ export async function initializeInvestmentPaymentAction(
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
-            return { error: "Export window not found", success: false, data: undefined, meta: null };
+            return { error: "Export window not found", success: false as const, data: undefined, meta: null };
         }
 
         const windowData = windowDoc.data();
         if (!windowData) {
-            return { error: "Export window data is corrupted", success: false, data: undefined, meta: null };
+            return { error: "Export window data is corrupted", success: false as const, data: undefined, meta: null };
         }
 
         if (windowData.status !== "open" && windowData.status !== "active") {
-            return { error: "This export window is no longer accepting investments", success: false, data: undefined, meta: null };
+            return { error: "This export window is no longer accepting investments", success: false as const, data: undefined, meta: null };
         }
 
         // Check if funding goal exceeded
@@ -328,7 +328,7 @@ export async function initializeInvestmentPaymentAction(
         if (currentFunding + investmentAmount > fundingGoal) {
             return {
                 error: `Investment exceeds available slots. Maximum available: ₦${(fundingGoal - currentFunding).toLocaleString()}`,
-                success: false,
+                success: false as const,
                 data: undefined,
                 meta: null
             };
@@ -370,7 +370,7 @@ export async function initializeInvestmentPaymentAction(
         });
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -380,7 +380,7 @@ export async function initializeInvestmentPaymentAction(
     } catch (error: any) {
         logger.error("Investment payment initialization error:", error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || "Failed to initialize investment payment. Please try again.",
             data: undefined,
             meta: null
@@ -399,7 +399,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false, data: null, meta: null };
+            return { error: "Authentication required", success: false as const, data: null, meta: null };
         }
 
         // 🔒 SECURITY FIX #1: Double-payment protection
@@ -409,7 +409,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         if (existingPayment.exists) {
             return {
                 error: "Payment has already been processed",
-                success: false, data: null, meta: null
+                success: false as const, data: null, meta: null
             };
         }
 
@@ -419,7 +419,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status}. Please contact support if amount was debited.`,
-                success: false, data: null, meta: null
+                success: false as const, data: null, meta: null
             };
         }
 
@@ -432,17 +432,17 @@ export async function verifyInvestmentPaymentAction(reference: string) {
 
         // Verify user match
         if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false, data: null, meta: null };
+            return { error: "Payment verification failed: User mismatch", success: false as const, data: null, meta: null };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation
         if (amountInNaira < 50000 || amountInNaira > 10000000) {
-            return { error: "Invalid payment amount", success: false, data: null, meta: null };
+            return { error: "Invalid payment amount", success: false as const, data: null, meta: null };
         }
 
         // Verify amount matches metadata (allow 1 naira variance for rounding)
         if (expectedAmount && Math.abs(amountInNaira - expectedAmount) > 1) {
-            return { error: "Payment amount mismatch", success: false, data: null, meta: null };
+            return { error: "Payment amount mismatch", success: false as const, data: null, meta: null };
         }
 
         // Find investment record
@@ -452,7 +452,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
             .get();
 
         if (investmentQuery.empty) {
-            return { error: "Investment record not found", success: false, data: null, meta: null };
+            return { error: "Investment record not found", success: false as const, data: null, meta: null };
         }
 
         const investmentDoc = investmentQuery.docs[0];
@@ -554,7 +554,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         });
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 message: `Investment successful! Your ₦${amountInNaira.toLocaleString()} investment in ${metadata.windowTitle} is now active.`,
                 investmentId: investmentDoc.id,
@@ -570,7 +570,7 @@ export async function verifyInvestmentPaymentAction(reference: string) {
         });
 
         return {
-            success: false,
+            success: false as const,
             data: null,
             meta: null,
             error: "Failed to verify investment payment. Please contact support with your payment reference.",

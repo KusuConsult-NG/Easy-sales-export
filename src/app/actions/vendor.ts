@@ -73,7 +73,7 @@ async function _getVendorOrdersAction(filters?: {
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         let query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).where("vendorId", "==", session.user.id);
@@ -93,13 +93,13 @@ async function _getVendorOrdersAction(filters?: {
             };
         }) as VendorOrder[];
 
-        return { success: true, data: { orders } };
+        return { success: true as const, data: { orders } };
     } catch (error: any) {
         logger.error("Get vendor orders error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const getVendorOrdersAction = withFlexibleSafeAction("getVendorOrdersAction", _getVendorOrdersAction);
@@ -120,7 +120,7 @@ async function _updateVendorOrderStatusAction(
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
@@ -147,14 +147,14 @@ async function _updateVendorOrderStatusAction(
             metadata: { status, trackingNumber },
         });
 
-        return { success: true, data: { message: "Order status updated successfully" } };
+        return { success: true as const, data: { message: "Order status updated successfully" } };
     } catch (error: any) {
         logger.error("Update vendor order error:", {
             userId: sessionResult?.session?.user?.id,
             orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const updateVendorOrderStatusAction = withFlexibleSafeAction("updateVendorOrderStatusAction", _updateVendorOrderStatusAction);
@@ -173,7 +173,7 @@ async function _getVendorProductsAction(filters?: {
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         let query = db.collection(COLLECTIONS.VENDOR_PRODUCTS).where("vendorId", "==", session.user.id);
@@ -197,13 +197,13 @@ async function _getVendorProductsAction(filters?: {
             };
         }) as VendorProduct[];
 
-        return { success: true, data: { products } };
+        return { success: true as const, data: { products } };
     } catch (error: any) {
         logger.error("Get vendor products error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const getVendorProductsAction = withFlexibleSafeAction("getVendorProductsAction", _getVendorProductsAction);
@@ -229,7 +229,7 @@ async function _updateVendorProductInventoryAction(
         const { session } = sessionResult;
         
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
@@ -270,7 +270,7 @@ async function _updateVendorProductInventoryAction(
             metadata: { operation, stockChange, newStock: updatedStock },
         });
 
-        return { success: true, data: { newStock: updatedStock } };
+        return { success: true as const, data: { newStock: updatedStock } };
     } catch (error: any) {
         logger.error("Update inventory error:", {
             userId: sessionResult?.session?.user?.id,
@@ -278,7 +278,7 @@ async function _updateVendorProductInventoryAction(
             error: error instanceof Error ? error.message : String(error)
         });
         return { 
-            success: false, 
+            success: false as const, 
             error: error.message.includes("STALE_DATA") 
                 ? "Inventory was modified by another process. Please refresh and try again."
                 : error.message || "Failed to update inventory" 
@@ -301,7 +301,7 @@ async function _toggleVendorProductStatusAction(
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
@@ -319,14 +319,14 @@ async function _toggleVendorProductStatusAction(
             });
         });
 
-        return { success: true, data: { newStatus } };
+        return { success: true as const, data: { newStatus } };
     } catch (error: any) {
         logger.error("Toggle product status error:", {
             userId: sessionResult?.session?.user?.id,
             productId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const toggleVendorProductStatusAction = withFlexibleSafeAction("toggleVendorProductStatusAction", _toggleVendorProductStatusAction);
@@ -345,7 +345,7 @@ async function _deleteVendorProductAction(
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const productRef = db.collection(COLLECTIONS.VENDOR_PRODUCTS).doc(productId);
@@ -374,7 +374,7 @@ async function _deleteVendorProductAction(
         });
 
         return {
-            success: true,
+            success: true as const,
             data: { message: "Product deleted successfully" },
         };
     } catch (error: any) {
@@ -383,7 +383,7 @@ async function _deleteVendorProductAction(
             productId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const deleteVendorProductAction = withFlexibleSafeAction("deleteVendorProductAction", _deleteVendorProductAction);

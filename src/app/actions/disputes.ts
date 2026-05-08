@@ -33,29 +33,29 @@ async function _createDisputeAction(params: {
         const { orderId, reason, description, evidenceUrls = [] } = params;
 
         if (description.length < 50) {
-            return { success: false, error: "Description must be at least 50 characters" };
+            return { success: false as const, error: "Description must be at least 50 characters" };
         }
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
         if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
+            return { success: false as const, error: "Order not found" };
         }
 
         const order = orderDoc.data() as Order;
         if (order.buyerId !== userId) {
-            return { success: false, error: "Not authorized" };
+            return { success: false as const, error: "Not authorized" };
         }
 
         if (order.status === "completed" || order.status === "cancelled") {
-            return { success: false, error: "Cannot dispute completed or cancelled orders" };
+            return { success: false as const, error: "Cannot dispute completed or cancelled orders" };
         }
 
         if (order.status === "pending_payment") {
-            return { success: false, error: "Cannot dispute an unpaid order" };
+            return { success: false as const, error: "Cannot dispute an unpaid order" };
         }
 
         if (order.status === "disputed") {
-            return { success: false, error: "Order already has an active dispute" };
+            return { success: false as const, error: "Order already has an active dispute" };
         }
 
         const existingDisputes = await db.collection(COLLECTIONS.DISPUTES)
@@ -64,7 +64,7 @@ async function _createDisputeAction(params: {
             .get();
 
         if (!existingDisputes.empty) {
-            return { success: false, error: "Active dispute already exists for this order" };
+            return { success: false as const, error: "Active dispute already exists for this order" };
         }
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc();
@@ -104,14 +104,14 @@ async function _createDisputeAction(params: {
             });
         });
 
-        return { success: true, data: { disputeId: disputeRef.id } };
+        return { success: true as const, data: { disputeId: disputeRef.id } };
     } catch (error) {
         logger.error("Create dispute error:", {
             userId: sessionResult?.session?.user?.id,
             orderId: params.orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to create dispute" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to create dispute" };
     }
 }
 export const createDisputeAction = withFlexibleSafeAction("createDisputeAction", _createDisputeAction);
@@ -143,13 +143,13 @@ async function _getBuyerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true, data: { disputes } };
+        return { success: true as const, data: { disputes } };
     } catch (error) {
         logger.error("Get buyer disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch disputes" };
+        return { success: false as const, error: "Failed to fetch disputes" };
     }
 }
 export const getBuyerDisputesAction = withFlexibleSafeAction("getBuyerDisputesAction", _getBuyerDisputesAction);
@@ -181,13 +181,13 @@ async function _getSellerDisputesAction() {
             };
         }) as Dispute[];
 
-        return { success: true, data: { disputes } };
+        return { success: true as const, data: { disputes } };
     } catch (error) {
         logger.error("Get seller disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch disputes" };
+        return { success: false as const, error: "Failed to fetch disputes" };
     }
 }
 export const getSellerDisputesAction = withFlexibleSafeAction("getSellerDisputesAction", _getSellerDisputesAction);
@@ -213,7 +213,7 @@ async function _getAdminDisputesAction(options: {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
-            return { success: false, error: "Not authorized as admin" };
+            return { success: false as const, error: "Not authorized as admin" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -264,7 +264,7 @@ async function _getAdminDisputesAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: {
                 disputes,
                 lastDocId: nextCursor,
@@ -276,7 +276,7 @@ async function _getAdminDisputesAction(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch disputes for admin" };
+        return { success: false as const, error: "Failed to fetch disputes for admin" };
     }
 }
 export const getAdminDisputesAction = withFlexibleSafeAction("getAdminDisputesAction", _getAdminDisputesAction);
@@ -294,7 +294,7 @@ async function _getDisputeByIdAction(disputeId: string) {
 
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
         if (!disputeDoc.exists) {
-            return { success: false, error: "Dispute not found" };
+            return { success: false as const, error: "Dispute not found" };
         }
 
         const dispute = disputeDoc.data() as Dispute;
@@ -306,7 +306,7 @@ async function _getDisputeByIdAction(disputeId: string) {
         const isSeller = dispute.sellerId === userId;
 
         if (!isAdmin && !isBuyer && !isSeller) {
-            return { success: false, error: "Not authorized to view this dispute" };
+            return { success: false as const, error: "Not authorized to view this dispute" };
         }
 
         const disputeData: Dispute = {
@@ -317,14 +317,14 @@ async function _getDisputeByIdAction(disputeId: string) {
             resolvedAt: (dispute.resolvedAt as unknown as Timestamp)?.toDate ? (dispute.resolvedAt as unknown as Timestamp).toDate() : dispute.resolvedAt,
         } as Dispute;
 
-        return { success: true, data: { dispute: disputeData } };
+        return { success: true as const, data: { dispute: disputeData } };
     } catch (error) {
         logger.error("Get dispute error:", {
             disputeId,
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch dispute details" };
+        return { success: false as const, error: "Failed to fetch dispute details" };
     }
 }
 export const getDisputeByIdAction = withFlexibleSafeAction("getDisputeByIdAction", _getDisputeByIdAction);
@@ -348,18 +348,18 @@ async function _updateDisputeStatusAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
-            return { success: false, error: "Not authorized as admin" };
+            return { success: false as const, error: "Not authorized as admin" };
         }
 
         const disputeDoc = await db.collection(COLLECTIONS.DISPUTES).doc(disputeId).get();
         if (!disputeDoc.exists) {
-            return { success: false, error: "Dispute not found" };
+            return { success: false as const, error: "Dispute not found" };
         }
 
         const dispute = disputeDoc.data() as Dispute;
 
         if (dispute.status === "resolved" || dispute.status === "closed") {
-            return { success: false, error: `Dispute is already '${dispute.status}'` };
+            return { success: false as const, error: `Dispute is already '${dispute.status}'` };
         }
 
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
@@ -416,14 +416,14 @@ async function _updateDisputeStatusAction(
             logger.error("Cache invalidation failed after dispute resolution", err);
         }
 
-        return { success: true, data: { message: "Dispute status updated successfully" } };
+        return { success: true as const, data: { message: "Dispute status updated successfully" } };
     } catch (error) {
         logger.error("Update dispute error:", {
             disputeId,
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to update dispute status" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to update dispute status" };
     }
 }
 export const updateDisputeStatusAction = withFlexibleSafeAction("updateDisputeStatusAction", _updateDisputeStatusAction);

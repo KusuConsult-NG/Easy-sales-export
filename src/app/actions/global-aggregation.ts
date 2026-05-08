@@ -14,7 +14,7 @@ import { logger } from "@/lib/logger";
 export async function getPlatformMetricsAction() {
     try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error };
 
         // 1. Transactions - Aggregate from actual historical collections 
         const [revenueSnap, allUsersSnap, usersSnap2] = await Promise.allSettled([
@@ -39,7 +39,7 @@ export async function getPlatformMetricsAction() {
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
         
         return {
-            success: true,
+            success: true as const,
             data: {
                 totalUsers,
                 totalTransactions,
@@ -48,7 +48,7 @@ export async function getPlatformMetricsAction() {
         };
     } catch (error: any) {
         logger.error("Failed to aggregate platform metrics:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -59,7 +59,7 @@ export async function getPlatformMetricsAction() {
 export async function getGlobalPendingApprovalsAction() {
     try {
         const sessionResult = await requireAdmin();
-        if ('error' in sessionResult) return { success: false, error: sessionResult.error };
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error };
 
         const [
             wave,
@@ -94,7 +94,7 @@ export async function getGlobalPendingApprovalsAction() {
         const totalPending = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 totalPending,
                 breakdown: counts
@@ -102,6 +102,6 @@ export async function getGlobalPendingApprovalsAction() {
         };
     } catch (error: any) {
         logger.error("Failed to compute pending approvals:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }

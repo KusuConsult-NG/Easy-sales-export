@@ -26,18 +26,18 @@ async function _createResourceAction(data: {
     fileUrl: string;
     fileName: string;
     fileSize: number;
-}): Promise<{ success: boolean; data?: any; error?: string }> {
+}): Promise<{ success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const resourceRef = await db.collection(COLLECTIONS.WAVE_RESOURCES).add({
@@ -57,13 +57,13 @@ async function _createResourceAction(data: {
             targetId: resourceRef.id,
         });
 
-        return { success: true, data: { resourceId: resourceRef.id } };
+        return { success: true as const, data: { resourceId: resourceRef.id } };
     } catch (error) {
         logger.error("Create resource error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to create resource" };
+        return { success: false as const, error: "Failed to create resource" };
     }
 }
 export const createResourceAction = withFlexibleSafeAction("createResourceAction", _createResourceAction);
@@ -78,18 +78,18 @@ async function _updateResourceAction(
         fileName: string;
         fileSize: number;
     }>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
@@ -105,31 +105,31 @@ async function _updateResourceAction(
             targetId: resourceId,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Update resource error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to update resource" };
+        return { success: false as const, error: "Failed to update resource" };
     }
 }
 export const updateResourceAction = withFlexibleSafeAction("updateResourceAction", _updateResourceAction);
 
 async function _deleteResourceAction(
     resourceId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({
@@ -147,13 +147,13 @@ async function _deleteResourceAction(
             targetId: resourceId,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Delete resource error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to delete resource" };
+        return { success: false as const, error: "Failed to delete resource" };
     }
 }
 export const deleteResourceAction = withFlexibleSafeAction("deleteResourceAction", _deleteResourceAction);
@@ -170,18 +170,18 @@ async function _createTrainingEventAction(data: {
     duration: string;
     maxParticipants: number;
     meetingLink?: string;
-}): Promise<{ success: boolean; data?: any; error?: string }> {
+}): Promise<{ success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const eventRef = await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).add({
@@ -201,13 +201,13 @@ async function _createTrainingEventAction(data: {
             targetId: eventRef.id,
         });
 
-        return { success: true, data: { eventId: eventRef.id } };
+        return { success: true as const, data: { eventId: eventRef.id } };
     } catch (error) {
         logger.error("Create event error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to create event" };
+        return { success: false as const, error: "Failed to create event" };
     }
 }
 export const createTrainingEventAction = withFlexibleSafeAction("createTrainingEventAction", _createTrainingEventAction);
@@ -224,18 +224,18 @@ async function _updateTrainingEventAction(
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
     }>
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
@@ -251,29 +251,29 @@ async function _updateTrainingEventAction(
             targetId: eventId,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Update event error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to update event" };
+        return { success: false as const, error: "Failed to update event" };
     }
 }
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
-async function _getEventParticipantsAction(eventId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+async function _getEventParticipantsAction(eventId: string): Promise<{ success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
@@ -282,13 +282,13 @@ async function _getEventParticipantsAction(eventId: string): Promise<{ success: 
 
         const participants = serializeDocs(snap.docs);
 
-        return { success: true, data: { participants } };
+        return { success: true as const, data: { participants } };
     } catch (error) {
         logger.error("Get participants error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch participants" };
+        return { success: false as const, error: "Failed to fetch participants" };
     }
 }
 export const getEventParticipantsAction = withFlexibleSafeAction("getEventParticipantsAction", _getEventParticipantsAction);
@@ -297,53 +297,53 @@ export const getEventParticipantsAction = withFlexibleSafeAction("getEventPartic
 // APPLICATIONS MANAGEMENT
 // ============================================================================
 
-async function _getWaveApplicationsAction(): Promise<{ success: boolean; data?: any; error?: string }> {
+async function _getWaveApplicationsAction(): Promise<{ success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
         const applications = serializeDocs(snapshot.docs);
 
-        return { success: true, data: { applications } };
+        return { success: true as const, data: { applications } };
     } catch (error) {
         logger.error("Get applications error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch applications" };
+        return { success: false as const, error: "Failed to fetch applications" };
     }
 }
 export const getWaveApplicationsAction = withFlexibleSafeAction("getWaveApplicationsAction", _getWaveApplicationsAction);
 
 async function _approveWaveApplicationAction(
     applicationId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "approved" });
         if (!valid.success) {
-            return { success: false, error: "Invalid application data" };
+            return { success: false as const, error: "Invalid application data" };
         }
 
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         let targetUserId: string | undefined;
@@ -438,13 +438,13 @@ async function _approveWaveApplicationAction(
             }
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Approve application error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to approve application" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to approve application" };
     }
 }
 export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveApplicationAction", _approveWaveApplicationAction);
@@ -452,23 +452,23 @@ export const approveWaveApplicationAction = withFlexibleSafeAction("approveWaveA
 async function _rejectWaveApplicationAction(
     applicationId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     let sessionResult;
     try {
         const valid = WaveApplicationReviewSchema.safeParse({ applicationId, status: "rejected", reason });
         if (!valid.success) {
-            return { success: false, error: "Invalid rejection data" };
+            return { success: false as const, error: "Invalid rejection data" };
         }
 
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         let targetUserId: string | undefined;
@@ -546,13 +546,13 @@ async function _rejectWaveApplicationAction(
             }
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Reject application error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to reject application" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to reject application" };
     }
 }
 export const rejectWaveApplicationAction = withFlexibleSafeAction("rejectWaveApplicationAction", _rejectWaveApplicationAction);
@@ -565,16 +565,16 @@ async function _getStandardWaveApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+        if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -706,7 +706,7 @@ async function _getStandardWaveApplicationsAction(options: {
         const hasMore = snapshot.docs.length === fetchLimit;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: finalForms,
             lastDocId,
             hasMore,
@@ -721,7 +721,7 @@ async function _getStandardWaveApplicationsAction(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch normalized Wave applications" };
+        return { success: false as const, error: "Failed to fetch normalized Wave applications" };
     }
 }
 export const getStandardWaveApplicationsAction = withFlexibleSafeAction("getStandardWaveApplicationsAction", _getStandardWaveApplicationsAction);
@@ -734,16 +734,16 @@ async function _getStandardWaveWithdrawalsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ success: boolean; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ success: true | false; data?: any[]; error?: string; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+        if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 25;
@@ -783,7 +783,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: withdrawals,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
@@ -797,7 +797,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch WAVE withdrawals" };
+        return { success: false as const, error: "Failed to fetch WAVE withdrawals" };
     }
 }
 export const getStandardWaveWithdrawalsAction = withFlexibleSafeAction("getStandardWaveWithdrawalsAction", _getStandardWaveWithdrawalsAction);
@@ -812,7 +812,7 @@ async function _processWaveWithdrawalAction(data: {
     action: "approve" | "reject" | "complete";
     adminNotes?: string;
     transactionReference?: string;
-}): Promise<{ success: boolean; data?: any; error?: string }> {
+}): Promise<{ success: true | false; data?: any; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -820,7 +820,7 @@ async function _processWaveWithdrawalAction(data: {
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles) || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
-            return { success: false, error: "Unauthorized: finance:process_withdrawals permission required" };
+            return { success: false as const, error: "Unauthorized: finance:process_withdrawals permission required" };
         }
 
         const { withdrawalId, action, adminNotes, transactionReference } = data;
@@ -892,7 +892,7 @@ async function _processWaveWithdrawalAction(data: {
                      await invalidateServiceCache(withdrawalData.userId, 'wave');
                  } catch (e) { }
              }
-             return { success: true, data: { status: action === "reject" ? "rejected" : "completed" } };
+             return { success: true as const, data: { status: action === "reject" ? "rejected" : "completed" } };
         }
 
         // PHASE 2: SIDE-EFFECT (PAYOUT)
@@ -909,7 +909,7 @@ async function _processWaveWithdrawalAction(data: {
                     adminNotes: (adminNotes ? adminNotes + " - " : "") + "Payout failed: Missing bank details.",
                     updatedAt: FieldValue.serverTimestamp(),
                 });
-                return { success: false, error: "User bank details missing" };
+                return { success: false as const, error: "User bank details missing" };
             }
 
             const payoutResult = await paystackPayout(
@@ -930,7 +930,7 @@ async function _processWaveWithdrawalAction(data: {
                     adminNotes: (adminNotes ? adminNotes + " - " : "") + `Payout failed: ${payoutResult.error}`,
                     updatedAt: FieldValue.serverTimestamp(),
                 });
-                return { success: false, error: `Paystack payout failed: ${payoutResult.error}` };
+                return { success: false as const, error: `Paystack payout failed: ${payoutResult.error}` };
             }
 
             // PHASE 3: FINAL COMMIT
@@ -953,7 +953,7 @@ async function _processWaveWithdrawalAction(data: {
                 } catch (e) { }
             }
 
-            return { success: true, data: { status: "completed" } };
+            return { success: true as const, data: { status: "completed" } };
 
         } catch (error: any) {
             logger.error(`[WAVE:Payout] Critical error during payout for ${withdrawalId}:`, error);
@@ -964,12 +964,12 @@ async function _processWaveWithdrawalAction(data: {
                 updatedAt: FieldValue.serverTimestamp(),
             }).catch(e => logger.error(`[WAVE:Rollback] Failed to rollback status for ${withdrawalId}:`, e));
             
-            return { success: false, error: "Critical payout failure. Status reverted to pending." };
+            return { success: false as const, error: "Critical payout failure. Status reverted to pending." };
         }
 
     } catch (error: any) {
         logger.error("Process WAVE withdrawal error:", error);
-        return { success: false, error: error.message || "Failed to process withdrawal" };
+        return { success: false as const, error: error.message || "Failed to process withdrawal" };
     }
 }
 

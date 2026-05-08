@@ -34,7 +34,7 @@ export async function createNotificationAction(data: {
     message: string;
     link?: string;
     linkText?: string;
-}): Promise<{ success: boolean; error?: string; notificationId?: string }> {
+}): Promise<{ success: true | false; error?: string; notificationId?: string }> {
     try {
         const notification: Omit<Notification, "id"> = {
             ...data,
@@ -44,10 +44,10 @@ export async function createNotificationAction(data: {
 
         const docRef = await db.collection(COLLECTIONS.NOTIFICATIONS).add(notification);
 
-        return { success: true, notificationId: docRef.id };
+        return { success: true as const, notificationId: docRef.id };
     } catch (error) {
         logger.error("Notification creation error:", error);
-        return { success: false, error: "Failed to create notification" };
+        return { success: false as const, error: "Failed to create notification" };
     }
 }
 
@@ -57,7 +57,7 @@ export async function createNotificationAction(data: {
 export async function createBulkNotificationsAction(
     userIds: string[],
     notification: Omit<Notification, "id" | "userId">
-): Promise<{ success: boolean; error?: string; count?: number }> {
+): Promise<{ success: true | false; error?: string; count?: number }> {
     try {
         const batch = db.batch();
         const notificationsRef = db.collection(COLLECTIONS.NOTIFICATIONS);
@@ -74,10 +74,10 @@ export async function createBulkNotificationsAction(
 
         await batch.commit();
 
-        return { success: true, count: userIds.length };
+        return { success: true as const, count: userIds.length };
     } catch (error) {
         logger.error("Bulk notification creation error:", error);
-        return { success: false, error: "Failed to create notifications" };
+        return { success: false as const, error: "Failed to create notifications" };
     }
 }
 
@@ -103,18 +103,18 @@ export async function getUserNotificationsAction(userId: string): Promise<Notifi
  */
 export async function markNotificationAsReadAction(
     notificationId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthenticated" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthenticated" };
         const { session } = sessionResult;
 
         // Verify ownership — only the notification's owner can mark it read
         const docRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc(notificationId);
         const snap = await docRef.get();
-        if (!snap.exists) return { success: false, error: "Notification not found" };
+        if (!snap.exists) return { success: false as const, error: "Notification not found" };
         if (snap.data()?.userId !== session.user.id) {
-            return { success: false, error: "Forbidden" };
+            return { success: false as const, error: "Forbidden" };
         }
 
         await docRef.update({
@@ -122,17 +122,17 @@ export async function markNotificationAsReadAction(
             readAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Mark as read error:", error);
-        return { success: false, error: "Failed to mark as read" };
+        return { success: false as const, error: "Failed to mark as read" };
     }
 }
 
 /**
  * Mark all notifications as read for user
  */
-export async function markAllAsReadAction(userId: string): Promise<{ success: boolean; error?: string }> {
+export async function markAllAsReadAction(userId: string): Promise<{ success: true | false; error?: string }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
             .where("userId", "==", userId)
@@ -140,7 +140,7 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: bo
             .get();
 
         if (snapshot.empty) {
-            return { success: true };
+            return { success: true as const };
         }
 
         const batch = db.batch();
@@ -153,10 +153,10 @@ export async function markAllAsReadAction(userId: string): Promise<{ success: bo
 
         await batch.commit();
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Mark all as read error:", error);
-        return { success: false, error: "Failed to mark all as read" };
+        return { success: false as const, error: "Failed to mark all as read" };
     }
 }
 

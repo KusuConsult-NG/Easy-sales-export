@@ -15,7 +15,7 @@ export async function clearLegacyPasswordFlagAction() {
     try {
         const session = await auth();
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
@@ -27,9 +27,9 @@ export async function clearLegacyPasswordFlagAction() {
         });
 
         logger.info(`[clearLegacyPasswordFlagAction] Security flag cleared for user ${session.user.id}`);
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("[clearLegacyPasswordFlagAction] Error clearing security flag", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }

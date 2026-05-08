@@ -15,13 +15,13 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 /**
  * Check if current user is enrolled in WAVE
  */
-export async function checkWaveMembershipAction(): Promise<{ success: boolean; data?: { enrolled: boolean; memberData?: any }; meta?: any; error?: string }> {
+export async function checkWaveMembershipAction(): Promise<{ success: true | false; data?: { enrolled: boolean; memberData?: any }; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: true, data: { enrolled: false } };
+            return { success: true as const, data: { enrolled: false } };
         }
 
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
@@ -31,7 +31,7 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
             const { isAdmin } = await import("@/lib/admin-permissions");
             if (isAdmin(session.user.roles)) {
                 return {
-                    success: true,
+                    success: true as const,
                     data: {
                         enrolled: true,
                         memberData: serializeDoc(session.user.id, {
@@ -70,7 +70,7 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
                 await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).set(memberData, { merge: true });
 
                 return {
-                    success: true,
+                    success: true as const,
                     data: {
                         enrolled: true,
                         memberData: serializeDoc(session.user.id, memberData)
@@ -78,11 +78,11 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
                 };
             }
 
-            return { success: true, data: { enrolled: false } };
+            return { success: true as const, data: { enrolled: false } };
         }
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 enrolled: true,
                 memberData: serializeDoc(memberDoc.id, memberDoc.data()),
@@ -90,25 +90,25 @@ export async function checkWaveMembershipAction(): Promise<{ success: boolean; d
         };
     } catch (error) {
         logger.error("WAVE membership check error:", error);
-        return { success: false, error: "Failed to check membership" };
+        return { success: false as const, error: "Failed to check membership" };
     }
 }
 
 /**
  * Get member dashboard stats
  */
-export async function getWaveMemberStatsAction(): Promise<{ success: boolean; data?: { stats: any }; meta?: any; error?: string }> {
+export async function getWaveMemberStatsAction(): Promise<{ success: true | false; data?: { stats: any }; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         const membershipResult = await checkWaveMembershipAction();
         if (!membershipResult.success || !membershipResult.data?.enrolled) {
-            return { success: false, error: "Not enrolled in WAVE" };
+            return { success: false as const, error: "Not enrolled in WAVE" };
         }
         
         const membership = membershipResult.data!;
@@ -135,7 +135,7 @@ export async function getWaveMemberStatsAction(): Promise<{ success: boolean; da
         );
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 stats: {
                     resourcesAccessed: resourceAccessSnap.size,
@@ -147,20 +147,20 @@ export async function getWaveMemberStatsAction(): Promise<{ success: boolean; da
         };
     } catch (error) {
         logger.error("Failed to get member stats:", error);
-        return { success: false, error: "Failed to fetch stats" };
+        return { success: false as const, error: "Failed to fetch stats" };
     }
 }
 
 /**
  * Track resource access
  */
-export async function trackResourceAccessAction(resourceId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function trackResourceAccessAction(resourceId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         // Check if already accessed
@@ -194,23 +194,23 @@ export async function trackResourceAccessAction(resourceId: string): Promise<{ s
             downloads: FieldValue.increment(1),
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Failed to track resource access:", error);
-        return { success: false, error: "Failed to track access" };
+        return { success: false as const, error: "Failed to track access" };
     }
 }
 
 /**
  * Get user's training registrations
  */
-export async function getUserTrainingRegistrationsAction(): Promise<{ success: boolean; data?: { registrations: any[] }; meta?: any; error?: string }> {
+export async function getUserTrainingRegistrationsAction(): Promise<{ success: true | false; data?: { registrations: any[] }; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         const snap = await db.collection(COLLECTIONS.WAVE_TRAINING_REGISTRATIONS)
@@ -219,9 +219,9 @@ export async function getUserTrainingRegistrationsAction(): Promise<{ success: b
 
         const registrations = serializeDocs(snap.docs);
 
-        return { success: true, data: { registrations } };
+        return { success: true as const, data: { registrations } };
     } catch (error) {
         logger.error("Failed to get registrations:", error);
-        return { success: false, error: "Failed to fetch registrations" };
+        return { success: false as const, error: "Failed to fetch registrations" };
     }
 }

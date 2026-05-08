@@ -21,7 +21,7 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized. You must be logged in." };
+            return { success: false as const, error: "Unauthorized. You must be logged in." };
         }
 
         const userId = session.user.id;
@@ -29,7 +29,7 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
 
         const userSnap = await userRef.get();
         if (!userSnap.exists) {
-            return { success: false, error: "User profile not found." };
+            return { success: false as const, error: "User profile not found." };
         }
 
         // Scrub all PII. We retain the UID so that database foreign keys (like
@@ -61,11 +61,11 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<void>> {
             logger.error("Cache invalidation failed after account deletion", err);
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("[NDPR Compliance] Account deletion error:", error);
         const msg = typeof error === 'string' ? error : (error?.message || "Account deletion failed");
-        return { success: false, error: msg };
+        return { success: false as const, error: msg };
     }
 }
 

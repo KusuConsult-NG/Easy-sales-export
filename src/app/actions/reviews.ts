@@ -42,31 +42,31 @@ export async function createReviewAction(params: {
         // Validate with Zod
         const validation = reviewSchema.safeParse({ rating, comment });
         if (!validation.success) {
-            return { success: false, error: validation.error.issues[0].message };
+            return { success: false as const, error: validation.error.issues[0].message };
         }
 
         // Get order and verify
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
         if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
+            return { success: false as const, error: "Order not found" };
         }
 
         const order = orderDoc.data() as Order;
 
         // Verify user is the buyer
         if (order.buyerId !== userId) {
-            return { success: false, error: "Not authorized" };
+            return { success: false as const, error: "Not authorized" };
         }
 
         // Verify order is completed
         if (order.status !== "completed") {
-            return { success: false, error: "Can only review completed orders" };
+            return { success: false as const, error: "Can only review completed orders" };
         }
 
         // Verify product is in order
         const orderItem = order.items.find((item) => item.productId === productId);
         if (!orderItem) {
-            return { success: false, error: "Product not found in order" };
+            return { success: false as const, error: "Product not found in order" };
         }
 
         // Check if already reviewed this product from this order
@@ -77,14 +77,14 @@ export async function createReviewAction(params: {
             .get();
 
         if (!existingReviews.empty) {
-            return { success: false, error: "You have already reviewed this product from this order" };
+            return { success: false as const, error: "You have already reviewed this product from this order" };
         }
 
         // Get the specific product to ensure we attribute the review to the ACTUAL seller
         // This eliminates the single-seller cart assumption bug
         const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
         if (!productDoc.exists) {
-           return { success: false, error: "Product no longer exists on the platform" };
+           return { success: false as const, error: "Product no longer exists on the platform" };
         }
         const productActualSellerId = productDoc.data()?.sellerId || order.sellerId;
 
@@ -104,10 +104,10 @@ export async function createReviewAction(params: {
 
         await db.collection(COLLECTIONS.PRODUCT_REVIEWS).add(reviewData);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Create review error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -140,10 +140,10 @@ export async function getProductReviewsAction(
             ? reviews.filter((r) => r.verified === filters.verified)
             : reviews;
 
-        return { success: true, reviews: filteredReviews };
+        return { success: true as const, reviews: filteredReviews };
     } catch (error: any) {
         logger.error("Get product reviews error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -164,10 +164,10 @@ export async function getUserReviewsAction() {
 
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
-        return { success: true, reviews };
+        return { success: true as const, reviews };
     } catch (error: any) {
         logger.error("Get user reviews error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -188,21 +188,21 @@ export async function updateReviewAction(
         // Validate with Zod
         const validation = reviewSchema.safeParse({ rating, comment });
         if (!validation.success) {
-            return { success: false, error: validation.error.issues[0].message };
+            return { success: false as const, error: validation.error.issues[0].message };
         }
 
         // Get review
         const reviewRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId);
         const reviewDoc = await reviewRef.get();
         if (!reviewDoc.exists) {
-            return { success: false, error: "Review not found" };
+            return { success: false as const, error: "Review not found" };
         }
 
         const review = reviewDoc.data() as ProductReview;
 
         // Verify ownership
         if (review.userId !== userId) {
-            return { success: false, error: "Not authorized" };
+            return { success: false as const, error: "Not authorized" };
         }
 
         // Check 30-day limit
@@ -213,7 +213,7 @@ export async function updateReviewAction(
             (Date.now() - reviewDate.getTime()) / (1000 * 60 * 60 * 24)
         );
         if (daysSinceCreation > 30) {
-            return { success: false, error: "Reviews can only be edited within 30 days" };
+            return { success: false as const, error: "Reviews can only be edited within 30 days" };
         }
 
         // Update review
@@ -224,10 +224,10 @@ export async function updateReviewAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Update review error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -249,14 +249,14 @@ export async function moderateReviewAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
-            return { success: false, error: "Not authorized as admin" };
+            return { success: false as const, error: "Not authorized as admin" };
         }
 
         // Get review
         const reviewRef = db.collection(COLLECTIONS.PRODUCT_REVIEWS).doc(reviewId);
         const reviewDoc = await reviewRef.get();
         if (!reviewDoc.exists) {
-            return { success: false, error: "Review not found" };
+            return { success: false as const, error: "Review not found" };
         }
 
         // Update review
@@ -272,10 +272,10 @@ export async function moderateReviewAction(
 
         await reviewRef.update(updateData);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Moderate review error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -292,7 +292,7 @@ export async function getSellerRatingAction(sellerId: string) {
         const reviews: ProductReview[] = snapshot.docs.map((doc) => doc.data()) as ProductReview[];
 
         if (reviews.length === 0) {
-            return { success: true, stats: {
+            return { success: true as const, stats: {
                     averageRating: 0,
                     totalReviews: 0,
                     distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 } },
@@ -312,14 +312,14 @@ export async function getSellerRatingAction(sellerId: string) {
             1: reviews.filter((r) => r.rating === 1).length,
         };
 
-        return { success: true, stats: {
+        return { success: true as const, stats: {
                 averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
                 totalReviews: reviews.length,
                 distribution, }
         };
     } catch (error: any) {
         logger.error("Get seller rating error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -342,7 +342,7 @@ export async function getAdminReviewsAction(options: {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
         if (!hasRole(userData?.roles || [], "admin")) {
-            return { success: false, error: "Not authorized as admin" };
+            return { success: false as const, error: "Not authorized as admin" };
         }
 
         const fetchLimit = options.limit || 20;
@@ -389,7 +389,7 @@ export async function getAdminReviewsAction(options: {
         }
 
         return { 
-            success: true, 
+            success: true as const, 
             reviews,
             stats,
             lastDocId: nextCursor,
@@ -397,6 +397,6 @@ export async function getAdminReviewsAction(options: {
         };
     } catch (error: any) {
         logger.error("Get admin reviews error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }

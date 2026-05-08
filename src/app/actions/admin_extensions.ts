@@ -10,8 +10,8 @@ import { logAuditAction } from "./audit";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 
 type ActionState =
-    | { error: string; success: false }
-    | { error: null; success: true; message: string };
+    | { error: string; success: false as const }
+    | { error: null; success: true as const; message: string };
 
 /**
  * Soft delete user (Preserve Referential Integrity)
@@ -27,7 +27,7 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) {
             // Fallback if specific permission doesn't exist
             if (!isAdmin(session.user.roles)) {
-                return { error: "Unauthorized: Admin access required", success: false };
+                return { error: "Unauthorized: Admin access required", success: false as const };
             }
         }
 
@@ -35,14 +35,14 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { error: "User not found", success: false };
+            return { error: "User not found", success: false as const };
         }
 
         const userData = userDoc.data()!;
 
         // Prevent deleting yourself
         if (targetUserId === session.user.id) {
-            return { error: "Cannot delete your own account", success: false };
+            return { error: "Cannot delete your own account", success: false as const };
         }
 
         // PII Scrubbing
@@ -94,10 +94,10 @@ export async function softDeleteUserAction(targetUserId: string): Promise<Action
             type: "soft_delete"
         });
 
-        return { success: true, message: "User soft-deleted successfully", error: null };
+        return { success: true as const, message: "User soft-deleted successfully", error: null };
 
     } catch (error: any) {
         logger.error("Soft delete user error:", error);
-        return { success: false, error: "Failed to delete user" };
+        return { success: false as const, error: "Failed to delete user" };
     }
 }

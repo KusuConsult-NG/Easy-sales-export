@@ -56,7 +56,7 @@ async function _submitQuoteRequestAction(data: QuoteRequestData) {
         revalidatePath(`/marketplace/products/${data.productId}`);
 
         return { 
-            success: true, 
+            success: true as const, 
             data: { 
                 quoteId: quoteRef.id,
                 message: "Quote request submitted successfully. The seller has been notified."
@@ -67,7 +67,7 @@ async function _submitQuoteRequestAction(data: QuoteRequestData) {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to submit quote request. Please try again later." };
+        return { success: false as const, error: "Failed to submit quote request. Please try again later." };
     }
 }
 export const submitQuoteRequestAction = withFlexibleSafeAction("submitQuoteRequestAction", _submitQuoteRequestAction);
@@ -92,13 +92,13 @@ async function _getMyQuotesAction(role: "buyer" | "seller") {
 
         const quotes = serializeDocs(snapshot.docs);
 
-        return { success: true, data: { quotes } };
+        return { success: true as const, data: { quotes } };
     } catch (error) {
         logger.error("Get my quotes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch quotes" };
+        return { success: false as const, error: "Failed to fetch quotes" };
     }
 }
 export const getMyQuotesAction = withFlexibleSafeAction("getMyQuotesAction", _getMyQuotesAction);

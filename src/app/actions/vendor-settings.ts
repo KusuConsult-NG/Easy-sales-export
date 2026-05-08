@@ -23,10 +23,10 @@ async function _updateVendorProfileAction(profileData: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error ?? 'Session expired' };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
@@ -76,13 +76,13 @@ async function _updateVendorProfileAction(profileData: {
             await batch.commit();
         }
 
-        return { success: true, data: { message: "Profile updated successfully" } };
+        return { success: true as const, data: { message: "Profile updated successfully" } };
     } catch (error: any) {
         logger.error("updateVendorProfileAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const updateVendorProfileAction = withFlexibleSafeAction("updateVendorProfileAction", _updateVendorProfileAction);
@@ -98,10 +98,10 @@ async function _updateVendorPaymentConfigAction(paymentData: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error ?? 'Session expired' };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
@@ -122,13 +122,13 @@ async function _updateVendorPaymentConfigAction(paymentData: {
             });
         });
 
-        return { success: true, data: { message: "Payment configuration updated" } };
+        return { success: true as const, data: { message: "Payment configuration updated" } };
     } catch (error: any) {
         logger.error("updateVendorPaymentConfigAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const updateVendorPaymentConfigAction = withFlexibleSafeAction("updateVendorPaymentConfigAction", _updateVendorPaymentConfigAction);
@@ -143,10 +143,10 @@ async function _updateVendorNotificationPrefsAction(prefs: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error ?? 'Session expired' };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
@@ -160,13 +160,13 @@ async function _updateVendorNotificationPrefsAction(prefs: {
             });
         });
 
-        return { success: true, data: { message: "Notification preferences updated" } };
+        return { success: true as const, data: { message: "Notification preferences updated" } };
     } catch (error: any) {
         logger.error("updateVendorNotificationPrefsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const updateVendorNotificationPrefsAction = withFlexibleSafeAction("updateVendorNotificationPrefsAction", _updateVendorNotificationPrefsAction);
@@ -180,10 +180,10 @@ async function _updateVendorShippingConfigAction(shippingData: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error ?? 'Session expired' };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
@@ -202,13 +202,13 @@ async function _updateVendorShippingConfigAction(shippingData: {
             });
         });
 
-        return { success: true, data: { message: "Shipping configuration updated" } };
+        return { success: true as const, data: { message: "Shipping configuration updated" } };
     } catch (error: any) {
         logger.error("updateVendorShippingConfigAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const updateVendorShippingConfigAction = withFlexibleSafeAction("updateVendorShippingConfigAction", _updateVendorShippingConfigAction);
@@ -217,17 +217,17 @@ async function _getVendorSettingsAction() {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: (sessionResult.error as any)?.error ?? 'Session expired' };
+        if (!sessionResult.session) return { success: false as const, error: (sessionResult.error as any)?.error ?? 'Session expired' };
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const vendorId = session.user.id;
         const vendorDoc = await db.collection(COLLECTIONS.VENDOR_PROFILES).doc(vendorId).get();
 
         if (!vendorDoc.exists) {
-            return { success: true, data: { settings: {
+            return { success: true as const, data: { settings: {
                     storeInfo: null,
                     paymentConfig: null,
                     notifications: {
@@ -243,13 +243,13 @@ async function _getVendorSettingsAction() {
         }
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
-        return { success: true, data: { settings: serializeValue(vendorDoc.data()) } };
+        return { success: true as const, data: { settings: serializeValue(vendorDoc.data()) } };
     } catch (error: any) {
         logger.error("getVendorSettingsAction error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const getVendorSettingsAction = withFlexibleSafeAction("getVendorSettingsAction", _getVendorSettingsAction);

@@ -18,7 +18,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    success: boolean;
+    success: true | false;
     error?: string | null;
     data?: {
         authorizationUrl: string;
@@ -44,12 +44,12 @@ export async function initializeEnrollmentPaymentAction(
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         // Validate amount
         if (amount < 1000) {
-            return { error: "Minimum enrollment fee is ₦1,000", success: false };
+            return { error: "Minimum enrollment fee is ₦1,000", success: false as const };
         }
 
         // Check if already enrolled
@@ -57,7 +57,7 @@ export async function initializeEnrollmentPaymentAction(
         const existingEnrollment = await db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId).get();
 
         if (existingEnrollment.exists) {
-            return { error: "You are already enrolled in this course", success: false };
+            return { error: "You are already enrolled in this course", success: false as const };
         }
 
         // Initialize payment with Paystack
@@ -91,7 +91,7 @@ export async function initializeEnrollmentPaymentAction(
         });
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -100,7 +100,7 @@ export async function initializeEnrollmentPaymentAction(
     } catch (error: any) {
         logger.error("Payment initialization error:", error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || "Failed to initialize payment. Please try again.",
         };
     }
@@ -111,7 +111,7 @@ export async function initializeEnrollmentPaymentAction(
  * Updates enrollment status after successful payment
  */
 export async function verifyEnrollmentPaymentAction(reference: string): Promise<{
-    success: boolean;
+    success: true | false;
     error?: string;
     data?: any;
     meta?: any;
@@ -122,13 +122,13 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
     const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
         if (!rateLimitResult.success) {
             return {
-                success: false,
+                success: false as const,
                 error: "Too many payment verification attempts. Please try again later."
             };
         }
@@ -150,7 +150,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: "Payment verification failed. Please contact support if amount was debited.",
-                success: false,
+                success: false as const,
             };
         }
 
@@ -161,14 +161,14 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         // Verify user match
         if (metadata.userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false };
+            return { error: "Payment verification failed: User mismatch", success: false as const };
         }
 
         // 🔒 SECURITY FIX #3: Amount re-validation against REAL course price
         // ✅ FIX: Query from active 'ACADEMY_COURSES' collection instead of legacy 'COURSES'.
         const courseDoc = await db.collection(COLLECTIONS.ACADEMY_COURSES).doc(metadata.courseId).get();
         if (!courseDoc.exists) {
-            return { success: false, error: "Course not found during verification" };
+            return { success: false as const, error: "Course not found during verification" };
         }
 
         const courseData = courseDoc.data();
@@ -180,7 +180,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             // If the user paid less, we reject.
             if (amountInNaira < expectedPrice) {
                 logger.warn(`Price mismatch for course ${metadata.courseId}. Expected ${expectedPrice}, got ${amountInNaira}`);
-                return { success: false, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).` };
+                return { success: false as const, error: `Payment amount (${amountInNaira}) does not match current course price (${expectedPrice}).` };
             }
         }
 
@@ -220,7 +220,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         });
 
         return {
-            success: true,
+            success: true as const,
             data: { message: "Enrollment successful! Check your email for course access details." },
         };
     } catch (error: any) {
@@ -232,7 +232,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         });
 
         return {
-            success: false,
+            success: false as const,
             error: "Failed to verify payment. Please contact support with reference: " + reference,
         };
     }

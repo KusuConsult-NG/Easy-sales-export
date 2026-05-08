@@ -51,7 +51,7 @@ function sanitizeForSerialization(obj: unknown): unknown {
  * - Land Listings (verificationStatus: pending)
  */
 export async function getPendingContentAction(): Promise<{
-    success: boolean;
+    success: true | false;
     data?: PendingContentItem[];
     error?: string;
 }> {
@@ -60,7 +60,7 @@ export async function getPendingContentAction(): Promise<{
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Not authenticated" };
+            return { success: false as const, error: "Not authenticated" };
         }
 
         // Check admin role
@@ -68,7 +68,7 @@ export async function getPendingContentAction(): Promise<{
         const userData = userDoc.data();
         const roles = userData?.roles || [];
         if (!userDoc.exists || !userData || !isAdmin(roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const pendingItems: PendingContentItem[] = [];
@@ -116,24 +116,24 @@ export async function getPendingContentAction(): Promise<{
         // Sort by submittedAt desc (ISO strings sort lexicographically)
         pendingItems.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
-        return { success: true, data: pendingItems };
+        return { success: true as const, data: pendingItems };
 
     } catch (error: any) {
         logger.error("Get pending content error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
 export async function approveContentAction(
     id: string,
     type: ContentType
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const timestamp = FieldValue.serverTimestamp();
@@ -155,14 +155,14 @@ export async function approveContentAction(
                 });
                 break;
             default:
-                return { success: false, error: "Invalid content type" };
+                return { success: false as const, error: "Invalid content type" };
         }
 
-        return { success: true };
+        return { success: true as const };
 
     } catch (error: any) {
         logger.error("Approve content error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -170,13 +170,13 @@ export async function rejectContentAction(
     id: string,
     type: ContentType,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const timestamp = FieldValue.serverTimestamp();
@@ -184,10 +184,10 @@ export async function rejectContentAction(
 
         // Validate reason
         if (!reason || reason.trim().length < 5) {
-            return { success: false, error: "Rejection reason must be at least 5 characters" };
+            return { success: false as const, error: "Rejection reason must be at least 5 characters" };
         }
         if (reason.length > 500) {
-            return { success: false, error: "Rejection reason is too long (max 500 characters)" };
+            return { success: false as const, error: "Rejection reason is too long (max 500 characters)" };
         }
 
         switch (type) {
@@ -208,12 +208,12 @@ export async function rejectContentAction(
                 });
                 break;
             default:
-                return { success: false, error: "Invalid content type" };
+                return { success: false as const, error: "Invalid content type" };
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Reject content error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }

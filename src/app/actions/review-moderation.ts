@@ -40,7 +40,7 @@ export async function getFlaggedReviewsAction(options?: {
     minFlags?: number;
     limit?: number;
 }): Promise<{
-    success: boolean;
+    success: true | false;
     data?: FlaggedReview[];
     error?: string;
 }> {
@@ -49,7 +49,7 @@ export async function getFlaggedReviewsAction(options?: {
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
-            return { success: false, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
+            return { success: false as const, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
 
         let query = db.collection(COLLECTIONS.REVIEWS)
@@ -96,10 +96,10 @@ export async function getFlaggedReviewsAction(options?: {
             });
         }
 
-        return { success: true, data: reviews };
+        return { success: true as const, data: reviews };
     } catch (error: any) {
         logger.error("Failed to get flagged reviews:", error);
-        return { success: false, error: error.message || "Failed to fetch reviews" };
+        return { success: false as const, error: error.message || "Failed to fetch reviews" };
     }
 }
 
@@ -108,20 +108,20 @@ export async function getFlaggedReviewsAction(options?: {
  */
 export async function approveReviewAction(
     reviewId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
-            return { success: false, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
+            return { success: false as const, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
 
         const reviewRef = db.collection(COLLECTIONS.REVIEWS).doc(reviewId);
         const reviewDoc = await reviewRef.get();
 
         if (!reviewDoc.exists) {
-            return { success: false, error: "Review not found" };
+            return { success: false as const, error: "Review not found" };
         }
 
         await reviewRef.update({
@@ -141,10 +141,10 @@ export async function approveReviewAction(
             metadata: { productId: reviewDoc.data()?.productId },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to approve review:", error);
-        return { success: false, error: error.message || "Failed to approve review" };
+        return { success: false as const, error: error.message || "Failed to approve review" };
     }
 }
 
@@ -154,24 +154,24 @@ export async function approveReviewAction(
 export async function deleteReviewAction(
     reviewId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
-            return { success: false, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
+            return { success: false as const, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
 
         if (!reason || reason.trim().length < 10) {
-            return { success: false, error: "Deletion reason must be at least 10 characters" };
+            return { success: false as const, error: "Deletion reason must be at least 10 characters" };
         }
 
         const reviewRef = db.collection(COLLECTIONS.REVIEWS).doc(reviewId);
         const reviewDoc = await reviewRef.get();
 
         if (!reviewDoc.exists) {
-            return { success: false, error: "Review not found" };
+            return { success: false as const, error: "Review not found" };
         }
 
         const reviewData = reviewDoc.data();
@@ -222,10 +222,10 @@ export async function deleteReviewAction(
             },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to delete review:", error);
-        return { success: false, error: error.message || "Failed to delete review" };
+        return { success: false as const, error: error.message || "Failed to delete review" };
     }
 }
 
@@ -236,28 +236,28 @@ export async function suspendReviewerAction(
     userId: string,
     duration: number, // days
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) {
-            return { success: false, error: "Unauthorized: Permission required - users:suspend" };
+            return { success: false as const, error: "Unauthorized: Permission required - users:suspend" };
         }
 
         if (!reason || reason.trim().length < 10) {
-            return { success: false, error: "Suspension reason must be at least 10 characters" };
+            return { success: false as const, error: "Suspension reason must be at least 10 characters" };
         }
 
         if (duration < 1 || duration > 365) {
-            return { success: false, error: "Duration must be between 1 and 365 days" };
+            return { success: false as const, error: "Duration must be between 1 and 365 days" };
         }
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const userDoc = await userRef.get();
 
         if (!userDoc.exists) {
-            return { success: false, error: "User not found" };
+            return { success: false as const, error: "User not found" };
         }
 
         const suspendedUntil = new Date();
@@ -292,10 +292,10 @@ export async function suspendReviewerAction(
             logger.error("Cache invalidation failed after user suspension", err);
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to suspend reviewer:", error);
-        return { success: false, error: error.message || "Failed to suspend user" };
+        return { success: false as const, error: error.message || "Failed to suspend user" };
     }
 }
 
@@ -304,21 +304,21 @@ export async function suspendReviewerAction(
  */
 export async function bulkApproveReviewsAction(
     reviewIds: string[]
-): Promise<{ success: boolean; approved: number; error?: string }> {
+): Promise<{ success: true | false; approved: number; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) {
-            return { success: false, approved: 0, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
+            return { success: false as const, approved: 0, error: "Unauthorized: Permission required - marketplace:moderate_reviews" };
         }
 
         if (reviewIds.length === 0) {
-            return { success: false, approved: 0, error: "No reviews selected" };
+            return { success: false as const, approved: 0, error: "No reviews selected" };
         }
 
         if (reviewIds.length > 50) {
-            return { success: false, approved: 0, error: "Cannot approve more than 50 reviews at once" };
+            return { success: false as const, approved: 0, error: "Cannot approve more than 50 reviews at once" };
         }
 
         let approvedCount = 0;
@@ -350,9 +350,9 @@ export async function bulkApproveReviewsAction(
             },
         });
 
-        return { success: true, approved: approvedCount };
+        return { success: true as const, approved: approvedCount };
     } catch (error: any) {
         logger.error("Failed to bulk approve reviews:", error);
-        return { success: false, approved: 0, error: error.message || "Failed to approve reviews" };
+        return { success: false as const, approved: 0, error: error.message || "Failed to approve reviews" };
     }
 }

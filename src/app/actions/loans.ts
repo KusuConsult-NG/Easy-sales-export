@@ -44,13 +44,13 @@ export async function submitLoanApplicationAction(formData: {
     durationMonths: number;
     contributionAmount: number;
     tier: "Member";
-}): Promise<{ success: boolean; error?: string; applicationId?: string }> {
+}): Promise<{ success: true | false; error?: string; applicationId?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== formData.userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         // ===== TIER VALIDATION =====
@@ -63,7 +63,7 @@ export async function submitLoanApplicationAction(formData: {
         // 2. Verify submitted tier matches contribution level
         if (formData.tier !== actualTier) {
             return {
-                success: false,
+                success: false as const,
                 error: `Tier mismatch: Your contribution of ₦${formData.contributionAmount.toLocaleString()} qualifies for ${actualTier} tier, not ${formData.tier} tier`,
             };
         }
@@ -74,7 +74,7 @@ export async function submitLoanApplicationAction(formData: {
 
         if (formData.amount > maxLoanAmount) {
             return {
-                success: false,
+                success: false as const,
                 error: `Loan amount exceeds ${actualTier} tier limit. Maximum: ₦${maxLoanAmount.toLocaleString()} (${tierInfo.maxLoanMultiplier}x your contribution)`,
             };
         }
@@ -83,7 +83,7 @@ export async function submitLoanApplicationAction(formData: {
         const maxDuration = getTierMaxDuration(actualTier);
         if (formData.durationMonths > maxDuration) {
             return {
-                success: false,
+                success: false as const,
                 error: `Repayment duration exceeds ${actualTier} tier limit. Maximum: ${maxDuration} months`,
             };
         }
@@ -107,7 +107,7 @@ export async function submitLoanApplicationAction(formData: {
         );
 
         if (!eligibility.eligible) {
-            return { success: false, error: eligibility.reason };
+            return { success: false as const, error: eligibility.reason };
         }
 
         // Calculate repayment
@@ -154,10 +154,10 @@ export async function submitLoanApplicationAction(formData: {
             },
         });
 
-        return { success: true, applicationId: docRef.id };
+        return { success: true as const, applicationId: docRef.id };
     } catch (error) {
         logger.error("Loan application error:", error);
-        return { success: false, error: "Failed to submit loan application" };
+        return { success: false as const, error: "Failed to submit loan application" };
     }
 }
 
@@ -217,7 +217,7 @@ export async function getAdminLoanApplicationsAction(options: {
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
 } = {}): Promise<{
-    success: boolean;
+    success: true | false;
     data?: LoanApplication[];
     error?: string;
     lastDocId?: string;
@@ -225,13 +225,13 @@ export async function getAdminLoanApplicationsAction(options: {
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
         
         if (!session?.user?.id || !session.user.roles?.some((r: string) =>
             r === "admin" || r === "super_admin" || r === "cooperative_admin"
         )) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 20;
@@ -270,14 +270,14 @@ export async function getAdminLoanApplicationsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: applications,
             lastDocId: nextCursor,
             hasMore
         };
     } catch (error: any) {
         logger.error("Failed to fetch admin loan applications:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -287,17 +287,17 @@ export async function getAdminLoanApplicationsAction(options: {
 export async function getAdminLoanApplicationsExportAction(options: {
     statusFilter?: "all" | "pending" | "approved" | "rejected" | "disbursed" | "active" | "completed";
 }): Promise<{
-    success: boolean;
+    success: true | false;
     data?: any[];
     error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
         
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         let query = db.collection(COLLECTIONS.LOAN_APPLICATIONS).orderBy("appliedAt", "desc");
@@ -341,12 +341,12 @@ export async function getAdminLoanApplicationsExportAction(options: {
         });
 
         return { 
-            success: true, 
+            success: true as const, 
             data: enrichedLoans
         };
     } catch (error: any) {
         logger.error("Failed to fetch admin loan applications for export:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -356,17 +356,17 @@ export async function getAdminLoanApplicationsExportAction(options: {
  * Returns accurate totals independent of pagination limits.
  */
 export async function getAdminLoanStatsAction(): Promise<{
-    success: boolean;
+    success: true | false;
     stats?: { total: number; pending: number; approved: number; rejected: number };
     error?: string;
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
 
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const col = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
@@ -378,7 +378,7 @@ export async function getAdminLoanStatsAction(): Promise<{
         ]);
 
         return {
-            success: true,
+            success: true as const,
             stats: {
                 total: total.data().count,
                 pending: pending.data().count,
@@ -388,7 +388,7 @@ export async function getAdminLoanStatsAction(): Promise<{
         };
     } catch (error: any) {
         logger.error("getAdminLoanStatsAction error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -398,13 +398,13 @@ export async function getAdminLoanStatsAction(): Promise<{
 export async function approveLoanAction(
     applicationId: string,
     adminId: string // Deprecated, use session
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const effectiveAdminId = session.user.id;
@@ -473,10 +473,10 @@ export async function approveLoanAction(
             },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Loan approval error:", error);
-        return { success: false, error: "Failed to approve loan" };
+        return { success: false as const, error: "Failed to approve loan" };
     }
 }
 
@@ -487,13 +487,13 @@ export async function rejectLoanAction(
     applicationId: string,
     adminId: string, // Deprecated, use session
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const effectiveAdminId = session.user.id;
@@ -502,7 +502,7 @@ export async function rejectLoanAction(
         const appDoc = await appRef.get();
 
         if (!appDoc.exists) {
-            return { success: false, error: "Application not found" };
+            return { success: false as const, error: "Application not found" };
         }
 
         await appRef.update({
@@ -526,10 +526,10 @@ export async function rejectLoanAction(
             },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Loan rejection error:", error);
-        return { success: false, error: "Failed to reject loan" };
+        return { success: false as const, error: "Failed to reject loan" };
     }
 }
 
@@ -538,13 +538,13 @@ export async function rejectLoanAction(
  */
 export async function disburseLoanAction(
     applicationId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const effectiveAdminId = session.user.id;
@@ -601,10 +601,10 @@ export async function disburseLoanAction(
             linkText: "View Loan",
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Loan disbursement error:", error);
-        return { success: false, error: error.message || "Failed to disburse loan" };
+        return { success: false as const, error: error.message || "Failed to disburse loan" };
     }
 }
 
@@ -632,13 +632,13 @@ export interface RepaymentInstallment {
  */
 export async function getRepaymentScheduleAction(
     loanId: string
-): Promise<{ success: boolean; error?: string; schedule?: RepaymentInstallment[] }> {
+): Promise<{ success: true | false; error?: string; schedule?: RepaymentInstallment[] }> {
     try {
         const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
         const loanDoc = await loanRef.get();
 
         if (!loanDoc.exists) {
-            return { success: false, error: "Loan not found" };
+            return { success: false as const, error: "Loan not found" };
         }
 
         const loanData = loanDoc.data() as LoanApplication;
@@ -647,7 +647,7 @@ export async function getRepaymentScheduleAction(
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || (session.user.id !== loanData.userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         // Check if schedule exists
@@ -659,7 +659,7 @@ export async function getRepaymentScheduleAction(
             // Return existing schedule
             const schedule = serializeDocs<RepaymentInstallment>(scheduleSnapshot.docs);
 
-            return { success: true, schedule };
+            return { success: true as const, schedule };
         }
 
         // Generate schedule if not exists
@@ -705,10 +705,10 @@ export async function getRepaymentScheduleAction(
             });
         }
 
-        return { success: true, schedule: installments };
+        return { success: true as const, schedule: installments };
     } catch (error) {
         logger.error("Failed to fetch repayment schedule:", error);
-        return { success: false, error: "Failed to fetch repayment schedule" };
+        return { success: false as const, error: "Failed to fetch repayment schedule" };
     }
 }
 
@@ -741,17 +741,17 @@ export async function submitRepaymentAction(data: {
     userId: string;
     amount: number;
     paymentReference: string;
-}): Promise<{ success: boolean; error?: string; penalty?: number }> {
+}): Promise<{ success: true | false; error?: string; penalty?: number }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== data.userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         if (data.amount <= 0) {
-            return { success: false, error: "Invalid repayment amount" };
+            return { success: false as const, error: "Invalid repayment amount" };
         }
 
         const installmentRef = db.collection(COLLECTIONS.LOAN_REPAYMENTS).doc(data.installmentId);
@@ -873,10 +873,10 @@ export async function submitRepaymentAction(data: {
             linkText: "View Loan",
         });
 
-        return { success: true, penalty: calculatedPenalty };
+        return { success: true as const, penalty: calculatedPenalty };
     } catch (error: any) {
         logger.error("Repayment submission error:", error);
-        return { success: false, error: error.message || "Failed to submit repayment" };
+        return { success: false as const, error: error.message || "Failed to submit repayment" };
     }
 }
 
@@ -885,13 +885,13 @@ export async function submitRepaymentAction(data: {
  */
 export async function getRepaymentHistoryAction(
     loanId: string
-): Promise<{ success: boolean; error?: string; payments?: any[] }> {
+): Promise<{ success: true | false; error?: string; payments?: any[] }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         // Note: For history, we should ideally check ownership of the loan first, 
@@ -901,7 +901,7 @@ export async function getRepaymentHistoryAction(
         if (loanDoc.exists) {
             const loanData = loanDoc.data();
             if (loanData && loanData.userId !== session.user.id && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-                return { success: false, error: "Unauthorized" };
+                return { success: false as const, error: "Unauthorized" };
             }
         }
 
@@ -911,9 +911,9 @@ export async function getRepaymentHistoryAction(
 
         const payments = serializeDocs(paymentsSnapshot.docs);
 
-        return { success: true, payments };
+        return { success: true as const, payments };
     } catch (error) {
         logger.error("Failed to fetch repayment history:", error);
-        return { success: false, error: "Failed to fetch repayment history" };
+        return { success: false as const, error: "Failed to fetch repayment history" };
     }
 }

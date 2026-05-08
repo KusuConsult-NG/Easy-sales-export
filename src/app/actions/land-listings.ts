@@ -63,7 +63,7 @@ export async function createLandListingAction(data: {
     category?: string;
     soilType?: string;
     waterSource?: string;
-}): Promise<{ success: boolean; error?: string; listingId?: string }> {
+}): Promise<{ success: true | false; error?: string; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ...data,
@@ -83,10 +83,10 @@ export async function createLandListingAction(data: {
             targetType: "land_listing_creation",
         });
 
-        return { success: true, listingId: docRef.id };
+        return { success: true as const, listingId: docRef.id };
     } catch (error) {
         logger.error("Land listing creation error:", error);
-        return { success: false, error: "Failed to create land listing" };
+        return { success: false as const, error: "Failed to create land listing" };
     }
 }
 
@@ -96,19 +96,19 @@ export async function createLandListingAction(data: {
 async function submitForVerificationAction(
     listingId: string,
     ownerId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
-            return { success: false, error: "Listing not found" };
+            return { success: false as const, error: "Listing not found" };
         }
 
         const listingData = listingDoc.data() as LandListing;
 
         if (listingData.ownerId !== ownerId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         await listingRef.update({
@@ -116,10 +116,10 @@ async function submitForVerificationAction(
             updatedAt: FieldValue.serverTimestamp(),
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Verification submission error:", error);
-        return { success: false, error: "Failed to submit for verification" };
+        return { success: false as const, error: "Failed to submit for verification" };
     }
 }
 
@@ -129,19 +129,19 @@ async function submitForVerificationAction(
 export async function verifyLandListingAction(
     listingId: string,
     adminId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!isAdmin(session?.user?.roles)) {
-            return { success: false, error: "Unauthorized: Admin access required" };
+            return { success: false as const, error: "Unauthorized: Admin access required" };
         }
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
-            return { success: false, error: "Listing not found" };
+            return { success: false as const, error: "Listing not found" };
         }
 
         await listingRef.update({
@@ -165,10 +165,10 @@ export async function verifyLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Land verification error:", error);
-        return { success: false, error: "Failed to verify listing" };
+        return { success: false as const, error: "Failed to verify listing" };
     }
 }
 
@@ -179,19 +179,19 @@ export async function rejectLandListingAction(
     listingId: string,
     adminId: string,
     reason: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
         if (!isAdmin(session?.user?.roles)) {
-            return { success: false, error: "Unauthorized: Admin access required" };
+            return { success: false as const, error: "Unauthorized: Admin access required" };
         }
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
-            return { success: false, error: "Listing not found" };
+            return { success: false as const, error: "Listing not found" };
         }
 
         await listingRef.update({
@@ -217,10 +217,10 @@ export async function rejectLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Land rejection error:", error);
-        return { success: false, error: "Failed to reject listing" };
+        return { success: false as const, error: "Failed to reject listing" };
     }
 }
 
@@ -354,7 +354,7 @@ export async function submitLandListingAction(data: {
     documentUrls: string[];
     // Optional: GPS coordinates if available
     gpsCoordinates?: { latitude: number; longitude: number };
-}): Promise<{ success: boolean; error?: string; listingId?: string }> {
+}): Promise<{ success: true | false; error?: string; listingId?: string }> {
     try {
         const listing: Omit<LandListing, "id"> = {
             ownerId: data.ownerId,
@@ -407,10 +407,10 @@ export async function submitLandListingAction(data: {
             linkText: "View Listings",
         });
 
-        return { success: true, listingId: docRef.id };
+        return { success: true as const, listingId: docRef.id };
     } catch (error: any) {
         logger.error("Land listing submission error:", error);
-        return { success: false, error: error.message || "Failed to submit land listing" };
+        return { success: false as const, error: error.message || "Failed to submit land listing" };
     }
 }
 
@@ -452,7 +452,7 @@ export async function submitLandInquiryAction(data: {
     buyerEmail: string;
     buyerPhone: string;
     message: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: true | false; error?: string }> {
     try {
         // 1. Save inquiry to database
         const inquiryRef = await db.collection(COLLECTIONS.LAND_INQUIRIES).add({
@@ -482,46 +482,46 @@ export async function submitLandInquiryAction(data: {
             details: `Inquiry for ${data.listingTitle}`,
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Submit inquiry error:", error);
-        return { success: false, error: error.message || "Failed to send message" };
+        return { success: false as const, error: error.message || "Failed to send message" };
     }
 }
 
 /**
  * Get inquiries for a user (as seller)
  */
-export async function getLandInquiriesAction(userId: string): Promise<{ success: boolean; inquiries?: any[]; error?: string }> {
+export async function getLandInquiriesAction(userId: string): Promise<{ success: true | false; inquiries?: any[]; error?: string }> {
     try {
         const snapshot = await db.collection(COLLECTIONS.LAND_INQUIRIES)
             .where("listingOwnerId", "==", userId)
             .orderBy("createdAt", "desc")
             .get();
         const inquiries = serializeDocs(snapshot.docs);
-        return { success: true, inquiries };
+        return { success: true as const, inquiries };
     } catch (error: any) {
         logger.error("Get inquiries error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
 /**
  * Get single inquiry by ID
  */
-export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ success: boolean; inquiry?: any; error?: string }> {
+export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ success: true | false; inquiry?: any; error?: string }> {
     try {
         const docRef = db.collection(COLLECTIONS.LAND_INQUIRIES).doc(inquiryId);
         const docSnap = await docRef.get();
 
         if (docSnap.exists) {
-            return { success: true, inquiry: { id: docSnap.id, ...docSnap.data() } };
+            return { success: true as const, inquiry: { id: docSnap.id, ...docSnap.data() } };
         } else {
-            return { success: false, error: "Inquiry not found" };
+            return { success: false as const, error: "Inquiry not found" };
         }
     } catch (error: any) {
         logger.error("Get inquiry error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -531,19 +531,19 @@ export async function getLandInquiryByIdAction(inquiryId: string): Promise<{ suc
 export async function deleteLandListingAction(
     listingId: string,
     adminId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!isAdmin(session?.user?.roles)) {
-            return { success: false, error: "Unauthorized: Admin access required" };
+            return { success: false as const, error: "Unauthorized: Admin access required" };
         }
         const listingRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(listingId);
         const listingDoc = await listingRef.get();
 
         if (!listingDoc.exists) {
-            return { success: false, error: "Listing not found" };
+            return { success: false as const, error: "Listing not found" };
         }
 
         await listingRef.delete();
@@ -560,9 +560,9 @@ export async function deleteLandListingAction(
         revalidateTag(`property-${listingId}`, "page");
         await invalidateAdminGlobalStats();
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Land deletion error:", error);
-        return { success: false, error: "Failed to delete listing" };
+        return { success: false as const, error: "Failed to delete listing" };
     }
 }

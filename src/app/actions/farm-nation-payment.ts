@@ -18,7 +18,7 @@ function nairaToKobo(naira: number): number {
 }
 
 export interface PaymentInitState {
-    success: boolean;
+    success: true | false;
     error?: string | null;
     data?: {
         authorizationUrl: string;
@@ -43,12 +43,12 @@ export async function initializePropertyPaymentAction(
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         // Validate amount
         if (amount < 10000) {
-            return { error: "Minimum property purchase is ₦10,000", success: false };
+            return { error: "Minimum property purchase is ₦10,000", success: false as const };
         }
 
         // Check if property exists and is available
@@ -56,18 +56,18 @@ export async function initializePropertyPaymentAction(
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
-            return { error: "Property not found", success: false };
+            return { error: "Property not found", success: false as const };
         }
 
         const propertyData = propertyDoc.data()!;
 
         if (propertyData.status !== "available") {
-            return { error: "Property is no longer available", success: false };
+            return { error: "Property is no longer available", success: false as const };
         }
 
         // Buyer cannot purchase their own property
         if (propertyData.ownerId === session.user.id) {
-            return { error: "You cannot purchase your own property", success: false };
+            return { error: "You cannot purchase your own property", success: false as const };
         }
 
         // Initialize payment with Paystack
@@ -113,7 +113,7 @@ export async function initializePropertyPaymentAction(
         });
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 authorizationUrl,
                 reference,
@@ -122,7 +122,7 @@ export async function initializePropertyPaymentAction(
     } catch (error: any) {
         logger.error("Property payment initialization error:", error);
         return {
-            success: false,
+            success: false as const,
             error: error.message || "Failed to initialize payment. Please try again.",
         };
     }
@@ -133,7 +133,7 @@ export async function initializePropertyPaymentAction(
  * Updates ownership after successful payment
  */
 export async function verifyPropertyPaymentAction(reference: string): Promise<{
-    success: boolean;
+    success: true | false;
     error?: string;
     message?: string;
     propertyId?: string;
@@ -144,13 +144,13 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         const { session } = sessionResult;
 
         if (!session?.user) {
-            return { error: "Authentication required", success: false };
+            return { error: "Authentication required", success: false as const };
         }
 
         const rateLimitResult = await paymentLimiter.check(session.user.id);
         if (!rateLimitResult.success) {
             return {
-                success: false,
+                success: false as const,
                 error: "Too many payment verification attempts. Please try again later."
             };
         }
@@ -172,7 +172,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         if (!paymentData.status || paymentData.data.status !== "success") {
             return {
                 error: `Payment ${paymentData.data.status}: ${paymentData.data.gateway_response}`,
-                success: false,
+                success: false as const,
             };
         }
 
@@ -183,7 +183,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
 
         // Verify user match
         if (userId !== session.user.id) {
-            return { error: "Payment verification failed: User mismatch", success: false };
+            return { error: "Payment verification failed: User mismatch", success: false as const };
         }
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
@@ -255,7 +255,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         });
 
         return {
-            success: true,
+            success: true as const,
             message: `Payment successful! Your funds are held securely in escrow for ${metadata.propertyTitle}.`,
             propertyId,
         };
@@ -267,7 +267,7 @@ export async function verifyPropertyPaymentAction(reference: string): Promise<{
         });
 
         return {
-            success: false,
+            success: false as const,
             error: "Failed to verify payment. Please contact support with reference: " + reference,
         };
     }

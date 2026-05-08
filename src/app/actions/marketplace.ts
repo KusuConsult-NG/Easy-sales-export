@@ -32,11 +32,11 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 // Check Marketplace Application Status Action
 // ============================================
 
-async function _checkMarketplaceStatusAction(): Promise<{ success: boolean; data: { status: string; accountType?: string } | null; error?: string }> {
+async function _checkMarketplaceStatusAction(): Promise<{ success: true | false; data: { status: string; accountType?: string } | null; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, data: null, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, data: null, error: "Unauthorized" };
         const { session } = sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -71,7 +71,7 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: boolean; data
         }
 
         if (status) {
-            return { success: true, data: { status, accountType } };
+            return { success: true as const, data: { status, accountType } };
         }
 
         // ── FALLBACK: Returning user whose marketplace data predates V2 schema ──
@@ -101,7 +101,7 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: boolean; data
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled legacy marketplace status '${legacyStatus}' for user ${session.user.id}`);
-            return { success: true, data: { status: legacyStatus, accountType: legacyAccountType } };
+            return { success: true as const, data: { status: legacyStatus, accountType: legacyAccountType } };
         }
 
         // ── FALLBACK 2: Check legacy sellerVerificationStatus field
@@ -116,7 +116,7 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: boolean; data
                 },
                 { merge: true }
             );
-            return { success: true, data: { status: legacyStatus, accountType: derivedAccountType } };
+            return { success: true as const, data: { status: legacyStatus, accountType: derivedAccountType } };
         }
 
         // ── FALLBACK 3: Check seller_verifications collection
@@ -150,16 +150,16 @@ async function _checkMarketplaceStatusAction(): Promise<{ success: boolean; data
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled from seller_verifications status '${vStatus}' for user ${session.user.id}`);
-            return { success: true, data: { status: vStatus, accountType: vAccountType } };
+            return { success: true as const, data: { status: vStatus, accountType: vAccountType } };
         }
 
-        return { success: true, data: null };
+        return { success: true as const, data: null };
     } catch (error) {
         logger.error("checkMarketplaceStatus error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, data: null, error: "Failed to check marketplace status" };
+        return { success: false as const, data: null, error: "Failed to check marketplace status" };
     }
 }
 export const checkMarketplaceStatusAction = withFlexibleSafeAction("checkMarketplaceStatusAction", _checkMarketplaceStatusAction);
@@ -185,7 +185,7 @@ export interface SellerVerificationFormData {
 }
 
 export interface SellerVerificationState {
-    success: boolean;
+    success: true | false;
     error?: string;
     data?: {
         verificationId: string;
@@ -219,7 +219,7 @@ async function _submitSellerVerificationAction(
             });
             if (hasActive) {
                 return {
-                    success: false,
+                    success: false as const,
                     error: "You already have a verification application. Please check your status."
                 };
             }
@@ -276,14 +276,14 @@ async function _submitSellerVerificationAction(
             logger.error("Failed to invalidate cache after Seller Verification:", { userId, error: err });
         }
 
-        return { success: true, data: { verificationId } };
+        return { success: true as const, data: { verificationId } };
     } catch (error) {
         logger.error("Seller verification error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
         return {
-            success: false,
+            success: false as const,
             error: error instanceof Error ? error.message : "Failed to submit verification"
         };
     }
@@ -307,7 +307,7 @@ async function _getSellerVerificationAction() {
             .get();
 
         if (snapshot.empty) {
-            return { success: true, data: { verification: null } };
+            return { success: true as const, data: { verification: null } };
         }
 
         const sortedDocs = snapshot.docs.sort((a, b) => {
@@ -317,13 +317,13 @@ async function _getSellerVerificationAction() {
         });
         const verification = serializeDoc<SellerVerification>(sortedDocs[0].id, sortedDocs[0].data());
 
-        return { success: true, data: { verification } };
+        return { success: true as const, data: { verification } };
     } catch (error) {
         logger.error("Get seller verification error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVerificationAction", _getSellerVerificationAction);
@@ -332,7 +332,7 @@ export const getSellerVerificationAction = withFlexibleSafeAction("getSellerVeri
  * Submit full marketplace onboarding (Profile + Verification + Files)
  */
 async function _submitMarketplaceOnboardingAction(
-    prevState: { success: boolean; error?: string; data?: any } | null,
+    prevState: { success: true | false; error?: string; data?: any } | null,
     formData: FormData
 ) {
     let sessionResult;
@@ -350,13 +350,13 @@ async function _submitMarketplaceOnboardingAction(
 
         if (existingStatus === 'pending' || existingStatus === 'under_review') {
             return {
-                success: false,
+                success: false as const,
                 error: "Your previous application is still being processed."
             };
         }
         if (existingStatus === 'approved') {
             return {
-                success: false,
+                success: false as const,
                 error: "You are already registered for Marketplace."
             };
         }
@@ -495,13 +495,13 @@ async function _submitMarketplaceOnboardingAction(
             logger.error("Failed to invalidate cache after Marketplace Onboarding:", { userId, error: err });
         }
 
-        return { success: true, data: { verificationId } };
+        return { success: true as const, data: { verificationId } };
     } catch (error) {
         logger.error("Marketplace onboarding error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to submit application" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to submit application" };
     }
 }
 export const submitMarketplaceOnboardingAction = withFlexibleSafeAction("submitMarketplaceOnboardingAction", _submitMarketplaceOnboardingAction);
@@ -534,7 +534,7 @@ export interface ProductFormData {
 }
 
 export interface ProductActionState {
-    success: boolean;
+    success: true | false;
     error?: string;
     data?: {
         productId: string;
@@ -562,11 +562,11 @@ async function _createProductAction(
         const userData = userDoc.data();
 
         if (!hasRole(userData?.roles || [], "seller")) {
-            return { success: false, error: "You must have seller role to create products" };
+            return { success: false as const, error: "You must have seller role to create products" };
         }
 
         if (userData?.sellerVerificationStatus !== "approved") {
-            return { success: false, error: "Your seller account must be approved first" };
+            return { success: false as const, error: "Your seller account must be approved first" };
         }
 
         // Extract and Prepare Data for Validation
@@ -602,7 +602,7 @@ async function _createProductAction(
 
         if (!validation.success) {
             return {
-                success: false,
+                success: false as const,
                 error: validation.error.issues[0]?.message || "Validation failed",
             };
         }
@@ -700,13 +700,13 @@ async function _createProductAction(
 
         await productRef.set(productData);
 
-        return { success: true, data: { productId } };
+        return { success: true as const, data: { productId } };
     } catch (error) {
         logger.error("Create product error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to create product" };
+        return { success: false as const, error: "Failed to create product" };
     }
 }
 export const createProductAction = withFlexibleSafeAction("createProductAction", _createProductAction);
@@ -773,12 +773,12 @@ async function _getMarketplaceProductsAction(params: {
             );
         }
 
-        return { success: true, data: { products } };
+        return { success: true as const, data: { products } };
     } catch (error) {
         logger.error("Get products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch products" };
+        return { success: false as const, error: "Failed to fetch products" };
     }
 }
 export const getMarketplaceProductsAction = withFlexibleSafeAction("getMarketplaceProductsAction", _getMarketplaceProductsAction);
@@ -792,20 +792,20 @@ async function _getProductByIdAction(productId: string) {
         const doc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
 
         if (!doc.exists) {
-            return { success: false, error: "Product not found" };
+            return { success: false as const, error: "Product not found" };
         }
 
         const data = doc.data();
         const { serializeValue } = await import("@/lib/firestore-serialize");
         const product = serializeValue(ProductSchema.parse({ id: doc.id, ...data }));
 
-        return { success: true, data: { product } };
+        return { success: true as const, data: { product } };
     } catch (error) {
         logger.error("Get product by id error:", {
             productId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch product" };
+        return { success: false as const, error: "Failed to fetch product" };
     }
 }
 export const getProductByIdAction = withFlexibleSafeAction("getProductByIdAction", _getProductByIdAction);
@@ -827,7 +827,7 @@ async function _deleteProductAction(productId: string) {
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {
-            return { success: false, error: "Product not found" };
+            return { success: false as const, error: "Product not found" };
         }
 
         const productData = productDoc.data();
@@ -838,7 +838,7 @@ async function _deleteProductAction(productId: string) {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const roles = userDoc.data()?.roles || [];
             if (!roles.some((r: string) => r === "admin" || r === "super_admin" || r === "marketplace_admin")) {
-                return { success: false, error: "Unauthorized: You do not own this product" };
+                return { success: false as const, error: "Unauthorized: You do not own this product" };
             }
         }
 
@@ -848,14 +848,14 @@ async function _deleteProductAction(productId: string) {
         // Optional: Delete images from storage if needed
         // For now, we'll just delete the Firestore record to be safe and fast
 
-        return { success: true, data: { message: "Product deleted successfully" } };
+        return { success: true as const, data: { message: "Product deleted successfully" } };
     } catch (error) {
         logger.error("Delete product error:", {
             productId,
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to delete product" };
+        return { success: false as const, error: "Failed to delete product" };
     }
 }
 export const deleteProductAction = withFlexibleSafeAction("deleteProductAction", _deleteProductAction);
@@ -879,12 +879,12 @@ async function _getRecommendedProductsAction(limitCount: number = 3) {
             return serializeValue(parsed);
         });
 
-        return { success: true, data: { products } };
+        return { success: true as const, data: { products } };
     } catch (error) {
         logger.error("Get recommended products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch recommended products" };
+        return { success: false as const, error: "Failed to fetch recommended products" };
     }
 }
 export const getRecommendedProductsAction = withFlexibleSafeAction("getRecommendedProductsAction", _getRecommendedProductsAction);
@@ -975,14 +975,14 @@ async function _getSellerProductsAction(options: {
             newLastId = (lastProduct as any).id;
         }
 
-        return { success: true, data: { products, lastId: newLastId, hasMore } };
+        return { success: true as const, data: { products, lastId: newLastId, hasMore } };
     } catch (error) {
         logger.error("Get seller products error:", {
             userId: sessionResult?.session?.user?.id,
             options,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 export const getSellerProductsAction = withFlexibleSafeAction("getSellerProductsAction", _getSellerProductsAction);
@@ -1056,14 +1056,14 @@ async function _getSellerOrdersAction(options: {
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { success: true, data: { orders, lastId: newLastId, hasMore } };
+        return { success: true as const, data: { orders, lastId: newLastId, hasMore } };
     } catch (error) {
         logger.error("Get seller orders error:", {
             userId: sessionResult?.session?.user?.id,
             options,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Fetch failed" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
 export const getSellerOrdersAction = withFlexibleSafeAction("getSellerOrdersAction", _getSellerOrdersAction);
@@ -1165,13 +1165,13 @@ async function _getSellerAnalyticsAction() {
             prevActiveListings: 0,
         });
 
-        return { success: true, data: serializeValue({ analytics }) };
+        return { success: true as const, data: serializeValue({ analytics }) };
     } catch (error: any) {
         logger.error("Get seller analytics error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to fetch analytics" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to fetch analytics" };
     }
 }
 export const getSellerAnalyticsAction = withFlexibleSafeAction("getSellerAnalyticsAction", _getSellerAnalyticsAction);
@@ -1229,13 +1229,13 @@ async function _getBuyerOrdersAction(options: {
             newLastId = snapshot.docs[snapshot.docs.length - 1].id;
         }
 
-        return { success: true, data: { orders, lastId: newLastId, hasMore } };
+        return { success: true as const, data: { orders, lastId: newLastId, hasMore } };
     } catch (error: any) {
         logger.error("Get buyer orders error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch orders" };
+        return { success: false as const, error: "Failed to fetch orders" };
     }
 }
 export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
@@ -1264,7 +1264,7 @@ async function _getBuyerStatsAction() {
         const savedSellers: number = buyerDoc.data()?.savedSellersCount ?? 0;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: { 
                 stats: {
                     activeOrders,
@@ -1279,7 +1279,7 @@ async function _getBuyerStatsAction() {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 export const getBuyerStatsAction = withFlexibleSafeAction("getBuyerStatsAction", _getBuyerStatsAction);
@@ -1293,7 +1293,7 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4) {
         const productSnap = await productRef.get();
 
         if (!productSnap.exists) {
-            return { success: false, error: "Product not found", data: { products: [] } };
+            return { success: false as const, error: "Product not found", data: { products: [] } };
         }
 
         const product = productSnap.data() as Product;
@@ -1309,14 +1309,14 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4) {
             .filter((p: any) => p.id !== productId);
 
         return { 
-            success: true, 
+            success: true as const, 
             data: { 
                 products: serializeValue(products.slice(0, limit)) 
             } 
         };
     } catch (error: any) {
         logger.error("Get related products error:", error);
-        return { success: false, error: error.message, data: { products: [] } };
+        return { success: false as const, error: error.message, data: { products: [] } };
     }
 }
 export const getRelatedProductsAction = withFlexibleSafeAction("getRelatedProductsAction", _getRelatedProductsAction);
@@ -1412,7 +1412,7 @@ async function _searchProductsAction(params: {
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
         return { 
-            success: true, 
+            success: true as const, 
             data: serializeValue({ 
                 products: finalProducts,
                 lastId: lastVisible ? lastVisible.id : undefined,
@@ -1424,7 +1424,7 @@ async function _searchProductsAction(params: {
         logger.error("Search products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message, data: { products: [] } };
+        return { success: false as const, error: error.message, data: { products: [] } };
     }
 }
 export const searchProductsAction = withFlexibleSafeAction("searchProductsAction", _searchProductsAction);
@@ -1445,13 +1445,13 @@ async function _resubmitSellerVerificationAction(
         bankAccount?: { bankName: string; accountNumber: string; accountName: string; bankCode: string };
         [key: string]: any;
     }
-): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: 'Unauthorized' };
+        if (!session?.user) return { success: false as const, error: 'Unauthorized' };
 
         const userId = session.user.id;
 
@@ -1503,13 +1503,13 @@ async function _resubmitSellerVerificationAction(
             logger.error("Failed to invalidate cache after Seller resubmission:", err);
         }
 
-        return { success: true, data: { message: "Seller verification resubmitted successfully" } };
+        return { success: true as const, data: { message: "Seller verification resubmitted successfully" } };
     } catch (error: any) {
         logger.error('resubmitSellerVerificationAction error:', {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message || 'Failed to resubmit seller verification' };
+        return { success: false as const, error: error.message || 'Failed to resubmit seller verification' };
     }
 }
 export const resubmitSellerVerificationAction = withFlexibleSafeAction("resubmitSellerVerificationAction", _resubmitSellerVerificationAction);
@@ -1527,13 +1527,13 @@ async function _updateSellerBadge(
     adminUserId: string,
     sellerId: string,
     grant: boolean
-): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
     try {
         const adminDoc = await db.collection(COLLECTIONS.USERS).doc(adminUserId).get();
         const adminRoles: string[] = adminDoc.data()?.roles || [];
         const hasMarketplaceAdminAccess = adminRoles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
         if (!hasMarketplaceAdminAccess) {
-            return { success: false, error: "Unauthorized: admin role required" };
+            return { success: false as const, error: "Unauthorized: admin role required" };
         }
 
         const now = FieldValue.serverTimestamp();
@@ -1584,22 +1584,22 @@ async function _updateSellerBadge(
         const { notifyBadgeUpdated } = await import("@/lib/marketplace-notifications");
         await notifyBadgeUpdated({ sellerId, granted: grant });
 
-        return { success: true, data: { message: `Seller badge ${grant ? "granted" : "revoked"} successfully` } };
+        return { success: true as const, data: { message: `Seller badge ${grant ? "granted" : "revoked"} successfully` } };
     } catch (error: any) {
         logger.error(`Badge ${grant ? "grant" : "revoke"} error:`, {
             adminUserId,
             sellerId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, data: undefined, error: error instanceof Error ? error.message : "Failed to update badge" };
+        return { success: false as const, data: undefined, error: error instanceof Error ? error.message : "Failed to update badge" };
     }
 }
 
-async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         return _updateSellerBadge(sessionResult.session.user.id, sellerId, true);
     } catch (error) {
         logger.error("grantSellerVerifiedBadgeAction error:", {
@@ -1607,16 +1607,16 @@ async function _grantSellerVerifiedBadgeAction(sellerId: string): Promise<{ succ
             sellerId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, data: undefined, error: "Failed to grant badge" };
+        return { success: false as const, data: undefined, error: "Failed to grant badge" };
     }
 }
 export const grantSellerVerifiedBadgeAction = withFlexibleSafeAction("grantSellerVerifiedBadgeAction", _grantSellerVerifiedBadgeAction);
 
-async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         return _updateSellerBadge(sessionResult.session.user.id, sellerId, false);
     } catch (error) {
         logger.error("revokeSellerVerifiedBadgeAction error:", {
@@ -1624,7 +1624,7 @@ async function _revokeSellerVerifiedBadgeAction(sellerId: string): Promise<{ suc
             sellerId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, data: undefined, error: "Failed to revoke badge" };
+        return { success: false as const, data: undefined, error: "Failed to revoke badge" };
     }
 }
 export const revokeSellerVerifiedBadgeAction = withFlexibleSafeAction("revokeSellerVerifiedBadgeAction", _revokeSellerVerifiedBadgeAction);
@@ -1640,11 +1640,11 @@ export const revokeSellerVerifiedBadgeAction = withFlexibleSafeAction("revokeSel
 async function _updateSellerCategoryAction(
     sellerId: string,
     category: "wholesale" | "retail"
-): Promise<{ success: boolean; data?: { message: string }; error?: string }> {
+): Promise<{ success: true | false; data?: { message: string }; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const actorId = sessionResult.session.user.id;
 
         // Allow: the seller themselves, or an admin
@@ -1653,7 +1653,7 @@ async function _updateSellerCategoryAction(
             const roles: string[] = actorDoc.data()?.roles || [];
             const hasMarketplaceAdminAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "marketplace_admin");
             if (!hasMarketplaceAdminAccess) {
-                return { success: false, error: "Unauthorized" };
+                return { success: false as const, error: "Unauthorized" };
             }
         }
 
@@ -1703,14 +1703,14 @@ async function _updateSellerCategoryAction(
             }
         });
 
-        return { success: true, data: { message: "Seller category updated successfully" } };
+        return { success: true as const, data: { message: "Seller category updated successfully" } };
     } catch (error) {
         logger.error("updateSellerCategoryAction error:", {
             userId: sessionResult?.session?.user?.id,
             sellerId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, data: undefined, error: error instanceof Error ? error.message : "Failed to update seller category" };
+        return { success: false as const, data: undefined, error: error instanceof Error ? error.message : "Failed to update seller category" };
     }
 }
 export const updateSellerCategoryAction = withFlexibleSafeAction("updateSellerCategoryAction", _updateSellerCategoryAction);

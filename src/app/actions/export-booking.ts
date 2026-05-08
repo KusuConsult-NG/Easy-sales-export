@@ -23,12 +23,12 @@ export async function createBookingAction(data: CreateBookingData) {
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, data: null, error: 'Not authenticated', meta: null };
+            return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }
 
         // Validate input
         if (!data.exportWindowId || data.quantity <= 0 || data.totalPrice <= 0) {
-            return { success: false, data: null, error: 'Invalid booking data', meta: null };
+            return { success: false as const, data: null, error: 'Invalid booking data', meta: null };
         }
 
         // Check if export window exists and has availability
@@ -36,7 +36,7 @@ export async function createBookingAction(data: CreateBookingData) {
         const windowDoc = await windowRef.get();
 
         if (!windowDoc.exists) {
-            return { success: false, data: null, error: 'Export window not found', meta: null };
+            return { success: false as const, data: null, error: 'Export window not found', meta: null };
         }
 
         const windowData = windowDoc.data()!;
@@ -44,7 +44,7 @@ export async function createBookingAction(data: CreateBookingData) {
 
         if (data.quantity > availableVolume) {
             return {
-                success: false,
+                success: false as const,
                 data: null,
                 error: `Only ${availableVolume}kg available`,
                 meta: null
@@ -69,7 +69,7 @@ export async function createBookingAction(data: CreateBookingData) {
         });
 
         return {
-            success: true,
+            success: true as const,
             data: { bookingId: bookingRef.id },
             error: null,
             meta: null
@@ -77,7 +77,7 @@ export async function createBookingAction(data: CreateBookingData) {
     } catch (error) {
         logger.error('Create booking error:', error);
         return {
-            success: false,
+            success: false as const,
             data: null,
             error: 'Failed to create booking',
             meta: null
@@ -94,7 +94,7 @@ export async function getUserBookingsAction() {
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, data: null, error: 'Not authenticated', meta: null };
+            return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }
 
         const snapshot = await db.collection(COLLECTIONS.EXPORT_BOOKINGS)
@@ -104,9 +104,9 @@ export async function getUserBookingsAction() {
 
         const bookings = serializeDocs(snapshot.docs);
 
-        return { success: true, data: bookings, error: null, meta: null };
+        return { success: true as const, data: bookings, error: null, meta: null };
     } catch (error) {
         logger.error('Get bookings error:', error);
-        return { success: false, data: null, error: 'Failed to fetch bookings', meta: null };
+        return { success: false as const, data: null, error: 'Failed to fetch bookings', meta: null };
     }
 }

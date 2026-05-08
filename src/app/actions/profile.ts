@@ -47,7 +47,7 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
     const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
     if (!userDoc.exists) {
-        return { success: false, error: "User profile not found" };
+        return { success: false as const, error: "User profile not found" };
     }
 
     const userData = userDoc.data()!;
@@ -62,7 +62,7 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
 
     const nameSplit = splitName(userData.fullName || "");
 
-    return { success: true, data: { profile: {
+    return { success: true as const, data: { profile: {
             firstName: userData.firstName || nameSplit.first,
             lastName: userData.lastName || nameSplit.last,
             otherName: userData.otherName || "",
@@ -116,9 +116,9 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         } catch (authErr: any) {
             logger.error("Firebase Auth email update failed:", authErr);
             if (authErr.code === 'auth/email-already-exists') {
-                return { success: false, error: "That email address is already in use by another account." };
+                return { success: false as const, error: "That email address is already in use by another account." };
             }
-            return { success: false, error: "Failed to update email. Please try again." };
+            return { success: false as const, error: "Failed to update email. Please try again." };
         }
     }
 
@@ -147,7 +147,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
 
     await invalidateUserCache(userId);
 
-    return { success: true };
+    return { success: true as const };
 });
 
 /**
@@ -173,5 +173,5 @@ export const updateNotificationPreferencesAction = withSafeAction("updateNotific
         updatedAt: new Date(),
     });
 
-    return { success: true };
+    return { success: true as const };
 });

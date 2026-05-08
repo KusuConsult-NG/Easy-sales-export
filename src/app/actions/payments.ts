@@ -43,10 +43,10 @@ export async function createPaymentRecordAction(data: {
     purpose: "loan_repayment" | "escrow_payment" | "cooperative_contribution" | "export_slot" | "training_fee";
     relatedId?: string;
     metadata?: Record<string, any>;
-}): Promise<{ success: boolean; error?: string; paymentId?: string }> {
+}): Promise<{ success: true | false; error?: string; paymentId?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error };
 
         const payment: Omit<PaymentRecord, "id"> = {
             ...data,
@@ -71,10 +71,10 @@ export async function createPaymentRecordAction(data: {
             },
         });
 
-        return { success: true, paymentId: docRef.id };
+        return { success: true as const, paymentId: docRef.id };
     } catch (error) {
         logger.error("Payment record creation error:", error);
-        return { success: false, error: "Failed to create payment record" };
+        return { success: false as const, error: "Failed to create payment record" };
     }
 }
 
@@ -84,7 +84,7 @@ export async function createPaymentRecordAction(data: {
 export async function verifyPaymentAction(
     paymentReference: string,
     paystackResponse: any
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         // Find payment by reference
         const snapshot = await db.collection(COLLECTIONS.PAYMENTS)
@@ -92,7 +92,7 @@ export async function verifyPaymentAction(
             .get();
 
         if (snapshot.empty) {
-            return { success: false, error: "Payment not found" };
+            return { success: false as const, error: "Payment not found" };
         }
 
         const paymentDoc = snapshot.docs[0];
@@ -120,10 +120,10 @@ export async function verifyPaymentAction(
         // Handle post-payment actions based on purpose
         await handlePostPaymentActions(paymentData, paymentDoc.id);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Payment verification error:", error);
-        return { success: false, error: "Failed to verify payment" };
+        return { success: false as const, error: "Failed to verify payment" };
     }
 }
 

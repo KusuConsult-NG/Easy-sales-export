@@ -57,7 +57,7 @@ export interface SmsBroadcastPreview {
 }
 
 export interface SmsBroadcastResult {
-    success: boolean;
+    success: true | false;
     sent: number;
     failed: number;
     skipped: number;
@@ -470,11 +470,11 @@ export async function sendSmsBroadcastAction(
     message: string
 ): Promise<SmsBroadcastResult> {
     const authCheck = await requireAdmin();
-    if ("error" in authCheck) return { success: false, sent: 0, failed: 0, skipped: 0, error: "Unauthorized: admin role required" };
+    if ("error" in authCheck) return { success: false as const, sent: 0, failed: 0, skipped: 0, error: "Unauthorized: admin role required" };
     try {
         const recipients = await collectSmsRecipients(filters);
         if (recipients.length === 0) {
-            return { success: false, sent: 0, failed: 0, skipped: 0, error: "No recipients with valid phone numbers matched your filters." };
+            return { success: false as const, sent: 0, failed: 0, skipped: 0, error: "No recipients with valid phone numbers matched your filters." };
         }
 
         let sent = 0;
@@ -510,8 +510,8 @@ export async function sendSmsBroadcastAction(
             status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial",
         });
 
-        return { success: true, sent, failed, skipped, logId: logRef.id };
+        return { success: true as const, sent, failed, skipped, logId: logRef.id };
     } catch (error: any) {
-        return { success: false, sent: 0, failed: 0, skipped: 0, error: error.message };
+        return { success: false as const, sent: 0, failed: 0, skipped: 0, error: error.message };
     }
 }

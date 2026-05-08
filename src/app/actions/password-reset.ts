@@ -11,12 +11,12 @@ import { Resend } from 'resend';
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export interface SendResetEmailState {
-    success: boolean;
+    success: true | false;
     error?: string;
 }
 
 export interface ResetPasswordState {
-    success: boolean;
+    success: true | false;
     error?: string;
 }
 
@@ -39,7 +39,7 @@ export async function sendResetEmailAction(
         const rawEmail = formData.get('email') as string;
 
         if (!rawEmail) {
-            return { success: false, error: 'Email is required' };
+            return { success: false as const, error: 'Email is required' };
         }
         
         const email = rawEmail.trim().toLowerCase();
@@ -47,7 +47,7 @@ export async function sendResetEmailAction(
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return { success: false, error: 'Invalid email format' };
+            return { success: false as const, error: 'Invalid email format' };
         }
 
         const auth = getAuth();
@@ -56,7 +56,7 @@ export async function sendResetEmailAction(
         } catch (error) {
             // For security, don't reveal if email exists or not
             return {
-                success: true,
+                success: true as const,
                 error: undefined
             };
         }
@@ -121,19 +121,19 @@ export async function sendResetEmailAction(
         if (error) {
             logger.error('Resend API Error (password reset):', error);
             return {
-                success: false,
+                success: false as const,
                 error: 'Failed to send reset email. Please try again later.'
             };
         }
 
         return {
-            success: true,
+            success: true as const,
             error: undefined
         };
     } catch (error) {
         logger.error('Failed to send reset email:', error);
         return {
-            success: false,
+            success: false as const,
             error: 'Failed to send reset email. Please try again later.'
         };
     }
@@ -153,15 +153,15 @@ export async function resetPasswordAction(
 
         // Validation
         if (!token || !password || !confirmPassword) {
-            return { success: false, error: 'All fields are required' };
+            return { success: false as const, error: 'All fields are required' };
         }
 
         if (password !== confirmPassword) {
-            return { success: false, error: 'Passwords do not match' };
+            return { success: false as const, error: 'Passwords do not match' };
         }
 
         if (password.length < 8) {
-            return { success: false, error: 'Password must be at least 8 characters' };
+            return { success: false as const, error: 'Password must be at least 8 characters' };
         }
 
         // Find and validate token in Firestore
@@ -171,7 +171,7 @@ export async function resetPasswordAction(
             .get();
 
         if (snapshot.empty) {
-            return { success: false, error: 'Invalid or expired reset token' };
+            return { success: false as const, error: 'Invalid or expired reset token' };
         }
 
         const resetDoc = snapshot.docs[0];
@@ -179,7 +179,7 @@ export async function resetPasswordAction(
 
         // Check if token has expired
         if (Date.now() > resetData.expiry) {
-            return { success: false, error: 'Reset token has expired' };
+            return { success: false as const, error: 'Reset token has expired' };
         }
 
         // Update password in Firebase Auth
@@ -192,7 +192,7 @@ export async function resetPasswordAction(
             });
         } catch (error) {
             logger.error('Failed to update password:', error);
-            return { success: false, error: 'Failed to update password' };
+            return { success: false as const, error: 'Failed to update password' };
         }
 
         // Mark token as used
@@ -202,13 +202,13 @@ export async function resetPasswordAction(
         });
 
         return {
-            success: true,
+            success: true as const,
             error: undefined
         };
     } catch (error) {
         logger.error('Password reset failed:', error);
         return {
-            success: false,
+            success: false as const,
             error: 'Password reset failed. Please try again.'
         };
     }

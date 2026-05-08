@@ -45,19 +45,19 @@ export type EscrowStatus = {
 
 type DashboardActionState = {
     error: string | null;
-    success: boolean;
+    success: true | false;
     data?: DashboardStats;
 };
 
 type ActivityActionState = {
     error: string | null;
-    success: boolean;
+    success: true | false;
     data?: RecentActivity;
 };
 
 type EscrowActionState = {
     error: string | null;
-    success: boolean;
+    success: true | false;
     data?: EscrowStatus;
 };
 
@@ -160,7 +160,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: {
                 totalExports,
                 activeOrders,
@@ -172,7 +172,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
         };
     } catch (error: any) {
         logger.error("Dashboard stats error:", error);
-        return { error: "Failed to fetch dashboard stats", success: false };
+        return { error: "Failed to fetch dashboard stats", success: false as const };
     }
 }
 
@@ -233,12 +233,12 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> {
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: activities.slice(0, 5), // Return top 5
         };
     } catch (error: any) {
         logger.error("Recent activity error:", error);
-        return { error: "Failed to fetch recent activity", success: false };
+        return { error: "Failed to fetch recent activity", success: false as const };
     }
 }
 
@@ -300,7 +300,7 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
 
         return {
             error: null,
-            success: true,
+            success: true as const,
             data: {
                 totalLocked,
                 pendingRelease,
@@ -310,6 +310,6 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> {
         };
     } catch (error: any) {
         logger.error("Escrow status error:", error);
-        return { error: "Failed to fetch escrow status", success: false };
+        return { error: "Failed to fetch escrow status", success: false as const };
     }
 }

@@ -21,7 +21,7 @@ const DEFAULT_CATALOG = [
 export async function getAdminExportCatalogAction(options: { 
     limit?: number; 
     lastDocId?: string; 
-} = {}): Promise<{ success: boolean; data?: any[]; meta?: any; error?: string; hasMore?: boolean; lastDocId?: string | null }> {
+} = {}): Promise<{ success: true | false; data?: any[]; meta?: any; error?: string; hasMore?: boolean; lastDocId?: string | null }> {
     try {
         const db = getAdminDb();
         let query = db.collection(COLLECTIONS.EXPORT_CATALOG)
@@ -45,7 +45,7 @@ export async function getAdminExportCatalogAction(options: {
             const nextCursor = hasMore ? docs[docs.length - 1].id : undefined;
 
             return { 
-                success: true, 
+                success: true as const, 
                 data: products, 
                 lastDocId: nextCursor,
                 hasMore: hasMore,
@@ -56,7 +56,7 @@ export async function getAdminExportCatalogAction(options: {
         // Only return default catalog if not paginated and collection is empty
         if (!options.lastDocId) {
             return { 
-                success: true, 
+                success: true as const, 
                 data: DEFAULT_CATALOG, 
                 lastDocId: null,
                 hasMore: false,
@@ -64,22 +64,22 @@ export async function getAdminExportCatalogAction(options: {
             };
         }
 
-        return { success: true, data: [], hasMore: false, meta: { hasMore: false } };
+        return { success: true as const, data: [], hasMore: false, meta: { hasMore: false } };
 
     } catch (error: any) {
         logger.error("Get export catalog error:", error);
-        return { success: false, error: "Failed to fetch catalog" };
+        return { success: false as const, error: "Failed to fetch catalog" };
     }
 }
 
-export async function createExportCatalogAction(productData: any): Promise<{ success: boolean; data?: any; error?: string }> {
+export async function createExportCatalogAction(productData: any): Promise<{ success: true | false; data?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
@@ -93,7 +93,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
                 updatedBy: session.user.id,
             }, { merge: true });
             
-            return { success: true, data: { id: productData.id } };
+            return { success: true as const, data: { id: productData.id } };
         } else {
             // Create new
             const dataToSave = { ...productData };
@@ -107,11 +107,11 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
                 createdBy: session.user.id,
             });
             
-            return { success: true, data: { id: ref.id } };
+            return { success: true as const, data: { id: ref.id } };
         }
     } catch (error: any) {
         logger.error("Create/update export catalog error:", error);
-        return { success: false, error: "Failed to save catalog item" };
+        return { success: false as const, error: "Failed to save catalog item" };
     }
 }
 
@@ -120,7 +120,7 @@ export async function createExportCatalogAction(productData: any): Promise<{ suc
 // ============================================
 
 export async function getExportRequestStatsAction(): Promise<{
-    success: boolean;
+    success: true | false;
     error?: string;
     data?: {
         total: number;
@@ -132,10 +132,10 @@ export async function getExportRequestStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
@@ -150,7 +150,7 @@ export async function getExportRequestStatsAction(): Promise<{
         ]);
 
         return {
-            success: true,
+            success: true as const,
             data: {
                 total: totalSnap.data().count,
                 pending: pendingSnap.data().count,
@@ -161,7 +161,7 @@ export async function getExportRequestStatsAction(): Promise<{
         };
     } catch (error: any) {
         logger.error("Get export request stats error:", error);
-        return { success: false, error: "Failed to fetch export stats" };
+        return { success: false as const, error: "Failed to fetch export stats" };
     }
 }
 
@@ -170,7 +170,7 @@ export async function getExportRequestStatsAction(): Promise<{
 // ============================================
 
 export async function getExportCatalogStatsAction(): Promise<{
-    success: boolean;
+    success: true | false;
     error?: string;
     data?: {
         totalProducts: number;
@@ -178,10 +178,10 @@ export async function getExportCatalogStatsAction(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
@@ -191,23 +191,23 @@ export async function getExportCatalogStatsAction(): Promise<{
             .get();
 
         return {
-            success: true,
+            success: true as const,
             data: { totalProducts: snap.data().count },
         };
     } catch (error: any) {
         logger.error("Get export catalog stats error:", error);
-        return { success: false, error: "Failed to fetch catalog stats" };
+        return { success: false as const, error: "Failed to fetch catalog stats" };
     }
 }
 
-export async function deleteExportCatalogAction(productId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteExportCatalogAction(productId: string): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
@@ -217,21 +217,21 @@ export async function deleteExportCatalogAction(productId: string): Promise<{ su
             deletedBy: session.user.id
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Delete export catalog error:", error);
-        return { success: false, error: "Failed to delete item" };
+        return { success: false as const, error: "Failed to delete item" };
     }
 }
 
-export async function getAdminPendingExportProductsAction(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+export async function getAdminPendingExportProductsAction(): Promise<{ success: true | false; data?: any[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
@@ -242,21 +242,21 @@ export async function getAdminPendingExportProductsAction(): Promise<{ success: 
 
         const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        return { success: true, data: products };
+        return { success: true as const, data: products };
     } catch (error: any) {
         logger.error("Get pending export products error:", error);
-        return { success: false, error: "Failed to fetch pending products" };
+        return { success: false as const, error: "Failed to fetch pending products" };
     }
 }
 
-export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ success: boolean; error?: string }> {
+export async function reviewExportProductAction(productId: string, action: 'approve' | 'reject'): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error };
         const { session } = sessionResult;
         
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const db = getAdminDb();
@@ -297,24 +297,24 @@ export async function reviewExportProductAction(productId: string, action: 'appr
             }
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Review export product error:", error);
-        return { success: false, error: "Failed to review product" };
+        return { success: false as const, error: "Failed to review product" };
     }
 }
 
 /**
  * Fetch all export orders for admin dashboard
  */
-export async function getAdminExportOrdersAction(): Promise<{ success: boolean; data?: any[]; error?: string }> {
+export async function getAdminExportOrdersAction(): Promise<{ success: true | false; data?: any[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized access" };
+            return { success: false as const, error: "Unauthorized access" };
         }
 
         const db = getAdminDb();
@@ -332,10 +332,10 @@ export async function getAdminExportOrdersAction(): Promise<{ success: boolean; 
             };
         });
 
-        return { success: true, data: orders };
+        return { success: true as const, data: orders };
     } catch (error: any) {
         logger.error("Failed to fetch admin export orders:", error);
-        return { success: false, error: "Failed to fetch export orders" };
+        return { success: false as const, error: "Failed to fetch export orders" };
     }
 }
 
@@ -346,14 +346,14 @@ export async function updateAdminExportOrderStatusAction(
     orderId: string, 
     status: string,
     documentData?: { name: string; url: string; type: string }
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized access" };
+            return { success: false as const, error: "Unauthorized access" };
         }
 
         const db = getAdminDb();
@@ -373,9 +373,9 @@ export async function updateAdminExportOrderStatusAction(
 
         await orderRef.update(updateData);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Failed to update export order status:", error);
-        return { success: false, error: "Failed to update export order status" };
+        return { success: false as const, error: "Failed to update export order status" };
     }
 }

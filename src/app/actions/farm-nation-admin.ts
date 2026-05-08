@@ -9,14 +9,14 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 
-async function _getFarmNationStatsAction(): Promise<{ success: true; data: { stats: { totalApplications: number } } } | { success: false; error: string }> {
+async function _getFarmNationStatsAction(): Promise<{ success: true as const; data: { stats: { totalApplications: number } } } | { success: false as const; error: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false };
+            return { error: "Unauthorized: Permission required", success: false as const };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -46,7 +46,7 @@ async function _getFarmNationStatsAction(): Promise<{ success: true; data: { sta
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch farm nation stats" };
+        return { success: false as const, error: "Failed to fetch farm nation stats" };
     }
 }
 export const getFarmNationStatsAction = withFlexibleSafeAction("getFarmNationStatsAction", _getFarmNationStatsAction);
@@ -58,7 +58,7 @@ async function _getFarmNationRegistrantsAction(options: {
     status?: string;
     lastDocId?: string;
 } = {}): Promise<{
-    success: boolean;
+    success: true | false;
     data?: any;
     meta?: any;
     error?: string;
@@ -69,7 +69,7 @@ async function _getFarmNationRegistrantsAction(options: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
         if (!session?.user || !isAdmin(session.user.roles)) {
-            return { error: "Unauthorized: Permission required", success: false };
+            return { error: "Unauthorized: Permission required", success: false as const };
         }
 
         const pageSize = options.search ? 2000 : (options.limit || 20);
@@ -123,7 +123,7 @@ async function _getFarmNationRegistrantsAction(options: {
         const hasMore = offset + pageSize < users.length;
 
         return {
-            success: true,
+            success: true as const,
             data: { users: paged },
             meta: {
                 hasMore,
@@ -136,7 +136,7 @@ async function _getFarmNationRegistrantsAction(options: {
             error: error instanceof Error ? error.message : String(error)
         });
         return {
-            success: false,
+            success: false as const,
             data: null,
             meta: null,
             error: "Failed to fetch farm nation registrants",
@@ -153,16 +153,16 @@ async function _getStandardFarmNationRegistrantsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string;
-} = {}): Promise<{ success: true; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false; error: string }> {
+} = {}): Promise<{ success: true as const; data: any[]; lastDocId?: string; hasMore?: boolean; meta?: any } | { success: false as const; error: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Not authenticated" };
+        if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -271,7 +271,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: applications,
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
@@ -285,7 +285,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch applications" };
+        return { success: false as const, error: "Failed to fetch applications" };
     }
 }
 export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("getStandardFarmNationRegistrantsAction", _getStandardFarmNationRegistrantsAction);
@@ -295,7 +295,7 @@ export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("ge
  * Uses Firestore COUNT queries — independent of pagination.
  */
 async function _getFarmNationVerificationStatsAction(): Promise<{
-    success: boolean;
+    success: true | false;
     data?: {
         stats: {
             total: number;
@@ -313,7 +313,7 @@ async function _getFarmNationVerificationStatsAction(): Promise<{
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const { getCached, setCache } = await import("@/lib/redis");
@@ -352,7 +352,7 @@ async function _getFarmNationVerificationStatsAction(): Promise<{
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch stats" };
+        return { success: false as const, error: "Failed to fetch stats" };
     }
 }
 export const getFarmNationVerificationStatsAction = withFlexibleSafeAction("getFarmNationVerificationStatsAction", _getFarmNationVerificationStatsAction);
@@ -363,7 +363,7 @@ async function _getAdminLandVerificationsAction(options: {
     status?: string;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<{ success: boolean; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -371,7 +371,7 @@ async function _getAdminLandVerificationsAction(options: {
         const { session } = sessionResult;
         
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
@@ -409,7 +409,7 @@ async function _getAdminLandVerificationsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: verifications,
             lastDocId: nextCursor,
             hasMore: !!nextCursor
@@ -419,7 +419,7 @@ async function _getAdminLandVerificationsAction(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch verifications" };
+        return { success: false as const, error: "Failed to fetch verifications" };
     }
 }
 export const getAdminLandVerificationsAction = withFlexibleSafeAction("getAdminLandVerificationsAction", _getAdminLandVerificationsAction);
@@ -428,7 +428,7 @@ async function _getFarmNationTransactionsAction(options: {
     limit?: number;
     status?: string;
     lastDocId?: string;
-} = {}): Promise<{ success: boolean; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<{ success: true | false; data?: any[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -436,7 +436,7 @@ async function _getFarmNationTransactionsAction(options: {
         const { session } = sessionResult;
         
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const fetchLimit = options.limit || 50;
@@ -463,7 +463,7 @@ async function _getFarmNationTransactionsAction(options: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: transactions,
             lastDocId: nextCursor,
             hasMore: !!nextCursor
@@ -473,12 +473,12 @@ async function _getFarmNationTransactionsAction(options: {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch transactions" };
+        return { success: false as const, error: "Failed to fetch transactions" };
     }
 }
 export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNationTransactionsAction", _getFarmNationTransactionsAction);
 
-async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ success: boolean; message?: string; error?: string }> {
+async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ success: true | false; message?: string; error?: string }> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -486,7 +486,7 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const txRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(transactionId);
@@ -536,13 +536,13 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<{ 
             });
         });
 
-        return { success: true, message: "Escrow released and property ownership transferred successfully." };
+        return { success: true as const, message: "Escrow released and property ownership transferred successfully." };
     } catch (error: any) {
         logger.error("Release Farm Nation Escrow error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error.message || "Failed to release escrow" };
+        return { success: false as const, error: error.message || "Failed to release escrow" };
     }
 }
 export const releaseFarmNationEscrowAction = withFlexibleSafeAction("releaseFarmNationEscrowAction", _releaseFarmNationEscrowAction);

@@ -66,10 +66,10 @@ export async function createAnnouncementAction(data: {
     priority: "low" | "medium" | "high" | "urgent";
     expiresAt?: string;
     adminId: string;
-}): Promise<{ success: boolean; error?: string; announcementId?: string }> {
+}): Promise<{ success: true | false; error?: string; announcementId?: string }> {
     try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
         const announcement: Omit<Announcement, "id"> = {
             title: data.title,
             content: data.content,
@@ -92,10 +92,10 @@ export async function createAnnouncementAction(data: {
             "announcement"
         );
 
-        return { success: true, announcementId: docRef.id };
+        return { success: true as const, announcementId: docRef.id };
     } catch (error) {
         logger.error("Announcement creation error:", error);
-        return { success: false, error: "Failed to create announcement" };
+        return { success: false as const, error: "Failed to create announcement" };
     }
 }
 
@@ -159,10 +159,10 @@ export async function getActiveAnnouncementsAction(
 export async function deactivateAnnouncementAction(
     announcementId: string,
     adminId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
         const announcementRef = db.collection(COLLECTIONS.ANNOUNCEMENTS).doc(announcementId);
 
         await announcementRef.update({
@@ -177,10 +177,10 @@ export async function deactivateAnnouncementAction(
             "announcement"
         );
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Deactivation error:", error);
-        return { success: false, error: "Failed to deactivate announcement" };
+        return { success: false as const, error: "Failed to deactivate announcement" };
     }
 }
 
@@ -198,10 +198,10 @@ export async function createBannerAction(data: {
     endDate: string;
     position: "top" | "bottom" | "popup";
     adminId: string;
-}): Promise<{ success: boolean; error?: string; bannerId?: string }> {
+}): Promise<{ success: true | false; error?: string; bannerId?: string }> {
     try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
         const banner: Omit<Banner, "id"> = {
             title: data.title,
             message: data.message,
@@ -226,10 +226,10 @@ export async function createBannerAction(data: {
             "banner"
         );
 
-        return { success: true, bannerId: docRef.id };
+        return { success: true as const, bannerId: docRef.id };
     } catch (error) {
         logger.error("Banner creation error:", error);
-        return { success: false, error: "Failed to create banner" };
+        return { success: false as const, error: "Failed to create banner" };
     }
 }
 
@@ -280,10 +280,10 @@ export async function getActiveBannersAction(): Promise<Banner[]> {
 export async function deactivateBannerAction(
     bannerId: string,
     adminId: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: true | false; error?: string }> {
     try {
         const admin = await requireAdmin();
-        if (!admin) return { success: false, error: "Unauthorized: Admin access required" };
+        if (!admin) return { success: false as const, error: "Unauthorized: Admin access required" };
         const bannerRef = db.collection(COLLECTIONS.BANNERS).doc(bannerId);
 
         await bannerRef.update({
@@ -298,9 +298,9 @@ export async function deactivateBannerAction(
             "banner"
         );
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("Deactivation error:", error);
-        return { success: false, error: "Failed to deactivate banner" };
+        return { success: false as const, error: "Failed to deactivate banner" };
     }
 }

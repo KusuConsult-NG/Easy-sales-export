@@ -116,12 +116,12 @@ const waveApplicationSchema = z.object({
 /**
  * Check WAVE application status for current user
  */
-export async function checkWaveStatusAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function checkWaveStatusAction(): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: "Unauthorized" };
+        if (!session?.user) return { success: false as const, error: "Unauthorized" };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
@@ -152,7 +152,7 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
         }
 
         if (status) {
-            return { success: true, data: { status } };
+            return { success: true as const, data: { status } };
         }
 
         // ── FALLBACK: Legacy Sync ──────
@@ -175,20 +175,20 @@ export async function checkWaveStatusAction(): Promise<{ success: boolean; data?
             );
 
             logger.info(`[checkWaveStatus] Backfilled legacy wave status '${legacyStatus}' for user ${session.user.id}`);
-            return { success: true, data: { status: legacyStatus } };
+            return { success: true as const, data: { status: legacyStatus } };
         }
 
-        return { success: true, data: null };
+        return { success: true as const, data: null };
     } catch (error) {
         logger.error("Check WAVE status error:", error);
-        return { success: false, error: "Failed to check status" };
+        return { success: false as const, error: "Failed to check status" };
     }
 }
 
 /**
  * Check if user is eligible for WAVE (female only)
  */
-export async function checkWaveEligibilityAction(userId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function checkWaveEligibilityAction(userId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -196,13 +196,13 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
 
         // Allow checking own eligibility or admin checking others
         if (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
-            return { success: true, data: { eligible: false, reason: "User not found" } };
+            return { success: true as const, data: { eligible: false, reason: "User not found" } };
         }
 
         const userData = userDoc.data();
@@ -214,7 +214,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
         // Admins (including module-specific admins) are always eligible to view resources.
         if (userData?.gender !== "female" && !isUserAdmin) {
             return {
-                success: true,
+                success: true as const,
                 data: {
                     eligible: false,
                     reason: "WAVE program is exclusively for women entrepreneurs"
@@ -225,10 +225,10 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
         // Double check: If they are female but somehow missed the role, we should probably allow them (as long as gender is correct)
         // But let's stick to the gender field as the source of truth for eligibility.
 
-        return { success: true, data: { eligible: true } };
+        return { success: true as const, data: { eligible: true } };
     } catch (error) {
         logger.error("WAVE eligibility check error:", error);
-        return { success: false, error: "Failed to check eligibility" };
+        return { success: false as const, error: "Failed to check eligibility" };
     }
 }
 
@@ -236,7 +236,7 @@ export async function checkWaveEligibilityAction(userId: string): Promise<{ succ
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
-export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -246,7 +246,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         const validation = waveApplicationSchema.safeParse(applicationData);
         if (!validation.success) {
             return {
-                success: false,
+                success: false as const,
                 error: validation.error.issues[0]?.message || "Validation failed"
             };
         }
@@ -266,7 +266,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         // or just enforce the 18+ rule strictly on the DOB.
         if (calculatedAge < 18) {
             return {
-                success: false,
+                success: false as const,
                 error: `You must be at least 18 years old to apply. (Calculated age based on DOB: ${calculatedAge})`
             };
         }
@@ -274,7 +274,7 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         // 2. Prevent "Age Paradox" (Declared 25, DOB indicates 15)
         if (Math.abs(calculatedAge - validatedData.age) > 1) {
             return {
-                success: false,
+                success: false as const,
                 error: `Date of Birth does not match the declared age (${validatedData.age}). Please check your inputs.`
             };
         }
@@ -308,13 +308,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
 
         if (existingStatus === 'pending' || existingStatus === 'under_review') {
             return {
-                success: false,
+                success: false as const,
                 error: "Your previous application is still being processed."
             };
         }
         if (existingStatus === 'approved') {
             return {
-                success: false,
+                success: false as const,
                 error: "You are already enrolled in the WAVE program."
             };
         }
@@ -336,13 +336,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         };
 
         const emailErr = checkDuplicate(emailSnap, 'email address');
-        if (emailErr) return { success: false, error: emailErr };
+        if (emailErr) return { success: false as const, error: emailErr };
 
         const phoneErr = checkDuplicate(phoneSnap, 'phone number');
-        if (phoneErr) return { success: false, error: phoneErr };
+        if (phoneErr) return { success: false as const, error: phoneErr };
 
         const ninErr = checkDuplicate(ninSnap, 'NIN');
-        if (ninErr) return { success: false, error: ninErr };
+        if (ninErr) return { success: false as const, error: ninErr };
 
         // Allow users with revision_required or rejected status to resubmit by reusing their application ID
         let applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
@@ -478,13 +478,13 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
         }
 
         return {
-            success: true,
+            success: true as const,
             data: { applicationId },
         };
     } catch (error: any) {
         logger.error("WAVE application submission error:", error);
         return {
-            success: false,
+            success: false as const,
             error: "Failed to submit application. Please try again."
         };
     }
@@ -493,20 +493,20 @@ export async function submitMultiStepWaveApplicationAction(applicationData: z.in
 /**
  * Enroll user in WAVE program
  */
-export async function enrollInWaveAction(userId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function enrollInWaveAction(userId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (session.user.id !== userId) {
-            return { success: false, error: "Cannot enroll on behalf of another user" };
+            return { success: false as const, error: "Cannot enroll on behalf of another user" };
         }
 
         const eligibility = await checkWaveEligibilityAction(userId);
 
         if (!eligibility.data?.eligible) {
-            return { success: false, error: eligibility.data?.reason || "Not eligible" };
+            return { success: false as const, error: eligibility.data?.reason || "Not eligible" };
         }
 
         await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userId).set({
@@ -522,10 +522,10 @@ export async function enrollInWaveAction(userId: string): Promise<{ success: boo
             targetType: "wave_enrollment",
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error("WAVE enrollment error:", error);
-        return { success: false, error: "Failed to enroll in WAVE program" };
+        return { success: false as const, error: "Failed to enroll in WAVE program" };
     }
 }
 
@@ -536,12 +536,12 @@ export async function getWaveResourcesAction(
     category?: string,
     cursor?: string | null,
     limit = 20
-): Promise<{ success: boolean; data?: WaveResource[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
+): Promise<{ success: true | false; data?: WaveResource[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
+        if (!session?.user) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
 
         // STRICT ENROLLMENT CHECK
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
@@ -549,7 +549,7 @@ export async function getWaveResourcesAction(
         if (!memberDoc.exists || !memberDoc.data()?.active) {
             if (!isAdmin(session.user.roles)) {
                 logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
-                return { success: false, error: "Access denied: Not enrolled in WAVE", meta: { cursor: null, hasMore: false } };
+                return { success: false as const, error: "Access denied: Not enrolled in WAVE", meta: { cursor: null, hasMore: false } };
             }
         }
 
@@ -582,10 +582,10 @@ export async function getWaveResourcesAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true, data, meta: { cursor: nextCursor, hasMore } };
+        return { success: true as const, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Failed to fetch WAVE resources:", error);
-        return { success: false, error: "Failed to fetch resources", meta: { cursor: null, hasMore: false } };
+        return { success: false as const, error: "Failed to fetch resources", meta: { cursor: null, hasMore: false } };
     }
 }
 
@@ -595,12 +595,12 @@ export async function getWaveResourcesAction(
 export async function getWaveTrainingEventsAction(
     cursor?: string | null,
     limit = 20
-): Promise<{ success: boolean; data?: WaveTrainingEvent[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
+): Promise<{ success: true | false; data?: WaveTrainingEvent[]; error?: string; meta: { cursor: string | null; hasMore: boolean } }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
+        if (!session?.user) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false } };
 
         const pageSize = Math.min(Math.max(limit, 1), 50);
 
@@ -626,10 +626,10 @@ export async function getWaveTrainingEventsAction(
             ? docs[docs.length - 1].data().date?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true, data, meta: { cursor: nextCursor, hasMore } };
+        return { success: true as const, data, meta: { cursor: nextCursor, hasMore } };
     } catch (error) {
         logger.error("Get training events error:", error);
-        return { success: false, error: "Failed to fetch training events", meta: { cursor: null, hasMore: false } };
+        return { success: false as const, error: "Failed to fetch training events", meta: { cursor: null, hasMore: false } };
     }
 }
 
@@ -660,24 +660,24 @@ export interface ShipmentTracking {
 /**
  * Get user's shipment tracking info
  */
-export async function getShipmentTrackingAction(userId: string): Promise<{ success: boolean; data?: ShipmentTracking[]; meta?: any; error?: string }> {
+export async function getShipmentTrackingAction(userId: string): Promise<{ success: true | false; data?: ShipmentTracking[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: "Unauthorized" };
+        if (!session?.user) return { success: false as const, error: "Unauthorized" };
 
         // Users can only see their own shipments
-        if (session.user.id !== userId) return { success: false, error: "Unauthorized to view other shipments" };
+        if (session.user.id !== userId) return { success: false as const, error: "Unauthorized to view other shipments" };
 
         const snapshot = await db.collection(COLLECTIONS.WAVE_SHIPMENTS)
             .where("memberId", "==", userId)
             .get();
 
-        return { success: true, data: serializeDocs<ShipmentTracking>(snapshot.docs) };
+        return { success: true as const, data: serializeDocs<ShipmentTracking>(snapshot.docs) };
     } catch (error) {
         logger.error("Get shipment tracking error:", error);
-        return { success: false, error: "Failed to fetch shipment tracking" };
+        return { success: false as const, error: "Failed to fetch shipment tracking" };
     }
 }
 
@@ -696,7 +696,7 @@ export async function updateShipmentStatusAction(
     status: ShipmentTracking["status"],
     location: string,
     note?: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -705,14 +705,14 @@ export async function updateShipmentStatusAction(
         // Check admin role
         const { isAdmin } = await import("@/lib/admin-permissions");
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
 
         if (!shipmentDoc.exists) {
-            return { success: false, error: "Shipment not found" };
+            return { success: false as const, error: "Shipment not found" };
         }
 
         const shipmentData = shipmentDoc.data() as ShipmentTracking;
@@ -735,10 +735,10 @@ export async function updateShipmentStatusAction(
 
         await shipmentRef.update(updateData);
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Update shipment error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -746,19 +746,19 @@ export async function updateShipmentStatusAction(
  * Sync shipment with carrier (Admin or Automator)
  * This fetches real-time updates from the Logistics Provider (GIG/Kwik)
  */
-export async function syncShipmentWithCarrierAction(shipmentId: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function syncShipmentWithCarrierAction(shipmentId: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
 
         if (!shipmentDoc.exists) {
-            return { success: false, error: "Shipment not found" };
+            return { success: false as const, error: "Shipment not found" };
         }
 
         const shipmentData = shipmentDoc.data() as ShipmentTracking;
 
         if (!shipmentData.trackingNumber) {
-            return { success: false, error: "No tracking number explicitly linked" };
+            return { success: false as const, error: "No tracking number explicitly linked" };
         }
 
         const provider = getLogisticsProvider();
@@ -795,13 +795,13 @@ export async function syncShipmentWithCarrierAction(shipmentId: string): Promise
                 lastSyncedAt: FieldValue.serverTimestamp()
             });
 
-            return { success: true };
+            return { success: true as const };
         }
 
-        return { success: true }; // No updates found
+        return { success: true as const }; // No updates found
     } catch (error: any) {
         logger.error("Sync shipment error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -829,7 +829,7 @@ export interface MemberEarnings {
 /**
  * Calculate member earnings from sales
  */
-export async function calculateEarningsAction(userId: string): Promise<{ success: boolean; data?: MemberEarnings; meta?: any; error?: string }> {
+export async function calculateEarningsAction(userId: string): Promise<{ success: true | false; data?: MemberEarnings; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -906,10 +906,10 @@ export async function calculateEarningsAction(userId: string): Promise<{ success
         };
 
         const { serializeValue } = await import("@/lib/firestore-serialize");
-        return { success: true, data: serializeValue(result) as any };
+        return { success: true as const, data: serializeValue(result) as any };
     } catch (error) {
         logger.error("Calculate earnings error:", error);
-        return { success: false, error: "Failed to calculate earnings" };
+        return { success: false as const, error: "Failed to calculate earnings" };
     }
 }
 
@@ -935,7 +935,7 @@ export async function generateCertificateAction(
     userId: string,
     programName: string,
     certificateType: WaveCertificate["certificateType"]
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
@@ -943,13 +943,13 @@ export async function generateCertificateAction(
 
         // Check admin role
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
         if (!userDoc.exists) {
-            return { success: false, error: "User not found" };
+            return { success: false as const, error: "User not found" };
         }
 
         const userData = userDoc.data();
@@ -979,51 +979,51 @@ export async function generateCertificateAction(
             targetType: "wave_certificate",
         });
 
-        return { success: true, data: { certificate } };
+        return { success: true as const, data: { certificate } };
     } catch (error: any) {
         logger.error("Generate certificate error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
 /**
  * Get member certificates
  */
-export async function getMemberCertificatesAction(userId: string): Promise<{ success: boolean; data?: WaveCertificate[]; meta?: any; error?: string }> {
+export async function getMemberCertificatesAction(userId: string): Promise<{ success: true | false; data?: WaveCertificate[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: "Unauthorized" };
+        if (!session?.user) return { success: false as const, error: "Unauthorized" };
 
         // Allow reading own certificates
-        if (session.user.id !== userId) return { success: false, error: "Unauthorized" };
+        if (session.user.id !== userId) return { success: false as const, error: "Unauthorized" };
 
         const snapshot = await db.collection(COLLECTIONS.WAVE_CERTIFICATES)
             .where("memberId", "==", userId)
             .get();
 
-        return { success: true, data: serializeDocs<WaveCertificate>(snapshot.docs) };
+        return { success: true as const, data: serializeDocs<WaveCertificate>(snapshot.docs) };
     } catch (error) {
         logger.error("Get certificates error:", error);
-        return { success: false, error: "Failed to load certificates" };
+        return { success: false as const, error: "Failed to load certificates" };
     }
 }
 
 /**
  * Get current user's certificates (auth handled internally)
  */
-export async function getCurrentUserCertificatesAction(): Promise<{ success: boolean; data?: WaveCertificate[]; meta?: any; error?: string }> {
+export async function getCurrentUserCertificatesAction(): Promise<{ success: true | false; data?: WaveCertificate[]; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
-        if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+        if (!session?.user?.id) return { success: false as const, error: "Unauthorized" };
 
         return await getMemberCertificatesAction(session.user.id);
     } catch (error) {
         logger.error("Get current user certificates error:", error);
-        return { success: false, error: "Failed to load certificates" };
+        return { success: false as const, error: "Failed to load certificates" };
     }
 }
 
@@ -1036,7 +1036,7 @@ export async function getCurrentUserCertificatesAction(): Promise<{ success: boo
  */
 export async function uploadWaveResourceAction(
     resource: Omit<WaveResource, "id" | "uploadedAt" | "downloads">
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1044,7 +1044,7 @@ export async function uploadWaveResourceAction(
 
         // Check admin role
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const resourceId = `resource_${Date.now()}`;
@@ -1057,10 +1057,10 @@ export async function uploadWaveResourceAction(
 
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).set(resourceData);
 
-        return { success: true, data: { resourceId } };
+        return { success: true as const, data: { resourceId } };
     } catch (error: any) {
         logger.error("Upload resource error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -1069,7 +1069,7 @@ export async function uploadWaveResourceAction(
  */
 export async function incrementResourceDownloadAction(
     resourceId: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1081,10 +1081,10 @@ export async function incrementResourceDownloadAction(
             downloads: FieldValue.increment(1)
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Increment download error:", error);
-        return { success: false, error: error.message };
+        return { success: false as const, error: error.message };
     }
 }
 
@@ -1094,14 +1094,14 @@ export async function incrementResourceDownloadAction(
 export async function registerForTrainingAction(
     userId: string,
     eventId: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
 
         if (session.user.id !== userId) {
-            return { success: false, error: "Cannot register for another user" };
+            return { success: false as const, error: "Cannot register for another user" };
         }
 
         const eventRef = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId);
@@ -1140,10 +1140,10 @@ export async function registerForTrainingAction(
             targetType: "training_registration",
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("Training registration error:", error);
-        return { success: false, error: error.message || "Failed to register for training" };
+        return { success: false as const, error: error.message || "Failed to register for training" };
     }
 }
 
@@ -1157,17 +1157,17 @@ export async function registerForTrainingAction(
  */
 export async function withdrawEarningsAction(
     amount: number
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
         if (!session?.user?.id) {
-            return { success: false, error: "Authentication required" };
+            return { success: false as const, error: "Authentication required" };
         }
 
         if (amount < 5000) {
-            return { success: false, error: "Minimum withdrawal amount is ₦5,000" };
+            return { success: false as const, error: "Minimum withdrawal amount is ₦5,000" };
         }
 
         const userId = session.user.id;
@@ -1175,7 +1175,7 @@ export async function withdrawEarningsAction(
         // Check available balance
         const earnings = await calculateEarningsAction(userId);
         if ((earnings.data?.paidAmount || 0) < amount) {
-            return { success: false, error: "Insufficient available balance" };
+            return { success: false as const, error: "Insufficient available balance" };
         }
 
         // Block if there's already a pending withdrawal
@@ -1186,7 +1186,7 @@ export async function withdrawEarningsAction(
             .get();
 
         if (!existingSnap.empty) {
-            return { success: false, error: "You have a pending withdrawal request. Please wait for it to be processed." };
+            return { success: false as const, error: "You have a pending withdrawal request. Please wait for it to be processed." };
         }
 
         const withdrawalId = `WD-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
@@ -1210,22 +1210,22 @@ export async function withdrawEarningsAction(
             metadata: { amount },
         });
 
-        return { success: true, data: { withdrawalId } };
+        return { success: true as const, data: { withdrawalId } };
     } catch (error: any) {
         logger.error("Withdraw earnings error:", error);
-        return { success: false, error: "Failed to submit withdrawal request" };
+        return { success: false as const, error: "Failed to submit withdrawal request" };
     }
 }
 
 /**
  * Get the current user's WAVE application (primarily for the review-pending page to show real submission date)
  */
-export async function getWaveApplicationStatusAction(userId?: string): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function getWaveApplicationStatusAction(userId?: string): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: "Unauthorized" };
+        if (!session?.user) return { success: false as const, error: "Unauthorized" };
         const targetId = userId || session.user.id;
 
         // Look in wave_applications collection
@@ -1237,7 +1237,7 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
             // Fallback: check serviceRegistrations on user doc
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(targetId).get();
             const reg = userDoc.data()?.serviceRegistrations?.wave;
-            return { success: true, data: { status: reg?.status || null } };
+            return { success: true as const, data: { status: reg?.status || null } };
         }
 
         const sortedDocs = snapshot.docs.map(d => d.data()).sort((a: any, b: any) => {
@@ -1249,7 +1249,7 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
         
         const { serializeValue } = await import("@/lib/firestore-serialize");
         return {
-            success: true,
+            success: true as const,
             data: {
                 status: data.status || null,
                 submittedAt: serializeValue(data.createdAt || data.submittedAt || null),
@@ -1257,7 +1257,7 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
         };
     } catch (error) {
         logger.error("getWaveApplicationStatusAction error:", error);
-        return { success: false, error: "Failed to get application status" };
+        return { success: false as const, error: "Failed to get application status" };
     }
 }
 
@@ -1268,26 +1268,26 @@ export async function getWaveApplicationStatusAction(userId?: string): Promise<{
 /**
  * Get the current user's existing WAVE application data (for pre-populating edit form)
  */
-export async function getWaveApplicationAction(): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+export async function getWaveApplicationAction(): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
-        if (!session?.user) return { success: false, error: 'Unauthorized' };
+        if (!session?.user) return { success: false as const, error: 'Unauthorized' };
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
 
-        if (!applicationId) return { success: false, error: 'No application found' };
+        if (!applicationId) return { success: false as const, error: 'No application found' };
 
         const appDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).get();
-        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+        if (!appDoc.exists) return { success: false as const, error: 'Application not found' };
 
         const data = appDoc.data();
-        return { success: true, data: { ...data, revisionNote: data?.revisionNote }, meta: null };
+        return { success: true as const, data: { ...data, revisionNote: data?.revisionNote }, meta: null };
     } catch (error) {
         logger.error('getWaveApplicationAction error:', error);
-        return { success: false, error: 'Failed to fetch application' };
+        return { success: false as const, error: 'Failed to fetch application' };
     }
 }
 
@@ -1297,18 +1297,18 @@ export async function getWaveApplicationAction(): Promise<{ success: boolean; da
 export async function requestWaveRevisionAction(
     applicationId: string,
     reason: string
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
-            return { success: false, error: 'Admin access required' };
+            return { success: false as const, error: 'Admin access required' };
         }
 
         const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
         const appDoc = await appRef.get();
-        if (!appDoc.exists) return { success: false, error: 'Application not found' };
+        if (!appDoc.exists) return { success: false as const, error: 'Application not found' };
 
         const userId = appDoc.data()?.userId;
 
@@ -1339,10 +1339,10 @@ export async function requestWaveRevisionAction(
             metadata: { action: 'revision_requested', reason },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error('requestWaveRevisionAction error:', error);
-        return { success: false, error: 'Failed to request revision' };
+        return { success: false as const, error: 'Failed to request revision' };
     }
 }
 
@@ -1351,7 +1351,7 @@ export async function requestWaveRevisionAction(
  */
 export async function resubmitWaveApplicationAction(
     applicationData: z.infer<typeof waveApplicationSchema>
-): Promise<{ success: boolean; data?: any; meta?: any; error?: string }> {
+): Promise<{ success: true | false; data?: any; meta?: any; error?: string }> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null as any;
@@ -1359,7 +1359,7 @@ export async function resubmitWaveApplicationAction(
 
         const validation = waveApplicationSchema.safeParse(applicationData);
         if (!validation.success) {
-            return { success: false, error: validation.error.issues[0]?.message || 'Validation failed' };
+            return { success: false as const, error: validation.error.issues[0]?.message || 'Validation failed' };
         }
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -1367,9 +1367,9 @@ export async function resubmitWaveApplicationAction(
         const applicationId = userData?.serviceRegistrations?.wave?.applicationId;
         const existingStatus = userData?.serviceRegistrations?.wave?.status;
 
-        if (!applicationId) return { success: false, error: 'No existing application found to resubmit' };
+        if (!applicationId) return { success: false as const, error: 'No existing application found to resubmit' };
         if (existingStatus !== 'revision_required' && existingStatus !== 'pending') {
-            return { success: false, error: 'Only applications in pending or revision_required status can be resubmitted' };
+            return { success: false as const, error: 'Only applications in pending or revision_required status can be resubmitted' };
         }
 
         const validatedData = validation.data;
@@ -1401,9 +1401,9 @@ export async function resubmitWaveApplicationAction(
             metadata: { action: 'application_resubmitted' },
         });
 
-        return { success: true };
+        return { success: true as const };
     } catch (error) {
         logger.error('resubmitWaveApplicationAction error:', error);
-        return { success: false, error: 'Failed to resubmit application' };
+        return { success: false as const, error: 'Failed to resubmit application' };
     }
 }

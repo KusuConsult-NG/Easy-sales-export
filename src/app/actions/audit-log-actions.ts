@@ -21,14 +21,28 @@ export async function getAuditLogsAction(filters: {
     endDate?: string;
     limit?: number;
     lastDocId?: string;
-}): Promise<{ success: boolean; data?: AuditLogEntry[]; logs?: AuditLogEntry[]; error?: string; lastDocId?: string; hasMore?: boolean }> {
+}): Promise<{ 
+    success: true as const; 
+    data: AuditLogEntry[]; 
+    logs: AuditLogEntry[]; 
+    error: null; 
+    lastDocId?: string; 
+    hasMore?: boolean 
+} | { 
+    success: false as const; 
+    error: string; 
+    data?: AuditLogEntry[]; 
+    logs?: AuditLogEntry[]; 
+    lastDocId?: undefined; 
+    hasMore?: false 
+}> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
         const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Authentication required" };
+            return { success: false as const, error: "Authentication required" };
         }
 
         // Check if user is admin
@@ -36,7 +50,7 @@ export async function getAuditLogsAction(filters: {
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
         if (!hasAdminRole) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         let q = db.collection(COLLECTIONS.AUDIT_LOGS).orderBy("timestamp", "desc");
@@ -83,7 +97,7 @@ export async function getAuditLogsAction(filters: {
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
         return { 
-            success: true, 
+            success: true as const, 
             data: logs,       // consumed by useAdminData (looks for result.data)
             logs,             // consumed by audit.ts wrapper + exportAuditLogsCSV
             lastDocId: nextCursor,
@@ -91,7 +105,7 @@ export async function getAuditLogsAction(filters: {
         };
     } catch (error: any) {
         logger.error("Failed to fetch audit logs:", error);
-        return { success: false, error: error.message || "Failed to fetch audit logs" };
+        return { success: false as const, error: error.message || "Failed to fetch audit logs" };
     }
 }
 
@@ -105,14 +119,14 @@ export async function exportAuditLogsCSV(filters: {
     severity?: AuditSeverity;
     startDate?: string;
     endDate?: string;
-}): Promise<{ success: boolean; csv?: string; error?: string }> {
+}): Promise<{ success: true as const; csv: string; error: null } | { success: false as const; error: string; csv?: undefined }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
     const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Authentication required" };
+            return { success: false as const, error: "Authentication required" };
         }
 
         // Check if user is admin
@@ -120,14 +134,14 @@ export async function exportAuditLogsCSV(filters: {
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
         if (!hasAdminRole) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         // Get logs (no limit for export)
         const result = await getAuditLogsAction(filters);
 
         if (!result.success || !result.logs) {
-            return { success: false, error: result.error || "Failed to fetch logs" };
+            return { success: false as const, error: result.error || "Failed to fetch logs" };
         }
 
         // Generate CSV
@@ -157,10 +171,10 @@ export async function exportAuditLogsCSV(filters: {
             ),
         ].join("\n");
 
-        return { success: true, csv: csvContent };
+        return { success: true as const, csv: csvContent };
     } catch (error: any) {
         logger.error("Failed to export audit logs:", error);
-        return { success: false, error: error.message || "Failed to export logs" };
+        return { success: false as const, error: error.message || "Failed to export logs" };
     }
 }
 
@@ -168,14 +182,18 @@ export async function exportAuditLogsCSV(filters: {
  * Get audit log statistics
  */
 export async function getAuditStatsAction(days: number = 30): Promise<{
-    success: boolean;
-    stats?: {
+    success: true as const;
+    stats: {
         totalLogs: number;
         bySeverity: { info: number; warning: number; critical: number };
         topActions: { action: string; count: number }[];
         topUsers: { userId: string; userEmail: string; count: number }[];
     };
-    error?: string;
+    error: null;
+} | {
+    success: false as const;
+    error: string;
+    stats?: undefined;
 }> {
     try {
         const sessionResult = await requireSession();
@@ -183,7 +201,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
     const { session } = sessionResult;
 
         if (!session?.user?.id) {
-            return { success: false, error: "Authentication required" };
+            return { success: false as const, error: "Authentication required" };
         }
 
         // Check if user is admin
@@ -191,14 +209,14 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
         if (!hasAdminRole) {
-            return { success: false, error: "Admin access required" };
+            return { success: false as const, error: "Admin access required" };
         }
 
         const cacheKey = `admin:audit-stats:${days}`;
         try {
             const cachedStats = await getCached<any>(cacheKey);
             if (cachedStats) {
-                return { success: true, stats: cachedStats };
+                return { success: true as const, stats: cachedStats };
             }
         } catch (e) {
             // cache bypass on error
@@ -253,9 +271,9 @@ export async function getAuditStatsAction(days: number = 30): Promise<{
             // silent fail
         }
 
-        return { success: true, stats };
+        return { success: true as const, stats };
     } catch (error: any) {
         logger.error("Failed to fetch audit stats:", error);
-        return { success: false, error: error.message || "Failed to fetch statistics" };
+        return { success: false as const, error: error.message || "Failed to fetch statistics" };
     }
 }

@@ -16,7 +16,7 @@ export interface BriefingRegistration extends BriefingRegistrationData {
 }
 
 export interface BriefingRegistrationsResult {
-    success: boolean;
+    success: true | false;
     data?: BriefingRegistration[];
     error?: string;
     meta: {
@@ -78,7 +78,7 @@ export async function getBriefingRegistrationsAction(
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
-            return { success: false, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
+            return { success: false as const, error: "Your session has expired. Please log in again.", meta: { cursor: null, hasMore: false } };
         }
         const { session } = sessionResult;
 
@@ -87,7 +87,7 @@ export async function getBriefingRegistrationsAction(
             session.user.roles?.includes("super_admin");
 
         if (!hasAdminRole) {
-            return { success: false, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
+            return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
         }
 
         const pageSize = Math.min(Math.max(limit, 1), 5000);
@@ -213,7 +213,7 @@ export async function getBriefingRegistrationsAction(
             ? docs[docs.length - 1].data().createdAt?.toDate?.()?.toISOString() ?? null
             : null;
 
-        return { success: true, data,
+        return { success: true as const, data,
             meta: { cursor: nextCursor, hasMore, totalCount } };
     } catch (error: any) {
         logger.error("getBriefingRegistrationsAction error:", error);
@@ -231,7 +231,7 @@ export async function getBriefingRegistrationsAction(
         }
         
         return { 
-            success: false, 
+            success: false as const, 
             error: errorMessage, 
             meta: { cursor: null, hasMore: false, totalCount: 0 } 
         };

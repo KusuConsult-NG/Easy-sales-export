@@ -54,7 +54,7 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
 
         if (!validationResult.success) {
             const firstError = validationResult.error.issues[0]?.message || "Invalid submission data";
-            return { success: false, error: firstError };
+            return { success: false as const, error: firstError };
         }
 
         const validData = validationResult.data!;
@@ -74,10 +74,10 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
         ]);
 
         if (!existingByEmail.empty) {
-            return { success: false, error: "This email address is already registered for the briefing." };
+            return { success: false as const, error: "This email address is already registered for the briefing." };
         }
         if (!existingByPhone.empty) {
-            return { success: false, error: "This phone number is already registered for the briefing." };
+            return { success: false as const, error: "This phone number is already registered for the briefing." };
         }
 
         const status: BriefingStatus = "registered";
@@ -116,11 +116,11 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
             logger.error(`[WAVE Briefing] Email system error for ${emailToStore}:`, emailError);
         }
 
-        return { success: true };
+        return { success: true as const };
     } catch (error: any) {
         logger.error("[WAVE Briefing] Registration error:", error);
         const msg = typeof error === 'string' ? error : (error?.message || "Registration failed");
-        return { success: false, error: msg };
+        return { success: false as const, error: msg };
     }
 }
 

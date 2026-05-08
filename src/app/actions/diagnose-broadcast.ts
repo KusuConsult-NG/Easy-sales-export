@@ -9,7 +9,7 @@ import { requireAdmin } from "@/lib/require-admin";
  * Call from any admin page or browser console via fetch.
  */
 export async function diagnoseBroadcastAction(): Promise<{
-    success: boolean;
+    success: true | false;
     projectId?: string;
     usersCollectionName: string;
     totalUserDocs: number;
@@ -20,7 +20,7 @@ export async function diagnoseBroadcastAction(): Promise<{
     try {
         const sessionResult = await requireAdmin();
         if ('error' in sessionResult) return { 
-            success: false, 
+            success: false as const, 
             usersCollectionName: COLLECTIONS.USERS,
             totalUserDocs: 0,
             usersWithEmail: 0,
@@ -49,14 +49,14 @@ export async function diagnoseBroadcastAction(): Promise<{
         const countSnap = await db.collection(collectionName).count().get();
         const totalCount = countSnap.data().count;
 
-        return { success: true, projectId: process.env.FIREBASE_PROJECT_ID || "(not set)",
+        return { success: true as const, projectId: process.env.FIREBASE_PROJECT_ID || "(not set)",
             usersCollectionName: collectionName,
             totalUserDocs: totalCount,
             usersWithEmail,
             sampleFields };
     } catch (error: any) {
         return {
-            success: false,
+            success: false as const,
             usersCollectionName: COLLECTIONS.USERS,
             totalUserDocs: 0,
             usersWithEmail: 0,

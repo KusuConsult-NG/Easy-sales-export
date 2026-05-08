@@ -14,14 +14,14 @@ interface ScanResult {
     affectedIds: string[];
 }
 
-export async function runForensicScanAction(): Promise<{ success: boolean; results: ScanResult[]; error?: string }> {
+export async function runForensicScanAction(): Promise<{ success: true | false; results: ScanResult[]; error?: string }> {
     try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return null as any;
     const { session } = sessionResult;
         // Strict Admin Check
         if (!session?.user?.roles?.includes("super_admin") && (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) {
-            return { success: false, results: [], error: "Unauthorized: Admin access required" };
+            return { success: false as const, results: [], error: "Unauthorized: Admin access required" };
         }
 
         const results: ScanResult[] = [];
@@ -330,10 +330,10 @@ export async function runForensicScanAction(): Promise<{ success: boolean; resul
             results.push({ module: "Academy", check: "Enrollment Scan", status: "fail", details: e.message, affectedIds: [] });
         }
 
-        return { success: true, results };
+        return { success: true as const, results };
 
     } catch (error: any) {
         logger.error("Forensic scan failed:", error);
-        return { success: false, results: [], error: error.message };
+        return { success: false as const, results: [], error: error.message };
     }
 }

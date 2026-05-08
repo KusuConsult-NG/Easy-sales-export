@@ -30,7 +30,7 @@ async function _getSellerOrdersAction(filters?: {
         const userData = userDoc.data();
 
         if (!hasRole(userData?.roles || [], "seller")) {
-            return { success: false, error: "Not authorized as seller" };
+            return { success: false as const, error: "Not authorized as seller" };
         }
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
@@ -47,13 +47,13 @@ async function _getSellerOrdersAction(filters?: {
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { success: true, data: { orders } };
+        return { success: true as const, data: { orders } };
     } catch (error) {
         logger.error("Get seller orders error:", { 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false, error: "Failed to fetch orders" };
+        return { success: false as const, error: "Failed to fetch orders" };
     }
 }
 export const getSellerOrdersAction = withFlexibleSafeAction("getSellerOrdersAction", _getSellerOrdersAction);
@@ -122,7 +122,7 @@ async function _updateOrderStatusAction(
             transaction.update(orderRef, updateData);
         });
 
-        return { success: true, data: { message: "Order status updated" } };
+        return { success: true as const, data: { message: "Order status updated" } };
     } catch (error) {
         logger.error("Update order status error:", { 
             orderId, 
@@ -130,7 +130,7 @@ async function _updateOrderStatusAction(
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to update order status" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to update order status" };
     }
 }
 export const updateOrderStatusAction = withFlexibleSafeAction("updateOrderStatusAction", _updateOrderStatusAction);
@@ -161,13 +161,13 @@ async function _getBuyerOrdersAction(filters?: {
         const snapshot = await query.get();
         const orders = serializeDocs<Order>(snapshot.docs);
 
-        return { success: true, data: { orders } };
+        return { success: true as const, data: { orders } };
     } catch (error) {
         logger.error("Get buyer orders error:", { 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false, error: "Failed to fetch orders" };
+        return { success: false as const, error: "Failed to fetch orders" };
     }
 }
 export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
@@ -242,14 +242,14 @@ async function _confirmDeliveryAction(orderId: string) {
             }
         }
 
-        return { success: true, data: { message: "Delivery confirmed" } };
+        return { success: true as const, data: { message: "Delivery confirmed" } };
     } catch (error) {
         logger.error("Confirm delivery error:", { 
             orderId, 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to confirm delivery" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to confirm delivery" };
     }
 }
 export const confirmDeliveryAction = withFlexibleSafeAction("confirmDeliveryAction", _confirmDeliveryAction);
@@ -267,24 +267,24 @@ async function _getOrderDetailsAction(orderId: string) {
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
 
         if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
+            return { success: false as const, error: "Order not found" };
         }
 
         const data = orderDoc.data()!;
         const isAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
 
         if (data.sellerId !== session.user.id && !isAdmin) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
-        return { success: true, data: { order: serializeDoc<Order>(orderDoc.id, data) } };
+        return { success: true as const, data: { order: serializeDoc<Order>(orderDoc.id, data) } };
     } catch (error) {
         logger.error("Get order details error:", { 
             orderId, 
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error) 
         });
-        return { success: false, error: "Failed to fetch order details" };
+        return { success: false as const, error: "Failed to fetch order details" };
     }
 }
 export const getOrderDetailsAction = withFlexibleSafeAction("getOrderDetailsAction", _getOrderDetailsAction);

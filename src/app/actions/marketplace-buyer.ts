@@ -79,14 +79,14 @@ async function _getProductsAction(filters?: ProductFilters) {
             products = products.filter(product => product.category === filters.category);
         }
 
-        return { success: true, data: { products: serializeValue(products) } };
+        return { success: true as const, data: { products: serializeValue(products) } };
     } catch (error) {
         logger.error("Get products error:", {
             userId: sessionResult?.session?.user?.id,
             filters,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch products", data: { products: [] } };
+        return { success: false as const, error: "Failed to fetch products", data: { products: [] } };
     }
 }
 export const getProductsAction = withFlexibleSafeAction("getProductsAction", _getProductsAction);
@@ -103,17 +103,17 @@ async function _getProductByIdAction(productId: string) {
         const productDoc = await productRef.get();
 
         if (!productDoc.exists) {
-            return { success: false, error: "Product not found" };
+            return { success: false as const, error: "Product not found" };
         }
 
-        return { success: true, data: { product: serializeDoc<Product>(productDoc.id, productDoc.data()!) } };
+        return { success: true as const, data: { product: serializeDoc<Product>(productDoc.id, productDoc.data()!) } };
     } catch (error) {
         logger.error("Get product error:", {
             userId: sessionResult?.session?.user?.id,
             productId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch product" };
+        return { success: false as const, error: "Failed to fetch product" };
     }
 }
 export const getProductByIdAction = withFlexibleSafeAction("getProductByIdAction", _getProductByIdAction);
@@ -132,13 +132,13 @@ async function _getFeaturedProductsAction() {
             .limit(8)
             .get();
 
-        return { success: true, data: { products: serializeDocs<Product>(snapshot.docs) } };
+        return { success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
     } catch (error) {
         logger.error("Get featured products error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch featured products", data: { products: [] } };
+        return { success: false as const, error: "Failed to fetch featured products", data: { products: [] } };
     }
 }
 export const getFeaturedProductsAction = withFlexibleSafeAction("getFeaturedProductsAction", _getFeaturedProductsAction);
@@ -156,14 +156,14 @@ async function _getProductsByCategoryAction(category: string) {
             .where("category", "==", category)
             .get();
 
-        return { success: true, data: { products: serializeDocs<Product>(snapshot.docs) } };
+        return { success: true as const, data: { products: serializeDocs<Product>(snapshot.docs) } };
     } catch (error) {
         logger.error("Get products by category error:", {
             userId: sessionResult?.session?.user?.id,
             category,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch products by category", data: { products: [] } };
+        return { success: false as const, error: "Failed to fetch products by category", data: { products: [] } };
     }
 }
 export const getProductsByCategoryAction = withFlexibleSafeAction("getProductsByCategoryAction", _getProductsByCategoryAction);
@@ -184,13 +184,13 @@ async function _getBuyerOrdersAction() {
             .orderBy("createdAt", "desc")
             .get();
 
-        return { success: true, data: { orders: serializeDocs<Order>(snapshot.docs) } };
+        return { success: true as const, data: { orders: serializeDocs<Order>(snapshot.docs) } };
     } catch (error) {
         logger.error("Get buyer orders error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: "Failed to fetch orders" };
+        return { success: false as const, error: "Failed to fetch orders" };
     }
 }
 export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
@@ -209,18 +209,18 @@ async function _confirmOrderReceiptAction(orderId: string) {
         const orderDoc = await orderRef.get();
 
         if (!orderDoc.exists) {
-            return { success: false, error: "Order not found" };
+            return { success: false as const, error: "Order not found" };
         }
 
         const orderData = orderDoc.data();
 
         // 2. Verify Buyer
         if (orderData?.buyerId !== userId) {
-            return { success: false, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized" };
         }
 
         if (orderData?.status !== "in_transit" && orderData?.status !== "processing" && orderData?.status !== "shipped") {
-            return { success: false, error: "Order is not yet in transit or processing" };
+            return { success: false as const, error: "Order is not yet in transit or processing" };
         }
 
         await db.runTransaction(async (transaction) => {
@@ -247,7 +247,7 @@ async function _confirmOrderReceiptAction(orderId: string) {
             });
         });
 
-        return { success: true, data: { message: "Order confirmed and funds released to seller(s)." } };
+        return { success: true as const, data: { message: "Order confirmed and funds released to seller(s)." } };
 
     } catch (error) {
         logger.error("Confirm receipt error:", {
@@ -255,7 +255,7 @@ async function _confirmOrderReceiptAction(orderId: string) {
             orderId,
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Failed to confirm receipt" };
+        return { success: false as const, error: error instanceof Error ? error.message : "Failed to confirm receipt" };
     }
 }
 export const confirmOrderReceiptAction = withFlexibleSafeAction("confirmOrderReceiptAction", _confirmOrderReceiptAction);
