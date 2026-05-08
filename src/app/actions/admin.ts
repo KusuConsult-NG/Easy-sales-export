@@ -1397,6 +1397,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate().toISOString() : (data.verifiedAt ? new Date(data.verifiedAt).toISOString() : undefined),
                 // Location
                 address: data.address,
+                state: data.address?.state || data.state || "",
                 lga: data.address?.lga || data.lga || "",
                 // KYC fields — prefer nested kyc.* (written by live QoreID actions),
                 // fall back to legacy top-level fields for existing records
