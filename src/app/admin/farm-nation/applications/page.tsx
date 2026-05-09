@@ -7,9 +7,10 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
-import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X } from "lucide-react";
+import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X, Eye } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 
 interface SellerProfile {
     id: string;
@@ -37,6 +38,7 @@ export default function FarmNationApplicationsPage() {
     const { showToast } = useToast();
     const [selectedSeller, setSelectedSeller] = useState<StandardPendingForm<SellerProfile> | null>(null);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
+    const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
@@ -286,6 +288,13 @@ export default function FarmNationApplicationsPage() {
                         <Shield className="w-3.5 h-3.5" />
                         View
                     </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedSeller(item); setIsRawDetailOpen(true); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition"
+                    >
+                        <Eye className="w-3.5 h-3.5" />
+                        Full Details
+                    </button>
                     {item.status === "pending" && (
                         <>
                             <button
@@ -494,6 +503,15 @@ export default function FarmNationApplicationsPage() {
                     </div>
                 )}
             </Modal>
+
+            {selectedSeller && (
+                <DynamicDetailModal
+                    isOpen={isRawDetailOpen}
+                    onClose={() => setIsRawDetailOpen(false)}
+                    data={selectedSeller.data}
+                    title={`Raw Details: ${selectedSeller.user.name}`}
+                />
+            )}
 
             {isExportModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">

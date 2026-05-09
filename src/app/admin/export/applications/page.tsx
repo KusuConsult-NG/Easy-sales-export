@@ -44,6 +44,7 @@ import RejectionModal from "@/components/admin/RejectionModal";
 import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -139,6 +140,7 @@ export default function AdminExportApplicationsPage() {
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
     const [selectedApp, setSelectedApp] = useState<StandardPendingForm<ExportApplication> | null>(null);
+    const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
 
     // Edit/Revision Note modal state
     const [editingApp, setEditingApp] = useState<ExportApplication | null>(null);
@@ -395,11 +397,18 @@ export default function AdminExportApplicationsPage() {
                                         <div className="flex items-center justify-end gap-2">
                                             {/* Detail */}
                                             <button
-                                                onClick={() => setSelectedApp(standardApp)}
-                                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                                 title="View Details"
                                             >
                                                 <Eye className="w-4 h-4" />
+                                            </button>
+
+                                            {/* Full Raw Details */}
+                                            <button
+                                                onClick={() => { setSelectedApp(standardApp); setIsRawDetailOpen(true); }}
+                                                className="p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+                                                title="Full Raw Details"
+                                            >
+                                                <FileText className="w-4 h-4" />
                                             </button>
 
                                             {/* Edit / Request Revision */}
@@ -576,6 +585,15 @@ export default function AdminExportApplicationsPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {selectedApp && (
+                <DynamicDetailModal
+                    isOpen={isRawDetailOpen}
+                    onClose={() => setIsRawDetailOpen(false)}
+                    data={selectedApp.data}
+                    title={`Raw Details: ${getDisplayName(selectedApp)}`}
+                />
             )}
 
             <RejectionModal

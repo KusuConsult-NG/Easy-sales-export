@@ -18,6 +18,7 @@ import { getStandardAcademyApplicationsAction, getAcademyApplicationStatsAction,
 import { useAdminData } from "@/hooks/useAdminData";
 import { useEffect } from "react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -371,6 +372,7 @@ export default function AdminAcademyApplicationsPage() {
     const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
     const [isExporting, setIsExporting] = useState(false);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
+    const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
 
     useEffect(() => {
         getAcademyApplicationStatsAction().then(res => {
@@ -793,6 +795,13 @@ export default function AdminAcademyApplicationsPage() {
                                         <Eye className="w-4 h-4" /> View
                                     </button>
 
+                                    <button
+                                        onClick={() => { setSelectedApp(app); setIsRawDetailOpen(true); }}
+                                        className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition flex items-center gap-1.5"
+                                    >
+                                        <FileText className="w-4 h-4" /> Full Details
+                                    </button>
+
                                     {/* Quick Actions */}
                                     {app.status === "pending" && (
                                         <>
@@ -974,6 +983,14 @@ export default function AdminAcademyApplicationsPage() {
                 </div>
             )}
 
+            {selectedApp && (
+                <DynamicDetailModal
+                    isOpen={isRawDetailOpen}
+                    onClose={() => setIsRawDetailOpen(false)}
+                    data={selectedApp._raw}
+                    title={`Raw Details: ${selectedApp.personalInfo.fullName}`}
+                />
+            )}
         </div>
     );
 }

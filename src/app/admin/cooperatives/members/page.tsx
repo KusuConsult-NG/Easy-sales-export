@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save } from "lucide-react";
+import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
@@ -13,6 +13,7 @@ import { getCooperativeStatsAction, getStandardCooperativeMembersAction } from "
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 
 type MembershipApplication = {
     id: string;
@@ -87,6 +88,7 @@ export default function CooperativeMembersPage() {
     const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
     const [selectedApplication, setSelectedApplication] = useState<StandardPendingForm<MembershipApplication> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -605,6 +607,13 @@ export default function CooperativeMembersPage() {
                                                     >
                                                         <Eye className="w-4 h-4" />
                                                     </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setSelectedApplication(app); setIsRawDetailOpen(true); }}
+                                                        className="text-slate-400 hover:text-slate-900 transition p-1.5 hover:bg-slate-100 rounded"
+                                                        title="Full Raw Details"
+                                                    >
+                                                        <FileText className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -867,12 +876,20 @@ export default function CooperativeMembersPage() {
                 isProcessing={isProcessing}
             />
 
-            {/* Import Legacy Member Modal */}
             <ImportLegacyModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => loadApplications()}
             />
+
+            {selectedApplication && (
+                <DynamicDetailModal
+                    isOpen={isRawDetailOpen}
+                    onClose={() => setIsRawDetailOpen(false)}
+                    data={selectedApplication.data}
+                    title={`Raw Details: ${selectedApplication.user.name}`}
+                />
+            )}
         </div>
     );
 }
