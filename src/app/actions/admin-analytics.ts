@@ -32,6 +32,12 @@ export interface AnalyticsData {
     userGrowthByMonth: Array<{ month: string; users: number }>;
     /** Module participation breakdown for the pie chart */
     moduleUsage: Array<{ module: string; count: number }>;
+    userSegments: {
+        active: number;
+        pending: number;
+        stalled: number;
+        ghost: number;
+    };
     recentTransactions: Array<{
         id: string;
         type: string;
@@ -137,9 +143,10 @@ export async function getDashboardStatsAction(options?: {
 
     const { getPlatformMetricsAction, getGlobalPendingApprovalsAction } = await import("./global-aggregation");
 
-    const [metricsResult, pendingResult] = await Promise.all([
+    const [metricsResult, pendingResult, usersSnap] = await Promise.all([
         getPlatformMetricsAction(),
-        getGlobalPendingApprovalsAction()
+        getGlobalPendingApprovalsAction(),
+        db.collection(COLLECTIONS.USERS).select("serviceRegistrations", "bankAccountNumber", "address").get()
     ]);
 
     const totalUsers = metricsResult.success ? (metricsResult.data?.totalUsers ?? 0) : 0;
@@ -198,12 +205,15 @@ export async function getDashboardStatsAction(options?: {
     const canonicalStats = await fetchModuleRegistrationStats();
 
     const moduleUsage = [
-        { module: "WAVE", count: canonicalStats.wave },
+        { module: "WAVE Apps", count: canonicalStats.wave },
+        { module: "Briefings", count: canonicalStats.waveBriefing },
         { module: "Academy", count: canonicalStats.academy },
         { module: "Cooperative", count: canonicalStats.cooperatives },
+        { module: "Co-op Onboarding", count: canonicalStats.cooperativeOnboarding },
         { module: "Farm Nation", count: canonicalStats.farmNation },
         { module: "Marketplace", count: canonicalStats.marketplace },
         { module: "Export Hub", count: canonicalStats.exportHub },
+        { module: "Export Onboarding", count: canonicalStats.exportOnboarding },
     ].filter((m) => m.count > 0);
 
 
@@ -249,6 +259,33 @@ export async function getDashboardStatsAction(options?: {
         logger.error("Failed to fetch unified recent transactions:", e);
     }
 
+    // ── User Segmentation (Mutually Exclusive) ──────────────────────────────
+    const userSegments = { active: 0, pending: 0, stalled: 0, ghost: 0 };
+    
+    // We already have the users from the module registration fetch
+    // BUT we need to iterate them to categorize. 
+    // To avoid redundant fetches, we'll refactor slightly if needed, 
+    // but for now, let's process the usersSnap we have.
+    
+    usersSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const regs = data.serviceRegistrations || {};
+        
+        const hasModule = Object.values(regs).some((m: any) => m && m.status && m.status !== "not_started");
+        const isApproved = Object.values(regs).some((m: any) => m && m.status === "approved" || m.status === "active");
+        
+        // Logical segments
+        if (isApproved) {
+            userSegments.active++;
+        } else if (hasModule) {
+            userSegments.pending++;
+        } else if (data.bankAccountNumber || data.address?.street) {
+            userSegments.stalled++;
+        } else {
+            userSegments.ghost++;
+        }
+    });
+
     const payload: AnalyticsData = {
         platformOverview: {
             totalUsers,
@@ -266,6 +303,7 @@ export async function getDashboardStatsAction(options?: {
         revenueByMonth,
         userGrowthByMonth,
         moduleUsage: moduleUsage.length ? moduleUsage : [{ module: "No data yet", count: 1 }],
+        userSegments,
         recentTransactions,
     };
 
@@ -444,7 +482,6 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface ModuleRegistrationStats {
-    hub: number;
     wave: number;
     waveBriefing: number;
     academy: number;
@@ -458,47 +495,55 @@ export interface ModuleRegistrationStats {
 
 const fetchModuleRegistrationStats = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
-        // Query the CANONICAL USERS collection for module participation
-        // This ensures the charts match the actual user base
+        // HYBRID AUDIT: Combining direct collection counts with serviceRegistrations
+        // to capture all submitted applications (not just approved/active)
         const [
-            hub,
-            wave,
-            academy,
-            cooperatives,
-            farmNation,
-            exportHub,
-            marketplace,
-            // Sub-metrics that still require specialized counts
             waveBriefing,
+            waveApplications,
             cooperativeOnboarding,
             exportOnboarding,
+            usersSnap,
         ] = await Promise.all([
-            safeCount(db.collection(COLLECTIONS.USERS)),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.wave.status", "in", ["submitted", "approved", "under_review"])),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.academy.status", "==", "active")),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.cooperative.status", "==", "active")),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "==", "active")),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.export.status", "==", "active")),
-            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.marketplace.status", "==", "approved")),
-            
-            // Legacy/Transient counts
             safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING).where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending_review")),
+            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)),
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING)),
+            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
+            db.collection(COLLECTIONS.USERS).select("serviceRegistrations").get(),
         ]);
 
-        return { 
-            hub, 
-            wave, 
-            waveBriefing, 
-            academy, 
-            cooperatives, 
-            cooperativeOnboarding, 
-            farmNation, 
-            exportHub, 
-            exportOnboarding, 
-            marketplace 
+        const stats: ModuleRegistrationStats = {
+            wave: waveApplications,
+            waveBriefing,
+            academy: 0,
+            cooperatives: 0,
+            cooperativeOnboarding,
+            farmNation: 0,
+            exportHub: 0,
+            exportOnboarding,
+            marketplace: 0
         };
+
+        // Process serviceRegistrations for modules NOT covered by direct collection counts
+        // or to find additional registrations in established modules.
+        usersSnap.docs.forEach(doc => {
+            const data = doc.data();
+            const regs = data.serviceRegistrations || {};
+            
+            const isStarted = (m: any) => m && m.status && m.status !== "not_started";
+
+            // Academy, Cooperatives, Farm Nation, Marketplace, Export Hub
+            // are primarily tracked in serviceRegistrations
+            if (isStarted(regs.academy)) stats.academy++;
+            if (isStarted(regs.cooperative)) stats.cooperatives++;
+            if (isStarted(regs.farm_nation) || isStarted(regs.farmNation)) stats.farmNation++;
+            if (isStarted(regs.marketplace)) stats.marketplace++;
+            if (isStarted(regs.export)) stats.exportHub++;
+            
+            // Note: wave and briefings are already set from safeCount(COLLECTIONS...) 
+            // which captures all submissions (the user's primary requirement).
+        });
+
+        return stats;
     },
     ["module-registration-stats"],
     { revalidate: 300, tags: ["module-registration-stats"] }

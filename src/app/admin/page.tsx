@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { AnalyticsData, ModuleRegistrationStats } from "@/app/actions/admin-analytics";
 import RegistrationPieChart from "@/components/admin/RegistrationPieChart";
+import UserSegmentsChart from "@/components/admin/UserSegmentsChart";
 import AnalyticsCharts from "@/components/admin/AnalyticsCharts";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
@@ -369,7 +370,7 @@ export default function AdminDashboardPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: 0.3 }}
-                    className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+                    className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8"
                 >
                     {/* Recent Transactions */}
                     <div className="bg-white rounded-2xl p-6 shadow-sm ring-1 ring-slate-200/50">
@@ -449,11 +450,25 @@ export default function AdminDashboardPage() {
                             </div>
                         ) : moduleStats ? (
                             <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 h-full p-2">
-                                <RegistrationPieChart stats={moduleStats} />
+                                <RegistrationPieChart 
+                                    stats={moduleStats} 
+                                    totalAccounts={stats.platformOverview?.totalUsers ?? 0}
+                                />
                             </div>
                         ) : (
                             <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 p-8 text-center text-slate-400 text-sm h-full flex items-center justify-center">
                                 No registration data available
+                            </div>
+                        )}
+                    </div>
+
+                    {/* User Segmentation Chart */}
+                    <div className="lg:col-span-1">
+                        {stats.userSegments ? (
+                            <UserSegmentsChart segments={stats.userSegments} />
+                        ) : (
+                            <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/50 p-8 text-center text-slate-400 text-sm h-full flex items-center justify-center">
+                                No segmentation data available
                             </div>
                         )}
                     </div>

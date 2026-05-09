@@ -12,16 +12,17 @@ interface Slice {
 
 interface RegistrationPieChartProps {
     stats: ModuleRegistrationStats;
+    totalAccounts: number;
 }
 
 // ─── Colour palette (vibrant, distinct) ────────────────────────────────────
 const COLORS = [
-    "#3b82f6", // blue        – Hub
-    "#10b981", // emerald     – WAVE Applications
-    "#6ee7b7", // light-green – WAVE Briefing
+    "#3b82f6", // blue
+    "#10b981", // emerald     – WAVE Apps
+    "#6ee7b7", // light-green – Briefings
     "#a855f7", // purple      – Academy
     "#f59e0b", // amber       – Cooperatives
-    "#14b8a6", // teal        – Cooperative Onboarding
+    "#14b8a6", // teal        – Co-op Onboarding
     "#ef4444", // red         – Farm Nation
     "#0ea5e9", // sky         – Export Hub
     "#6366f1", // indigo      – Export Onboarding
@@ -49,7 +50,7 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
     return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 }
 
-export default function RegistrationPieChart({ stats }: RegistrationPieChartProps) {
+export default function RegistrationPieChart({ stats, totalAccounts }: RegistrationPieChartProps) {
     const [hovered, setHovered] = useState<number | null>(null);
 
     const rawSlices: Slice[] = [
@@ -131,7 +132,7 @@ export default function RegistrationPieChart({ stats }: RegistrationPieChartProp
                         border: "1px solid #e2e8f0"
                     }}
                 >
-                    {(stats?.hub ?? 0).toLocaleString()} Unique Accounts
+                    {totalAccounts.toLocaleString()} Unique Accounts
                 </span>
             </p>
 
