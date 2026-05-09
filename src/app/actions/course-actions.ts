@@ -19,7 +19,7 @@ import { requireSession } from "@/lib/session-guard";
 export async function updateLessonProgress(
     data: z.infer<typeof courseProgressSchema>
 ) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try {
@@ -58,7 +58,7 @@ export async function updateLessonProgress(
 export async function enrollInCourse(
     data: z.infer<typeof courseEnrollmentSchema>
 ) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const validated = courseEnrollmentSchema.parse(data);
@@ -111,7 +111,7 @@ export async function enrollInCourse(
  * Get user's course progress
  */
 export async function getCourseProgress(courseId: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
@@ -135,7 +135,7 @@ export async function getCourseProgress(courseId: string) { const sessionResult 
  * Get lesson progress (video state)
  */
 export async function getLessonProgress(lessonId: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try {
@@ -158,7 +158,7 @@ export async function getLessonProgress(lessonId: string) { const sessionResult 
  * Get all enrolled courses for user
  */
 export async function getUserEnrolledCourses() { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const snapshot = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
@@ -177,7 +177,7 @@ export async function getUserEnrolledCourses() { const sessionResult = await req
  * Mark course as complete (manual completion)
  */
 export async function completeCourse(courseId: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
@@ -213,7 +213,7 @@ export async function completeCourse(courseId: string) { const sessionResult = a
  * Called automatically when progress reaches 100%
  */
 export async function generateCourseCertificate(courseId: string, courseTitle: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { // Verify course is completed
@@ -284,7 +284,7 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
  * Get user's course certificate
  */
 export async function getCourseCertificate(courseId: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const snapshot = await db.collection(COLLECTIONS.COURSE_CERTIFICATES)

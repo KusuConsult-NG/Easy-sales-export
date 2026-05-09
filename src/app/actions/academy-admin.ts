@@ -26,7 +26,7 @@ async function _approveAcademyApplicationAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
@@ -159,7 +159,7 @@ async function _rejectAcademyApplicationAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
@@ -278,7 +278,7 @@ async function _updateAcademyApplicationPaymentAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
@@ -339,7 +339,7 @@ export const updateAcademyApplicationPaymentAction = withFlexibleSafeAction("upd
 async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update") &&
             !session.user.roles?.includes("academy_admin")) {
@@ -409,7 +409,7 @@ async function _getAcademyEnrollmentsAction(options?: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated", data: null };
@@ -492,7 +492,7 @@ async function _getAcademyInstructorsAction(): Promise<ActionResponse<any[]>> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated", data: null };
@@ -526,7 +526,7 @@ async function _getAcademyCoursesAction(options?: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated", data: null };
@@ -572,7 +572,7 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated", data: null };
@@ -698,7 +698,7 @@ export const getAcademyStatsAction = withFlexibleSafeAction("getAcademyStatsActi
 async function _getAcademyApplicationStatsAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         // Ensure user has admin permissions
         if (!isAdmin(session.user.roles)) {
@@ -745,7 +745,7 @@ async function _upsertAcademyCourseAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false, error: "Not authenticated", data: null };
@@ -811,7 +811,7 @@ async function _getStandardAcademyApplicationsAction(options: {
 } = {}): Promise<ActionResponse<any> & { lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated", data: null };
 
@@ -965,7 +965,7 @@ export const getStandardAcademyApplicationsAction = withFlexibleSafeAction("getS
 async function _logAcademyExportAction(details: any): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         await createAdminAuditLog({
             action: "data_export",

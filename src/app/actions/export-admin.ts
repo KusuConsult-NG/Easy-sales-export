@@ -257,7 +257,7 @@ export async function getAdminExportOrdersAction(): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };
@@ -294,7 +294,7 @@ export async function updateAdminExportOrderStatusAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) { return { success: false as const, error: "Unauthorized access", data: null };

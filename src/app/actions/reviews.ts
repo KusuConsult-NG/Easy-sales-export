@@ -28,7 +28,7 @@ export async function createReviewAction(params: { productId: string;
     comment: string;
     images?: string[]; }) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -134,7 +134,7 @@ export async function getProductReviewsAction(
  */
 export async function getUserReviewsAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -160,7 +160,7 @@ export async function updateReviewAction(
     comment: string
 ) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -212,7 +212,7 @@ export async function moderateReviewAction(
     rejectionReason?: string
 ) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -288,7 +288,7 @@ export async function getAdminReviewsAction(options: { statusFilter?: "all" | "p
     lastDocId?: string;
     sortOrder?: "asc" | "desc"; } = {}) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 

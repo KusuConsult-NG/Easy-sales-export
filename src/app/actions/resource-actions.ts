@@ -35,7 +35,7 @@ export async function uploadResourceAction(formData: FormData): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
@@ -155,7 +155,7 @@ export async function downloadResourceAction(resourceId: string): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
@@ -193,7 +193,7 @@ export async function deleteResourceAction(resourceId: string): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
@@ -239,7 +239,7 @@ export async function updateResourceAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };

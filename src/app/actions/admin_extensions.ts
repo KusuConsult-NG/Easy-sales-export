@@ -19,7 +19,7 @@ type ActionState =
  */
 export async function softDeleteUserAction(targetUserId: string): Promise<ActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         // Strict: Only Super Admin or Admin can delete users

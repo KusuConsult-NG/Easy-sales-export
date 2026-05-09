@@ -37,7 +37,7 @@ export async function initializeExportOrderPaymentAction(
     buyerDetails: ExportBuyerDetails
 ): Promise<PaymentInitState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user) { return { error: "Authentication required", success: false as const, data: null, meta: null };
@@ -123,7 +123,7 @@ export async function initializeExportOrderPaymentAction(
 
 export async function verifyExportOrderPaymentAction(reference: string) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
@@ -248,7 +248,7 @@ export async function initializeInvestmentPaymentAction(
     expectedROI: number
 ): Promise<PaymentInitState> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
 
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };
@@ -340,7 +340,7 @@ export async function initializeInvestmentPaymentAction(
  */
 export async function verifyInvestmentPaymentAction(reference: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
 
         if (!session?.user) { return { error: "Authentication required", success: false as const, meta: null };

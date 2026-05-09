@@ -57,7 +57,7 @@ async function _initiateCooperativePaymentAction(
     tier: "Member" = "Member"
 ): Promise<MembershipRegistrationState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
@@ -129,7 +129,7 @@ export async function registerCooperativeMemberAction(
     formData: FormData
 ): Promise<MembershipRegistrationState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in to register", success: false as const, data: null };
         }
@@ -350,7 +350,7 @@ export async function joinCooperativeAction(
     initialContribution: number = 0
 ): Promise<JoinCooperativeState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in to join a cooperative", success: false as const, data: null };
         }
@@ -439,7 +439,7 @@ async function _makeContributionAction(
     formData: FormData
 ): Promise<MakeContributionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in to make a contribution", success: false as const, data: null };
         }
@@ -530,7 +530,7 @@ async function _submitWithdrawalAction(
     formData: FormData
 ): Promise<WithdrawalActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
@@ -598,7 +598,7 @@ export const submitWithdrawalAction = withFlexibleSafeAction("submitWithdrawalAc
 
 async function _getMembershipAction(): Promise<GetMembershipState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const, data: null };
+        if (!sessionResult.session) return { error: sessionResult.error?.error ?? "Authentication required", success: false as const, data: null };
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
@@ -625,7 +625,7 @@ export const getMembershipAction = withFlexibleSafeAction("getMembershipAction",
 
 async function _getTransactionsAction(): Promise<GetTransactionsState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { error: sessionResult.error.error, success: false as const, data: null };
+        if (!sessionResult.session) return { error: sessionResult.error?.error ?? "Authentication required", success: false as const, data: null };
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
@@ -761,7 +761,7 @@ async function _applyForLoanAction(
     formData: FormData
 ): Promise<LoanApplicationState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in to apply for a loan", success: false as const, data: null };
         }
@@ -859,7 +859,7 @@ async function _createFixedSavingsAction(
     formData: FormData
 ): Promise<FixedSavingsState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) { return { error: "You must be logged in", success: false as const, data: null };
         }
@@ -934,7 +934,7 @@ async function _getDirectoryMembersAction(): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         // Allow any logged in user? Or just admin? Assuming members can view directory.
         if (!session?.user) { return { error: "Unauthorized", success: false as const, data: null };
@@ -989,7 +989,7 @@ export async function getCooperativeApplicationAction(): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
@@ -1023,7 +1023,7 @@ export async function resubmitCooperativeApplicationAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 

@@ -15,7 +15,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { totalApplications: number } }>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session.user.roles)) {
@@ -72,7 +72,7 @@ async function _getFarmNationRegistrantsAction(options: {
 } = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session.user.roles)) {
@@ -162,7 +162,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
 } = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
@@ -307,7 +307,7 @@ export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("ge
 async function _getFarmNationVerificationStatsAction(): Promise<ActionResponse<{ stats: { total: number; pending: number; verified: number; rejected: number; } }>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
@@ -371,7 +371,7 @@ async function _getAdminLandVerificationsAction(options: {
 } = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session.user.roles)) {
@@ -494,7 +494,7 @@ async function _getFarmNationTransactionsAction(options: {
 } = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session.user.roles)) {
@@ -599,7 +599,7 @@ export const getFarmNationTransactionsAction = withFlexibleSafeAction("getFarmNa
 async function _releaseFarmNationEscrowAction(transactionId: string): Promise<ActionResponse<{ message: string }>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {

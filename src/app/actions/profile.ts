@@ -36,7 +36,7 @@ const notificationPreferencesSchema = z.object({ email: z.boolean(),
  * Get user profile data
  */
 export const getUserProfileAction = withSafeAction("getUserProfileAction", async () => { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     const userId = session.user.id;
@@ -88,7 +88,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     bio?: string;
     identityDocument?: string;
     version?: number; }) => { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     const validated = profileUpdateSchema.parse(data);
@@ -135,7 +135,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
 export const updateNotificationPreferencesAction = withSafeAction("updateNotificationPreferencesAction", async (preferences: { email: boolean;
     push: boolean;
     sms: boolean; }) => { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     // Validate input

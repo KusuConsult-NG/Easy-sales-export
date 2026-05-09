@@ -18,7 +18,7 @@ import { withFlexibleSafeAction } from "@/lib/safe-action";
 async function _getSellerOrdersAction(filters?: { status?: OrderStatus; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -62,7 +62,7 @@ async function _updateOrderStatusAction(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -126,7 +126,7 @@ export const updateOrderStatusAction = withFlexibleSafeAction("updateOrderStatus
 async function _getBuyerOrdersAction(filters?: { status?: OrderStatus; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -158,7 +158,7 @@ export const getBuyerOrdersAction = withFlexibleSafeAction("getBuyerOrdersAction
 async function _confirmDeliveryAction(orderId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -265,7 +265,7 @@ export const confirmDeliveryAction = withFlexibleSafeAction("confirmDeliveryActi
 async function _getOrderDetailsAction(orderId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();

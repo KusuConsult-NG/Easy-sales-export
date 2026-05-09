@@ -20,7 +20,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
  */
 export async function getConversationsAction() { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", conversations: [] };
         }
@@ -46,7 +46,7 @@ export async function getConversationsAction() { try {
  */
 export async function getAllConversationsAdminAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", conversations: [] };
         }
@@ -76,7 +76,7 @@ export async function getAllConversationsAdminAction() { try {
  */
 export async function getMessagesAction(conversationId: string, limit = 50) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", messages: [] };
         }
@@ -118,7 +118,7 @@ export async function getMessagesAction(conversationId: string, limit = 50) { tr
  */
 export async function sendMessageAction(conversationId: string, text: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", success: false as const, data: null };
         }
@@ -180,7 +180,7 @@ export async function sendMessageAction(conversationId: string, text: string) { 
  */
 export async function markAsReadAction(conversationId: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", success: false as const, data: null };
         }
@@ -203,7 +203,7 @@ export async function markAsReadAction(conversationId: string) { try {
  */
 export async function startConversationAction(participantUid: string, productId?: string, orderId?: string) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", conversationId: null };
         }
@@ -271,7 +271,7 @@ export async function startConversationAction(participantUid: string, productId?
  */
 export async function searchUsersAction(query: string) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", users: [] };
         }
@@ -396,7 +396,7 @@ export async function searchUsersAction(query: string) { try {
  */
 export async function startSupportConversationAction(module?: string) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Not authenticated", conversationId: null };
         }

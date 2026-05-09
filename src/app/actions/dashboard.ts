@@ -60,7 +60,7 @@ type EscrowActionState = { error: string | null;
 
 export async function getDashboardStatsAction(): Promise<DashboardActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -166,7 +166,7 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
 
 export async function getRecentActivityAction(): Promise<ActivityActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -224,7 +224,7 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> { 
 
 export async function getEscrowStatusAction(): Promise<EscrowActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;

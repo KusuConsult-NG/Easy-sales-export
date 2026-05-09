@@ -42,7 +42,7 @@ export async function uploadCertificateAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) { return { success: false as const, error: "Unauthorized", data: null };
         }
@@ -114,7 +114,7 @@ export async function deleteCertificateAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) { return { success: false as const, error: "Unauthorized", data: null };
         }
@@ -173,7 +173,7 @@ export async function completeOnboardingAction(userId: string): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== userId) { return { success: false as const, error: "Unauthorized", data: null };
         }

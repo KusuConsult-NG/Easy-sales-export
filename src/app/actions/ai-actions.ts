@@ -38,7 +38,7 @@ async function _sendAIMessage(
     data: z.infer<typeof aiChatMessageSchema>
 ): Promise<ActionResponse<{ response: string; chatId: string }>> { 
 const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try {
@@ -104,7 +104,7 @@ export const sendAIMessage = withSafeAction("sendAIMessage", _sendAIMessage);
  */
 async function _getAIChatHistory(maxMessages: number = 20): Promise<ActionResponse<{ messages: AIChatMessage[] }>> { 
 const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const chatQuery = db.collection(COLLECTIONS.AI_CHAT_HISTORY).where('userId', '==', session.user.id).orderBy('createdAt', 'desc').limit(maxMessages);
@@ -135,7 +135,7 @@ export const getAIChatHistory = withSafeAction("getAIChatHistory", _getAIChatHis
  */
 async function _getAISuggestions(context: { currentPage: string; userRole: string }): Promise<ActionResponse<{ suggestions: string[] }>> { 
 const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     // Generate contextual suggestions based on page

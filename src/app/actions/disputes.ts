@@ -23,7 +23,7 @@ async function _createDisputeAction(params: { orderId: string;
     evidenceUrls?: string[]; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -105,7 +105,7 @@ export const createDisputeAction = withFlexibleSafeAction("createDisputeAction",
 async function _getBuyerDisputesAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -139,7 +139,7 @@ export const getBuyerDisputesAction = withFlexibleSafeAction("getBuyerDisputesAc
 async function _getSellerDisputesAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -178,7 +178,7 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
     sortOrder?: "asc" | "desc"; } = {}) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -291,7 +291,7 @@ export const getAdminDisputesAction = withFlexibleSafeAction("getAdminDisputesAc
 async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -377,7 +377,7 @@ async function _updateDisputeStatusAction(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 

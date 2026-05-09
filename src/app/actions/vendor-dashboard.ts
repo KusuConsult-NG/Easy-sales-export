@@ -15,7 +15,7 @@ import { logger } from "@/lib/logger";
 async function _getVendorSalesStatsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
         }
@@ -69,7 +69,7 @@ export const getVendorSalesStatsAction = withFlexibleSafeAction("getVendorSalesS
 async function _getVendorRevenueTrendsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -122,7 +122,7 @@ export const getVendorRevenueTrendsAction = withFlexibleSafeAction("getVendorRev
 async function _getTopSellingProductsAction(limit: number = 5) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -171,7 +171,7 @@ export const getTopSellingProductsAction = withFlexibleSafeAction("getTopSelling
 async function _getVendorInventoryStatsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -217,7 +217,7 @@ export const getVendorInventoryStatsAction = withFlexibleSafeAction("getVendorIn
 async function _getVendorRevenueInsightsAction() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -269,7 +269,7 @@ export const getVendorRevenueInsightsAction = withFlexibleSafeAction("getVendorR
 async function _getVendorActivityFeedAction(limit: number = 20) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 

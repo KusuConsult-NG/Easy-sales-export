@@ -134,7 +134,7 @@ async function _verifyLandListingAction(
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session?.user?.roles)) { 
@@ -187,7 +187,7 @@ async function _rejectLandListingAction(
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session?.user?.roles)) { 
@@ -319,7 +319,7 @@ export const searchLandListingsAction = withFlexibleSafeAction("searchLandListin
 async function _getPendingLandListingsAction(): Promise<ActionResponse<LandListing[]>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session?.user?.roles)) { 
@@ -503,7 +503,7 @@ export const submitLandInquiryAction = withFlexibleSafeAction("submitLandInquiry
 async function _getLandInquiriesAction(userId: string): Promise<ActionResponse<any[]>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         
         const snapshot = await db.collection(COLLECTIONS.LAND_INQUIRIES)
             .where("listingOwnerId", "==", userId)
@@ -524,7 +524,7 @@ export const getLandInquiriesAction = withFlexibleSafeAction("getLandInquiriesAc
 async function _getLandInquiryByIdAction(inquiryId: string): Promise<ActionResponse<any>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         const docRef = db.collection(COLLECTIONS.LAND_INQUIRIES).doc(inquiryId);
         const docSnap = await docRef.get();
@@ -550,7 +550,7 @@ async function _deleteLandListingAction(
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!isAdmin(session?.user?.roles)) { 

@@ -34,7 +34,7 @@ export async function initializeEnrollmentPaymentAction(
     phone: string
 ): Promise<PaymentInitState> { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
@@ -98,7 +98,7 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
 
         if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };

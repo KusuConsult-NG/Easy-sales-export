@@ -55,7 +55,7 @@ export async function submitWaveApplicationAction(
 ): Promise<WaveApplicationState> { try {
         // Get authenticated user
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
 
         // Extract and validate form data
@@ -109,7 +109,7 @@ export async function enrollInCourseAction(
 ): Promise<EnrollmentActionState> { try {
         // Get authenticated user
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         // Extract and validate form data
@@ -169,7 +169,7 @@ export async function submitWithdrawalAction(
 ): Promise<WithdrawalActionState> { try {
         // Get authenticated user
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         const idempotencyKey = formData.get("idempotencyKey") as string;

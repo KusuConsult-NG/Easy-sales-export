@@ -17,7 +17,7 @@ import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-inv
  */
 async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized. You must be logged in.", data: null };
         }

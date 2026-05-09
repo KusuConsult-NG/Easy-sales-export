@@ -12,7 +12,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
  */
 export async function setupTestCooperativeAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;

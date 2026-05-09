@@ -42,7 +42,7 @@ export async function createPaymentRecordAction(data: { userId: string;
     relatedId?: string;
     metadata?: Record<string, any>; }): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error, data: null };
+        if (sessionResult.error) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         const payment: Omit<PaymentRecord, "id"> = { ...data,
             status: "pending",

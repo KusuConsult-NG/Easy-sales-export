@@ -24,7 +24,7 @@ export async function getAuditLogsAction(filters: { userId?: string;
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
@@ -95,7 +95,7 @@ export async function exportAuditLogsCSV(filters: { userId?: string;
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
@@ -154,7 +154,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Authentication required"};

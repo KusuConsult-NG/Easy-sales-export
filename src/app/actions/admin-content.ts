@@ -56,7 +56,7 @@ export async function getPendingContentAction(): Promise<
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -132,7 +132,7 @@ export async function approveContentAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" , data: null };
@@ -178,7 +178,7 @@ export async function rejectContentAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" , data: null };

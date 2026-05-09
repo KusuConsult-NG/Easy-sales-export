@@ -33,7 +33,7 @@ async function _createResourceAction(data: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -88,7 +88,7 @@ async function _updateResourceAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -131,7 +131,7 @@ async function _deleteResourceAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -186,7 +186,7 @@ async function _createTrainingEventAction(data: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -243,7 +243,7 @@ async function _updateTrainingEventAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -284,7 +284,7 @@ async function _getEventParticipantsAction(eventId: string): Promise<
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -322,7 +322,7 @@ async function _getWaveApplicationsAction(): Promise<
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -360,7 +360,7 @@ async function _approveWaveApplicationAction(
         }
 
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
@@ -487,7 +487,7 @@ async function _rejectWaveApplicationAction(
         }
 
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" };
@@ -597,7 +597,7 @@ async function _getStandardWaveApplicationsAction(options: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
@@ -772,7 +772,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
@@ -899,7 +899,7 @@ async function _processWaveWithdrawalAction(data: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles) || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {

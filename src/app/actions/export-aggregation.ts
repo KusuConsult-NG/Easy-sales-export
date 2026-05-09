@@ -105,7 +105,7 @@ export async function bookExportSlotAction(data: { windowId: string;
     fullName: string;
     volume: number; }) { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(data.windowId);
         const windowDoc = await windowRef.get();
@@ -161,7 +161,7 @@ export async function bookExportSlotAction(data: { windowId: string;
  */
 export async function getUserExportSlotsAction(userId: string) { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (sessionResult.error) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         const q = db.collection(COLLECTIONS.EXPORT_SLOTS).where("userId", "==", userId);
 

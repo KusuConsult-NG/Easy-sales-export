@@ -59,7 +59,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated", data: null };
@@ -235,7 +235,7 @@ async function _getAllMembersAction(options?: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated", data: null };
@@ -354,7 +354,7 @@ async function _updateMemberStatusAction(
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated", data: null };
@@ -467,7 +467,7 @@ async function _getAllTransactionsAction(options?: {
     let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated", data: null };
@@ -613,7 +613,7 @@ export async function getContributionReportsAction(options?: {
 }): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated", data: null };
@@ -744,7 +744,7 @@ export async function getContributionReportsAction(options?: {
 export async function getRecentActivityAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated", data: null };
@@ -801,7 +801,7 @@ export async function approveWithdrawalAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         // Check admin role directly from session (Performance Optimization)
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
@@ -921,7 +921,7 @@ export async function rejectWithdrawalAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
@@ -1045,7 +1045,7 @@ export async function requestCooperativeRevisionAction(
 ): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!isAdmin(session?.user?.roles)) {
             return { success: false as const, error: 'Admin access required', data: null };

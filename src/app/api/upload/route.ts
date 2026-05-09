@@ -22,7 +22,7 @@ async function uploadHandler(request: NextRequest) {
 
         if (!sessionResult.session) {
             return NextResponse.json(
-                { success: false, error: sessionResult.error.error },
+                { success: false, error: sessionResult.error?.error ?? "Authentication required" },
                 { status: 401 }
             );
         }

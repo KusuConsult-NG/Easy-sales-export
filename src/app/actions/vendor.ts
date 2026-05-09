@@ -62,7 +62,7 @@ export interface VendorProduct { id: string;
 async function _getVendorOrdersAction(filters?: { status?: VendorOrder["status"]; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
@@ -103,7 +103,7 @@ async function _updateVendorOrderStatusAction(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
@@ -146,7 +146,7 @@ async function _getVendorProductsAction(filters?: { status?: VendorProduct["stat
     category?: string; }) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
@@ -195,7 +195,7 @@ async function _updateVendorProductInventoryAction(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
@@ -256,7 +256,7 @@ async function _toggleVendorProductStatusAction(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };
@@ -295,7 +295,7 @@ async function _deleteVendorProductAction(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user?.id) { return { success: false as const, error: "Unauthorized", data: null };

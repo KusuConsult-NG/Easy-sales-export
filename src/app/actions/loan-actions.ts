@@ -20,7 +20,7 @@ import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 export async function submitLoanApplication(
     data: z.infer<typeof loanApplicationSchema>
 ) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const validated = loanApplicationSchema.parse(data);
@@ -67,7 +67,7 @@ export async function submitLoanApplication(
  * Get all loan applications for current user
  */
 export async function getUserLoanApplications() { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const loansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
@@ -86,7 +86,7 @@ export async function getUserLoanApplications() { const sessionResult = await re
  * Get a specific loan application by ID
  */
 export async function getLoanApplication(loanId: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(loanId);
@@ -113,7 +113,7 @@ export async function getLoanApplication(loanId: string) { const sessionResult =
  * Get all pending loan applications (Admin only)
  */
 export async function getPendingLoanApplications() { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", loans: [], data: null };
     }
@@ -136,7 +136,7 @@ export async function getPendingLoanApplications() { const sessionResult = await
 export async function approveLoanApplication(
     data: z.infer<typeof loanApprovalSchema>
 ) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", data: null };
     }
@@ -194,7 +194,7 @@ export async function approveLoanApplication(
  * Update loan status to DISBURSED (Admin only)
  */
 export async function disburseLoan(loanId: string, disbursementNotes?: string) { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only"};
     }
@@ -279,7 +279,7 @@ export async function disburseLoan(loanId: string, disbursementNotes?: string) {
  * Get loan statistics (Admin only)
  */
 export async function getLoanStatistics() { const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     if (!session || !session.user.roles?.includes('admin')) { return { success: false as const, error: "Unauthorized - Admin only", stats: null, data: null };
     }
@@ -330,7 +330,7 @@ export async function getLoanStatistics() { const sessionResult = await requireS
  */
 export async function processLoanRepaymentAction(loanId: string, amount: number) {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
     const { session } = sessionResult;
 
     try {

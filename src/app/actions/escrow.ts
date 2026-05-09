@@ -451,7 +451,7 @@ async function _createDisputeAction(data: { escrowId: string;
 > { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         const existingQuery = db.collection(COLLECTIONS.DISPUTES)

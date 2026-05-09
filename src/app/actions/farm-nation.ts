@@ -148,7 +148,7 @@ export const getPropertiesAction = withFlexibleSafeAction("getPropertiesAction",
 async function _approveFarmNationSellerAction(userId: string): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
@@ -197,7 +197,7 @@ export const approveFarmNationSellerAction = withFlexibleSafeAction("approveFarm
 async function _rejectFarmNationSellerAction(userId: string, reason: string): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
@@ -283,7 +283,7 @@ export const getPropertyByIdAction = withFlexibleSafeAction("getPropertyByIdActi
 async function _listPropertyAction(input: PropertyListingInput): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // Check user tier (Premium required)
@@ -363,7 +363,7 @@ export const listPropertyAction = withFlexibleSafeAction("listPropertyAction", _
 async function _getMyPropertiesAction(): Promise<ActionResponse<{ properties: Property[] }>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         let snapshot;
@@ -411,7 +411,7 @@ async function _initiatePropertyPurchaseAction(
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // Verify property exists and is available
@@ -493,7 +493,7 @@ export const initiatePropertyPurchaseAction = withFlexibleSafeAction("initiatePr
 async function _getMyPurchaseRequestsAction(): Promise<ActionResponse<{ requests: any[] }>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         let snapshot;
@@ -533,7 +533,7 @@ export const getMyPurchaseRequestsAction = withFlexibleSafeAction("getMyPurchase
 async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const requestRef = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(requestId);
@@ -599,7 +599,7 @@ export const cancelPurchaseRequestAction = withFlexibleSafeAction("cancelPurchas
 async function _deletePropertyAction(propertyId: string): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
@@ -650,7 +650,7 @@ export const deletePropertyAction = withFlexibleSafeAction("deletePropertyAction
 async function _updatePropertyAction(propertyId: string, updates: Partial<PropertyListingInput>): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
@@ -741,7 +741,7 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
     try {
         // Get authenticated session
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;
@@ -852,7 +852,7 @@ export const submitFarmNationOnboardingAction = withFlexibleSafeAction("submitFa
 async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -941,7 +941,7 @@ async function _uploadPropertyDocumentsAction(
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
@@ -981,7 +981,7 @@ export const uploadPropertyDocumentsAction = withFlexibleSafeAction("uploadPrope
 async function _verifyPropertyAction(propertyId: string, verified: boolean): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         // Check admin role
@@ -1044,7 +1044,7 @@ export const verifyPropertyAction = withFlexibleSafeAction("verifyPropertyAction
 async function _getFarmNationApplicationAction(): Promise<ActionResponse<any>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -1076,7 +1076,7 @@ async function _resubmitFarmNationApplicationAction(
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const userId = session.user.id;

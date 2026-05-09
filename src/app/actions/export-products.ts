@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 
 export async function submitExportProductAction(productData: any) { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
         if (!session?.user) { return { error: "Authentication required", success: false as const, data: null };
@@ -32,7 +32,7 @@ export async function submitExportProductAction(productData: any) { try {
 
 export async function getUserExportProductsAction() { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { error: "Authentication required", success: false as const, data: null };
         }

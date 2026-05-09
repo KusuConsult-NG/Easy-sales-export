@@ -19,7 +19,7 @@ export async function checkWaveMembershipAction(): Promise<{ success: true; erro
     | { success: false; error: string; data?: null; meta?: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: true as const, error: null, data: { enrolled: false } };
@@ -81,7 +81,7 @@ export async function getWaveMemberStatsAction(): Promise<{ success: true; error
     | { success: false; error: string; data?: null; meta?: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
@@ -136,7 +136,7 @@ export async function trackResourceAccessAction(resourceId: string): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }
@@ -179,7 +179,7 @@ export async function getUserTrainingRegistrationsAction(): Promise<{ success: t
     | { success: false; error: string; data?: null; meta?: any }
 > { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, error: "Not authenticated", data: null };
         }

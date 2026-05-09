@@ -60,7 +60,7 @@ async function _processWithdrawalAction(
         if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:process_withdrawals")) {
             return { error: "Unauthorized: Permission required - finance:process_withdrawals", success: false as const };
@@ -232,7 +232,7 @@ async function _toggleUserVerificationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false as const };
@@ -300,7 +300,7 @@ async function _toggleUserKycVerificationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Assuming "users:update" is sufficient for KYC. Could create a stricter role if needed.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
@@ -392,7 +392,7 @@ async function _toggleUserKycVerificationAction(
  ): Promise<ActionState> {
      try {
          const sessionResult = await requireSession();
-         if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
          const { session } = sessionResult;
          if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
              return { error: "Unauthorized: Permission required - users:update", success: false as const };
@@ -450,7 +450,7 @@ async function _getPendingWithdrawalsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
             return { error: "Unauthorized: Permission required - finance:read", success: false as const };
@@ -555,7 +555,7 @@ async function _getPendingLandListings(limit = 50): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const };
@@ -630,7 +630,7 @@ async function _verifyLandListing(
         if ("error" in adminCheck) return { error: adminCheck.error, success: false as const };
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "land:verify_listings")) {
             return { error: "Unauthorized: Permission required - land:verify_listings", success: false as const };
@@ -752,7 +752,7 @@ async function _getPendingLoanApplications(): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
@@ -840,7 +840,7 @@ async function _getAllExportRequestsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
             return { error: "Unauthorized: Permission required - finance:read", success: false as const };
@@ -922,7 +922,7 @@ async function _approveLoanApplication(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "cooperatives:approve_loans")) {
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const };
@@ -1130,7 +1130,7 @@ async function _rejectLoanApplication(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "finance:read")) {
             return { error: "Unauthorized: Permission required - finance:read", success: false as const };
@@ -1218,7 +1218,7 @@ async function _rejectLoanApplication(
 async function _unlockUserAccount(email: string): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             return { error: "Unauthorized: Permission required - users:read", success: false as const };
@@ -1283,7 +1283,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<{
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) {
             const roles = session?.user?.roles ?? [];
@@ -1495,7 +1495,7 @@ async function _updateUserRolesAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) {
             return { error: "Unauthorized: Permission required - users:assign_roles", success: false as const };
@@ -1569,7 +1569,7 @@ async function _approveSellerVerificationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:approve_sellers")) {
             // Fallback for super_admin if specific role missing, or strict check
@@ -1726,7 +1726,7 @@ async function _approveExportOnboardingAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || (!hasAdminPermission(session.user.roles, "users:update") && !hasAdminPermission(session.user.roles, "export:approve_applications"))) {
@@ -1851,7 +1851,7 @@ async function _requestExportApplicationRevisionAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
@@ -1951,7 +1951,7 @@ async function _getExportApplicationsStatsAction(): Promise<
 > {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error , data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" , data: null };
 
@@ -2019,7 +2019,7 @@ async function _getStandardExportApplicationsAction(options: {
 } = {}): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any; lastDocId?: string; hasMore?: boolean }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
@@ -2161,7 +2161,7 @@ async function _rejectExportApplicationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Use general user update permission or create a new one. Using users:update for now.
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
@@ -2291,7 +2291,7 @@ async function _getAcademyApplicationsAction(
 }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "academy:approve_applications")) {
             const roles = session.user.roles || [];
@@ -2389,7 +2389,7 @@ async function _approveAcademyApplicationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         const roles = session.user.roles || [];
         const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
@@ -2506,7 +2506,7 @@ async function _rejectAcademyApplicationAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         const roles = session.user.roles || [];
         const hasAcademyAccess = roles.some(r => r === "admin" || r === "super_admin" || r === "academy_admin");
@@ -2577,7 +2577,7 @@ async function _markAcademyApplicationUnderReviewAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { error: "Unauthorized", success: false as const };
@@ -2623,7 +2623,7 @@ async function _savePlatformSettingsAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "config:update")) {
             return { error: "Unauthorized: Admin access required", success: false as const };
@@ -2749,7 +2749,7 @@ async function _editApplicationAction(params: {
 }): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
@@ -2851,7 +2851,7 @@ async function _toggleVerifiedBadgeAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
             return { error: "Unauthorized: Permission required - users:update", success: false as const };
@@ -2946,7 +2946,7 @@ async function _manualAcademyEnrollmentAction(
 ): Promise<ActionState> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         // Check if admin has user update permissions (or a specific academy permission)
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
@@ -3035,7 +3035,7 @@ async function _inviteLegacyMemberAction(
         if ("error" in adminCheck) return { error: (adminCheck as any).error, success: false as const };
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
 
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:create")) {
@@ -3162,7 +3162,7 @@ async function _getStandardSellerVerificationsAction(
 ): Promise<{ error: string | null, success: boolean; data?: any[]; meta?: any }> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Not authenticated" };
 
@@ -3264,7 +3264,7 @@ async function _getMarketplaceUsersAction(options: {
 } = {}) {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" };

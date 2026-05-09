@@ -34,7 +34,7 @@ export type BankVerificationResult = ActionResponse<{ accountName: string }>;
  */
 export async function getBankList(): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error, data: null };
+        if (sessionResult.error) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         const secretKey = process.env.PAYSTACK_SECRET_KEY;
 
@@ -73,7 +73,7 @@ export async function verifyBankAccount(
     bankCode: string
 ): Promise<BankVerificationResult> { try {
         const sessionResult = await requireSession();
-        if (sessionResult.error) return { success: false, error: sessionResult.error.error, data: null };
+        if (sessionResult.error) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         // Validation
         if (!accountNumber || !bankCode) { logger.warn('verifyBankAccount: Missing required parameters', { accountNumber: !!accountNumber, bankCode: !!bankCode });

@@ -22,7 +22,7 @@ const escrowStatusSchema = z.enum(["pending", "funded", "in_transit", "delivered
 async function _getUserEscrowTransactions() { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -65,7 +65,7 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
     sortOrder?: "asc" | "desc"; } = {}) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // Live role re-validation
@@ -183,7 +183,7 @@ async function _updateEscrowStatus(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -274,7 +274,7 @@ async function _createEscrowDispute(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -332,7 +332,7 @@ async function _releaseEscrowFunds(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Admin access required"};
@@ -419,7 +419,7 @@ async function _refundEscrowToBuyer(
 ) { let sessionResult;
     try {
         sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error};
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) { return { success: false as const, error: "Admin access required"};

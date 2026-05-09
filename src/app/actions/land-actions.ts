@@ -23,7 +23,7 @@ async function _createLandListing(
     data: z.infer<typeof landListingSchema>
 ): Promise<ActionResponse<null>> { 
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { 
@@ -185,7 +185,7 @@ export const getLandListing = withFlexibleSafeAction("getLandListing", _getLandL
  */
 async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> { 
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { 
@@ -226,7 +226,7 @@ async function _updateLandListing(
     data: z.infer<typeof landListingUpdateSchema>
 ): Promise<ActionResponse<null>> { 
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { 
@@ -288,7 +288,7 @@ async function _verifyLandListing(
     data: z.infer<typeof landVerificationSchema>
 ): Promise<ActionResponse<null>> { 
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
     if (!session || !session.user.roles?.includes('admin')) { 
@@ -340,7 +340,7 @@ export const verifyLandListing = withFlexibleSafeAction("verifyLandListing", _ve
  */
 async function _deleteLandListing(listingId: string): Promise<ActionResponse<null>> { 
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
     try { 
@@ -384,7 +384,7 @@ export const deleteLandListing = withFlexibleSafeAction("deleteLandListing", _de
  */
 async function _getLandStatistics(): Promise<ActionResponse<any>> { 
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
     
     if (!session || !session.user.roles?.includes('admin')) { 

@@ -119,7 +119,7 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
 async function _checkWaveStatusAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -192,7 +192,7 @@ export const checkWaveStatusAction = withFlexibleSafeAction("checkWaveStatusActi
 async function _checkWaveEligibilityAction(userId: string): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // Allow checking own eligibility or admin checking others
@@ -239,7 +239,7 @@ export const checkWaveEligibilityAction = withFlexibleSafeAction("checkWaveEligi
 async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         // Validate with Zod
@@ -452,7 +452,7 @@ export const submitMultiStepWaveApplicationAction = withFlexibleSafeAction("subm
 async function _enrollInWaveAction(userId: string): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (session.user.id !== userId) {
@@ -620,7 +620,7 @@ export interface ShipmentTracking { id: string;
 async function _getShipmentTrackingAction(userId: string): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -657,7 +657,7 @@ async function _updateShipmentStatusAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const { isAdmin } = await import("@/lib/admin-permissions");
@@ -786,7 +786,7 @@ export interface MemberEarnings { memberId: string;
 async function _calculateEarningsAction(userId: string): Promise<ActionResponse<MemberEarnings>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (session.user.id !== userId && (!isAdmin(session.user.roles))) {
@@ -906,7 +906,7 @@ async function _generateCertificateAction(
 ): Promise<ActionResponse<WaveCertificate>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")) {
@@ -957,7 +957,7 @@ export const generateCertificateAction = withFlexibleSafeAction("generateCertifi
 async function _getMemberCertificatesAction(userId: string): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -982,7 +982,7 @@ export const getMemberCertificatesAction = withFlexibleSafeAction("getMemberCert
 async function _getCurrentUserCertificatesAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false as const, error: "Unauthorized", data: null };
 
@@ -1039,7 +1039,7 @@ async function _incrementResourceDownloadAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
 
         const resourceRef = db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId);
 
@@ -1064,7 +1064,7 @@ async function _registerForTrainingAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (session.user.id !== userId) {
@@ -1133,17 +1133,21 @@ async function _withdrawEarningsAction(
         };
 
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
-        const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Authentication required", data: null };
+        const maybeSession = sessionResult.session;
+        if (!maybeSession || !maybeSession?.user?.id) {
+            return { 
+                success: false as const, 
+                error: sessionResult.error?.error ?? "Authentication required", 
+                data: null 
+            };
         }
+        const session = maybeSession;
 
         if (amount < 5000) {
             return { success: false as const, error: "Minimum withdrawal amount is ₦5,000", data: null };
         }
 
-        const userId = session.user.id;
+        const userId = session!.user.id;
 
         // PHASE 1: Balance Calculation (Snapshot)
         // Note: We calculate before the transaction because Firestore queries are not supported inside transactions in Node SDK.
@@ -1173,7 +1177,7 @@ async function _withdrawEarningsAction(
             transaction.set(withdrawalRef, {
                 withdrawalId,
                 userId,
-                userEmail: session.user.email,
+                userEmail: session!.user.email,
                 amount,
                 status: "pending",
                 requestedAt: FieldValue.serverTimestamp(),
@@ -1231,7 +1235,7 @@ export const withdrawEarningsAction = withFlexibleSafeAction("withdrawEarningsAc
 async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
         const targetId = userId || session.user.id;
@@ -1279,7 +1283,7 @@ export const getWaveApplicationStatusAction = withFlexibleSafeAction("getWaveApp
 async function _getWaveApplicationAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized', data: null };
 
@@ -1309,7 +1313,7 @@ async function _requestWaveRevisionAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         if (!session?.user?.roles?.includes('admin') && !session?.user?.roles?.includes('super_admin')) {
             return { success: false as const, error: 'Admin access required', data: null };
@@ -1363,7 +1367,7 @@ async function _resubmitWaveApplicationAction(
 ): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         const validation = waveApplicationSchema.safeParse(applicationData);

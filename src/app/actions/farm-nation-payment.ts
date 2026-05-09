@@ -29,7 +29,7 @@ async function _initializePropertyPaymentAction(
 ): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user) { 
@@ -125,7 +125,7 @@ export const initializePropertyPaymentAction = withFlexibleSafeAction("initializ
 async function _verifyPropertyPaymentAction(reference: string): Promise<ActionResponse<{ propertyId: string; message: string }>> { 
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: sessionResult.error.error, data: null };
+        if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!session?.user) { 
