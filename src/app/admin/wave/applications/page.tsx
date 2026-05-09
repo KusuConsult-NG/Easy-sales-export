@@ -103,7 +103,7 @@ export default function AdminWaveApplicationsPage() {
     }, [filters.status, updateFilter]);
 
     async function handleApprove(applicationId: string) {
-        setProcessingId(applicationId);
+        setProcessingId(applicationId + "_approve");
         const result = await approveWaveApplicationAction(applicationId);
 
         if (result.success) {
@@ -123,7 +123,7 @@ export default function AdminWaveApplicationsPage() {
 
     async function handleConfirmReject(reason: string) {
         if (!rejectingAppId) return;
-        setProcessingId(rejectingAppId);
+        setProcessingId(rejectingAppId + "_reject");
         setRejectionModalOpen(false);
 
         const result = await rejectWaveApplicationAction(rejectingAppId, reason);
@@ -393,10 +393,10 @@ export default function AdminWaveApplicationsPage() {
                                             </button>
                                             <button
                                                 onClick={() => handleReject(app.id)}
-                                                disabled={processingId === app.id}
+                                                disabled={!!processingId}
                                                 className="px-4 py-2 rounded-lg border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
                                             >
-                                                {processingId === app.id ? (
+                                                {processingId === app.id + "_reject" ? (
                                                     <Loader2 className="w-4 h-4 animate-spin" />
                                                 ) : (
                                                     <XCircle className="w-4 h-4" />
@@ -405,10 +405,10 @@ export default function AdminWaveApplicationsPage() {
                                             </button>
                                             <button
                                                 onClick={() => handleApprove(app.id)}
-                                                disabled={processingId === app.id}
+                                                disabled={!!processingId}
                                                 className="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
                                             >
-                                                {processingId === app.id ? (
+                                                {processingId === app.id + "_approve" ? (
                                                     <Loader2 className="w-4 h-4 animate-spin" />
                                                 ) : (
                                                     <CheckCircle className="w-4 h-4" />

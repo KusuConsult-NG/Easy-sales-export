@@ -84,7 +84,7 @@ export default function AdminSellersPage() {
     const [selectedVerification, setSelectedVerification] = useState<StandardPendingForm<SellerVerification> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isRawDetailsOpen, setIsRawDetailsOpen] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingId, setProcessingId] = useState<string | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectionMode, setRejectionMode] = useState<"reject" | "suspend">("reject");
     const [rejectionTargetId, setRejectionTargetId] = useState<string | null>(null);
@@ -180,7 +180,7 @@ export default function AdminSellersPage() {
 
     async function handleApprove(verificationId: string) {
         if (!confirm("Approve this seller?")) return;
-        setIsProcessing(true);
+        setProcessingId(verificationId + "_approve");
         try {
             const response = await fetch("/api/admin/marketplace/approve-seller", {
                 method: "POST",
@@ -198,7 +198,7 @@ export default function AdminSellersPage() {
         } catch (error) {
             showToast("An error occurred", "error");
         } finally {
-            setIsProcessing(false);
+            setProcessingId(null);
         }
     };
 
@@ -217,7 +217,7 @@ export default function AdminSellersPage() {
     async function handleConfirmRejection(reason: string) {
         if (!rejectionTargetId) return;
         setRejectionModalOpen(false);
-        setIsProcessing(true);
+        setProcessingId(rejectionTargetId + (rejectionMode === "reject" ? "_reject" : "_suspend"));
         try {
             const endpoint = rejectionMode === "reject"
                 ? "/api/admin/marketplace/reject-seller"
@@ -238,7 +238,7 @@ export default function AdminSellersPage() {
         } catch (error) {
             showToast("An error occurred", "error");
         } finally {
-            setIsProcessing(false);
+            setProcessingId(null);
             setRejectionTargetId(null);
         }
     };
@@ -467,19 +467,19 @@ export default function AdminSellersPage() {
                                                     <>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleApprove(standardV.id); }}
-                                                            disabled={isProcessing}
+                                                            disabled={!!processingId}
                                                             className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded disabled:opacity-50"
                                                             title="Approve Seller"
                                                         >
-                                                            <CheckCircle className="w-4 h-4" />
+                                                            {processingId === standardV.id + "_approve" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                                                         </button>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleReject(standardV.id); }}
-                                                            disabled={isProcessing}
+                                                            disabled={!!processingId}
                                                             className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded disabled:opacity-50"
                                                             title="Reject Seller"
                                                         >
-                                                            <XCircle className="w-4 h-4" />
+                                                            {processingId === standardV.id + "_reject" ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                                                         </button>
                                                     </>
                                                 )}
@@ -582,21 +582,24 @@ export default function AdminSellersPage() {
                         <div className="p-6 border-t border-slate-200 flex gap-4">
                             {selectedVerification.status === "pending" && (
                                 <>
-                                    <button onClick={() => handleApprove(selectedVerification.id)} disabled={isProcessing}
-                                        className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
-                                        <CheckCircle className="w-5 h-5 inline mr-2" />Approve Seller
+                                    <button onClick={() => handleApprove(selectedVerification.id)} disabled={!!processingId}
+                                        className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                                        {processingId === selectedVerification.id + "_approve" ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                                        Approve Seller
                                     </button>
-                                    <button onClick={() => handleReject(selectedVerification.id)} disabled={isProcessing}
-                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
-                                        <XCircle className="w-5 h-5 inline mr-2" />Reject
+                                    <button onClick={() => handleReject(selectedVerification.id)} disabled={!!processingId}
+                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                                        {processingId === selectedVerification.id + "_reject" ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
+                                        Reject
                                     </button>
                                 </>
                             )}
                             {selectedVerification.status === "approved" && (
                                 <>
-                                    <button onClick={() => handleSuspend(selectedVerification.id)} disabled={isProcessing}
+                                    <button onClick={() => handleSuspend(selectedVerification.id)} disabled={!!processingId}
                                         className="px-5 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2">
-                                        <Ban className="w-4 h-4" />Suspend
+                                        {processingId === selectedVerification.id + "_suspend" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                                        Suspend
                                     </button>
                                     {/* Verified Badge Toggle */}
                                     <button
@@ -654,7 +657,7 @@ export default function AdminSellersPage() {
                     ? "The seller will be notified of this rejection with the reason below."
                     : "The seller's account will be suspended. Please provide a reason."
                 }
-                isProcessing={isProcessing}
+                isProcessing={!!processingId}
             />
             {/* Edit Seller Modal */}
             {editingVerification && (

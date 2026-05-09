@@ -330,7 +330,7 @@ function ApplicationDetailModal({
                                 disabled={!!processingId}
                                 className="px-4 py-2 rounded-xl border border-red-300 text-red-700 font-semibold hover:bg-red-50 transition disabled:opacity-50 flex items-center gap-2"
                             >
-                                {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                                {processingId === app.id + "_reject" ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                                 Reject
                             </button>
                             {app.status === "pending" && (
@@ -348,7 +348,7 @@ function ApplicationDetailModal({
                                 disabled={!!processingId}
                                 className="px-4 py-2 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition disabled:opacity-50 flex items-center gap-2"
                             >
-                                {processingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                {processingId === app.id + "_approve" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                                 Approve
                             </button>
                         </>
@@ -370,7 +370,6 @@ export default function AdminAcademyApplicationsPage() {
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
-    const [isExporting, setIsExporting] = useState(false);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
 
@@ -464,7 +463,7 @@ export default function AdminAcademyApplicationsPage() {
     });
 
     async function handleApprove(id: string) {
-        setProcessingId(id);
+        setProcessingId(id + "_approve");
         const result = await approveAcademyApplicationAction(id);
         if (result.success) {
             showToast("Application approved", "success");
@@ -479,7 +478,7 @@ export default function AdminAcademyApplicationsPage() {
     async function handleReject(id: string) {
         const reason = prompt("Enter rejection reason:");
         if (!reason) return;
-        setProcessingId(id);
+        setProcessingId(id + "_reject");
         const result = await rejectAcademyApplicationAction(id, reason);
         if (result.success) {
             showToast("Application rejected", "success");
@@ -544,7 +543,7 @@ export default function AdminAcademyApplicationsPage() {
 
     const handleExportCSV = async (config: typeof exportConfig) => {
         setIsExportModalOpen(false);
-        setIsExporting(true);
+        setProcessingId("export");
         showToast("Preparing export...", "success");
         try {
             const result = await getStandardAcademyApplicationsAction({
@@ -628,7 +627,7 @@ export default function AdminAcademyApplicationsPage() {
             console.error(error);
             showToast("Failed to export applications", "error");
         } finally {
-            setIsExporting(false);
+            setProcessingId(null);
         }
     };
 
@@ -651,11 +650,11 @@ export default function AdminAcademyApplicationsPage() {
                                 });
                                 setIsExportModalOpen(true);
                             }}
-                            disabled={isExporting}
+                            disabled={processingId === "export"}
                             className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold transition shadow-sm border border-slate-700 flex items-center gap-2 disabled:opacity-50"
                         >
-                            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                            {isExporting ? "Exporting..." : "Export CSV"}
+                            {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {processingId === "export" ? "Exporting..." : "Export CSV"}
                         </button>
                     )}
                     <button
@@ -974,9 +973,10 @@ export default function AdminAcademyApplicationsPage() {
                             </button>
                             <button
                                 onClick={() => handleExportCSV(exportConfig)}
-                                className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2"
+                                disabled={processingId === "export"}
+                                className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2 disabled:opacity-50"
                             >
-                                <Download className="w-4 h-4" />
+                                {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Export CSV
                             </button>
                         </div>

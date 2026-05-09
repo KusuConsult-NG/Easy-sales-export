@@ -48,7 +48,6 @@ export default function FarmNationApplicationsPage() {
         status: "all",
         limit: 5000,
     });
-    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         getFarmNationStatsAction().then(res => {
@@ -106,7 +105,7 @@ export default function FarmNationApplicationsPage() {
 
     async function handleExportCSV(config: typeof exportConfig) {
         setIsExportModalOpen(false);
-        setIsExporting(true);
+        setProcessingId("export");
         showToast("Preparing export...", "success");
         try {
             const result = await getStandardFarmNationRegistrantsAction({
@@ -142,7 +141,7 @@ export default function FarmNationApplicationsPage() {
                 ];
             });
             const header = ["Name", "Email", "Phone", "Location", "Status", "Submitted Date"];
-            const csv = [header, ...rows].map((r) => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+            const csv = [header, ...rows].map((r) => r.map((c: any) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
             const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
             const a = document.createElement("a");
             a.href = url;
@@ -154,13 +153,13 @@ export default function FarmNationApplicationsPage() {
             console.error("Export error:", error);
             showToast(error.message || "Failed to export data", "error");
         } finally {
-            setIsExporting(false);
+            setProcessingId(null);
         }
     }
 
     async function handleApproveSeller(seller: StandardPendingForm<SellerProfile>) {
         if (!confirm("Approve this seller and grant posting rights?")) return;
-        setProcessingId(seller.id);
+        setProcessingId(seller.id + "_approve");
 
         try {
             const { approveFarmNationSellerAction } = await import("@/app/actions/farm-nation");
@@ -353,11 +352,11 @@ export default function FarmNationApplicationsPage() {
                             });
                             setIsExportModalOpen(true);
                         }}
-                        disabled={isExporting}
+                        disabled={processingId === "export"}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                     >
-                        {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                        {isExporting ? "Exporting..." : "Export CSV"}
+                        {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        {processingId === "export" ? "Exporting..." : "Export CSV"}
                     </button>
                 }
                 filters={
@@ -529,7 +528,7 @@ export default function FarmNationApplicationsPage() {
                                 <label className="block text-sm font-semibold text-slate-700 mb-1">Status Filter</label>
                                 <select
                                     value={exportConfig.status}
-                                    onChange={(e) => setExportConfig(c => ({ ...c, status: e.target.value as any }))}
+                                    onChange={(e) => setExportConfig((c: typeof exportConfig) => ({ ...c, status: e.target.value as any }))}
                                     className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
                                 >
                                     <option value="all">All Statuses</option>
@@ -564,10 +563,10 @@ export default function FarmNationApplicationsPage() {
                             </button>
                             <button
                                 onClick={() => handleExportCSV(exportConfig)}
-                                disabled={isExporting}
+                                disabled={processingId === "export"}
                                 className="px-5 py-2 font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition shadow-sm flex items-center gap-2 disabled:opacity-50"
                             >
-                                {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                                {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                                 Export CSV
                             </button>
                         </div>

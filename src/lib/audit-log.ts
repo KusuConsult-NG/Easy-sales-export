@@ -139,7 +139,12 @@ export type AuditAction =
     // AI Chatbot Actions (Phase 13)
     | 'chatbot_session_started'
     | 'chatbot_escalated'
-    | 'chatbot_session_resolved';
+    | 'chatbot_session_resolved'
+    | 'data_access'
+    | 'FETCH_COOPERATIVE_MEMBERS'
+    | 'FETCH_COOPERATIVE_TRANSACTIONS'
+    | 'FETCH_WAVE_APPLICATIONS'
+    | 'telemetry_broadcast_sent';
 
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 

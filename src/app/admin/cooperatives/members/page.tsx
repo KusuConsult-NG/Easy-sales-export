@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { logger } from '@/lib/logger';
-import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText } from "lucide-react";
+import { Users, CheckCircle, XCircle, Clock, Eye, Search, Filter, Download, SlidersHorizontal, X, Edit2, Save, FileText, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import Modal from "@/components/ui/Modal";
 import RejectionModal from "@/components/admin/RejectionModal";
@@ -89,7 +89,7 @@ export default function CooperativeMembersPage() {
     const [selectedApplication, setSelectedApplication] = useState<StandardPendingForm<MembershipApplication> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [processingId, setProcessingId] = useState<string | null>(null);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectingId, setRejectingId] = useState<string | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -98,9 +98,6 @@ export default function CooperativeMembersPage() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editFields, setEditFields] = useState<Record<string, string>>({});
     const [editNote, setEditNote] = useState("");
-    const [isSaving, setIsSaving] = useState(false);
-    const [isExporting, setIsExporting] = useState(false);
-
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
     const NIGERIAN_STATES = [
@@ -139,7 +136,7 @@ export default function CooperativeMembersPage() {
             return;
         }
 
-        setIsProcessing(true);
+        setProcessingId(applicationId + "_approve");
         try {
             const response = await fetch("/api/admin/cooperative/approve-member", {
                 method: "POST",
@@ -159,7 +156,7 @@ export default function CooperativeMembersPage() {
         } catch (error) {
             showToast("An error occurred while approving the membership", "error");
         } finally {
-            setIsProcessing(false);
+            setProcessingId(null);
         }
     };
 
@@ -172,7 +169,7 @@ export default function CooperativeMembersPage() {
         if (!rejectingId) return;
         setRejectionModalOpen(false);
         const targetId = rejectingId;
-        setIsProcessing(true);
+        setProcessingId(targetId + "_reject");
         try {
             const response = await fetch("/api/admin/cooperative/reject-member", {
                 method: "POST",
@@ -190,13 +187,13 @@ export default function CooperativeMembersPage() {
         } catch (error) {
             showToast("An error occurred while rejecting the membership", "error");
         } finally {
-            setIsProcessing(false);
+            setProcessingId(null);
             setRejectingId(null);
         }
     };
 
     async function handleExportCSV() {
-        setIsExporting(true);
+        setProcessingId("export");
         try {
             const params = new URLSearchParams();
             if (stateFilter) params.append('state', stateFilter);
@@ -208,7 +205,7 @@ export default function CooperativeMembersPage() {
         } catch (error) {
             showToast("Failed to initiate export", "error");
         } finally {
-            setTimeout(() => setIsExporting(false), 2000);
+            setTimeout(() => setProcessingId(null), 2000);
         }
     }
     const viewDetails = (application: StandardPendingForm<MembershipApplication>) => {
@@ -240,7 +237,7 @@ export default function CooperativeMembersPage() {
 
     async function handleSaveEdit() {
         if (!selectedApplication) return;
-        setIsSaving(true);
+        setProcessingId(selectedApplication.id + "_save");
         const result = await editApplicationAction({
             collection: COLLECTIONS.COOPERATIVE_MEMBERS,
             docId: selectedApplication.id,
@@ -275,7 +272,7 @@ export default function CooperativeMembersPage() {
         } else {
             showToast(result.error || "Failed to update", "error");
         }
-        setIsSaving(false);
+        setProcessingId(null);
     };
 
     const getStatusBadge = (status: string) => {
@@ -309,11 +306,11 @@ export default function CooperativeMembersPage() {
                     </button>
                     <button
                         onClick={handleExportCSV}
-                        disabled={isExporting}
+                        disabled={processingId === "export"}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
                     >
                         <Download className="w-4 h-4" />
-                        {isExporting ? "Exporting..." : "Export Full CSV"}
+                        {processingId === "export" ? "Exporting..." : "Export Full CSV"}
                     </button>
                 </div>
             </div>
@@ -586,17 +583,27 @@ export default function CooperativeMembersPage() {
                                                         <>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleApprove(app.id); }}
-                                                                className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded"
+                                                                disabled={!!processingId && processingId.startsWith(app.id)}
+                                                                className="text-slate-400 hover:text-green-600 transition p-1.5 hover:bg-green-50 rounded disabled:opacity-50"
                                                                 title="Inline Approve"
                                                             >
-                                                                <CheckCircle className="w-4 h-4" />
+                                                                {processingId === app.id + "_approve" ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <CheckCircle className="w-4 h-4" />
+                                                                )}
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleReject(app.id); }}
-                                                                className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded"
+                                                                disabled={!!processingId && processingId.startsWith(app.id)}
+                                                                className="text-slate-400 hover:text-red-600 transition p-1.5 hover:bg-red-50 rounded disabled:opacity-50"
                                                                 title="Inline Reject"
                                                             >
-                                                                <XCircle className="w-4 h-4" />
+                                                                {processingId === app.id + "_reject" ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <XCircle className="w-4 h-4" />
+                                                                )}
                                                             </button>
                                                         </>
                                                     )}
@@ -672,10 +679,15 @@ export default function CooperativeMembersPage() {
                                 </button>
                                 <button
                                     onClick={handleSaveEdit}
-                                    disabled={isSaving}
+                                    disabled={!!processingId && !!selectedApplication && processingId.startsWith(selectedApplication.id)}
                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-green-600 hover:bg-green-700 text-white rounded-lg transition disabled:opacity-50"
                                 >
-                                    <Save className="w-3.5 h-3.5" /> {isSaving ? "Saving…" : "Save"}
+                                    {processingId === (selectedApplication?.id || "") + "_save" ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                        <Save className="w-3.5 h-3.5" />
+                                    )}
+                                    {processingId === (selectedApplication?.id || "") + "_save" ? "Saving…" : "Save"}
                                 </button>
                             </div>
                         )}
@@ -845,18 +857,26 @@ export default function CooperativeMembersPage() {
                                 <div className="flex gap-3">
                                     <button
                                         onClick={() => handleApprove(selectedApplication.id)}
-                                        disabled={isProcessing}
+                                        disabled={!!processingId && processingId.startsWith(selectedApplication.id)}
                                         className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
-                                        <CheckCircle className="w-5 h-5" />
-                                        {isProcessing ? "Processing…" : "Approve"}
+                                        {processingId === selectedApplication.id + "_approve" ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <CheckCircle className="w-5 h-5" />
+                                        )}
+                                        {processingId === selectedApplication.id + "_approve" ? "Approving…" : "Approve"}
                                     </button>
                                     <button
                                         onClick={() => handleReject(selectedApplication.id)}
-                                        disabled={isProcessing}
+                                        disabled={!!processingId && processingId.startsWith(selectedApplication.id)}
                                         className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                     >
-                                        <XCircle className="w-5 h-5" />
+                                        {processingId === selectedApplication.id + "_reject" ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <XCircle className="w-5 h-5" />
+                                        )}
                                         Reject
                                     </button>
                                 </div>
@@ -873,7 +893,7 @@ export default function CooperativeMembersPage() {
                 onConfirm={handleConfirmReject}
                 title="Reject Membership Application"
                 description="This member will receive an email notification with the reason you provide."
-                isProcessing={isProcessing}
+                isProcessing={!!processingId && processingId.endsWith("_reject")}
             />
 
             <ImportLegacyModal

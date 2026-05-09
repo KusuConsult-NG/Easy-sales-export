@@ -8,6 +8,8 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
+
 
 /**
  * Get global stats for Farm Nation admin dashboard
@@ -32,8 +34,7 @@ async function _getFarmNationStatsAction(): Promise<ActionResponse<{ stats: { to
             // Redis error should not block the action
         }
 
-        const countSnap = await db.collection(COLLECTIONS.USERS)
-            .where('serviceRegistrations.farmNation.status', '!=', null)
+        const countSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
             .count()
             .get();
         const totalApplications = countSnap.data().count;
@@ -154,100 +155,107 @@ export const getFarmNationRegistrantsAction = withFlexibleSafeAction("getFarmNat
 async function _getStandardFarmNationRegistrantsAction(options: { 
     limit?: number;
     search?: string;
-    status?: string;
+    status?: "pending" | "approved" | "rejected" | "under_review" | "all";
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
     dateFrom?: string;
     dateTo?: string; 
-} = {}): Promise<ActionResponse<any[]>> {
+} = {}): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
         if (!isAdmin(session.user.roles)) {
-            return { success: false, error: "Unauthorized: Permission required", data: null };
+            return { success: false, error: "Unauthorized", data: null };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS)
-            .where('serviceRegistrations.farmNation.status', '!=', null);
-
         const applicationsSortDirection = options.sortOrder || "desc";
 
+        // 1. Query the dedicated applications collection (Authoritative Record)
+        // This avoids range query violations on the USERS collection.
+        let q: any = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).orderBy("submittedAt", applicationsSortDirection);
+
+        if (options.status && options.status !== "all") {
+            q = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where("status", "==", options.status)
+                .orderBy("submittedAt", applicationsSortDirection);
+        }
+
+        // Apply server-side date range filtering
         if (options.dateFrom) {
             const fromTs = new Date(options.dateFrom);
-            q = q.where("createdAt", ">=", fromTs);
+            q = q.where("submittedAt", ">=", fromTs);
         }
         if (options.dateTo) {
             const toTs = new Date(options.dateTo + "T23:59:59");
-            q = q.where("createdAt", "<=", toTs);
+            q = q.where("submittedAt", "<=", toTs);
         }
 
-        q = q.orderBy("createdAt", applicationsSortDirection);
-
         if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
+            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 q = q.startAfter(lastDoc);
             }
         }
+
         q = q.limit(fetchLimit);
-
         const snapshot = await q.get();
-        const users = serializeDocs(snapshot.docs);
+        const applications = serializeDocs(snapshot.docs);
 
-        let applications = users.filter((user: any) => {
-            const status = user.serviceRegistrations?.farmNation?.status || "pending";
-            if (options.status && options.status !== "all" && status !== options.status) return false;
-            return true;
-        }).map((user: any) => {
-            const userName = user.firstName
-                ? `${user.firstName} ${user.lastName || ''}`.trim()
-                : (user.name || user.fullName || user.email || "Unknown User");
-            const status = user.serviceRegistrations?.farmNation?.status || "pending";
+        // 2. Hydrate User Data (Standard Hydration Pattern)
+        const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+        const userPromises = [];
+        
+        for (let i = 0; i < userIds.length; i += 30) {
+            const chunk = userIds.slice(i, i + 30);
+            if (chunk.length > 0) {
+                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+            }
+        }
+        
+        const userSnapsArray = await Promise.all(userPromises);
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
-            const bankDetails = user.bankDetails || {
-                bankName: user.bankName || user.bankAccount?.bankName || "N/A",
-                accountNumber: user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A",
-                accountName: user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A"),
-                bankCode: user.bankCode || user.bankAccount?.bankCode || "N/A"
-            };
-
-            const profileAlias = { 
-                phone:   user.phone || user.phoneNumber || null,
-                state:   user.stateOfOrigin || user.address?.state || user.state || null,
-                lga:     user.lga || user.address?.lga || null,
-                address: user.residentialAddress || user.address?.street || (typeof user.address === 'string' ? user.address : null) || null 
-            };
+        // 3. Normalize and Merge Data for the Admin Table
+        let finalApplications = applications.map((app: any) => {
+            const uData = (userMap.get(app.userId) || {}) as any;
+            const profile = (app.profile || {}) as any;
             
-            const mergedData = {
-                ...user,
-                bankDetails,
-                phone:              profileAlias.phone,
-                gender:             user.gender             || null,
-                dateOfBirth:        user.dateOfBirth        || user.dob           || null,
-                occupation:         user.occupation         || null,
-                stateOfOrigin:      profileAlias.state,
-                lga:                profileAlias.lga,
-                residentialAddress: profileAlias.address,
-                farmNation: {
-                    ...(user.farmNation || {}),
-                    profile: {
-                        ...(user.farmNation?.profile || {}),
-                        phone:   (user.farmNation?.profile?.phone   || profileAlias.phone),
-                        state:   (user.farmNation?.profile?.state   || profileAlias.state),
-                        lga:     (user.farmNation?.profile?.lga     || profileAlias.lga),
-                        address: (user.farmNation?.profile?.address || profileAlias.address) 
-                    },
-                    interests: user.farmNation?.interests || user.serviceRegistrations?.farmNation?.interests || null 
-                } 
+            // Reconstruct the userName
+            const userName = profile.firstName 
+                ? `${profile.firstName} ${profile.lastName || ''}`.trim() 
+                : (uData.fullName || uData.name || "Unknown");
+
+            // Canonical bankDetails injection
+            const bankDetails = uData.bankDetails || {
+                bankName: uData.bankName || "N/A",
+                accountNumber: uData.bankAccountNumber || "N/A",
+                accountName: uData.bankAccountName || "N/A",
+                bankCode: uData.bankCode || "N/A"
             };
 
-            return { 
-                id: user.id,
+            const mergedData = {
+                ...uData,
+                ...app,
+                // Flatten profile fields to top-level for UI consistency
+                phone: app.phone || profile.phone || uData.phone || null,
+                email: app.email || profile.email || uData.email || null,
+                stateOfOrigin: profile.state || uData.stateOfOrigin || null,
+                lga: profile.lga || uData.lga || null,
+                residentialAddress: profile.address || uData.residentialAddress || null,
+                firstName: profile.firstName || uData.firstName || null,
+                lastName: profile.lastName || uData.lastName || null,
+                fullName: userName
+            };
+
+            return {
+                id: app.id,
+                userId: app.userId,
                 user: {
-                    id: user.id,
+                    id: app.userId,
                     name: userName,
                     email: mergedData.email || "Unknown",
                     phone: mergedData.phone || "Unknown",
@@ -257,17 +265,19 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                     lga: mergedData.lga || "Unknown",
                     bankDetails
                 },
-                status: status,
-                data: mergedData
+                status: app.status,
+                data: mergedData,
+                submittedAt: app.submittedAt
             };
         });
 
+        // 4. Client-side Search (if requested)
         if (options.search) {
             const s = options.search.toLowerCase().trim();
-            applications = applications.filter((app: any) => {
+            finalApplications = finalApplications.filter((app: any) => {
                 const searchString = [
                     app.id,
-                    app.user?.id,
+                    app.userId,
                     app.user?.name,
                     app.user?.email,
                     app.user?.phone,
@@ -280,26 +290,37 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             });
         }
 
-        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        const lastDoc = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1] : null;
+
+        await createAdminAuditLog({
+            action: "data_access",
+            userId: session.user.id,
+            targetType: "farm_nation_applications",
+            targetId: "list",
+            details: `Accessed Farm Nation registrants list (limit: ${fetchLimit}, status: ${options.status || 'all'})`,
+            metadata: { options }
+        });
 
         return { 
             success: true, 
             error: null, 
-            data: applications, 
+            data: finalApplications, 
             meta: {
-                totalFetched: users.length, 
-                hasMore: !!nextCursor,
-                lastDocId: nextCursor
+                totalFetched: finalApplications.length, 
+                hasMore: snapshot.docs.length === fetchLimit,
+                lastDocId: lastDoc?.id || null
             }
         };
     } catch (error: any) {
         logger.error("Get standard Farm Nation registrants error:", {
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined
         });
         return { success: false, error: "Failed to fetch applications", data: null };
     }
 }
 export const getStandardFarmNationRegistrantsAction = withFlexibleSafeAction("getStandardFarmNationRegistrantsAction", _getStandardFarmNationRegistrantsAction);
+
 
 /**
  * Get aggregate counts for land_listings by verification status.

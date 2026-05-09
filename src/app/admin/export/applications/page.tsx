@@ -144,6 +144,7 @@ export default function AdminExportApplicationsPage() {
 
     // Edit/Revision Note modal state
     const [editingApp, setEditingApp] = useState<ExportApplication | null>(null);
+    const [editingAppId, setEditingAppId] = useState<string | null>(null);
     const [revisionNote, setRevisionNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
     
@@ -170,7 +171,7 @@ export default function AdminExportApplicationsPage() {
 
     async function handleApprove(app: StandardPendingForm<ExportApplication>) {
         if (!confirm(`Approve application for ${app.user.name}?`)) return;
-        setProcessingId(app.id);
+        setProcessingId(app.id + "_approve");
         const appId = app.data.applicationId || app.id;
         const result = await approveExportOnboardingAction(appId);
         if (result.success) {
@@ -186,7 +187,7 @@ export default function AdminExportApplicationsPage() {
         if (!rejectingAppId) return;
         const app = applications.find((a) => a.id === rejectingAppId);
         const appId = app?.data.applicationId || rejectingAppId;
-        setProcessingId(rejectingAppId);
+        setProcessingId(rejectingAppId + "_reject");
         const result = await rejectExportApplicationAction(appId, reason);
         if (result.success) {
             showToast("Application rejected", "success");
@@ -201,26 +202,30 @@ export default function AdminExportApplicationsPage() {
 
     function handleOpenEdit(app: StandardPendingForm<ExportApplication>) {
         setEditingApp(app.data);
+        setEditingAppId(app.id);
         setRevisionNote(app.data.revisionNote || "");
     };
 
     async function handleSaveRevision() {
-        if (!editingApp || !revisionNote.trim()) {
+        if (!editingApp || !revisionNote.trim() || !editingAppId) {
             showToast("Please enter a revision note for the applicant.", "error");
             return;
         }
         setEditSaving(true);
+        setProcessingId(editingAppId + "_revision");
         const appId = editingApp.applicationId || editingApp.id;
         const result = await requestExportApplicationRevisionAction(appId, revisionNote.trim());
         if (result.success) {
             showToast("Revision note sent. Application marked for correction.", "success");
             setEditingApp(null);
+            setEditingAppId(null);
             setRevisionNote("");
             await fetchData();
         } else {
             showToast(result.error || "Failed to send revision note", "error");
         }
         setEditSaving(false);
+        setProcessingId(null);
     };
 
     async function handleExportCSV() {
@@ -415,11 +420,15 @@ export default function AdminExportApplicationsPage() {
                                             {(standardApp.status === "pending_review" || standardApp.status === "pending" || standardApp.status === "revision_required") && (
                                                 <button
                                                     onClick={() => handleOpenEdit(standardApp)}
-                                                    disabled={!!processingId}
+                                                    disabled={!!processingId && processingId.startsWith(standardApp.id)}
                                                     className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-lg transition disabled:opacity-50"
                                                     title="Request Correction / Add Note"
                                                 >
-                                                    <Pencil className="w-4 h-4" />
+                                                    {processingId === standardApp.id + "_revision" ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <Pencil className="w-4 h-4" />
+                                                    )}
                                                 </button>
                                             )}
 
@@ -427,11 +436,11 @@ export default function AdminExportApplicationsPage() {
                                             {(standardApp.status === "pending_review" || standardApp.status === "pending" || standardApp.status === "revision_required") && (
                                                 <button
                                                     onClick={() => handleApprove(standardApp)}
-                                                    disabled={processingId === standardApp.id}
+                                                    disabled={!!processingId && processingId.startsWith(standardApp.id)}
                                                     className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-50"
                                                     title="Approve"
                                                 >
-                                                    {processingId === standardApp.id ? (
+                                                    {processingId === standardApp.id + "_approve" ? (
                                                         <Loader2 className="w-4 h-4 animate-spin" />
                                                     ) : (
                                                         <CheckCircle className="w-4 h-4" />
@@ -446,11 +455,15 @@ export default function AdminExportApplicationsPage() {
                                                         setRejectingAppId(standardApp.id);
                                                         setRejectionModalOpen(true);
                                                     }}
-                                                    disabled={!!processingId}
+                                                    disabled={!!processingId && processingId.startsWith(standardApp.id)}
                                                     className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
                                                     title="Reject"
                                                 >
-                                                    <XCircle className="w-4 h-4" />
+                                                    {processingId === standardApp.id + "_reject" ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <XCircle className="w-4 h-4" />
+                                                    )}
                                                 </button>
                                             )}
                                         </div>
@@ -601,7 +614,7 @@ export default function AdminExportApplicationsPage() {
                 onClose={() => { setRejectionModalOpen(false); setRejectingAppId(null); }}
                 onConfirm={handleRejectConfirm}
                 title="Reject Export Application"
-                isProcessing={!!processingId}
+                isProcessing={!!processingId && processingId.endsWith("_reject")}
             />
 
             {/* Edit / Revision Note Modal */}

@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin, hasAdminPermission } from "@/lib/admin-permissions";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { FieldValue, FieldPath, Query } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { WaveApplicationReviewSchema } from "@/lib/schemas";
@@ -325,18 +325,73 @@ async function _getWaveApplicationsAction(): Promise<
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated" , data: null };
-        }
-
+        
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        const snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(1000).get();
-        const applications = serializeDocs(snapshot.docs);
+        // Audit logging
+        await createAdminAuditLog({
+            userId: session.user.id,
+            userEmail: session.user.email ?? "unknown",
+            action: "FETCH_WAVE_APPLICATIONS",
+            targetType: "WAVE_APPLICATIONS",
+            details: JSON.stringify({})
+        });
 
-        return { error: null, success: true as const, data: null };
+        let snapshot;
+        try {
+            snapshot = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .orderBy("submittedAt", "desc")
+                .limit(1000)
+                .get();
+        } catch (error: any) {
+             if (error.code === 9 || error.message?.includes("FAILED_PRECONDITION")) {
+                logger.error("Firestore Index Missing for Wave Applications:", error.message);
+                return { 
+                    success: false, 
+                    error: "Administrative index is currently being provisioned. Please try again in 5 minutes.", 
+                    data: null 
+                };
+            }
+            throw error;
+        }
+
+        const rawApplications = serializeDocs(snapshot.docs);
+
+        // HYDRATION: Batch-resolve user profiles
+        const userIds = [...new Set(rawApplications.map((app: any) => app.userId).filter(Boolean))];
+        const userMap = new Map<string, any>();
+
+        if (userIds.length > 0) {
+            const userPromises = [];
+            for (let i = 0; i < userIds.length; i += 30) {
+                const chunk = userIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+                }
+            }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+        }
+
+        const applications = rawApplications.map((app: any) => {
+            const uData = userMap.get(app.userId) || {};
+            const canonical = extractCanonicalUser(uData, app);
+
+            return {
+                ...app,
+                user: {
+                    id: app.userId,
+                    name: canonical.name,
+                    email: canonical.email,
+                    phone: canonical.phone,
+                    bankDetails: canonical.bankDetails
+                }
+            };
+        });
+
+        return { error: null, success: true as const, data: { applications } };
     } catch (error) {
         logger.error("Get applications error:", {
             userId: sessionResult?.session?.user?.id,

@@ -815,16 +815,16 @@ async function _getStandardAcademyApplicationsAction(options: {
         const { session } = sessionResult;
         if (!session?.user?.id) return { success: false, error: "Not authenticated", data: null };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!userDoc.exists || !isAdmin(userDoc.data()?.roles)) {
+        if (!isAdmin(session.user.roles)) {
             return { success: false, error: "Unauthorized", data: null };
         }
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
-        // NOTE: academy_applications documents use 'submittedAt', not 'createdAt'.
-        // orderBy('submittedAt') is the authoritative sort for academy apps.
+        
+        // 1. Query dedicated collection
         let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
+        
         if (options.status && options.status !== "all") {
             q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("status", "==", options.status)
@@ -852,43 +852,44 @@ async function _getStandardAcademyApplicationsAction(options: {
         const snapshot = await q.get();
         const applications = serializeDocs(snapshot.docs);
 
+        // 2. Hydrate User Data (Standard Hydration Pattern)
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         const userPromises = [];
+        
         for (let i = 0; i < userIds.length; i += 30) {
             const chunk = userIds.slice(i, i + 30);
             if (chunk.length > 0) {
                 userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
             }
         }
+        
         const userSnapsArray = await Promise.all(userPromises);
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
+        // 3. Normalize and Merge Data
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const pi = (app.personalInfo || {}) as any;
-            const localName = pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : (pi.fullName || null);
-            // Fix: check uData.firstName presence FIRST to avoid "undefined undefined" for legacy users
+            
+            // Priority: USERS doc > personalInfo object > fallback
             const userName = uData.firstName
                 ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                : (uData.name || uData.fullName || localName || "Unknown User");
+                : (uData.name || uData.fullName || pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Unknown User"));
 
-            // Merge app + personalInfo sub-object + USERS profile so every field is populated
-            // regardless of which path the data came through (direct fields, nested personalInfo, or USERS doc).
             const mergedData = {
+                ...uData,
                 ...app,
-                // Flatten personalInfo fields to top-level for consistent access by admin UI
-                phone:              app.phone              || pi.phone              || uData.phone       || uData.phoneNumber || null,
-                gender:             app.gender             || pi.gender             || uData.gender      || null,
-                dateOfBirth:        app.dateOfBirth        || pi.dateOfBirth        || uData.dob         || null,
-                occupation:         app.occupation         || pi.occupation         || uData.occupation  || null,
-                stateOfOrigin:      app.stateOfOrigin      || pi.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state  : uData.stateOfOrigin)  || null,
-                lga:                app.lga                || pi.lga                || (typeof uData.address === 'object' ? uData.address?.lga    : uData.lga)            || null,
-                residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
-                firstName:          pi.firstName           || app.firstName         || uData.firstName   || null,
-                lastName:           pi.lastName            || app.lastName          || uData.lastName    || null,
-                fullName:           pi.fullName            || app.fullName          || `${uData.firstName || ''} ${uData.lastName || ''}`.trim() || null,
-                email:              app.email              || pi.email              || uData.email        || null,
+                // Flatten fields for UI consistency
+                phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || null,
+                email: app.email || pi.email || uData.email || null,
+                gender: app.gender || pi.gender || uData.gender || null,
+                dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,
+                occupation: app.occupation || pi.occupation || uData.occupation || null,
+                stateOfOrigin: app.stateOfOrigin || pi.stateOfOrigin || (typeof uData.address === 'object' ? uData.address?.state : uData.stateOfOrigin) || null,
+                lga: app.lga || pi.lga || (typeof uData.address === 'object' ? uData.address?.lga : uData.lga) || null,
+                residentialAddress: app.residentialAddress || pi.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
+                fullName: userName
             };
 
             // Canonical bankDetails injection
@@ -901,6 +902,7 @@ async function _getStandardAcademyApplicationsAction(options: {
 
             return {
                 id: app.id,
+                userId: app.userId,
                 user: {
                     id: app.userId,
                     name: userName,
@@ -910,21 +912,22 @@ async function _getStandardAcademyApplicationsAction(options: {
                     address: mergedData.residentialAddress || "Unknown",
                     state: mergedData.stateOfOrigin || "Unknown",
                     lga: mergedData.lga || "Unknown",
+                    bankDetails
                 },
                 status: app.status || "pending",
-                bankDetails,
-                data: mergedData
+                data: mergedData,
+                submittedAt: app.submittedAt
             };
         });
 
-        // Client-side search application if specified
+        // 4. Client-side Search
         let finalForms = standardForms;
         if (options.search) {
             const s = options.search.toLowerCase().trim();
             finalForms = standardForms.filter((f: any) => {
                 const searchString = [
                     f.id,
-                    f.user?.id,
+                    f.userId,
                     f.user?.name,
                     f.user?.email,
                     f.user?.phone,
@@ -940,20 +943,40 @@ async function _getStandardAcademyApplicationsAction(options: {
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
+        await createAdminAuditLog({
+            action: "data_access",
+            userId: session.user.id,
+            targetType: "academy_applications",
+            targetId: "list",
+            details: `Accessed Academy applications list (limit: ${fetchLimit}, status: ${options.status || 'all'})`,
+            metadata: { options }
+        });
+
         return { 
             success: true,
             error: null, 
             data: finalForms,
-            lastDocId: nextCursor,
-            hasMore: !!nextCursor,
             meta: {
-                totalFetched: applications.length,
-                hasMore: !!nextCursor
+                totalFetched: finalForms.length,
+                hasMore: !!nextCursor,
+                lastDocId: nextCursor || null
             }
         };
-    } catch (error) {
-        logger.error("Get standard academy apps error:", error);
-        return { success: false, error: "Failed to fetch normalized applications", data: null };
+    } catch (error: any) {
+        logger.error("Get standard academy apps error:", {
+            error: error instanceof Error ? error.message : String(error),
+            code: error?.code
+        });
+        
+        if (error?.code === 9 || error?.message?.includes("FAILED_PRECONDITION")) {
+            return { 
+                success: false, 
+                error: "Failed to fetch applications: Missing Firestore Index. Please check server logs for the creation link.", 
+                data: null 
+            };
+        }
+
+        return { success: false, error: "Failed to fetch applications", data: null };
     }
 }
 export const getStandardAcademyApplicationsAction = withFlexibleSafeAction("getStandardAcademyApplicationsAction", _getStandardAcademyApplicationsAction);

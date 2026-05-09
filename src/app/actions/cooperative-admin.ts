@@ -20,6 +20,7 @@ import {
     sendWithdrawalRejectedEmail
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { Resend } from "resend";
 import { revalidateTag } from "next/cache";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -238,13 +239,19 @@ async function _getAllMembersAction(options?: {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated", data: null };
-        }
-
+        
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
+
+        // Audit logging
+        await createAdminAuditLog({
+            userId: session.user.id,
+            userEmail: session.user.email ?? "unknown",
+            action: "FETCH_COOPERATIVE_MEMBERS",
+            targetType: "COOPERATIVE_MEMBERS",
+            details: JSON.stringify({ status: options?.status, limit: options?.limit })
+        });
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
@@ -261,33 +268,46 @@ async function _getAllMembersAction(options?: {
         const fetchLimit = options?.search ? 2000 : (options?.limit ? options.limit * 10 : 500);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
-        const snapshot = await q.get();
-        const allMembers = serializeDocs(snapshot.docs);
-
-        const userIds = allMembers.map(m => m.id);
-        let paidUserIds = new Set();
-        if (userIds.length > 0) {
-            const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("type", "==", "cooperative_membership_registration")
-                .where("status", "==", "completed")
-                .get();
-            paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
+        let snapshot;
+        try {
+            snapshot = await q.get();
+        } catch (error: any) {
+            if (error.code === 9 || error.message?.includes("FAILED_PRECONDITION")) {
+                logger.error("Firestore Index Missing for Cooperative Members:", error.message);
+                return { 
+                    success: false, 
+                    error: "Administrative index is currently being provisioned. Please try again in 5 minutes.", 
+                    data: null 
+                };
+            }
+            throw error;
         }
 
-        const membersRaw = allMembers.filter((m: any) => m.paymentStatus === "completed" || paidUserIds.has(m.id));
+        const allMembersRaw = serializeDocs(snapshot.docs);
+
+        // Filter: Only show members who have a record of registration or active status
+        // Note: We avoid scanning the entire PROCESSED_PAYMENTS collection for performance.
+        const membersRaw = allMembersRaw.filter((m: any) => 
+            m.membershipStatus === "active" || 
+            m.paymentStatus === "completed" || 
+            m.registrationStatus === "completed"
+        );
 
         // --- HYDRATION START ---
         const memberUserIds = [...new Set(membersRaw.map(m => m.userId || m.id).filter(Boolean))];
         const userMap = new Map<string, any>();
-        const userPromises = [];
-        for (let i = 0; i < memberUserIds.length; i += 30) {
-            const chunk = memberUserIds.slice(i, i + 30);
-            if (chunk.length > 0) {
-                userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+        
+        if (memberUserIds.length > 0) {
+            const userPromises = [];
+            for (let i = 0; i < memberUserIds.length; i += 30) {
+                const chunk = memberUserIds.slice(i, i + 30);
+                if (chunk.length > 0) {
+                    userPromises.push(db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get());
+                }
             }
+            const userSnapsArray = await Promise.all(userPromises);
+            userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
         }
-        const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
         // --- HYDRATION END ---
 
         let members = membersRaw.map((m: any) => {
@@ -465,13 +485,19 @@ async function _getAllTransactionsAction(options?: {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id) {
-            return { success: false as const, error: "Not authenticated", data: null };
-        }
 
         if (!isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized", data: null };
         }
+
+        // Audit logging
+        await createAdminAuditLog({
+            userId: session.user.id,
+            userEmail: session.user.email ?? "unknown",
+            action: "FETCH_COOPERATIVE_TRANSACTIONS",
+            targetType: "COOPERATIVE_TRANSACTIONS",
+            details: JSON.stringify({ type: options?.type, status: options?.status })
+        });
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
 
@@ -501,7 +527,21 @@ async function _getAllTransactionsAction(options?: {
             }
         }
 
-        const snapshot = await query.limit(fetchLimit + 1).get();
+        let snapshot;
+        try {
+            snapshot = await query.limit(fetchLimit + 1).get();
+        } catch (error: any) {
+            if (error.code === 9 || error.message?.includes("FAILED_PRECONDITION")) {
+                logger.error("Firestore Index Missing for Cooperative Transactions:", error.message);
+                return { 
+                    success: false, 
+                    error: "Administrative index is currently being provisioned. Please try again in 5 minutes.", 
+                    data: null 
+                };
+            }
+            throw error;
+        }
+
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
