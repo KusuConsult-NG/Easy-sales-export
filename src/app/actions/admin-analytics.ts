@@ -194,33 +194,18 @@ export async function getDashboardStatsAction(options?: {
     );
 
     // ── Module usage (for pie chart) ─────────────────────────────────────────
-    const [waveCount, academyCount, cooperativeCount, farmNationCount, marketplaceCount, exportCount] =
-        await Promise.allSettled([
-            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("status", "in", ["pending", "submitted", "under_review", "approved"])),
-            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
-            safeCount(
-                db
-                    .collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                    .where("paymentStatus", "==", "completed")
-            ),
-            safeCount(db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)),
-            safeCount(
-                db
-                    .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                    .where("status", "!=", "rejected")
-            ),
-            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
-        ]);
+    // WE USE THE CANONICAL COUNTS FROM THE USERS COLLECTION
+    const canonicalStats = await fetchModuleRegistrationStats();
 
     const moduleUsage = [
-        { module: "WAVE", count: waveCount.status === "fulfilled" ? waveCount.value : 0 },
-        { module: "Academy", count: academyCount.status === "fulfilled" ? academyCount.value : 0 },
-        { module: "Cooperative", count: cooperativeCount.status === "fulfilled" ? cooperativeCount.value : 0 },
-        { module: "Farm Nation", count: farmNationCount.status === "fulfilled" ? farmNationCount.value : 0 },
-        { module: "Marketplace", count: marketplaceCount.status === "fulfilled" ? marketplaceCount.value : 0 },
-        { module: "Export Hub", count: exportCount.status === "fulfilled" ? exportCount.value : 0 },
+        { module: "WAVE", count: canonicalStats.wave },
+        { module: "Academy", count: canonicalStats.academy },
+        { module: "Cooperative", count: canonicalStats.cooperatives },
+        { module: "Farm Nation", count: canonicalStats.farmNation },
+        { module: "Marketplace", count: canonicalStats.marketplace },
+        { module: "Export Hub", count: canonicalStats.exportHub },
     ].filter((m) => m.count > 0);
+
 
     // ── Recent transactions: pulling completely from unified platform ledger
     const recentTransactions: AnalyticsData["recentTransactions"] = [];

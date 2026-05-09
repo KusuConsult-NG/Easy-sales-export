@@ -23,6 +23,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { Resend } from "resend";
 import { revalidateTag } from "next/cache";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 
 // ============================================================================
 // ============================================================================
@@ -290,22 +291,17 @@ async function _getAllMembersAction(options?: {
         // --- HYDRATION END ---
 
         let members = membersRaw.map((m: any) => {
-            const uData = (userMap.get(m.userId || m.id) || {}) as any;
-            const bankDetails = uData.bankDetails || {
-                bankName: m.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: m.bankAccountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: m.bankAccountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: m.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
-            };
+            const uData = userMap.get(m.userId || m.id) || {};
+            const canonical = extractCanonicalUser(uData, m);
 
             return {
                 ...m,
                 user: {
                     id: m.userId || m.id,
-                    name: uData.fullName || uData.name || m.fullName || "Unknown Member",
-                    email: uData.email || m.email || "Unknown",
-                    phone: uData.phone || m.phone || "Unknown",
-                    bankDetails
+                    name: canonical.name,
+                    email: canonical.email,
+                    phone: canonical.phone,
+                    bankDetails: canonical.bankDetails
                 }
             };
         });
@@ -534,33 +530,23 @@ async function _getAllTransactionsAction(options?: {
 
             userSnapshots.forEach(snap => {
                 snap.forEach(doc => {
-                    const data = doc.data();
-                    userMap[doc.id] = {
-                        name: data.fullName || data.name || data.displayName || "Unknown",
-                        email: data.email || "",
-                        phone: data.phone || "",
-                        bankDetails: {
-                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
-                        }
-                    };
+                    const uData = doc.data();
+                    userMap[doc.id] = extractCanonicalUser(uData);
                 });
             });
         }
 
         const transactions = rawDocs.map((raw: any) => {
             const dateVal = raw.date?.toDate ? raw.date.toDate() : (raw.date ? new Date(raw.date) : new Date());
-            const userProfile = userMap[raw.userId] || null;
+            const canonical = userMap[raw.userId] || null;
             
             return {
                 id: raw.id,
                 userId: raw.userId || "",
-                userName: userProfile?.name || raw.userId || "Unknown",
-                user: userProfile,
+                userName: canonical?.name || raw.userId || "Unknown",
+                user: canonical,
                 // Root-level bankDetails for UI consistency
-                bankDetails: userProfile?.bankDetails || {
+                bankDetails: canonical?.bankDetails || {
                     bankName: raw.bankName || "N/A",
                     accountNumber: raw.accountNumber || "N/A",
                     accountName: raw.accountName || "N/A",

@@ -14,6 +14,7 @@ import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { paystackPayout } from "@/lib/paystack-transfer";
 import { z } from "zod";
+import { extractCanonicalUser } from "@/lib/canonical/normalizer";
 
 // ============================================================================
 // RESOURCES MANAGEMENT
@@ -666,50 +667,28 @@ async function _getStandardWaveApplicationsAction(options: {
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
 
         const standardForms = applications.map((app: any) => {
-            const uData = (userMap.get(app.userId as string) || {}) as any;
-            const userName = uData.firstName
-                ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                : (uData.name || uData.fullName ||
-                   (app.firstName ? `${app.firstName} ${app.surname || app.lastName || ''}`.trim() : null) ||
-                   "Unknown User");
-
-            const bankDetails = app.bankDetails || uData.bankDetails || {
-                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || app.fullName || uData.fullName || userName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
-            };
-
-            const mergedData = {
-                ...app,
-                bankDetails,
-                phone:              app.phone              || uData.phone       || uData.phoneNumber || null,
-                gender:             app.gender             || uData.gender      || null,
-                dateOfBirth:        app.dateOfBirth        || uData.dob         || null,
-                occupation:         app.occupation         || uData.occupation  || null,
-                stateOfOrigin:      app.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state  : uData.stateOfOrigin)  || null,
-                lga:                app.lga                || (typeof uData.address === 'object' ? uData.address?.lga    : uData.lga)            || null,
-                residentialAddress: app.residentialAddress || (typeof uData.address === 'object' ? uData.address?.street : uData.address)        || null,
-                firstName:          app.firstName          || uData.firstName   || null,
-                lastName:           app.lastName || app.surname || uData.lastName || null,
-                email:              app.email || app.userEmail || uData.email    || null,
-            };
+            const uData = userMap.get(app.userId as string) || {};
+            const canonical = extractCanonicalUser(uData, app);
 
             return {
                 id: app.id,
                 user: {
                     id: app.userId,
-                    name: userName,
-                    email: mergedData.email || "Unknown",
-                    phone: mergedData.phone || "Unknown",
-                    dob: mergedData.dateOfBirth || "Unknown",
-                    address: mergedData.residentialAddress || "Unknown",
-                    state: mergedData.stateOfOrigin || "Unknown",
-                    lga: mergedData.lga || "Unknown",
-                    bankDetails
+                    name: canonical.name,
+                    email: canonical.email,
+                    phone: canonical.phone,
+                    dob: canonical.dateOfBirth || "N/A",
+                    address: canonical.address.street,
+                    state: canonical.address.state,
+                    lga: canonical.address.lga,
+                    bankDetails: canonical.bankDetails
                 },
                 status: app.status || "pending",
-                data: mergedData
+                data: {
+                    ...app,
+                    ...canonical, // Inject SSOT fields directly into the data object
+                    bankDetails: canonical.bankDetails
+                }
             };
         });
 
@@ -832,17 +811,13 @@ async function _getStandardWaveWithdrawalsAction(options: {
 
             userSnapshots.forEach(snap => {
                 snap.forEach(doc => {
-                    const data = doc.data();
+                    const uData = doc.data();
+                    const canonical = extractCanonicalUser(uData);
                     userMap[doc.id] = {
-                        name: data.name || "Unknown",
-                        email: data.email || "",
-                        phone: data.phone || "",
-                        bankDetails: {
-                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
-                        }
+                        name: canonical.name,
+                        email: canonical.email,
+                        phone: canonical.phone,
+                        bankDetails: canonical.bankDetails
                     };
                 });
             });
@@ -859,6 +834,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
                 bankCode: "N/A"
             }
         }));
+
 
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 

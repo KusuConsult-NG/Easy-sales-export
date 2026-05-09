@@ -62,7 +62,10 @@ export interface CanonicalServiceRegistrations {
 }
 
 export interface CanonicalUserProfile extends CanonicalIdentity {
-    address?: CanonicalAddress;
+    address: CanonicalAddress;
+    bankDetails: CanonicalBankDetails;
+    nin?: string;
+    bvn?: string;
     verificationProfile?: CanonicalVerificationProfile;
     serviceRegistrations: CanonicalServiceRegistrations;
     createdAt: Date;
@@ -70,4 +73,4 @@ export interface CanonicalUserProfile extends CanonicalIdentity {
     schemaVersion: number;
 }
 
-export const LATEST_SCHEMA_VERSION = 5; // Incrementing for this major refactor
+export const LATEST_SCHEMA_VERSION = 8; // Incrementing for this major refactor

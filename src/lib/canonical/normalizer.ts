@@ -14,36 +14,48 @@ export function normalizeAggressive(
     cData: any = null, 
     wData: any = null
 ): CanonicalUserProfile {
-    
+    // Helper to ignore "N/A" strings as falsy
+    const cleanVal = (val: any) => (val && val !== "N/A" && val !== "undefined" && val !== "null") ? val : null;
+
     // 1. Resolve Identity (Strict Priority: WAVE > User > Seller)
-    // WAVE is often the most recent "full" onboarding form
-    const fullName = uData.fullName || 
-                   (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "") || 
-                   wData?.fullName || 
-                   (wData?.firstName && wData?.surname ? `${wData.firstName} ${wData.surname}` : "") ||
-                   sData?.businessName ||
+    const fullName = cleanVal(uData.fullName) || 
+                   cleanVal(uData.displayName) || 
+                   (cleanVal(uData.firstName) && cleanVal(uData.lastName) ? `${uData.firstName} ${uData.lastName}` : null) || 
+                   cleanVal(wData?.fullName) || 
+                   (cleanVal(wData?.firstName) && cleanVal(wData?.surname) ? `${wData.firstName} ${wData.surname}` : null) ||
+                   cleanVal(sData?.businessName) ||
                    "Unknown User";
 
-    const firstName = uData.firstName || wData?.firstName || fullName.split(" ")[0] || "";
-    const lastName = uData.lastName || wData?.surname || fullName.split(" ").slice(1).join(" ") || "";
+    const firstName = cleanVal(uData.firstName) || cleanVal(wData?.firstName) || fullName.split(" ")[0] || "";
+    const lastName = cleanVal(uData.lastName) || cleanVal(wData?.surname) || fullName.split(" ").slice(1).join(" ") || "";
 
-    const email = uData.email || wData?.userEmail || sData?.email || "";
-    const phone = uData.phone || sData?.phone || wData?.phone || uData.phoneNumber || "";
-    const gender = uData.gender || wData?.gender || "other";
-    const dob = uData.dateOfBirth || wData?.dateOfBirth || cData?.personalInfo?.dateOfBirth || "";
+    const email = cleanVal(uData.email) || cleanVal(wData?.userEmail) || cleanVal(sData?.email) || "";
+    const phone = cleanVal(uData.phone) || cleanVal(sData?.phone) || cleanVal(wData?.phone) || cleanVal(uData.phoneNumber) || "N/A";
+    const gender = cleanVal(uData.gender) || cleanVal(wData?.gender) || "other";
+    const dob = cleanVal(uData.dateOfBirth) || cleanVal(wData?.dateOfBirth) || cleanVal(cData?.personalInfo?.dateOfBirth) || "N/A";
 
-    // 2. Resolve Bank Details
+    // 2. Resolve Bank Details (Aggressive fallback)
     const bankDetails = {
-        bankName: sData?.bankDetails?.bankName || wData?.bankName || cData?.bankDetails?.bankName || uData.bankDetails?.bankName || uData.bankName || "N/A",
-        accountNumber: sData?.bankDetails?.accountNumber || wData?.accountNumber || cData?.bankDetails?.accountNumber || uData.bankDetails?.accountNumber || uData.accountNumber || "N/A",
-        accountName: sData?.bankDetails?.accountName || wData?.accountName || cData?.bankDetails?.accountName || uData.bankDetails?.accountName || uData.accountName || fullName,
+        bankName:      cleanVal(uData.bankDetails?.bankName)      || cleanVal(wData?.bankName)      || cleanVal(cData?.bankDetails?.bankName)      || cleanVal(sData?.bankAccount?.bankName)      || cleanVal(uData.bankName)      || "N/A",
+        accountNumber: cleanVal(uData.bankDetails?.accountNumber) || cleanVal(wData?.accountNumber) || cleanVal(cData?.bankDetails?.accountNumber) || cleanVal(sData?.bankAccount?.accountNumber) || cleanVal(uData.accountNumber) || "N/A",
+        accountName:   cleanVal(uData.bankDetails?.accountName)   || cleanVal(cData?.bankDetails?.accountName)   || cleanVal(sData?.bankAccount?.accountName)   || cleanVal(uData.fullName) || fullName || "N/A",
+        bankCode:      cleanVal(uData.bankDetails?.bankCode)      || cleanVal(cData?.bankDetails?.bankCode)      || cleanVal(sData?.bankAccount?.bankCode)      || cleanVal(uData.bankCode) || ""
     };
 
     // 3. Resolve KYC / Identity (NIN/BVN)
-    const nin = uData.nin || wData?.nin || "";
-    const bvn = uData.bvn || wData?.bvn || cData?.documents?.bvn || "";
+    const nin = cleanVal(uData.nin) || cleanVal(wData?.nin) || cleanVal(sData?.nin) || "";
+    const bvn = cleanVal(uData.bvn) || cleanVal(wData?.bvn) || cleanVal(sData?.bvn) || cleanVal(cData?.documents?.bvn) || "";
 
-    // 4. Resolve Documents (Aggregate from all sources)
+    // 4. Resolve Address
+    const address = {
+        street: cleanVal(uData.address?.street) || cleanVal(uData.residentialAddress) || cleanVal(wData?.residentialAddress) || cleanVal(cData?.residentialAddress) || cleanVal(sData?.address?.street) || "N/A",
+        city: cleanVal(uData.address?.city) || cleanVal(sData?.address?.city) || "N/A",
+        state: cleanVal(uData.address?.state) || cleanVal(uData.stateOfOrigin) || cleanVal(wData?.stateOfOrigin) || cleanVal(cData?.stateOfOrigin) || cleanVal(sData?.address?.state) || "N/A",
+        lga: cleanVal(uData.address?.lga) || cleanVal(uData.lga) || cleanVal(wData?.lgaOfOrigin) || cleanVal(cData?.lga) || cleanVal(sData?.address?.lga) || "N/A",
+        country: "Nigeria"
+    };
+
+    // 5. Resolve Documents (Aggregate from all sources)
     const documents = {
         idCard: sData?.documents?.idDoc || sData?.documents?.idCard || cData?.documents?.validId || uData.documents?.idDoc || null,
         businessCert: sData?.documents?.businessDoc || sData?.documents?.businessCertificate || uData.documents?.businessDoc || null,
@@ -55,7 +67,7 @@ export function normalizeAggressive(
     const cleanDocs: Record<string, any> = {};
     Object.entries(documents).forEach(([k, v]) => { if (v) cleanDocs[k] = v; });
 
-    // 5. Resolve Module Statuses
+    // 6. Resolve Module Statuses
     const marketplaceStatus = sData?.status || uData.sellerVerificationStatus || "not_started";
     const cooperativeStatus = cData?.status || uData.serviceRegistrations?.cooperative?.status || (cData ? "active" : "not_started");
     const waveStatus = wData?.status || uData.serviceRegistrations?.wave?.status || (wData ? "submitted" : "not_started");
@@ -72,16 +84,14 @@ export function normalizeAggressive(
         roles: Array.isArray(uData.roles) ? uData.roles : [],
         isVerified: !!(uData.isVerified || uData.verified || marketplaceStatus === "approved"),
         onboardingCompleted: !!(uData.onboardingCompleted || sData || cData || wData),
-        address: uData.address || {
-            street: uData.residentialAddress || wData?.residentialAddress || cData?.personalInfo?.address || "",
-            city: "",
-            state: uData.stateOfOrigin || wData?.stateOfOrigin || cData?.personalInfo?.state || "",
-            lga: uData.lga || wData?.lgaOfOrigin || cData?.personalInfo?.lga || "",
-            country: "Nigeria"
-        },
+        address,
+        bankDetails,
+        nin,
+        bvn,
         verificationProfile: {
             status: marketplaceStatus,
             bankDetails,
+            address, // Adding address to profile for easier auditing
             documents: cleanDocs,
             isCanonical: true,
             schemaVersion: LATEST_SCHEMA_VERSION,
@@ -101,3 +111,43 @@ export function normalizeAggressive(
         schemaVersion: LATEST_SCHEMA_VERSION
     };
 }
+
+/**
+ * EXTRACTS CANONICAL DATA FROM A USER DOCUMENT
+ * 
+ * Used for UI hydration loops to ensure we ALWAYS read from the SSOT fields,
+ * with fallbacks to legacy fields if the SSOT hasn't been synced yet.
+ */
+export function extractCanonicalUser(uData: any, appData: any = null) {
+    const profile = uData?.verificationProfile;
+    
+    // 1. BANK DETAILS (SSOT Priority)
+    const bankDetails = {
+        bankName:      profile?.bankDetails?.bankName      || uData?.bankDetails?.bankName      || uData?.bankName      || appData?.bankName      || appData?.bankAccount?.bankName      || "N/A",
+        accountNumber: profile?.bankDetails?.accountNumber || uData?.bankDetails?.accountNumber || uData?.accountNumber || appData?.accountNumber || appData?.bankAccount?.accountNumber || "N/A",
+        accountName:   profile?.bankDetails?.accountName   || uData?.bankDetails?.accountName   || uData?.accountName   || appData?.accountName   || appData?.bankAccount?.accountName   || uData?.fullName || "N/A",
+        bankCode:      profile?.bankDetails?.bankCode      || uData?.bankDetails?.bankCode      || uData?.bankCode      || appData?.bankCode      || appData?.bankAccount?.bankCode      || "N/A",
+    };
+
+    // 2. ADDRESS (SSOT Priority)
+    const address = {
+        street: profile?.address?.street || uData?.address?.street || uData?.residentialAddress || appData?.residentialAddress || appData?.address?.street || appData?.address || "N/A",
+        state:  profile?.address?.state  || uData?.address?.state  || uData?.stateOfOrigin      || appData?.stateOfOrigin      || appData?.address?.state  || appData?.state   || "N/A",
+        lga:    profile?.address?.lga    || uData?.address?.lga    || uData?.lga                || appData?.lgaOfOrigin        || appData?.lga             || appData?.address?.lga || "N/A",
+    };
+
+    // 3. IDENTITY
+    const name = uData?.fullName || uData?.name || (uData?.firstName && uData?.lastName ? `${uData.firstName} ${uData.lastName}` : appData?.fullName || appData?.name || "N/A");
+
+    return {
+        name,
+        email: uData?.email || appData?.email || appData?.userEmail || "N/A",
+        phone: uData?.phone || uData?.phoneNumber || appData?.phone || "N/A",
+        dateOfBirth: uData?.dateOfBirth || appData?.dateOfBirth || "N/A",
+        bankDetails,
+        address,
+        nin: profile?.nin || uData?.nin || appData?.nin || "N/A",
+        bvn: profile?.bvn || uData?.bvn || appData?.bvn || "N/A",
+    };
+}
+

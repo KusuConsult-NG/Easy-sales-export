@@ -36,6 +36,8 @@ const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; lab
             { value: "pending_applicants", label: "All Pending Applicants", desc: "Everyone awaiting review across Cooperative, WAVE, Academy, Farm Nation & Export" },
             { value: "unpaid_applicants", label: "Unpaid Applicants", desc: "Users who applied but have not completed their required payment" },
             { value: "abandoned_failed_transactions", label: "Abandoned / Failed Payments", desc: "Users with failed or aborted payments" },
+            { value: "stalled_users", label: "⚠️ Stalled Users (Incomplete)", desc: "1,901 users who started modules but missing Bank/Address" },
+            { value: "ghost_users", label: "👻 Ghost Users (Never Started)", desc: "17,341 users who signed up but never activated any service" },
             { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
         ],
     },
