@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Download, Users, Search, Loader2, AlertCircle, Filter, X, RefreshCw, ChevronDown, MapPin } from "lucide-react";
+import { ArrowLeft, Download, Users, Search, Loader2, AlertCircle, Filter, X, RefreshCw, ChevronDown, MapPin, Eye } from "lucide-react";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -86,6 +87,8 @@ export default function BriefingRegistrationsPage() {
     });
 
     const [isExporting, setIsExporting] = useState(false);
+    const [selectedRegistration, setSelectedRegistration] = useState<BriefingRegistration | null>(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
     // Count active filters
     const activeFilterCount = [
@@ -437,7 +440,7 @@ export default function BriefingRegistrationsPage() {
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    {["Name", "Email", "Phone", "State", "Role", "Status", "Registered"].map(h => (
+                                    {["Name", "Email", "Phone", "State", "Role", "Status", "Registered", "Actions"].map(h => (
                                         <th key={h} className="px-5 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                                     ))}
                                 </tr>
@@ -466,6 +469,15 @@ export default function BriefingRegistrationsPage() {
                                         </td>
                                         <td className="px-5 py-4 text-slate-500 text-sm">
                                             {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString("en-NG") : "—"}
+                                        </td>
+                                        <td className="px-5 py-4 text-sm">
+                                            <button 
+                                                onClick={() => { setSelectedRegistration(reg); setIsDetailModalOpen(true); }}
+                                                className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-900 transition-colors"
+                                                title="View Full Details"
+                                            >
+                                                <Eye className="w-5 h-5" />
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -497,6 +509,16 @@ export default function BriefingRegistrationsPage() {
                     </div>
                 )}
             </div>
+
+            {/* Dynamic Detail Modal */}
+            {selectedRegistration && (
+                <DynamicDetailModal
+                    isOpen={isDetailModalOpen}
+                    onClose={() => { setIsDetailModalOpen(false); setSelectedRegistration(null); }}
+                    title={`Briefing Registration: ${selectedRegistration.fullName}`}
+                    data={selectedRegistration}
+                />
+            )}
         </div>
     );
 }

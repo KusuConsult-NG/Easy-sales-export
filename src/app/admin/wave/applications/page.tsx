@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download, Pencil, X, Save, RefreshCw } from "lucide-react";
+import { FileText, CheckCircle, XCircle, Loader2, AlertCircle, Filter, Download, Pencil, X, Save, RefreshCw, Eye } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { approveWaveApplicationAction, rejectWaveApplicationAction, getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
@@ -11,6 +11,7 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
 
@@ -87,6 +88,10 @@ export default function AdminWaveApplicationsPage() {
     const [editDraft, setEditDraft] = useState<Record<string, string>>({});
     const [editNote, setEditNote] = useState("");
     const [editSaving, setEditSaving] = useState(false);
+
+    // Detail modal state
+    const [detailApp, setDetailApp] = useState<WaveApplication | null>(null);
+    const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
     const statusFilter = (filters.status as ApplicationStatus | "all") || "pending";
 
@@ -410,7 +415,24 @@ export default function AdminWaveApplicationsPage() {
                                                 )}
                                                 Approve
                                             </button>
+                                            <button
+                                                onClick={() => { setDetailApp(app.data); setIsDetailModalOpen(true); }}
+                                                className="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold hover:bg-slate-800 transition flex items-center gap-2"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                                View Details
+                                            </button>
                                         </div>
+                                    )}
+
+                                    {app.status !== "pending" && (
+                                        <button
+                                            onClick={() => { setDetailApp(app.data); setIsDetailModalOpen(true); }}
+                                            className="px-4 py-2 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 transition flex items-center gap-2"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                            View Details
+                                        </button>
                                     )}
 
                                     {app.status === "approved" && app.data.approvedBy && (
@@ -524,6 +546,16 @@ export default function AdminWaveApplicationsPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Dynamic Detail Modal */}
+            {detailApp && (
+                <DynamicDetailModal
+                    isOpen={isDetailModalOpen}
+                    onClose={() => { setIsDetailModalOpen(false); setDetailApp(null); }}
+                    title={`Application Detail: ${detailApp.surname || ''} ${detailApp.firstName || ''}`}
+                    data={detailApp}
+                />
             )}
         </div>
     );

@@ -11,6 +11,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/firestore";
 import RejectionModal from "@/components/admin/RejectionModal";
+import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
 import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction, getAdminSellerStatsAction } from "@/app/actions/admin";
 import { formatLocalDate } from "@/lib/date-utils";
@@ -82,6 +83,7 @@ export default function AdminSellersPage() {
     const filterStatus = (filters.status as FilterType) || "all";
     const [selectedVerification, setSelectedVerification] = useState<StandardPendingForm<SellerVerification> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [isRawDetailsOpen, setIsRawDetailsOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [rejectionModalOpen, setRejectionModalOpen] = useState(false);
     const [rejectionMode, setRejectionMode] = useState<"reject" | "suspend">("reject");
@@ -619,6 +621,10 @@ export default function AdminSellersPage() {
                                 className="px-5 py-3 bg-blue-50 border border-blue-200 text-blue-700 font-bold rounded-xl hover:bg-blue-100 transition-all flex items-center gap-2">
                                 <Pencil className="w-4 h-4" /> Edit
                             </button>
+                            <button onClick={() => setIsRawDetailsOpen(true)}
+                                className="px-5 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all flex items-center gap-2">
+                                <Eye className="w-4 h-4" /> Full Details
+                            </button>
                             <button onClick={() => setIsDetailsModalOpen(false)}
                                 className="px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 font-bold rounded-xl transition-all">
                                 Close
@@ -626,6 +632,16 @@ export default function AdminSellersPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Raw Details Modal */}
+            {selectedVerification && (
+                <DynamicDetailModal 
+                    isOpen={isRawDetailsOpen}
+                    onClose={() => setIsRawDetailsOpen(false)}
+                    title={`Raw Seller Data: ${selectedVerification.data.businessName}`}
+                    data={selectedVerification.data}
+                />
             )}
 
             {/* Rejection / Suspension Modal */}
