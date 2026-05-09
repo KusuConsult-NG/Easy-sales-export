@@ -16,6 +16,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
+import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { createNotificationAction } from "@/app/actions/notifications";
 import {
     WaveApplicationReviewSchema,
@@ -3181,46 +3182,38 @@ async function _getStandardSellerVerificationsAction(
         userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
         const standardForms = applications.map((app: any) => {
-            const uData = (userMap.get(app.userId as string) || {}) as any;
+            const userId = app.userId as string;
+            const uData = userMap.get(userId) || {};
             
-            // Use canonical profile if available, otherwise fall back to fragmented reconstruction
-            const canonical = uData.verificationProfile || {};
-            const userName = canonical.fullName || uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
-            
-            // Canonical bankDetails injection
-            const bankDetails = canonical.bankDetails || {
-                bankName: app.bankName || app.bankAccount?.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: app.accountNumber || app.bankAccountNumber || app.bankAccount?.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: app.accountName || app.bankAccountName || app.bankAccount?.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: app.bankCode || app.bankAccount?.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
-            };
-
-            // Canonical documents injection
-            const documents = canonical.documents || {
-                businessDoc: app.businessDoc || app.documents?.businessDoc || uData.documents?.businessDoc || "Not uploaded",
-                idDoc: app.idDoc || app.documents?.idDoc || uData.documents?.idDoc || "Not uploaded",
-                addressProof: app.addressProof || app.documents?.addressProof || uData.documents?.addressProof || "Not uploaded"
-            };
+            // AGGRESSIVE CANONICAL NORMALIZATION
+            // This ensures that even if the app record is partial, we reconstruct the truth from the user doc
+            const normalized = normalizeAggressive(
+                userId,
+                uData,
+                app, // Seller app data
+                null, // Coop data (not needed for seller view)
+                null  // WAVE data (not needed for seller view)
+            );
 
             return {
                 id: app.id,
                 user: {
-                    id: app.userId,
-                    name: userName,
-                    email: uData.email || app.userEmail || app.email || "Unknown",
-                    phone: uData.phone || app.phone || app.phoneNumber || "Unknown",
-                    dob: uData.dob || app.dateOfBirth || "Unknown",
-                    address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
-                    state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
-                    lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
-                    bankDetails,
-                    documents
+                    id: userId,
+                    name: normalized.fullName,
+                    email: normalized.email,
+                    phone: normalized.phone,
+                    dob: normalized.dateOfBirth || "Unknown",
+                    address: normalized.address?.street || "Unknown",
+                    state: normalized.address?.state || "Unknown",
+                    lga: normalized.address?.lga || "Unknown",
+                    bankDetails: normalized.verificationProfile?.bankDetails,
+                    documents: normalized.verificationProfile?.documents
                 },
-                status: app.status || "pending",
+                status: normalized.verificationProfile?.status || "pending",
                 data: {
                     ...app,
-                    bankDetails,
-                    documents
+                    bankDetails: normalized.verificationProfile?.bankDetails,
+                    documents: normalized.verificationProfile?.documents
                 }
             };
         });

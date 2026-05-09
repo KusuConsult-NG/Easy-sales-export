@@ -473,30 +473,47 @@ export interface ModuleRegistrationStats {
 
 const fetchModuleRegistrationStats = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
+        // Query the CANONICAL USERS collection for module participation
+        // This ensures the charts match the actual user base
         const [
             hub,
             wave,
-            waveBriefing,
             academy,
             cooperatives,
-            cooperativeOnboarding,
             farmNation,
             exportHub,
-            exportOnboarding,
             marketplace,
+            // Sub-metrics that still require specialized counts
+            waveBriefing,
+            cooperativeOnboarding,
+            exportOnboarding,
         ] = await Promise.all([
             safeCount(db.collection(COLLECTIONS.USERS)),
-            safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS).where("status", "in", ["pending", "submitted", "under_review", "approved", "rejected"])),
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.wave.status", "in", ["submitted", "approved", "under_review"])),
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.academy.status", "==", "active")),
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.cooperative.status", "==", "active")),
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.farmNation.status", "==", "active")),
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.export.status", "==", "active")),
+            safeCount(db.collection(COLLECTIONS.USERS).where("serviceRegistrations.marketplace.status", "==", "approved")),
+            
+            // Legacy/Transient counts
             safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
-            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
-            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "==", "completed").where("membershipStatus", "!=", "rejected")),
             safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING).where("status", "==", "pending")),
-            safeCount(db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)),
-            safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
             safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("status", "==", "pending_review")),
-            safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "!=", "rejected")),
         ]);
-        return { hub, wave, waveBriefing, academy, cooperatives, cooperativeOnboarding, farmNation, exportHub, exportOnboarding, marketplace };
+
+        return { 
+            hub, 
+            wave, 
+            waveBriefing, 
+            academy, 
+            cooperatives, 
+            cooperativeOnboarding, 
+            farmNation, 
+            exportHub, 
+            exportOnboarding, 
+            marketplace 
+        };
     },
     ["module-registration-stats"],
     { revalidate: 300, tags: ["module-registration-stats"] }
