@@ -47,3 +47,4 @@ service-account*.json
 # Scripts data (prevent committing json/csv with real user PII)
 scripts/data/*.json
 scripts/data/*.csv
+*.csv
