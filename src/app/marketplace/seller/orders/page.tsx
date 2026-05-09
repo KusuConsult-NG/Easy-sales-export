@@ -13,6 +13,7 @@ import Link from "next/link";
 import { getSellerOrdersAction } from "@/app/actions/marketplace";
 import type { Order } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import BackButton from "@/components/ui/BackButton";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -197,9 +198,7 @@ export default function SellerOrdersPage() {
                         visibleOrders.map((order) => {
                             const statusConfig = getStatusConfig(order.status);
                             const StatusIcon = statusConfig.icon;
-                            const formattedDate = order.createdAt instanceof Date
-                                ? order.createdAt.toLocaleDateString()
-                                : new Date((order.createdAt as unknown as { seconds?: number })?.seconds ? (order.createdAt as unknown as { seconds: number }).seconds * 1000 : Date.now()).toLocaleDateString();
+                            const formattedDate = formatLocalDate(order.createdAt);
 
                             return (
                                 <div

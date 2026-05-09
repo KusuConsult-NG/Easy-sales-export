@@ -21,6 +21,7 @@ import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
 import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/termii";
 import { pushWithdrawalDecision } from "@/lib/fcm";
 import { isAdmin } from "@/lib/admin-permissions";
+import { ActionResponse } from "@/lib/safe-action";
 
 const MIN_WITHDRAWAL = 5000;   // ₦5,000 minimum withdrawal (NGN)
 const WALLET_COLLECTION = COLLECTIONS.WALLETS;
@@ -55,10 +56,7 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
 // GET: Retrieve current user's wallet
 // ---------------------------------------------------------------------------
 
-export async function getWalletAction(): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+export async function getWalletAction(): Promise<ActionResponse<Wallet>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
@@ -66,10 +64,11 @@ export async function getWalletAction(): Promise<
         const userId = session.user.id;
 
         const wallet = await _getOrCreateWallet(userId);
-        return { error: null, success: true as const, wallet , data: null };
-    } catch (err: any) {
+        return { error: null, success: true as const, data: wallet };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to retrieve wallet";
         logger.error("getWalletAction error:", err);
-        return { success: false as const, error: err.message || "Failed to retrieve wallet" , data: null };
+        return { success: false as const, error: message , data: null };
     }
 }
 
@@ -77,10 +76,7 @@ export async function getWalletAction(): Promise<
 // FUND: Initialize Paystack payment to top up the wallet
 // ---------------------------------------------------------------------------
 
-export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+export async function fundWalletViaPaystackAction(amountNGN: number): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> {
     // Wallet operations are currently disabled
     return { 
         success: false as const, 
@@ -128,7 +124,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
 
         const paystackData = await paystackRes.json();
         if (!paystackData.status) {
-            return { success: false as const, error: paystackData.message || "Paystack initialization failed" };
+            return { success: false as const, error: paystackData.message || "Paystack initialization failed", data: null };
         }
 
         // Create a pending wallet transaction record
@@ -156,7 +152,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
         };
     } catch (err: any) {
         logger.error("fundWalletViaPaystackAction error:", err);
-        return { success: false as const, error: err.message || "Failed to initiate wallet funding" };
+        return { success: false as const, error: err.message || "Failed to initiate wallet funding", data: null };
     }
     */
 }
@@ -165,10 +161,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<
 // CONFIRM: Handle Paystack callback to credit the wallet
 // ---------------------------------------------------------------------------
 
-export async function confirmWalletFundingAction(reference: string): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+export async function confirmWalletFundingAction(reference: string): Promise<ActionResponse<{ newBalance: number }>> {
     try {
         // Verify with Paystack
         const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -177,7 +170,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<
         const paystackData = await paystackRes.json();
 
         if (!paystackData.status || paystackData.data.status !== "success") {
-            return { success: false as const, error: "Payment verification failed" };
+            return { success: false as const, error: "Payment verification failed", data: null };
         }
 
         const metadata = paystackData.data.metadata;
@@ -193,7 +186,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<
 
         if (txnSnap.empty) {
             // Either already processed or not found — safe to ignore
-            return { success: false as const, error: "Already processed" };
+            return { success: false as const, error: "Already processed", data: null };
         }
 
         const txnRef = txnSnap.docs[0].ref;
@@ -242,10 +235,11 @@ export async function confirmWalletFundingAction(reference: string): Promise<
             return updatedBalance;
         });
 
-        return { error: null, success: true as const, newBalance , data: null };
-    } catch (err: any) {
+        return { error: null, success: true as const, data: { newBalance } };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to confirm funding";
         logger.error("confirmWalletFundingAction error:", err);
-        return { success: false as const, error: err.message || "Failed to confirm funding" };
+        return { success: false as const, error: message, data: null };
     }
 }
 
@@ -256,19 +250,16 @@ export async function confirmWalletFundingAction(reference: string): Promise<
 export async function walletCheckoutAction(
     orderId: string,
     amountNGN: number
-): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+): Promise<ActionResponse<{ newBalance: number }>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
         // CRITICAL SECURITY FIX: Prevent negative-amount inflation attacks and NaN corruption
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN <= 0) {
-            return { success: false as const, error: "Invalid checkout amount" };
+            return { success: false as const, error: "Invalid checkout amount", data: null };
         }
 
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
@@ -327,10 +318,11 @@ export async function walletCheckoutAction(
             return updatedBalance;
         });
 
-        return { error: null, success: true as const, newBalance , data: null };
-    } catch (err: any) {
+        return { error: null, success: true as const, data: { newBalance } };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Wallet checkout failed";
         logger.error("walletCheckoutAction error:", err);
-        return { success: false as const, error: err.message || "Wallet checkout failed" };
+        return { success: false as const, error: message, data: null };
     }
 }
 
@@ -341,10 +333,7 @@ export async function walletCheckoutAction(
 export async function withdrawFromWalletAction(
     amountNGN: number,
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
-): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+): Promise<ActionResponse<{ withdrawalId: string }>> {
     // Wallet operations are currently disabled
     return { 
         success: false as const, 
@@ -449,13 +438,10 @@ export async function withdrawFromWalletAction(
 export async function getWalletTransactionsAction(options?: {
     limit?: number;
     startAfter?: string; // Last transaction doc ID for cursor pagination
-}): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+}): Promise<ActionResponse<{ transactions: WalletTransaction[]; hasMore: boolean }>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
@@ -477,10 +463,11 @@ export async function getWalletTransactionsAction(options?: {
         const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
 
         const transactions = serializeDocs<WalletTransaction>(docs);
-        return { error: null, success: true as const, transactions, hasMore , data: null };
-    } catch (err: any) {
+        return { error: null, success: true as const, data: { transactions, hasMore } };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to fetch transactions";
         logger.error("getWalletTransactionsAction error:", err);
-        return { success: false as const, error: err.message || "Failed to fetch transactions" };
+        return { success: false as const, error: message, data: null };
     }
 }
 
@@ -492,26 +479,23 @@ export async function processWalletWithdrawalAction(
     transactionId: string,
     action: "approve" | "reject",
     note?: string
-): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+): Promise<ActionResponse<null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const adminId = sessionResult.session.user.id;
 
         if (!isAdmin(sessionResult.session.user.roles)) {
-            return { success: false as const, error: "Unauthorized" };
+            return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const txnRef = db.collection(TXN_COLLECTION).doc(transactionId);
         const txnSnap = await txnRef.get();
-        if (!txnSnap.exists) return { success: false as const, error: "Transaction not found" };
+        if (!txnSnap.exists) return { success: false as const, error: "Transaction not found", data: null };
 
         const txnData = txnSnap.data()!;
         if (txnData.status !== "pending") {
-            return { success: false as const, error: "Transaction is no longer pending" };
+            return { success: false as const, error: "Transaction is no longer pending", data: null };
         }
 
         if (action === "reject") {
@@ -625,9 +609,10 @@ export async function processWalletWithdrawalAction(
         }
 
         return { error: null, success: true as const , data: null };
-    } catch (err: any) {
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to process withdrawal";
         logger.error("processWalletWithdrawalAction error:", err);
-        return { success: false as const, error: err.message || "Failed to process withdrawal" , data: null };
+        return { success: false as const, error: message , data: null };
     }
 }
 
@@ -640,10 +625,7 @@ export async function getAdminWalletWithdrawalsAction(options: {
     limit?: number;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+} = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
@@ -731,13 +713,15 @@ export async function getAdminWalletWithdrawalsAction(options: {
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
-            error: null, success: true as const, 
+            error: null, 
+            success: true as const, 
             data: enrichedWithdrawals,
             lastDocId: nextCursor,
             hasMore
         };
-    } catch (err: any) {
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to fetch withdrawals";
         logger.error("getAdminWalletWithdrawalsAction error:", err);
-        return { success: false as const, error: err.message || "Failed to fetch withdrawals" , data: null };
+        return { success: false as const, error: message , data: null };
     }
 }

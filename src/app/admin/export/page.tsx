@@ -42,18 +42,18 @@ export default function AdminExportPage() {
                 currentLastDocId
             );
 
-            if (result.success && result.exports) {
+            if (result.success && result.data) {
                 if (reset) {
-                    setExports(result.exports);
+                    setExports(result.data);
                 } else {
-                    setExports(prev => [...prev, ...result.exports!]);
+                    setExports(prev => [...prev, ...result.data!]);
                 }
 
                 setHasMore(result.hasMore || false);
 
                 // Set cursor for next page
-                if (result.exports.length > 0) {
-                    const lastItem = result.exports[result.exports.length - 1];
+                if (result.data.length > 0) {
+                    const lastItem = result.data[result.data.length - 1];
                     setLastDocId(lastItem.id);
                 }
             } else {

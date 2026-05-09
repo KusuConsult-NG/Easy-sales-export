@@ -786,26 +786,23 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
                 .filter(Boolean).join(" ").trim();
 
             // Update user document
-            transaction.set(userRef, { 
-                farmNation: {
-                    role: data.role,
-                    profile: {
-                        ...data.profile,
-                        fullName
-                    },
-                    interests: data.interests,
-                    onboardingCompletedAt: new Date().toISOString(),
-                    termsAcceptedAt: new Date().toISOString() 
+            transaction.update(userRef, { 
+                "farmNation.role": data.role,
+                "farmNation.profile": {
+                    ...data.profile,
+                    fullName
                 },
+                "farmNation.interests": data.interests,
+                "farmNation.onboardingCompletedAt": new Date().toISOString(),
+                "farmNation.termsAcceptedAt": new Date().toISOString(),
                 roles: FieldValue.arrayUnion(...roles),
-                // Dot notation for serviceRegistrations
-                "serviceRegistrations.farmNation": {
-                    status: "pending",
-                    paymentStatus: "completed",
-                    role: data.role,
-                    completedAt: FieldValue.serverTimestamp(),
-                    submittedAt: FieldValue.serverTimestamp()
-                },
+                // Safe dot-notation for serviceRegistrations
+                "serviceRegistrations.farmNation.status": "pending",
+                "serviceRegistrations.farmNation.paymentStatus": "completed",
+                "serviceRegistrations.farmNation.role": data.role,
+                "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
+                "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
+                
                 firstName: data.profile.firstName,
                 lastName: data.profile.lastName,
                 otherName: data.profile.otherName || null,
@@ -815,7 +812,7 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
                 lga: data.profile.lga,
                 residentialAddress: data.profile.address,
                 updatedAt: FieldValue.serverTimestamp() 
-            }, { merge: true });
+            });
 
             // Create authoritative record
             transaction.set(appRef, { 
@@ -895,18 +892,13 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
         if (legacyFarmNation?.role || legacyFarmNation?.onboardingCompletedAt) { 
             const legacyStatus = 'pending'; // V1 data = completed onboarding = pending review
 
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
                 {
-                    serviceRegistrations: {
-                        farmNation: {
-                            status: legacyStatus,
-                            role: legacyFarmNation.role,
-                            syncedFromLegacy: true,
-                            syncedAt: new Date().toISOString()
-                        }
-                    }
-                },
-                { merge: true }
+                    "serviceRegistrations.farmNation.status": legacyStatus,
+                    "serviceRegistrations.farmNation.role": legacyFarmNation.role,
+                    "serviceRegistrations.farmNation.syncedFromLegacy": true,
+                    "serviceRegistrations.farmNation.syncedAt": new Date().toISOString()
+                }
             );
 
             logger.info(`[checkFarmNationStatus] Backfilled legacy farmNation status '${legacyStatus}' for user ${session.user.id}`);
@@ -1093,22 +1085,19 @@ async function _resubmitFarmNationApplicationAction(
             return { success: false as const, data: null, error: 'You must accept all terms to continue', meta: null };
         }
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).set(
+        await db.collection(COLLECTIONS.USERS).doc(userId).update(
             { 
-                farmNation: {
-                    role: data.role,
-                    profile: {
-                        ...data.profile,
-                        fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
-                            .filter(Boolean).join(" ").trim() 
-                    },
-                    interests: data.interests,
-                    resubmittedAt: new Date().toISOString(),
-                    termsAcceptedAt: new Date().toISOString() 
+                "farmNation.role": data.role,
+                "farmNation.profile": {
+                    ...data.profile,
+                    fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+                        .filter(Boolean).join(" ").trim() 
                 },
+                "farmNation.interests": data.interests,
+                "farmNation.resubmittedAt": new Date().toISOString(),
+                "farmNation.termsAcceptedAt": new Date().toISOString(),
                 updatedAt: FieldValue.serverTimestamp() 
-            },
-            { merge: true }
+            }
         );
 
         await db.collection(COLLECTIONS.USERS).doc(userId).update({ 

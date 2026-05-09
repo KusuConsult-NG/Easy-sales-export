@@ -90,3 +90,16 @@ export const CacheKeys = {
     userStats: (userId: string) => `user:stats:${userId}`,
     allUserData: (userId: string) => `user:*:${userId}`,
 } as const;
+
+/**
+ * Check if Redis is connected and configured
+ */
+export async function getRedisClientStatus(): Promise<boolean> {
+    if (!redisUrl || !redisToken) return false;
+    try {
+        await redis.get("health-check");
+        return true;
+    } catch (e) {
+        return false;
+    }
+}

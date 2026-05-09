@@ -14,6 +14,7 @@ import {
 import { getUserReviewsAction, updateReviewAction } from "@/app/actions/reviews";
 import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
+import { formatLocalDate } from "@/lib/date-utils";
 
 function StarRating({ rating, onRate }: { rating: number; onRate?: (r: number) => void }) {
     const [hover, setHover] = useState(0);
@@ -69,8 +70,8 @@ export default function MyReviewsPage() {
         setLoading(true);
         try {
             const result = await getUserReviewsAction();
-            if (result.success) {
-                setReviews(result.reviews || []);
+            if (result.success && result.data?.reviews) {
+                setReviews(result.data.reviews || []);
             } else {
                 showToast(result.error || "Failed to load reviews", "error");
             }
@@ -186,7 +187,7 @@ export default function MyReviewsPage() {
                                             </div>
                                             <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <Calendar className="w-4 h-4" />
-                                                {toDate(review.createdAt).toLocaleDateString()}
+                                                {formatLocalDate(review.createdAt)}
                                                 <span
                                                     className={`ml-2 px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
                                                         review.status

@@ -23,11 +23,9 @@ import type { VillageMarketEvent } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 
-const fmtDate = (val: any) => {
-    if (!val) return "—";
-    const d = val?.toDate ? val.toDate() : new Date(val);
-    return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
-};
+import { formatLocalDate } from "@/lib/date-utils";
+
+const fmtDate = (val: any) => formatLocalDate(val);
 
 const STATUS_COLORS: Record<string, string> = {
     draft: "bg-slate-100 text-slate-600",
@@ -233,9 +231,10 @@ export default function AdminVillageMarketPage() {
             });
             return {
                 success: result.success,
-                data: result.data || [],
-                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
-                error: result.error
+                data: result.success ? result.data : [],
+                lastDocId: result.success ? result.lastDocId : undefined,
+                hasMore: result.success ? result.hasMore : false,
+                error: result.success ? null : result.error
             };
         },
         limit: 20,

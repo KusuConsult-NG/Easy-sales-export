@@ -7,6 +7,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getMarketplaceUsersAction } from "@/app/actions/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import { formatLocalDate } from "@/lib/date-utils";
 
 type BuyerRole = "buyer_only" | "seller_only" | "both";
 
@@ -71,7 +72,7 @@ export default function MarketplaceBuyersPage() {
 
     function handleExport() {
         const headers = ["Name", "Email", "Phone", "State", "LGA", "Role", "Status", "Joined"];
-        const rows = filtered.map(u => [u.name, u.email, u.phone || "—", u.state || "—", u.lga || "—", u.buyerRole.replace("_", " "), u.status || "—", u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"]);
+        const rows = filtered.map(u => [u.name, u.email, u.phone || "—", u.state || "—", u.lga || "—", u.buyerRole.replace("_", " "), u.status || "—", formatLocalDate(u.createdAt) || "—"]);
         const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
         const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
         const url = URL.createObjectURL(blob);
@@ -220,7 +221,7 @@ export default function MarketplaceBuyersPage() {
                                             }`}>{user.status || "active"}</span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-500">
-                                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-NG") : "—"}
+                                            {formatLocalDate(user.createdAt) || "—"}
                                         </td>
                                         <td className="px-6 py-4">
                                             <button

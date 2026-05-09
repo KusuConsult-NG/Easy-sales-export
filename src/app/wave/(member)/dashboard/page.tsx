@@ -20,6 +20,7 @@ import { getWaveResourcesAction, getWaveTrainingEventsAction } from "@/app/actio
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { useSession } from "next-auth/react";
 import type { WaveResource, WaveTrainingEvent } from "@/app/actions/wave";
+import { toSafeDate } from "@/lib/utils";
 
 export default function WaveDashboardPage() {
     const router = useRouter();
@@ -261,7 +262,7 @@ export default function WaveDashboardPage() {
                                         <div className="flex items-center gap-4 text-xs text-gray-500">
                                             <span className="flex items-center gap-1">
                                                 <Calendar className="w-3 h-3" />
-                                                {new Date(event.date).toLocaleDateString()}
+                                                {toSafeDate(event.date).toLocaleDateString()}
                                             </span>
                                             <span className="flex items-center gap-1">
                                                 <Users className="w-3 h-3" />

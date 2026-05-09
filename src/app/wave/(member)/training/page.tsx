@@ -17,6 +17,7 @@ import { checkWaveMembershipAction, getUserTrainingRegistrationsAction } from "@
 import { getWaveTrainingEventsAction, registerForTrainingAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";
+import { toSafeDate } from "@/lib/utils";
 
 export default function WaveTrainingPage() {
     const router = useRouter();
@@ -202,7 +203,7 @@ export default function WaveTrainingPage() {
                                             <div className="flex items-center gap-2 text-sm text-gray-600">
                                                 <Calendar className="w-4 h-4 text-emerald-700" />
                                                 <span className="font-medium">Date:</span>{" "}
-                                                {new Date(event.date).toLocaleDateString("en-US", {
+                                                {toSafeDate(event.date).toLocaleDateString("en-US", {
                                                     weekday: "long",
                                                     year: "numeric",
                                                     month: "long",

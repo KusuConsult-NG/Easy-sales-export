@@ -28,6 +28,7 @@ import {
 } from "@/app/actions/audit-log-actions";
 import type { AuditLogEntry, AuditSeverity } from "@/lib/audit-log";
 import { useAdminData } from "@/hooks/useAdminData";
+import { toSafeDate } from "@/lib/utils";
 
 const severityConfig = {
     info: { color: "blue", icon: Info, label: "Info" },
@@ -79,8 +80,8 @@ export default function AdminAuditLogsPage() {
         async function loadStats() {
             if (status !== "authenticated") return;
             const statsResult = await getAuditStatsAction(30);
-            if (statsResult.success && statsResult.stats) {
-                setStats(statsResult.stats);
+            if (statsResult.success && statsResult.data) {
+                setStats(statsResult.data);
             }
         }
         loadStats();
@@ -96,8 +97,8 @@ export default function AdminAuditLogsPage() {
             endDate: filters.endDate as string || undefined,
         });
 
-        if (result.success && result.csv) {
-            const blob = new Blob([result.csv], { type: "text/csv" });
+        if (result.success && result.data) {
+            const blob = new Blob([result.data], { type: "text/csv" });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -115,7 +116,7 @@ export default function AdminAuditLogsPage() {
     function formatDate(timestamp: any): string {
         if (!timestamp) return "Unknown";
         try {
-            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            const date = toSafeDate(timestamp);
             if (isNaN(date.getTime())) return "Unknown";
             return date.toLocaleString();
         } catch (e) {

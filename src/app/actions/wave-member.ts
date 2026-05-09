@@ -12,12 +12,13 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 
+import { ActionResponse } from "@/lib/safe-action";
+
 /**
  * Check if current user is enrolled in WAVE
  */
-export async function checkWaveMembershipAction(): Promise<{ success: true; error: null; data: { enrolled: boolean; memberData?: any }; meta?: any }
-    | { success: false; error: string; data?: null; meta?: any }
-> { try {
+export async function checkWaveMembershipAction(): Promise<ActionResponse<{ enrolled: boolean; memberData?: any }>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -77,9 +78,8 @@ export async function checkWaveMembershipAction(): Promise<{ success: true; erro
 /**
  * Get member dashboard stats
  */
-export async function getWaveMemberStatsAction(): Promise<{ success: true; error: null; data: { stats: any }; meta?: any }
-    | { success: false; error: string; data?: null; meta?: any }
-> { try {
+export async function getWaveMemberStatsAction(): Promise<ActionResponse<{ stats: { resourcesAccessed: number; trainingsRegistered: number; trainingsCompleted: number; daysActive: number } }>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -118,6 +118,7 @@ export async function getWaveMemberStatsAction(): Promise<{ success: true; error
             data: { 
                 stats: {
                     resourcesAccessed: resourceAccessSnap.size,
+                    trainingsRegistered: trainingSnap.size,
                     trainingsCompleted,
                     daysActive: Math.max(0, daysActive)
                 }
@@ -131,10 +132,8 @@ export async function getWaveMemberStatsAction(): Promise<{ success: true; error
 /**
  * Track resource access
  */
-export async function trackResourceAccessAction(resourceId: string): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+export async function trackResourceAccessAction(resourceId: string): Promise<ActionResponse<null>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -175,9 +174,8 @@ export async function trackResourceAccessAction(resourceId: string): Promise<
 /**
  * Get user's training registrations
  */
-export async function getUserTrainingRegistrationsAction(): Promise<{ success: true; error: null; data: { registrations: any[] }; meta?: any }
-    | { success: false; error: string; data?: null; meta?: any }
-> { try {
+export async function getUserTrainingRegistrationsAction(): Promise<ActionResponse<{ registrations: any[] }>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;

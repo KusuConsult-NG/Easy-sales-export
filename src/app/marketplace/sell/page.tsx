@@ -311,7 +311,7 @@ export default function SellerDashboardPage() {
                                     {/* Actions */}
                                     <div className="flex items-center gap-2">
                                         <button
-                                            onClick={() => router.push(`/marketplace/product/${product.id}`)}
+                                            onClick={() => router.push(`/marketplace/products/${product.id}`)}
                                             className="flex-1 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold rounded-lg transition text-sm"
                                         >
                                             View

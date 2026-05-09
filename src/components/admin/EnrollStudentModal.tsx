@@ -26,9 +26,9 @@ export default function EnrollStudentModal({ isOpen, onClose }: EnrollStudentMod
 
         setIsSearching(true);
         const res = await getUsersAction({ search: searchQuery, limit: 10 });
-        if (res.success && res.users) {
-            setUsers(res.users);
-            if (res.users.length === 0) {
+        if (res.success && res.data) {
+            setUsers(res.data);
+            if (res.data.length === 0) {
                 showToast("No users found matching that email/phone/name", "error");
             }
         } else {

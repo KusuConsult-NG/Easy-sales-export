@@ -14,6 +14,7 @@ import { createDisputeAction } from "@/app/actions/disputes";
 import { getOrderByIdAction } from "@/app/actions/orders";
 import type { Order, DisputeReason } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 
 const DISPUTE_REASONS: { value: DisputeReason; label: string; description: string }[] = [
@@ -232,7 +233,7 @@ function NewDisputePageContent() {
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-600">Order Date:</span>
                             <span className="text-gray-900">
-                                {new Date(order.createdAt).toLocaleDateString()}
+                                {formatLocalDate(order.createdAt)}
                             </span>
                         </div>
                         <div className="flex justify-between text-sm">

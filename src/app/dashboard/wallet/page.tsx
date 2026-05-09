@@ -17,6 +17,7 @@ import {
     fundWalletViaPaystackAction,
     withdrawFromWalletAction,
 } from "@/app/actions/wallet";
+import { getFeatureTogglesAction } from "@/app/actions/health";
 import { useToast } from "@/contexts/ToastContext";
 
 const fmt = (n: number = 0) =>
@@ -61,11 +62,17 @@ export default function WalletPage() {
     const [wdAmount, setWdAmount] = useState("");
     const [wdBank, setWdBank] = useState({ accountNumber: "", bankCode: "", accountName: "", bankName: "" });
     const [wdLoading, setWdLoading] = useState(false);
+    const [toggles, setToggles] = useState<Record<string, boolean>>({});
+
+    const loadToggles = useCallback(async () => {
+        const res = await getFeatureTogglesAction();
+        if (res.success && res.data) setToggles(res.data);
+    }, []);
 
     const loadWallet = useCallback(async () => {
         setLoading(true);
         const res = await getWalletAction();
-        if (res.success && res.wallet) setWallet(res.wallet);
+        if (res.success && res.data) setWallet(res.data);
         else showToast(res.error || "Failed to load wallet", "error");
         setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -75,29 +82,29 @@ export default function WalletPage() {
         setTxLoading(true);
         const cursor = reset ? undefined : lastId;
         const res = await getWalletTransactionsAction({ limit: 15, startAfter: cursor });
-        if (res.success && res.transactions) {
-            setTransactions(prev => reset ? res.transactions! : [...prev, ...res.transactions!]);
-            setHasMore(!!res.hasMore);
-            if (res.transactions.length > 0)
-                setLastId(res.transactions[res.transactions.length - 1].id);
+        if (res.success && res.data?.transactions) {
+            setTransactions(prev => reset ? res.data!.transactions : [...prev, ...res.data!.transactions]);
+            setHasMore(!!res.data.hasMore);
+            if (res.data.transactions.length > 0)
+                setLastId(res.data.transactions[res.data.transactions.length - 1].id);
         }
         setTxLoading(false);
     }, [lastId]);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => { loadWallet(); loadTransactions(true); }, []);
+    useEffect(() => { loadToggles(); loadWallet(); loadTransactions(true); }, []);
 
     async function handleFund() {
         const amount = Number(fundAmount);
         if (!amount || amount < 100) return showToast("Minimum ₦100", "error");
         setFundLoading(true);
         const res = await fundWalletViaPaystackAction(amount);
-        setFundLoading(false);
-        if (res.success && res.authorizationUrl) {
-            showToast("Redirecting to Paystack…", "info");
-            window.location.href = res.authorizationUrl;
+        if (res.success && res.data?.authorizationUrl) {
+            showToast("Redirecting to payment...", "success");
+            window.location.href = res.data.authorizationUrl;
         } else {
-            showToast(res.error || "Failed", "error");
+            showToast(res.error || "Funding failed", "error");
+            setFundLoading(false);
         }
     };
 
@@ -151,20 +158,23 @@ export default function WalletPage() {
                             {fmt(wallet?.balance || 0)}
                         </p>
                         <div className="flex gap-3">
-                            {/* Wallet Funding Disabled 
-                            <button
-                                onClick={() => setShowFund(true)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-white text-green-700 font-bold rounded-xl hover:bg-green-50 transition shadow"
-                            >
-                                <Plus className="w-4 h-4" /> Fund Wallet
-                            </button>
-                            */}
-                            <button
-                                onClick={() => setShowWithdraw(true)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition border border-white/30"
-                            >
-                                <ArrowUpCircle className="w-4 h-4" /> Withdraw
-                            </button>
+                            {toggles.wallet_deposits && (
+                                <button
+                                    onClick={() => setShowFund(true)}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-white text-green-700 font-bold rounded-xl hover:bg-green-50 transition shadow"
+                                >
+                                    <Plus className="w-4 h-4" /> Fund Wallet
+                                </button>
+                            )}
+                            
+                            {toggles.wallet_withdrawals && (
+                                <button
+                                    onClick={() => setShowWithdraw(true)}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-white/20 text-white font-bold rounded-xl hover:bg-white/30 transition border border-white/30"
+                                >
+                                    <ArrowUpCircle className="w-4 h-4" /> Withdraw
+                                </button>
+                            )}
                             <button
                                 onClick={() => { loadWallet(); loadTransactions(true); }}
                                 className="p-2.5 bg-white/20 text-white rounded-xl hover:bg-white/30 transition border border-white/30"

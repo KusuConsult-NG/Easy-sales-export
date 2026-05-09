@@ -45,6 +45,7 @@ type EscrowTransaction = BaseEscrowTransaction & {
     };
 };
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 import { useSession } from "next-auth/react";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -272,7 +273,7 @@ export default function AdminEscrowPage() {
                                                 <span className="font-mono text-xs text-gray-400">{tx.id?.slice(0, 10)}...</span>
                                                 {tx.createdAt && (
                                                     <span className="text-xs text-gray-400">
-                                                        {(tx.createdAt as Date).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                                                        {formatLocalDate(tx.createdAt)}
                                                     </span>
                                                 )}
                                             </div>

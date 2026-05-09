@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Shield, Key, Clock, Save, Loader2, Lock, AlertTriangle } from "lucide-react";
+import { Shield, Key, Clock, Save, Loader2, Lock, AlertTriangle, Database, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
+import { runServiceRegistrationRecoveryAction } from "@/app/actions/data-recovery";
 
 interface SecuritySettings {
     sessionDurationDays: number;
@@ -28,6 +29,8 @@ export default function SecuritySettingsPage() {
     const [settings, setSettings] = useState<SecuritySettings>(DEFAULTS);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isRecovering, setIsRecovering] = useState(false);
+    const [recoveryStats, setRecoveryStats] = useState<any>(null);
     const isSuperAdmin = session?.user?.roles?.includes("super_admin");
 
     useEffect(() => {
@@ -65,6 +68,25 @@ export default function SecuritySettingsPage() {
             setIsSaving(false);
         }
     };
+
+    async function handleRunRecovery() {
+        if (!confirm("Are you sure you want to run the Data Integrity Recovery? This will scan all users and backfill missing registration data.")) return;
+        
+        setIsRecovering(true);
+        try {
+            const result = await runServiceRegistrationRecoveryAction();
+            if (result.success) {
+                setRecoveryStats(result.stats);
+                showToast(`Data recovery complete: ${result.stats.fixedCount} users fixed.`, "success");
+            } else {
+                showToast(result.stats?.errors?.[0] || "Recovery failed", "error");
+            }
+        } catch (error: any) {
+            showToast(error.message || "An unexpected error occurred", "error");
+        } finally {
+            setIsRecovering(false);
+        }
+    }
 
     if (isLoading) {
         return (
@@ -226,6 +248,67 @@ export default function SecuritySettingsPage() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Data Integrity & Recovery */}
+            <div className="bg-white rounded-2xl shadow-sm p-6 mt-6 border-t-4 border-blue-600">
+                <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                        <Database className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="font-bold text-slate-900">Data Integrity & Recovery</h3>
+                            {isSuperAdmin && (
+                                <button
+                                    onClick={handleRunRecovery}
+                                    disabled={isRecovering}
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition"
+                                >
+                                    {isRecovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                                    Run Integrity Audit
+                                </button>
+                            )}
+                        </div>
+                        <p className="text-sm text-slate-500 mb-4">
+                            Scans the database for corrupted module registrations caused by destructive writes. Reconstructs missing data from authoritative collections.
+                        </p>
+
+                        {recoveryStats && (
+                            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                <div className="flex items-center gap-2 text-green-600 font-semibold mb-3">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span>Last Audit Results</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Users Scanned</p>
+                                        <p className="text-xl font-bold text-slate-900">{recoveryStats.totalUsersProcessed}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Issues Found</p>
+                                        <p className="text-xl font-bold text-slate-900">{recoveryStats.corruptedFound}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Users Fixed</p>
+                                        <p className="text-xl font-bold text-green-600">{recoveryStats.fixedCount}</p>
+                                    </div>
+                                </div>
+                                {recoveryStats.errors?.length > 0 && (
+                                    <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-100">
+                                        <p className="text-xs text-red-600 font-semibold mb-1">Errors Encountered:</p>
+                                        <ul className="text-[10px] text-red-500 list-disc list-inside space-y-1">
+                                            {recoveryStats.errors.slice(0, 3).map((err: string, i: number) => (
+                                                <li key={i}>{err}</li>
+                                            ))}
+                                            {recoveryStats.errors.length > 3 && <li>And {recoveryStats.errors.length - 3} more...</li>}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

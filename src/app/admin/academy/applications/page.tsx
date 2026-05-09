@@ -443,13 +443,18 @@ export default function AdminAcademyApplicationsPage() {
                 return {
                     success: true,
                     data: apps,
-                    meta: {
-                        lastDocId: result.lastDocId,
-                        hasMore: result.hasMore
-                    }
+                    lastDocId: result.lastDocId,
+                    hasMore: result.hasMore,
+                    error: null
                 };
             } catch (err: any) {
-                return { success: false, data: [], meta: { hasMore: false }, error: err.message };
+                return { 
+                    success: false, 
+                    data: [], 
+                    lastDocId: undefined,
+                    hasMore: false, 
+                    error: err.message 
+                };
             }
         },
         limit: 50,

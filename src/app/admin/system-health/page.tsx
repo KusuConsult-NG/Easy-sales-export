@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { runSystemHealthDiagnostic, type HealthReport, type HealthIssue } from "@/app/actions/health";
-import { Activity, AlertTriangle, CheckCircle, RefreshCw, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle, RefreshCw, ShieldAlert, Server, Database, CreditCard, Mail, ToggleLeft, ToggleRight, Search } from "lucide-react";
 
 export default function SystemHealthPage() {
     const [loading, setLoading] = useState(true);
@@ -64,14 +64,14 @@ export default function SystemHealthPage() {
             {!loading && report && (
                 <>
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                             <div className="flex items-center gap-3 text-slate-500 mb-4">
                                 <Activity className="w-5 h-5 text-blue-500" />
-                                <span className="font-medium text-sm uppercase tracking-wide">Documents Scanned</span>
+                                <span className="font-medium text-sm uppercase tracking-wide">Scanned</span>
                             </div>
                             <span className="text-4xl font-bold text-slate-900">{report.totalScanned.toLocaleString()}</span>
-                            <div className="mt-2 text-xs text-slate-500">Recent Users</div>
+                            <div className="mt-2 text-xs text-slate-500">Sample Size (Recent Users)</div>
                         </div>
 
                         <div className={`bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-between ${isHealthy ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30'}`}>
@@ -81,80 +81,165 @@ export default function SystemHealthPage() {
                                 ) : (
                                     <ShieldAlert className="w-5 h-5 text-red-500" />
                                 )}
-                                <span className="font-medium text-sm uppercase tracking-wide">System State</span>
+                                <span className="font-medium text-sm uppercase tracking-wide">Integrity</span>
                             </div>
                             <span className={`text-4xl font-bold ${isHealthy ? 'text-emerald-700' : 'text-red-700'}`}>
                                 {isHealthy ? 'Healthy' : 'At Risk'}
                             </span>
                             <div className={`mt-2 text-xs ${isHealthy ? 'text-emerald-600' : 'text-red-600'}`}>
-                                Data Integrity Rules Validated
+                                {report.anomaliesFound} Critical Anomalies
                             </div>
                         </div>
 
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
                             <div className="flex items-center gap-3 text-slate-500 mb-4">
                                 <AlertTriangle className="w-5 h-5 text-orange-500" />
-                                <span className="font-medium text-sm uppercase tracking-wide">Anomalies Detected</span>
+                                <span className="font-medium text-sm uppercase tracking-wide">Orphaned Apps</span>
                             </div>
-                            <span className="text-4xl font-bold text-slate-900">{report.anomaliesFound}</span>
-                            <div className="mt-2 text-xs text-slate-500">Conflicts Detected in Core Platform</div>
+                            <span className="text-4xl font-bold text-slate-900">{report.stats.orphanedApplications}</span>
+                            <div className="mt-2 text-xs text-slate-500">Missing User Linkages</div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+                            <div className="flex items-center gap-3 text-slate-500 mb-4">
+                                <ShieldAlert className="w-5 h-5 text-purple-500" />
+                                <span className="font-medium text-sm uppercase tracking-wide">Desynced Regs</span>
+                            </div>
+                            <span className="text-4xl font-bold text-slate-900">{report.stats.desyncedRegistrations}</span>
+                            <div className="mt-2 text-xs text-slate-500">Stale Module States</div>
+                        </div>
+                    </div>
+
+                    {/* Service Health & Feature Toggles */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Services */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                            <div className="flex items-center gap-2 mb-6">
+                                <Server className="w-5 h-5 text-slate-400" />
+                                <h2 className="font-bold text-slate-800">Infrastructure Connectivity</h2>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.redis ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                    <Database className="w-5 h-5" />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold uppercase">Upstash Redis</span>
+                                        <span className="text-sm">{report.services.redis ? 'Connected' : 'Disconnected'}</span>
+                                    </div>
+                                </div>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.firestore ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                    <Database className="w-5 h-5" />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold uppercase">Cloud Firestore</span>
+                                        <span className="text-sm">{report.services.firestore ? 'Active' : 'Error'}</span>
+                                    </div>
+                                </div>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.paystack ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                    <CreditCard className="w-5 h-5" />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold uppercase">Paystack API</span>
+                                        <span className="text-sm">{report.services.paystack ? 'Configured' : 'Missing Key'}</span>
+                                    </div>
+                                </div>
+                                <div className={`p-4 rounded-xl border flex items-center gap-3 ${report.services.resend ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-red-50 border-red-100 text-red-700'}`}>
+                                    <Mail className="w-5 h-5" />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-bold uppercase">Resend Mail</span>
+                                        <span className="text-sm">{report.services.resend ? 'Ready' : 'Missing Key'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Feature Toggles */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2">
+                                    <ToggleRight className="w-5 h-5 text-slate-400" />
+                                    <h2 className="font-bold text-slate-800">Feature Activation States</h2>
+                                </div>
+                                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-tighter font-bold">Runtime Toggles</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                                {Object.entries(report.featureToggles).map(([key, enabled]) => (
+                                    <div key={key} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0">
+                                        <span className="text-xs font-medium text-slate-600 truncate mr-2" title={key}>{key.replace(/_/g, ' ')}</span>
+                                        {enabled ? (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                                <CheckCircle className="w-2.5 h-2.5" /> ON
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                                                OFF
+                                            </span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
                     {/* Report Table */}
                     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                            <h2 className="font-semibold text-slate-800">Flagged User Accounts</h2>
+                            <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-orange-500" />
+                                Critical Integrity Conflicts
+                            </h2>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold uppercase text-slate-400 bg-white border border-slate-100 px-2 py-1 rounded-lg shadow-xs">
+                                    Last Check: {new Date(report.timestamp).toLocaleTimeString()}
+                                </span>
+                            </div>
                         </div>
                         {report.issues.length === 0 ? (
                             <div className="p-12 text-center text-slate-500">
                                 <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-                                <p className="text-lg font-medium text-slate-900">No issues found!</p>
-                                <p className="text-sm mt-1">All scanned accounts comply with platform constraints.</p>
+                                <p className="text-lg font-medium text-slate-900">Platform Synchronized!</p>
+                                <p className="text-sm mt-1">No structural anomalies detected in current sample.</p>
                             </div>
                         ) : (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-medium">
                                         <tr>
-                                            <th className="px-6 py-4">User</th>
-                                            <th className="px-6 py-4">Issue Type</th>
-                                            <th className="px-6 py-4">Expected State</th>
-                                            <th className="px-6 py-4">Actual State</th>
-                                            <th className="px-6 py-4 text-right">Actions</th>
+                                            <th className="px-6 py-4">User Identity</th>
+                                            <th className="px-6 py-4">Conflict Type</th>
+                                            <th className="px-6 py-4">Evidence</th>
+                                            <th className="px-6 py-4 text-right">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {report.issues.map((issue, idx) => (
                                             <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
                                                 <td className="px-6 py-4">
-                                                    <div className="font-medium text-slate-900 truncate max-w-[200px]" title={issue.email}>
+                                                    <div className="font-bold text-slate-900 truncate max-w-[200px]" title={issue.email}>
                                                         {issue.email}
                                                     </div>
-                                                    <div className="text-xs text-slate-400 font-mono mt-1">
-                                                        {issue.id}
+                                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 tracking-tight">
+                                                        UID: {issue.id}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-50 text-red-700 text-xs font-semibold whitespace-nowrap">
-                                                        <AlertTriangle className="w-3.5 h-3.5" />
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold whitespace-nowrap ${issue.issueType.includes("High") ? 'bg-orange-50 text-orange-700' : 'bg-red-50 text-red-700'}`}>
+                                                        {issue.issueType.includes("High") ? <AlertTriangle className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
                                                         {issue.issueType}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-600 font-mono text-xs">
-                                                    {issue.expectedState}
-                                                </td>
                                                 <td className="px-6 py-4">
-                                                    <span className="font-mono text-xs bg-slate-100 px-2 flex py-1 rounded border border-slate-200 break-all max-w-xs">
-                                                        {issue.actualState}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Description</span>
+                                                        <p className="text-xs text-slate-600 leading-relaxed italic border-l-2 border-slate-100 pl-2">
+                                                            {issue.description}
+                                                        </p>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <a 
                                                         href={`/admin/users/${issue.id}`} 
-                                                        className="text-blue-600 font-medium hover:text-blue-800 text-sm whitespace-nowrap"
+                                                        className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-all shadow-sm"
                                                     >
-                                                        Review Profile
+                                                        <Search className="w-3.5 h-3.5" />
+                                                        Verify
                                                     </a>
                                                 </td>
                                             </tr>

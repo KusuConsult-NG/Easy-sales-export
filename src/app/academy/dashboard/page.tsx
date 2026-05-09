@@ -8,6 +8,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { checkAcademyPaymentStatusAction } from "@/app/actions/academy-payment";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
+import { formatLocalDate } from "@/lib/date-utils";
 
 type CourseProgress = {
     courseId: string;
@@ -277,7 +278,7 @@ export default function AcademyDashboardPage() {
                                         {cert.courseTitle}
                                     </h3>
                                     <p className="text-center text-sm text-slate-600 mb-1">
-                                        Completed: {new Date(cert.completionDate).toLocaleDateString()}
+                                        Completed: {formatLocalDate(cert.completionDate)}
                                     </p>
                                     {cert.grade && (
                                         <p className="text-center text-sm font-semibold text-green-600 mb-4">

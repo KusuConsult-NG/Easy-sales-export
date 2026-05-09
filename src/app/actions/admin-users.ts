@@ -1,5 +1,7 @@
 "use server";
 
+import { ActionResponse } from "@/lib/safe-action";
+
 import { requireSession } from "@/lib/session-guard";
 import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/lib/firebase-admin";
@@ -12,10 +14,7 @@ import { createNotificationAction } from "@/app/actions/notifications";
 /**
  * Fetch all admin and super_admin users — used to populate the assignment dropdown.
  */
-export async function getAdminUsersAction(): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+export async function getAdminUsersAction(): Promise<ActionResponse<any[]>> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthenticated", data: null };
 
@@ -43,7 +42,7 @@ export async function getAdminUsersAction(): Promise<
                 role: (d.roles as string[])?.includes("super_admin") ? "super_admin" : "admin" });
         }
 
-        return { success: true as const, admins, error: null };
+        return { success: true as const, data: admins, error: null };
     } catch (error: any) { return { success: false as const, error: error.message, data: null };
     }
 }
@@ -55,10 +54,7 @@ export async function assignDisputeAction(
     disputeId: string,
     assigneeId: string,
     assigneeName: string
-): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+): Promise<ActionResponse<null>> { try {
         const adminCheck = await requireAdmin();
         if ("error" in adminCheck) return { success: false as const, error: adminCheck.error, data: null };
 
@@ -96,7 +92,7 @@ export async function assignDisputeAction(
             type: "info",
             link: `/admin/marketplace/disputes/${disputeId}` });
 
-        return { success: true as const, error: null };
+        return { success: true as const, error: null, data: null };
     } catch (error: any) { return { success: false as const, error: error.message, data: null };
     }
 }

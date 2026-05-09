@@ -46,9 +46,10 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<any>> {
                 if (appData.status === "approved") {
                     currentStatus = "approved";
                     // Proactively backfill for performance in future logins
-                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-                        serviceRegistrations: { academy: { status: "approved", syncedAt: new Date().toISOString() } }
-                    }, { merge: true });
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                        "serviceRegistrations.academy.status": "approved",
+                        "serviceRegistrations.academy.syncedAt": new Date().toISOString()
+                    });
                 } else if (appData.status) {
                     currentStatus = appData.status;
                 }
@@ -183,13 +184,26 @@ async function _getCoursesAction(
         const courses = serializeDocs<Course>(snapshot.docs);
 
         const newLastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+        const hasMore = snapshot.docs.length === limit;
 
-        return { success: true, error: null, data: courses };
+        return { 
+            success: true, 
+            error: null, 
+            data: courses,
+            lastDocId: newLastDocId,
+            hasMore
+        };
     } catch (error) {
         logger.error("Failed to fetch courses:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false, error: error instanceof Error ? error.message : "Fetch failed", data: null };
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Fetch failed", 
+            data: null,
+            lastDocId: null,
+            hasMore: false
+        };
     }
 }
 export const getCoursesAction = withFlexibleSafeAction("getCoursesAction", _getCoursesAction);

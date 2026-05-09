@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { Loader2, MessageSquare, Calendar, ChevronRight } from "lucide-react";
 import { getLandInquiriesAction } from "@/app/actions/land-listings";
 import Link from "next/link";
+import { formatLocalDate } from "@/lib/date-utils";
 
 export default function InquiriesPage() {
     const router = useRouter();
@@ -83,9 +84,7 @@ export default function InquiriesPage() {
                                                     </p>
                                                     <div className="flex items-center text-xs text-slate-500">
                                                         <Calendar className="w-3 h-3 mr-1" />
-                                                        {inquiry.createdAt?.seconds
-                                                            ? new Date(inquiry.createdAt.seconds * 1000).toLocaleDateString()
-                                                            : 'Just now'}
+                                                        {formatLocalDate(inquiry.createdAt) || 'Just now'}
                                                     </div>
                                                 </div>
                                                 <h3 className="text-lg font-semibold text-slate-900 truncate">

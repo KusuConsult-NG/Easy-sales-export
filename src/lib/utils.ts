@@ -103,3 +103,33 @@ export function escapeHtml(str: string): string {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
 }
+
+/**
+ * Safely converts various date-like formats (Timestamp, string, number) to a Date object.
+ */
+export function toSafeDate(date: any): Date {
+    if (!date) return new Date();
+    if (date instanceof Date) return date;
+    
+    try {
+        if (typeof date === "string" || typeof date === "number") {
+            const d = new Date(date);
+            return isNaN(d.getTime()) ? new Date() : d;
+        }
+        
+        // Handle Firestore Timestamp
+        if (date && typeof date.toDate === "function") {
+            return date.toDate();
+        }
+        
+        // Handle POJO Timestamp (from server actions)
+        if (date && typeof date.seconds === "number") {
+            return new Date(date.seconds * 1000);
+        }
+        
+        const fallback = new Date(date);
+        return isNaN(fallback.getTime()) ? new Date() : fallback;
+    } catch {
+        return new Date();
+    }
+}

@@ -18,6 +18,7 @@ import {
     CheckCircle,
 } from "lucide-react";
 import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave-member";
+import { toSafeDate } from "@/lib/utils";
 
 export default function WaveProfilePage() {
     const router = useRouter();
@@ -68,7 +69,7 @@ export default function WaveProfilePage() {
     }
 
     const enrolledDate = memberData?.enrolledAt
-        ? new Date(memberData.enrolledAt.toDate()).toLocaleDateString("en-US", {
+        ? toSafeDate(memberData.enrolledAt).toLocaleDateString("en-US", {
             month: "long",
             day: "numeric",
             year: "numeric",

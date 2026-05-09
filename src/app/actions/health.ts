@@ -1,9 +1,12 @@
 "use server";
 
 import { requireSession } from "@/lib/session-guard";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { db, getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS, User } from "@/lib/types/firestore";
-import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
+import { isAdmin } from "@/lib/admin-permissions";
+import { getRedisClientStatus } from "@/lib/redis";
+import { logger } from "@/lib/logger";
+import { DEFAULT_TOGGLES } from "@/lib/feature-toggles";
 
 export interface HealthIssue { id: string; // userId
     email: string;
@@ -12,9 +15,24 @@ export interface HealthIssue { id: string; // userId
     actualState: string;
     description: string; }
 
-export interface HealthReport { totalScanned: number;
+export interface HealthReport {
+    totalScanned: number;
     anomaliesFound: number;
-    issues: HealthIssue[]; }
+    issues: HealthIssue[];
+    services: {
+        redis: boolean;
+        firestore: boolean;
+        paystack: boolean;
+        resend: boolean;
+    };
+    featureToggles: Record<string, boolean>;
+    stats: {
+        corruptedUsers: number;
+        orphanedApplications: number;
+        desyncedRegistrations: number;
+    };
+    timestamp: string;
+}
 
 export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
@@ -85,9 +103,87 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
             }
         });
 
-        return { error: null, success: true as const, data: null
+        // 4. Service Health
+        const redisStatus = await getRedisClientStatus();
+        const firestoreStatus = !!db;
+
+        // 5. Orphaned Apps Check (Sample)
+        let orphanedApps = 0;
+        let desyncedRegs = 0;
+        const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(50).get();
+        for (const doc of waveSnap.docs) {
+            const userId = doc.data().userId;
+            if (!userId) {
+                orphanedApps++;
+            } else {
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                if (!userDoc.exists) orphanedApps++;
+            }
+        }
+
+        // 6. Feature Toggles
+        const featureToggles: Record<string, boolean> = { ...DEFAULT_TOGGLES };
+        try {
+            const togglesSnapshot = await db.collection(COLLECTIONS.FEATURE_TOGGLES).get();
+            togglesSnapshot.docs.forEach(doc => {
+                const data = doc.data();
+                if (data && typeof data.enabled === 'boolean') {
+                    featureToggles[doc.id] = data.enabled;
+                }
+            });
+        } catch (err) {
+            logger.error("Failed to fetch toggles in health diagnostic:", err);
+        }
+
+        const report: HealthReport = {
+            totalScanned: usersSnap.size,
+            anomaliesFound: issues.length,
+            issues: issues,
+            services: {
+                redis: redisStatus,
+                firestore: firestoreStatus,
+                paystack: !!process.env.PAYSTACK_SECRET_KEY,
+                resend: !!process.env.RESEND_API_KEY,
+            },
+            featureToggles,
+            stats: {
+                corruptedUsers: issues.filter(i => i.issueType.includes("Corruption")).length,
+                orphanedApplications: orphanedApps,
+                desyncedRegistrations: desyncedRegs
+            },
+            timestamp: new Date().toISOString()
         };
 
-    } catch (e: any) { return { success: false as const, error: e.message, data: null };
+        return { error: null, success: true as const, data: report };
+
+    } catch (e: any) {
+        logger.error("System health diagnostic failed:", e);
+        return { success: false as const, error: e.message, data: null };
+    }
+}
+
+import { ActionResponse } from "@/lib/safe-action";
+
+/**
+ * Fetches the current state of feature toggles, merging defaults with database overrides.
+ */
+export async function getFeatureTogglesAction(): Promise<ActionResponse<Record<string, boolean>>> {
+    try {
+        const db = getAdminDb();
+        const featureToggles: Record<string, boolean> = { ...DEFAULT_TOGGLES };
+
+        const togglesSnapshot = await db.collection(COLLECTIONS.FEATURE_TOGGLES).get();
+        togglesSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data && typeof data.enabled === 'boolean') {
+                featureToggles[doc.id] = data.enabled;
+            }
+        });
+
+        return { success: true as const, data: featureToggles, error: null };
+    } catch (e: any) {
+        logger.error("Failed to fetch feature toggles:", e);
+        // Fallback to defaults on error
+        return { success: true as const, data: DEFAULT_TOGGLES, error: null };
     }
 }

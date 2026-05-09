@@ -16,6 +16,7 @@ import { useState, useEffect } from "react";
 import { getBuyerStatsAction, getBuyerOrdersAction, getRecommendedProductsAction } from "@/app/actions/marketplace";
 import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import { toDate, formatLocalDate } from "@/lib/date-utils";
 
 export default function BuyerDashboard() {
     const [loading, setLoading] = useState(true);
@@ -44,7 +45,7 @@ export default function BuyerDashboard() {
                 if (ordersResult.success && ordersResult.data?.orders) {
                     // Sort by newest first and take top 5
                     const sorted = ordersResult.data.orders.sort((a: any, b: any) => {
-                        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                        return toDate(b.createdAt).getTime() - toDate(a.createdAt).getTime();
                     });
                     setRecentOrders(sorted.slice(0, 5));
                 }
@@ -228,7 +229,7 @@ export default function BuyerDashboard() {
                                 ) : (
                                     recentOrders.map((order) => {
                                         const badge = getStatusBadge(order.status);
-                                        const formattedDate = new Date(order.createdAt).toLocaleDateString();
+                                        const formattedDate = formatLocalDate(order.createdAt);
 
                                         return (
                                             <div

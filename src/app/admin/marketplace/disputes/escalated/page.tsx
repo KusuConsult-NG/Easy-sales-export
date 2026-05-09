@@ -55,10 +55,8 @@ export default function EscalatedDisputesPage() {
                 lastDocId: opts.lastDocId
             });
             return {
-                success: disputeRes.success,
-                data: ((disputeRes as any).disputes || []) as any,
-                meta: { lastDocId: (disputeRes as any).lastDocId, hasMore: (disputeRes as any).hasMore },
-                error: (disputeRes as any).error || (disputeRes as any).message
+                ...disputeRes,
+                data: disputeRes.data || []
             };
         },
         limit: 20
@@ -73,7 +71,7 @@ export default function EscalatedDisputesPage() {
         async function fetchAdmins() {
             try {
                 const adminRes = await getAdminUsersAction();
-                if (adminRes.success && adminRes.admins) setAdmins(adminRes.admins);
+                if (adminRes.success && adminRes.data) setAdmins(adminRes.data);
             } catch {
                 showToast("Failed to load admins", "error");
             }

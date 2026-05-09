@@ -16,6 +16,7 @@ import { getAdminDisputesAction, updateDisputeStatusAction } from "@/app/actions
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { Dispute } from "@/lib/types/marketplace";
+import { formatLocalDate } from "@/lib/date-utils";
 
 export default function AdminDisputesPage() {
     const { showToast } = useToast();
@@ -175,9 +176,7 @@ export default function AdminDisputesPage() {
                                 <div className="flex items-center justify-between">
                                     {getStatusBadge(dispute.status)}
                                     <span className="text-xs text-slate-500">
-                                        {dispute.createdAt
-                                            ? new Date(dispute.createdAt as any).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })
-                                            : ""}
+                                        {formatLocalDate(dispute.createdAt)}
                                     </span>
                                 </div>
                             </div>

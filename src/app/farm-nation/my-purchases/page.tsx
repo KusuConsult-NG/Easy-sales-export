@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { getMyPurchaseRequestsAction, cancelPurchaseRequestAction } from "@/app/actions/farm-nation";
 import { useToast } from "@/contexts/ToastContext";
+import { formatLocalDate } from "@/lib/date-utils";
 
 interface PurchaseRequest {
     id: string;
@@ -327,7 +328,7 @@ This document serves as a record of the purchase agreement initiated through Eas
                                                 <div className="bg-slate-50 rounded-lg p-3">
                                                     <p className="text-xs text-slate-600 mb-1">Request Date</p>
                                                     <p className="text-sm font-semibold text-slate-900">
-                                                        {new Date(purchase.createdAt).toLocaleDateString()}
+                                                        {formatLocalDate(purchase.createdAt)}
                                                     </p>
                                                 </div>
                                             </div>

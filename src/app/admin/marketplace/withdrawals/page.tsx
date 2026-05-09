@@ -57,9 +57,10 @@ export default function AdminWalletWithdrawalsPage() {
             });
             return {
                 success: result.success,
-                data: result.data || [],
-                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
-                error: result.error
+                data: result.success ? result.data : [],
+                lastDocId: result.success ? result.lastDocId : undefined,
+                hasMore: result.success ? result.hasMore : false,
+                error: result.success ? null : result.error
             };
         },
         limit: 25,

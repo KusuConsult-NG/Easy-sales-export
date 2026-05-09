@@ -43,6 +43,10 @@ export const DEFAULT_TOGGLES: Record<string, boolean> = {
     // Experimental features
     blockchain_verification: false,
     ml_credit_scoring: false,
+
+    // Wallet features (disabled for production rollout)
+    wallet_deposits: false,
+    wallet_withdrawals: false,
 };
 
 /**
@@ -164,6 +168,20 @@ export const FEATURE_METADATA: Record<string, FeatureMetadata> = {
         name: "ML Credit Scoring",
         description: "Machine learning algorithms for cooperative loan assessments",
         category: "EXPERIMENTAL",
+        defaultEnabled: false,
+    },
+    wallet_deposits: {
+        id: "wallet_deposits",
+        name: "Wallet Deposits",
+        description: "Allow users to deposit funds into their marketplace wallet",
+        category: "CORE",
+        defaultEnabled: false,
+    },
+    wallet_withdrawals: {
+        id: "wallet_withdrawals",
+        name: "Wallet Withdrawals",
+        description: "Allow users to withdraw funds from their marketplace wallet",
+        category: "CORE",
         defaultEnabled: false,
     },
 };

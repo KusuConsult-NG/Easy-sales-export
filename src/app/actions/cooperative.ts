@@ -719,9 +719,12 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             const derivedStatus = memberData.membershipStatus ?? memberData.status ?? 'pending';
 
             // Backfill the user doc so future reads hit the fast path
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { cooperatives: { status: derivedStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
-                { merge: true }
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
+                { 
+                    "serviceRegistrations.cooperatives.status": derivedStatus, 
+                    "serviceRegistrations.cooperatives.syncedFromLegacy": true, 
+                    "serviceRegistrations.cooperatives.syncedAt": new Date().toISOString() 
+                }
             );
             logger.info(`[checkCooperativeStatus] Backfilled status '${derivedStatus}' for user ${session.user.id}`);
             return derivedStatus;

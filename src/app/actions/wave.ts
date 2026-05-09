@@ -4,6 +4,8 @@
 
 "use server";
 
+import { ActionResponse } from "@/lib/safe-action";
+
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -16,7 +18,7 @@ import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "@/lib/sc
 import { Resend } from "resend";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
+import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 
 /**
@@ -43,13 +45,13 @@ export interface WaveTrainingEvent { id?: string;
     title: string;
     description: string;
     instructor: string;
-    date: any;
+    date: FieldValue | Timestamp | Date | string;
     duration: string;
     maxParticipants: number;
     currentParticipants: number;
     meetingLink?: string;
     status: "upcoming" | "ongoing" | "completed" | "cancelled";
-    createdAt: any; }
+    createdAt: FieldValue | Timestamp | Date | string; }
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
 const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
@@ -116,7 +118,7 @@ const waveApplicationSchema = z.object({ // SECTION A: Personal Identification
 /**
  * Check WAVE application status for current user
  */
-async function _checkWaveStatusAction(): Promise<ActionResponse<any>> {
+async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string | null }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -142,9 +144,10 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<any>> {
                 if (appData.status === "approved") {
                     status = "approved";
                     // Proactively backfill for performance in future logins
-                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-                        serviceRegistrations: { wave: { status: "approved", syncedAt: new Date().toISOString() } }
-                    }, { merge: true });
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                        "serviceRegistrations.wave.status": "approved",
+                        "serviceRegistrations.wave.syncedAt": new Date().toISOString()
+                    });
                 } else if (appData.status) {
                     status = appData.status;
                 }
@@ -169,16 +172,18 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<any>> {
             const legacyData = sortedDocs[0];
             const legacyStatus = legacyData?.status ?? 'pending';
 
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { wave: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
-                { merge: true }
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
+                {
+                    "serviceRegistrations.wave.status": legacyStatus,
+                    "serviceRegistrations.wave.syncedFromLegacy": true,
+                    "serviceRegistrations.wave.syncedAt": new Date().toISOString()
+                }
             );
 
             logger.info(`[checkWaveStatus] Backfilled legacy wave status '${legacyStatus}' for user ${session.user.id}`);
             return { error: null, success: true as const, data: { status: legacyStatus } };
         }
-
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: { status: null } };
     } catch (error) {
         logger.error("Check WAVE status error:", error);
         return { success: false as const, error: "Failed to check status", data: null };
@@ -189,7 +194,7 @@ export const checkWaveStatusAction = withFlexibleSafeAction("checkWaveStatusActi
 /**
  * Check if user is eligible for WAVE (female only)
  */
-async function _checkWaveEligibilityAction(userId: string): Promise<ActionResponse<any>> {
+async function _checkWaveEligibilityAction(userId: string): Promise<ActionResponse<{ eligible: boolean; reason?: string } | null>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -236,7 +241,7 @@ export const checkWaveEligibilityAction = withFlexibleSafeAction("checkWaveEligi
  * Submit multi-step WAVE application
  * Accepts object data from multi-step form (not FormData)
  */
-async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<ActionResponse<any>> {
+async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<typeof waveApplicationSchema>): Promise<ActionResponse<{ applicationId: string }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -437,11 +442,11 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         } catch (err) {
             logger.error("Failed to invalidate cache after WAVE application:", err);
         }
-
-        return { error: null, success: true as const, data: null };
-    } catch (error: any) {
+        return { error: null, success: true as const, data: { applicationId } };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("WAVE application submission error:", error);
-        return { success: false as const, error: "Failed to submit application. Please try again.", data: null };
+        return { success: false as const, error: "Failed to submit application. Please try again.", data: null as any };
     }
 }
 export const submitMultiStepWaveApplicationAction = withFlexibleSafeAction("submitMultiStepWaveApplicationAction", _submitMultiStepWaveApplicationAction);
@@ -471,6 +476,18 @@ async function _enrollInWaveAction(userId: string): Promise<ActionResponse<null>
             updatedAt: FieldValue.serverTimestamp(),
             active: true
         }, { merge: true });
+        
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userData = userDoc.data();
+        const existingApplicationId = userData?.serviceRegistrations?.wave?.applicationId || `WAVE-ENROLL-${Date.now()}`;
+
+        // Ensure user registration is also updated
+        await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+            "serviceRegistrations.wave.status": "approved",
+            "serviceRegistrations.wave.paymentStatus": "completed",
+            "serviceRegistrations.wave.applicationId": existingApplicationId,
+            "serviceRegistrations.wave.updatedAt": FieldValue.serverTimestamp()
+        });
 
         await createAdminAuditLog({
             action: "user_update",
@@ -493,7 +510,7 @@ async function _getWaveResourcesAction(
     category?: string,
     cursor?: string | null,
     limit = 20
-): Promise<ActionResponse<any>> {
+): Promise<ActionResponse<WaveResource[], { cursor: string | null; hasMore: boolean }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false }, data: null };
@@ -553,7 +570,7 @@ export const getWaveResourcesAction = withFlexibleSafeAction("getWaveResourcesAc
 async function _getWaveTrainingEventsAction(
     cursor?: string | null,
     limit = 20
-): Promise<ActionResponse<any>> {
+): Promise<ActionResponse<WaveTrainingEvent[], { cursor: string | null; hasMore: boolean }>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", meta: { cursor: null, hasMore: false }, data: null };
@@ -617,7 +634,7 @@ export interface ShipmentTracking { id: string;
 /**
  * Get user's shipment tracking info
  */
-async function _getShipmentTrackingAction(userId: string): Promise<ActionResponse<any>> {
+async function _getShipmentTrackingAction(userId: string): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -693,9 +710,10 @@ async function _updateShipmentStatusAction(
         await shipmentRef.update(updateData);
 
         return { error: null, success: true as const, data: null };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Update shipment error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const updateShipmentStatusAction = withFlexibleSafeAction("updateShipmentStatusAction", _updateShipmentStatusAction);
@@ -704,7 +722,7 @@ export const updateShipmentStatusAction = withFlexibleSafeAction("updateShipment
  * Sync shipment with carrier (Admin or Automator)
  * This fetches real-time updates from the Logistics Provider (GIG/Kwik)
  */
-async function _syncShipmentWithCarrierAction(shipmentId: string): Promise<ActionResponse<any>> {
+async function _syncShipmentWithCarrierAction(shipmentId: string): Promise<ActionResponse<null>> {
     try {
         const shipmentRef = db.collection(COLLECTIONS.WAVE_SHIPMENTS).doc(shipmentId);
         const shipmentDoc = await shipmentRef.get();
@@ -753,9 +771,10 @@ async function _syncShipmentWithCarrierAction(shipmentId: string): Promise<Actio
         }
 
         return { error: null, success: true as const, data: null };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Sync shipment error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const syncShipmentWithCarrierAction = withFlexibleSafeAction("syncShipmentWithCarrierAction", _syncShipmentWithCarrierAction);
@@ -944,9 +963,10 @@ async function _generateCertificateAction(
         });
 
         return { error: null, success: true as const, data: certificate };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Generate certificate error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const generateCertificateAction = withFlexibleSafeAction("generateCertificateAction", _generateCertificateAction);
@@ -954,7 +974,7 @@ export const generateCertificateAction = withFlexibleSafeAction("generateCertifi
 /**
  * Get member certificates
  */
-async function _getMemberCertificatesAction(userId: string): Promise<ActionResponse<any>> {
+async function _getMemberCertificatesAction(userId: string): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -979,7 +999,7 @@ export const getMemberCertificatesAction = withFlexibleSafeAction("getMemberCert
 /**
  * Get current user's certificates (auth handled internally)
  */
-async function _getCurrentUserCertificatesAction(): Promise<ActionResponse<any>> {
+async function _getCurrentUserCertificatesAction(): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -1024,9 +1044,10 @@ async function _uploadWaveResourceAction(
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).set(resourceData);
 
         return { error: null, success: true as const, data: null };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Upload resource error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const uploadWaveResourceAction = withFlexibleSafeAction("uploadWaveResourceAction", _uploadWaveResourceAction);
@@ -1048,9 +1069,10 @@ async function _incrementResourceDownloadAction(
         });
 
         return { error: null, success: true as const, data: null };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Increment download error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const incrementResourceDownloadAction = withFlexibleSafeAction("incrementResourceDownloadAction", _incrementResourceDownloadAction);
@@ -1106,9 +1128,10 @@ async function _registerForTrainingAction(
         });
 
         return { error: null, success: true as const, data: null };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Training registration error:", error);
-        return { success: false as const, error: error.message || "Failed to register for training", data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const registerForTrainingAction = withFlexibleSafeAction("registerForTrainingAction", _registerForTrainingAction);
@@ -1222,9 +1245,10 @@ async function _withdrawEarningsAction(
         });
 
         return { success: true as const, error: null, data: null };
-    } catch (error: any) {
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
         logger.error("Withdraw earnings error:", error);
-        return { success: false as const, error: error.message || "Failed to submit withdrawal request", data: null };
+        return { success: false as const, error: message, data: null };
     }
 }
 export const withdrawEarningsAction = withFlexibleSafeAction("withdrawEarningsAction", _withdrawEarningsAction);
@@ -1232,7 +1256,7 @@ export const withdrawEarningsAction = withFlexibleSafeAction("withdrawEarningsAc
 /**
  * Get the current user's WAVE application (primarily for the review-pending page to show real submission date)
  */
-async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionResponse<any>> {
+async function _getWaveApplicationStatusAction(userId?: string): Promise<ActionResponse<{ status: string; submittedAt?: any } | null>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -1280,7 +1304,7 @@ export const getWaveApplicationStatusAction = withFlexibleSafeAction("getWaveApp
 /**
  * Get the current user's existing WAVE application data (for pre-populating edit form)
  */
-async function _getWaveApplicationAction(): Promise<ActionResponse<any>> {
+async function _getWaveApplicationAction(): Promise<ActionResponse<any | null>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };

@@ -16,6 +16,7 @@ import { getAdminReviewsAction, moderateReviewAction } from "@/app/actions/revie
 import type { ProductReview } from "@/lib/types/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { formatLocalDate } from "@/lib/date-utils";
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -269,7 +270,7 @@ export default function AdminReviewsPage() {
                                         </div>
                                         <p className="text-sm text-gray-600 mb-3">
                                             Product: {review.productId} • User: {review.userId.slice(0, 12)} •{" "}
-                                            {toDate(review.createdAt).toLocaleDateString()}
+                                            {formatLocalDate(review.createdAt)}
                                         </p>
                                         <p className="text-gray-900 mb-4">{review.comment}</p>
                                     </div>
@@ -307,7 +308,7 @@ export default function AdminReviewsPage() {
                                 {review.status !== "pending" && (
                                     <div className="pt-4 border-t border-gray-200">
                                         <p className="text-sm text-gray-600">
-                                            {review.status === "approved" ? "Approved" : "Rejected"}{review.moderatedAt && ` on ${toDate(review.moderatedAt).toLocaleDateString()}`}
+                                            {review.status === "approved" ? "Approved" : "Rejected"}{review.moderatedAt && ` on ${formatLocalDate(review.moderatedAt)}`}
                                         </p>
                                     </div>
                                 )}

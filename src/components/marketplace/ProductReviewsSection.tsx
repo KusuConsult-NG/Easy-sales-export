@@ -50,8 +50,8 @@ export default function ProductReviewsSection({ productId }: ProductReviewsSecti
                 productId,
                 filterRating ? { rating: filterRating } : undefined
             );
-            if (result.success) {
-                setReviews(result.reviews || []);
+            if (result.success && result.data?.reviews) {
+                setReviews(result.data.reviews || []);
             }
         } catch (error) {
             console.error("Failed to load reviews:", error);

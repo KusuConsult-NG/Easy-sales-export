@@ -26,10 +26,8 @@ export default function AcademyAdminPage() {
         fetchAction: async (opts) => {
             const result = await getCoursesAction(opts.limit || 12, opts.lastDocId);
             return {
-                success: result.success,
-                data: result.data as any,
-                meta: result.meta,
-                error: result.error
+                ...result,
+                data: result.data || []
             };
         },
         limit: 12

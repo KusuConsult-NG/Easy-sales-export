@@ -7,6 +7,7 @@ import { CheckCircle, Package, Truck, MapPin, CreditCard, ArrowLeft, Loader2 } f
 import { getOrderByIdAction } from "@/app/actions/orders";
 import type { Order } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/date-utils";
 
 export default function OrderConfirmationPage() {
     const params = useParams();
@@ -111,14 +112,14 @@ export default function OrderConfirmationPage() {
                             <div className="flex items-center justify-between">
                                 <span className="text-gray-600">Order Date:</span>
                                 <span className="font-semibold text-gray-900">
-                                    {new Date(order.createdAt).toLocaleDateString()}
+                                    {formatLocalDate(order.createdAt)}
                                 </span>
                             </div>
                             {order.estimatedDeliveryDate && (
                                 <div className="flex items-center justify-between">
                                     <span className="text-gray-600">Est. Delivery:</span>
                                     <span className="font-semibold text-gray-900">
-                                        {new Date(order.estimatedDeliveryDate).toLocaleDateString()}
+                                        {formatLocalDate(order.estimatedDeliveryDate)}
                                     </span>
                                 </div>
                             )}

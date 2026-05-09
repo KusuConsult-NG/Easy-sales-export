@@ -808,7 +808,7 @@ async function _getStandardAcademyApplicationsAction(options: {
     sortOrder?: "asc" | "desc";
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
-} = {}): Promise<ActionResponse<any> & { lastDocId?: string; hasMore?: boolean }> {
+} = {}): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -944,7 +944,6 @@ async function _getStandardAcademyApplicationsAction(options: {
             success: true,
             error: null, 
             data: finalForms,
-            // @ts-ignore - Temporary until meta is standardized
             lastDocId: nextCursor,
             hasMore: !!nextCursor,
             meta: {

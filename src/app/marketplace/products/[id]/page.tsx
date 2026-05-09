@@ -4,8 +4,10 @@ import { ArrowLeft, Package, ShoppingCart, Star, MapPin, Award, Phone, Mail, Shi
 import { logger } from '@/lib/logger';
 import Image from "next/image";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useToast } from "@/contexts/ToastContext";
 import { getProductAction, getRelatedProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
@@ -13,6 +15,9 @@ import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 
 export default function ProductDetailPage() {
     const params = useParams();
+    const router = useRouter();
+    const { data: session } = useSession();
+    const { showToast } = useToast();
     const productId = params.id as string;
 
     const [loading, setLoading] = useState(true);
@@ -20,6 +25,7 @@ export default function ProductDetailPage() {
     const [error, setError] = useState("");
     const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
     const [showQuoteModal, setShowQuoteModal] = useState(false);
+    const [isAddingToCart, setIsAddingToCart] = useState(false);
 
     useEffect(() => {
         async function loadProduct() {
@@ -47,6 +53,44 @@ export default function ProductDetailPage() {
         }
         loadProduct();
     }, [productId]);
+
+    const handleAddToCart = () => {
+        if (!product) return;
+        setIsAddingToCart(true);
+
+        try {
+            const userId = session?.user?.id;
+            const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
+            
+            const savedCart = localStorage.getItem(cartKey);
+            let cart: any[] = savedCart ? JSON.parse(savedCart) : [];
+
+            const existingItemIndex = cart.findIndex(item => item.id === product.id);
+
+            if (existingItemIndex > -1) {
+                cart[existingItemIndex].quantity += 1;
+            } else {
+                cart.push({
+                    ...product,
+                    quantity: 1
+                });
+            }
+
+            localStorage.setItem(cartKey, JSON.stringify(cart));
+            showToast("Added to cart successfully", "success");
+            
+            // Brief delay for visual feedback then redirect
+            setTimeout(() => {
+                router.push("/marketplace/checkout");
+            }, 800);
+
+        } catch (err) {
+            logger.error("Failed to add to cart:", err);
+            showToast("Failed to add to cart", "error");
+        } finally {
+            setIsAddingToCart(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -192,9 +236,17 @@ export default function ProductDetailPage() {
 
                         {/* CTA Buttons */}
                         <div className="flex flex-col sm:flex-row gap-4">
-                            <button className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-all hover:scale-105 shadow-lg">
-                                <ShoppingCart className="w-5 h-5" />
-                                Add to Cart
+                            <button 
+                                onClick={handleAddToCart}
+                                disabled={isAddingToCart}
+                                className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isAddingToCart ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    <ShoppingCart className="w-5 h-5" />
+                                )}
+                                {isAddingToCart ? "Adding..." : "Add to Cart"}
                             </button>
                             <button 
                                 onClick={() => setShowQuoteModal(true)}

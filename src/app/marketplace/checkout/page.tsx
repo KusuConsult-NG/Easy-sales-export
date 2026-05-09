@@ -70,7 +70,7 @@ export default function CheckoutPage() {
                     quantity: item.quantity,
                     unit: item.unit,
                     selectedTier: item.pricingTiers[0]?.type || "retail",
-                    addedAt: new Date().toISOString(),
+                    addedAt: new Date(),
                 }));
                 const res = await calculateDeliveryAction(cartItems);
                 if (res.success && res.data) {
@@ -127,7 +127,7 @@ export default function CheckoutPage() {
                 quantity: item.quantity,
                 unit: item.unit,
                 selectedTier: item.pricingTiers[0]?.type || "retail",
-                addedAt: new Date().toISOString(),
+                addedAt: new Date(),
             }));
 
             // Initialize payment

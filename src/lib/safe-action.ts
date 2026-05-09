@@ -6,16 +6,20 @@ import { z } from "zod";
  * Standardized response format for all Next.js Server Actions
  * Enforces safe boundary so no unhandled exceptions leak to the client
  */
-export type ActionResponse<T = any> = {
+export type ActionResponse<T = unknown, M = any> = {
     success: true;
     error: null;
     data: T;
-    meta?: any;
+    lastDocId?: string | null;
+    hasMore?: boolean;
+    meta?: M;
 } | {
     success: false;
     error: string;
     data: null;
-    meta?: any;
+    lastDocId?: string | null;
+    hasMore?: boolean;
+    meta?: M;
 };
 
 /**

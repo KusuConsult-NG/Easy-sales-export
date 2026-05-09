@@ -13,6 +13,7 @@ import { collection, query, orderBy, onSnapshot, Unsubscribe } from "firebase/fi
 import RejectionModal from "@/components/admin/RejectionModal";
 import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction, toggleVerifiedBadgeAction, getStandardSellerVerificationsAction, getAdminSellerStatsAction } from "@/app/actions/admin";
+import { formatLocalDate } from "@/lib/date-utils";
 
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
@@ -100,7 +101,7 @@ export default function AdminSellersPage() {
     const [statsLoading, setStatsLoading] = useState(true);
     useEffect(() => {
         getAdminSellerStatsAction().then((res) => {
-            if (res.success && res.stats) setServerStats(res.stats);
+            if (res.success && res.data) setServerStats(res.data);
         }).finally(() => setStatsLoading(false));
     }, []);
 
@@ -153,7 +154,7 @@ export default function AdminSellersPage() {
                 v.user.name || "", v.user.email || "", v.data.phone || "",
                 v.data.state || "", v.data.lga || "", v.data.address || "",
                 v.data.bankDetails?.bankName || "", v.data.bankDetails?.accountNumber || "", v.data.bankDetails?.accountName || "",
-                v.status, new Date(v.data.createdAt || Date.now()).toLocaleDateString("en-NG")
+                v.status, formatLocalDate(v.data.createdAt || Date.now())
             ]);
             const csv = [
                 headers.join(","),
@@ -456,7 +457,7 @@ export default function AdminSellersPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600">
-                                            {new Date(v.createdAt || Date.now()).toLocaleDateString()}
+                                            {formatLocalDate(v.createdAt || Date.now())}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">

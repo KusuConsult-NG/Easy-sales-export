@@ -74,6 +74,17 @@ const nextConfig: NextConfig = {
   // Compression
   compress: true,
 
+  // Redirects
+  async redirects() {
+    return [
+      {
+        source: '/marketplace/product/:id',
+        destination: '/marketplace/products/:id',
+        permanent: true,
+      },
+    ];
+  },
+
   // Security headers
   async headers() {
     return [

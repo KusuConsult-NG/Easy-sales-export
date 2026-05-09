@@ -25,6 +25,7 @@ import {
 import { getWaveTrainingEventsAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
+import { toSafeDate } from "@/lib/utils";
 
 const STATUS_OPTIONS = [
     { id: "upcoming", label: "Upcoming", color: "blue" },
@@ -98,7 +99,7 @@ export default function AdminWaveTrainingPage() {
             title: event.title,
             description: event.description,
             instructor: event.instructor,
-            date: new Date(event.date).toISOString().slice(0, 16),
+            date: toSafeDate(event.date).toISOString().slice(0, 16),
             duration: event.duration,
             maxParticipants: event.maxParticipants,
             meetingLink: event.meetingLink || "",
@@ -287,7 +288,7 @@ export default function AdminWaveTrainingPage() {
                                                                     <div className="flex items-center gap-2 text-gray-600">
                                                                         <Calendar className="w-4 h-4 text-purple-600" />
                                                                         <span>
-                                                                            {new Date(event.date).toLocaleDateString()}
+                                                                            {toSafeDate(event.date).toLocaleDateString()}
                                                                         </span>
                                                                     </div>
                                                                     <div className="flex items-center gap-2 text-gray-600">
@@ -577,7 +578,7 @@ export default function AdminWaveTrainingPage() {
                                                     </p>
                                                     <p className="text-sm text-gray-500">
                                                         Registered:{" "}
-                                                        {new Date(participant.registeredAt.toDate()).toLocaleDateString()}
+                                                        {toSafeDate(participant.registeredAt).toLocaleDateString()}
                                                     </p>
                                                 </div>
                                                 {participant.attended && (

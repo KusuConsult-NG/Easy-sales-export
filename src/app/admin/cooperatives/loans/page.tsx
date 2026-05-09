@@ -12,6 +12,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { getAdminLoanApplicationsAction, getAdminLoanStatsAction, getAdminLoanApplicationsExportAction } from "@/app/actions/loans";
 import { Loader2 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
+import { formatLocalDate } from "@/lib/date-utils";
 
 type LoanApplication = {
     id: string;
@@ -62,9 +63,10 @@ export default function AdminLoansPage() {
             });
             return {
                 success: result.success,
-                data: result.data || [],
-                meta: { lastDocId: result.lastDocId, hasMore: result.hasMore },
-                error: result.error
+                data: result.success ? result.data : [],
+                lastDocId: result.success ? result.lastDocId : undefined,
+                hasMore: result.success ? result.hasMore : false,
+                error: result.success ? null : result.error
             };
         },
         limit: 20,
@@ -197,7 +199,7 @@ export default function AdminLoansPage() {
                 a.tier || "", a.amount,
                 `${a.interestRate}%`, a.durationMonths, a.monthlyPayment,
                 a.purpose || "", a.status,
-                new Date(a.appliedAt as any).toLocaleDateString("en-NG"),
+                formatLocalDate(a.appliedAt),
                 a.bankName || "", a.accountNumber || "", a.accountName || ""
             ]);
             const csv = [
@@ -350,7 +352,7 @@ export default function AdminLoansPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600">
-                                            {new Date(app.appliedAt).toLocaleDateString()}
+                                            {formatLocalDate(app.appliedAt)}
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
@@ -429,7 +431,7 @@ export default function AdminLoansPage() {
                                 <div><p className="text-sm text-slate-600">Interest Rate</p><p className="font-semibold">{selectedApplication.interestRate}% APR</p></div>
                                 <div><p className="text-sm text-slate-600">Duration</p><p className="font-semibold">{selectedApplication.durationMonths} months</p></div>
                                 <div><p className="text-sm text-slate-600">Monthly Payment</p><p className="font-semibold text-green-600">{formatCurrency(selectedApplication.monthlyPayment)}</p></div>
-                                <div><p className="text-sm text-slate-600">Applied</p><p className="font-semibold">{new Date(selectedApplication.appliedAt).toLocaleDateString()}</p></div>
+                                <div><p className="text-sm text-slate-600">Applied</p><p className="font-semibold">{formatLocalDate(selectedApplication.appliedAt)}</p></div>
                             </div>
                             
                             {(selectedApplication.bankName || selectedApplication.accountNumber) && (

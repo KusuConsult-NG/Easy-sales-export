@@ -1,5 +1,7 @@
 "use server";
 
+import { ActionResponse } from "@/lib/safe-action";
+
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
@@ -19,10 +21,7 @@ export async function getAuditLogsAction(filters: { userId?: string;
     startDate?: string;
     endDate?: string;
     limit?: number;
-    lastDocId?: string; }): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+    lastDocId?: string; }): Promise<ActionResponse<AuditLogEntry[]>> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -73,10 +72,7 @@ export async function getAuditLogsAction(filters: { userId?: string;
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
-        return { success: true as const, error: null, data: logs, // consumed by useAdminData (looks for result.data)
-            logs, // consumed by audit.ts wrapper + exportAuditLogsCSV
-            lastDocId: nextCursor, hasMore: !!nextCursor
- };
+        return { success: true as const, error: null, data: logs, lastDocId: nextCursor, hasMore: !!nextCursor };
     } catch (error: any) { logger.error("Failed to fetch audit logs:", error);
         return { success: false as const, error: error.message || "Failed to fetch audit logs", data: null };
     }
@@ -90,10 +86,7 @@ export async function exportAuditLogsCSV(filters: { userId?: string;
     action?: AuditAction;
     severity?: AuditSeverity;
     startDate?: string;
-    endDate?: string; }): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+    endDate?: string; }): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
@@ -111,12 +104,12 @@ export async function exportAuditLogsCSV(filters: { userId?: string;
         // Get logs (no limit for export)
         const result = await getAuditLogsAction(filters);
 
-        if (!result.success || !result.logs) { return { success: false as const, error: result.error || "Failed to fetch logs", data: null };
+        if (!result.success || !result.data) { return { success: false as const, error: result.error || "Failed to fetch logs", data: null };
         }
 
         // Generate CSV
         const headers = ["Timestamp", "Severity", "Action", "User ID", "User Email", "Target Type", "Target ID", "Details"];
-        const rows = result.logs.map((log: any) => { let timestampStr = "";
+        const rows = result.data.map((log: any) => { let timestampStr = "";
             if (typeof log.timestamp === "string") timestampStr = log.timestamp;
             else if (log.timestamp?.toDate) timestampStr = log.timestamp.toDate().toISOString();
             else timestampStr = String(log.timestamp);
@@ -140,37 +133,34 @@ export async function exportAuditLogsCSV(filters: { userId?: string;
             ),
         ].join("\n");
 
-        return { error: null,  success: true as const, csv: csvContent , data: null };
+        return { error: null,  success: true as const, data: csvContent };
     } catch (error: any) { logger.error("Failed to export audit logs:", error);
-        return { success: false as const, error: error.message || "Failed to export logs"};
+        return { success: false as const, error: error.message || "Failed to export logs", data: null };
     }
 }
 
 /**
  * Get audit log statistics
  */
-export async function getAuditStatsAction(days: number = 30): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> { try {
+export async function getAuditStatsAction(days: number = 30): Promise<ActionResponse<any>> { try {
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
-        if (!session?.user?.id) { return { success: false as const, error: "Authentication required"};
+        if (!session?.user?.id) { return { success: false as const, error: "Authentication required", data: null };
         }
 
         // Check if user is admin
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
         const hasAdminRole = userData?.roles?.includes("admin") || userData?.roles?.includes("super_admin") || userData?.role === "admin";
-        if (!hasAdminRole) { return { success: false as const, error: "Admin access required"};
+        if (!hasAdminRole) { return { success: false as const, error: "Admin access required", data: null };
         }
 
         const cacheKey = `admin:audit-stats:${days}`;
         try { const cachedStats = await getCached<any>(cacheKey);
             if (cachedStats) {
-                return { error: null, success: true as const, stats: cachedStats , data: null };
+                return { error: null, success: true as const, data: cachedStats };
             }
         } catch (e) { // cache bypass on error
         }
@@ -217,7 +207,7 @@ export async function getAuditStatsAction(days: number = 30): Promise<
         } catch (e) { // silent fail
         }
 
-        return { error: null,  success: true as const, stats , data: null };
+        return { error: null,  success: true as const, data: stats };
     } catch (error: any) { logger.error("Failed to fetch audit stats:", error);
         return { success: false as const, error: error.message || "Failed to fetch statistics", data: null };
     }

@@ -6,6 +6,7 @@ import { Package, Eye, Truck, CheckCircle, Clock, Loader2, Filter, DollarSign } 
 import { getVendorOrdersAction, updateVendorOrderStatusAction } from "@/app/actions/vendor";
 import type { VendorOrder } from "@/app/actions/vendor";
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 
 export default function VendorOrdersPage() {
@@ -130,7 +131,7 @@ export default function VendorOrdersPage() {
                                             {order.orderNumber}
                                         </h3>
                                         <p className="text-sm text-gray-600">
-                                            {order.customerName} • {new Date(order.createdAt).toLocaleDateString()}
+                                            {order.customerName} • {formatLocalDate(order.createdAt)}
                                         </p>
                                     </div>
                                     <span className={`px-4 py-2 rounded-lg font-bold text-sm capitalize ${order.status === "pending" ? "bg-yellow-100 text-yellow-700" :

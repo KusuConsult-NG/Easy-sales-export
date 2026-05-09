@@ -690,9 +690,10 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
                 if (appData.status === "approved" || appData.status === "approved_admin") {
                     status = "approved";
                     // Proactively backfill for performance in future logins
-                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-                        serviceRegistrations: { export: { status: "approved", syncedAt: new Date().toISOString() } }
-                    }, { merge: true });
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                        "serviceRegistrations.export.status": "approved",
+                        "serviceRegistrations.export.syncedAt": new Date().toISOString()
+                    });
                 } else if (appData.status) { // Normalize statuses
                     status = appData.status === "pending_review" ? "pending_approval" : appData.status;
                 }
@@ -715,9 +716,12 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
             const legacyData = sortedDocs[0];
             const legacyStatus = legacyData?.status ?? 'pending';
 
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: { export: { status: legacyStatus, syncedFromLegacy: true, syncedAt: new Date().toISOString() } } },
-                { merge: true }
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
+                {
+                    "serviceRegistrations.export.status": legacyStatus,
+                    "serviceRegistrations.export.syncedFromLegacy": true,
+                    "serviceRegistrations.export.syncedAt": new Date().toISOString()
+                }
             );
 
             logger.info(`[checkExportStatus] Backfilled legacy export status '${legacyStatus}' for user ${session.user.id}`);

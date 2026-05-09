@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2, Wallet, Zap } from "lucide-react";
 import Link from "next/link";
 import { getSellerAnalyticsAction, getSellerOrdersAction, getSellerProductsAction } from "@/app/actions/marketplace";
+import { getFeatureTogglesAction } from "@/app/actions/health";
 import type { Order, Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 
@@ -29,18 +30,24 @@ export default function SellerDashboard() {
     });
     const [recentOrders, setRecentOrders] = useState<Order[]>([]);
     const [topProducts, setTopProducts] = useState<Product[]>([]);
+    const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         async function loadDashboardData() {
             try {
-                const [analyticsRes, ordersRes, productsRes] = await Promise.all([
+                const [analyticsRes, ordersRes, productsRes, togglesRes] = await Promise.all([
                     getSellerAnalyticsAction(),
                     getSellerOrdersAction(),
-                    getSellerProductsAction()
+                    getSellerProductsAction(),
+                    getFeatureTogglesAction()
                 ]);
 
+                if (togglesRes.success && togglesRes.data) {
+                    setToggles(togglesRes.data);
+                }
+
                 if (analyticsRes.success && analyticsRes.data?.analytics) {
-                    setStats(analyticsRes.data.analytics);
+                    setStats(analyticsRes.data.analytics as any);
                 }
 
                 if (ordersRes.success && ordersRes.data?.orders) {
@@ -196,14 +203,16 @@ export default function SellerDashboard() {
                             <p className="text-xs text-blue-100">Manage products</p>
                         </Link>
 
-                        <Link
-                            href="/dashboard/wallet"
-                            className="bg-linear-to-br from-amber-500 to-orange-600 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
-                        >
-                            <Wallet className="w-7 h-7 mb-2" />
-                            <h3 className="text-sm font-bold mb-0.5">Wallet</h3>
-                            <p className="text-xs text-amber-100">Balance & withdrawals</p>
-                        </Link>
+                        {toggles.wallet_withdrawals && (
+                            <Link
+                                href="/dashboard/wallet"
+                                className="bg-linear-to-br from-amber-500 to-orange-600 text-white rounded-xl p-5 hover:shadow-lg transition-shadow"
+                            >
+                                <Wallet className="w-7 h-7 mb-2" />
+                                <h3 className="text-sm font-bold mb-0.5">Wallet</h3>
+                                <p className="text-xs text-amber-100">Balance & withdrawals</p>
+                            </Link>
+                        )}
 
                         <Link
                             href="/marketplace/village-market/seller"

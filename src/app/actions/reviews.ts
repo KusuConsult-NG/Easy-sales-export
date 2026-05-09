@@ -14,6 +14,7 @@ import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import { z } from "zod";
+import { ActionResponse } from "@/lib/safe-action";
 import { escapeHtml } from "@/lib/utils";
 
 const reviewSchema = z.object({ rating: z.number().min(1, "Rating must be at least 1").max(5, "Rating cannot exceed 5"),
@@ -22,11 +23,14 @@ const reviewSchema = z.object({ rating: z.number().min(1, "Rating must be at lea
 /**
  * Create a product review
  */
-export async function createReviewAction(params: { productId: string;
+export async function createReviewAction(params: { 
+    productId: string;
     orderId: string;
     rating: number;
     comment: string;
-    images?: string[]; }) { try {
+    images?: string[]; 
+}): Promise<ActionResponse<null>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -90,9 +94,11 @@ export async function createReviewAction(params: { productId: string;
 
         await db.collection(COLLECTIONS.PRODUCT_REVIEWS).add(reviewData);
 
-        return { success: true as const, error: null };
-    } catch (error: any) { logger.error("Create review error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: true as const, data: null, error: null };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Create review error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }
 
@@ -104,7 +110,8 @@ export async function getProductReviewsAction(
     filters?: { rating?: number;
         verified?: boolean;
     }
-) { try {
+): Promise<ActionResponse<{ reviews: ProductReview[] }>> { 
+    try {
         let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
             .where("productId", "==", productId)
             .where("status", "==", "approved")
@@ -123,16 +130,19 @@ export async function getProductReviewsAction(
             ? reviews.filter((r) => r.verified === filters.verified)
             : reviews;
 
-        return { success: true as const, reviews: filteredReviews, error: null };
-    } catch (error: any) { logger.error("Get product reviews error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: true as const, data: { reviews: filteredReviews }, error: null };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Get product reviews error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }
 
 /**
  * Get user's own reviews
  */
-export async function getUserReviewsAction() { try {
+export async function getUserReviewsAction(): Promise<ActionResponse<{ reviews: ProductReview[] }>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -145,9 +155,11 @@ export async function getUserReviewsAction() { try {
 
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
-        return { success: true as const, reviews, error: null };
-    } catch (error: any) { logger.error("Get user reviews error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: true as const, data: { reviews }, error: null };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Get user reviews error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }
 
@@ -158,7 +170,8 @@ export async function updateReviewAction(
     reviewId: string,
     rating: number,
     comment: string
-) { try {
+): Promise<ActionResponse<null>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -197,9 +210,11 @@ export async function updateReviewAction(
             status: "pending", // Re-trigger moderation
             updatedAt: FieldValue.serverTimestamp() });
 
-        return { success: true as const, error: null };
-    } catch (error: any) { logger.error("Update review error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: true as const, data: null, error: null };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Update review error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }
 
@@ -210,7 +225,8 @@ export async function moderateReviewAction(
     reviewId: string,
     status: "approved" | "rejected",
     rejectionReason?: string
-) { try {
+): Promise<ActionResponse<null>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -238,16 +254,19 @@ export async function moderateReviewAction(
 
         await reviewRef.update(updateData);
 
-        return { success: true as const, error: null };
-    } catch (error: any) { logger.error("Moderate review error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { success: true as const, data: null, error: null };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Moderate review error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }
 
 /**
  * Get seller rating statistics
  */
-export async function getSellerRatingAction(sellerId: string) { try {
+export async function getSellerRatingAction(sellerId: string): Promise<ActionResponse<{ averageRating: number; totalReviews: number; distribution: Record<number, number> }>> { 
+    try {
         const snapshot = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
             .where("sellerId", "==", sellerId)
             .where("status", "==", "approved")
@@ -256,8 +275,10 @@ export async function getSellerRatingAction(sellerId: string) { try {
         const reviews: ProductReview[] = snapshot.docs.map((doc) => doc.data()) as ProductReview[];
 
         if (reviews.length === 0) {
-            return { error: null, success: true as const, stats: {
-                    averageRating: 0, totalReviews: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 , data: null } , data: null } , data: null };
+            return { error: null, success: true as const, data: {
+                    averageRating: 0, totalReviews: 0, distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 }
+                }
+            };
         }
 
         // Calculate average
@@ -271,22 +292,34 @@ export async function getSellerRatingAction(sellerId: string) { try {
             2: reviews.filter((r) => r.rating === 2).length,
             1: reviews.filter((r) => r.rating === 1).length };
 
-        return { error: null, success: true as const, stats: {
+        return { error: null, success: true as const, data: {
                 averageRating: Math.round(averageRating * 10) / 10, // Round to 1 decimal
-                totalReviews: reviews.length, distribution , data: null }
-        , data: null };
-    } catch (error: any) { logger.error("Get seller rating error:", error);
-        return { success: false as const, error: error.message, data: null };
+                totalReviews: reviews.length, 
+                distribution
+            }
+        };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Get seller rating error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }
 
 /**
  * Get all reviews for admin moderation
  */
-export async function getAdminReviewsAction(options: { statusFilter?: "all" | "pending" | "approved" | "rejected";
+export async function getAdminReviewsAction(options: { 
+    statusFilter?: "all" | "pending" | "approved" | "rejected";
     limit?: number;
     lastDocId?: string;
-    sortOrder?: "asc" | "desc"; } = {}) { try {
+    sortOrder?: "asc" | "desc"; 
+} = {}): Promise<ActionResponse<{ 
+    reviews: ProductReview[]; 
+    stats?: { pending: number; approved: number; rejected: number }; 
+    lastDocId?: string; 
+    hasMore: boolean 
+}>> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
@@ -337,9 +370,14 @@ export async function getAdminReviewsAction(options: { statusFilter?: "all" | "p
                 rejected: rejectedCount.data().count };
         }
 
-        return { error: null, success: true as const, reviews, stats, lastDocId: nextCursor, hasMore
- , data: null };
-    } catch (error: any) { logger.error("Get admin reviews error:", error);
-        return { success: false as const, error: error.message, data: null };
+        return { 
+            error: null, 
+            success: true as const, 
+            data: { reviews, stats, lastDocId: nextCursor, hasMore }
+        };
+    } catch (error) { 
+        const message = error instanceof Error ? error.message : "An unexpected error occurred";
+        logger.error("Get admin reviews error:", error);
+        return { success: false as const, error: message, data: null };
     }
 }

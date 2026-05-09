@@ -9,6 +9,8 @@
 
 "use server";
 
+import { ActionResponse } from "@/lib/safe-action";
+
 import { db } from "@/lib/firebase-admin";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldValue } from "firebase-admin/firestore";
@@ -350,10 +352,7 @@ export async function getAdminVillageMarketEventsAction(options: {
     limit?: number;
     lastDocId?: string;
     sortOrder?: "asc" | "desc";
-} = {}): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
-> {
+} = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };

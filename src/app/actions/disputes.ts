@@ -123,7 +123,7 @@ async function _getBuyerDisputesAction() { let sessionResult;
                 resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined };
         }) as Dispute[];
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: disputes };
     } catch (error) { logger.error("Get buyer disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -157,7 +157,7 @@ async function _getSellerDisputesAction() { let sessionResult;
                 resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined };
         }) as Dispute[];
 
-        return { error: null, success: true as const, data: null };
+        return { error: null, success: true as const, data: disputes };
     } catch (error) { logger.error("Get seller disputes error:", {
             userId: sessionResult?.session?.user?.id,
             error: error instanceof Error ? error.message : String(error)
@@ -270,11 +270,10 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
         return { 
             success: true as const, 
             error: null, 
-            data: { 
-                disputes, 
-                lastDocId: nextCursor, 
-                hasMore: !!nextCursor 
-            } 
+            data: disputes,
+            disputes,
+            lastDocId: nextCursor, 
+            hasMore: !!nextCursor 
         };
     } catch (error) { logger.error("Get admin disputes error:", {
             userId: sessionResult?.session?.user?.id,

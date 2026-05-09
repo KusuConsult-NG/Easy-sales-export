@@ -19,15 +19,19 @@ interface WithdrawalRequestData { amount: number;
     accountName: string;
     reason?: string; }
 
-type ActionState = 
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
-
-import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 
 async function _submitWithdrawalRequestAction(
     data: WithdrawalRequestData
-): Promise<ActionState> { let sessionResult;
+): Promise<ActionResponse> {
+    return {
+        success: false as const,
+        error: "Withdrawals are currently disabled for maintenance. Please try again later.",
+        data: null
+    };
+
+    /*
+    let sessionResult;
     try {
         sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -118,6 +122,6 @@ async function _submitWithdrawalRequestAction(
             error: error instanceof Error ? error.message : String(error)
         });
         return { error: error.message || 'Failed to submit withdrawal request', success: false as const, data: null };
-        }
+    */
 }
 export const submitWithdrawalRequestAction = withFlexibleSafeAction("submitWithdrawalRequestAction", _submitWithdrawalRequestAction);

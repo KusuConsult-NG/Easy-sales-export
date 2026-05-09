@@ -13,6 +13,7 @@ import { getBuyerOrdersAction } from "@/app/actions/marketplace";
 import { confirmOrderReceiptAction } from "@/app/actions/marketplace-buyer";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate } from "@/lib/date-utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import { logger } from "@/lib/logger";
 
@@ -228,7 +229,7 @@ export default function OrdersPage() {
                                                     {displayTitle}
                                                 </h3>
                                                 <p className="text-sm text-slate-600">
-                                                    Order {order.orderId} • {order.date}
+                                                    Order {order.orderId} • {formatLocalDate(order.createdAt)}
                                                 </p>
                                             </div>
                                         </div>

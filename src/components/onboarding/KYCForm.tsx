@@ -1,8 +1,7 @@
 /**
  * KYC Form Component
  *
- * Reusable component for collecting KYC information with live
- * BVN and NIN verification via QoreID.
+ * Reusable component for collecting KYC information for manual identity verification.
  */
 
 'use client';
@@ -502,7 +501,7 @@ export function KYCForm({ onDataChange, initialData, includeBVN = false }: KYCFo
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-sm text-blue-700">
-                    Your identity is verified instantly via QoreID. Data is encrypted in transit and stored securely. You can update your KYC anytime from <strong>Profile → Identity Verification</strong>.
+                    Your identity details have been submitted for manual verification. This usually takes 24-48 hours. Data is encrypted in transit and stored securely. You can update your KYC anytime from <strong>Profile → Identity Verification</strong>.
                 </p>
             </div>
         </div>

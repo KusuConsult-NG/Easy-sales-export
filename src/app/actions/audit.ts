@@ -64,18 +64,18 @@ export async function getAuditLogsAction(
     limitCount: number = 50
 ): Promise<GetAuditLogsState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
+        if (!sessionResult.session) return { success: false as const, error: "Unauthenticated", data: null };
         const { session } = sessionResult;
         if (!session?.user || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) { return { error: "Unauthorized: Admin access required", success: false as const, data: null };
         }
 
         const result = await coreGetAuditLogsAction({ limit: limitCount });
         
-        if (!result.success || !result.logs) { return { error: result.error || "Failed to fetch audit logs", success: false as const, data: null };
+        if (!result.success || !result.data) { return { error: result.error || "Failed to fetch audit logs", success: false as const, data: null };
         }
 
         // Map standard AuditLogEntry to legacy format used by old UI
-        const logs: AuditLog[] = (result.logs as AuditLogEntry[]).map((log: AuditLogEntry) => { let logDate = new Date();
+        const logs: AuditLog[] = (result.data as AuditLogEntry[]).map((log: AuditLogEntry) => { let logDate = new Date();
             if (log.timestamp && typeof log.timestamp === 'object' && 'toDate' in log.timestamp) {
                 logDate = log.timestamp.toDate(); 
             } else if (log.timestamp && typeof log.timestamp === 'string') { logDate = new Date(log.timestamp);

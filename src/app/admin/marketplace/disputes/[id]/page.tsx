@@ -27,6 +27,7 @@ import {
 } from "@/app/actions/escalation-notes";
 import type { Dispute, Order, DisputeResolution } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
+import { formatLocalDate, formatLocalDateTime, toDate } from "@/lib/date-utils";
 import { useToast } from "@/contexts/ToastContext";
 
 const DISPUTE_REASON_LABELS: Record<string, string> = {
@@ -189,9 +190,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
     const isEscrowDispute = !dispute.orderId && !!dispute.escrowId;
 
     const daysAgo = Math.floor(
-        (Date.now() - new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
-            ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
-            : dispute.createdAt as unknown as Date | number | string).getTime()) / (1000 * 60 * 60 * 24)
+        (Date.now() - toDate(dispute.createdAt).getTime()) / (1000 * 60 * 60 * 24)
     );
 
     return (
@@ -248,9 +247,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     </div>
                     <p className="text-gray-600 mt-1">
                         Opened {daysAgo} day{daysAgo !== 1 ? "s" : ""} ago •{" "}
-                        {new Date((dispute.createdAt as unknown as { toDate?: () => Date })?.toDate
-                            ? (dispute.createdAt as unknown as { toDate: () => Date }).toDate()
-                            : dispute.createdAt as unknown as Date | number | string).toLocaleString()}
+                        {formatLocalDateTime(dispute.createdAt)}
                     </p>
                 </div>
 
@@ -272,7 +269,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-600 mb-1">Order Date</p>
-                                    <p className="text-gray-900">{new Date(order.createdAt).toLocaleDateString()}</p>
+                                    <p className="text-gray-900">{formatLocalDate(order.createdAt)}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-600 mb-1">Total Amount</p>
@@ -579,9 +576,7 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                                         <div className="flex items-center justify-between mb-1">
                                             <span className="text-xs font-bold text-slate-600">{note.createdByName}</span>
                                             <span className="text-xs text-slate-400">
-                                                {(note.createdAt as any)?.toDate
-                                                    ? (note.createdAt as any).toDate().toLocaleString()
-                                                    : String(note.createdAt)}
+                                                {formatLocalDateTime(note.createdAt)}
                                             </span>
                                         </div>
                                         <p className="text-sm text-slate-800 whitespace-pre-wrap">{note.text}</p>

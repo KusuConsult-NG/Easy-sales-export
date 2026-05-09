@@ -56,10 +56,12 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
                     status = "approved";
                     accountType = verData.accountType || "seller";
                     // Proactively backfill for performance in future logins
-                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
-                        serviceRegistrations: { marketplace: { status: "approved", accountType, syncedAt: new Date().toISOString() } },
+                    await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
+                        "serviceRegistrations.marketplace.status": "approved",
+                        "serviceRegistrations.marketplace.accountType": accountType,
+                        "serviceRegistrations.marketplace.syncedAt": new Date().toISOString(),
                         _version: FieldValue.increment(1)
-                    }, { merge: true });
+                    });
                 } else if (verData.status) { status = verData.status;
                     accountType = verData.accountType || accountType;
                 }
@@ -79,19 +81,14 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
             const legacyStatus = legacyData?.status ?? 'pending';
             const legacyAccountType = legacyData?.accountType;
 
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
                 {
-                    serviceRegistrations: {
-                        marketplace: {
-                            status: legacyStatus,
-                            accountType: legacyAccountType,
-                            syncedFromLegacy: true,
-                            syncedAt: new Date().toISOString()
-                        }
-                    },
+                    "serviceRegistrations.marketplace.status": legacyStatus,
+                    "serviceRegistrations.marketplace.accountType": legacyAccountType,
+                    "serviceRegistrations.marketplace.syncedFromLegacy": true,
+                    "serviceRegistrations.marketplace.syncedAt": new Date().toISOString(),
                     _version: FieldValue.increment(1)
-                },
-                { merge: true }
+                }
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled legacy marketplace status '${legacyStatus}' for user ${session.user.id}`);
@@ -101,12 +98,14 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
         // ── FALLBACK 2: Check legacy sellerVerificationStatus field
         if (userData?.sellerVerificationStatus) { const legacyStatus = userData.sellerVerificationStatus;
             const derivedAccountType = "seller";
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
                 { 
-                    serviceRegistrations: { marketplace: { status: legacyStatus, accountType: derivedAccountType, syncedFromLegacy: true, syncedAt: new Date().toISOString() } },
+                    "serviceRegistrations.marketplace.status": legacyStatus,
+                    "serviceRegistrations.marketplace.accountType": derivedAccountType,
+                    "serviceRegistrations.marketplace.syncedFromLegacy": true,
+                    "serviceRegistrations.marketplace.syncedAt": new Date().toISOString(),
                     _version: FieldValue.increment(1)
-                },
-                { merge: true }
+                }
             );
             return { error: null, success: true as const, data: { status: legacyStatus, accountType: derivedAccountType } };
         }
@@ -116,27 +115,23 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
             .where('userId', '==', session.user.id)
             .get();
 
-        if (!verificationSnap.empty) { const sortedDocs = verificationSnap.docs.map(d => d.data()).sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
+        if (!verificationSnap.empty) { const sortedDocs = verificationSnap.docs.map(d => d.data()).sort((a, b) => {
+                const aTime = (a as any).createdAt?.toMillis?.() || (a as any).createdAt?.seconds * 1000 || 0;
+                const bTime = (b as any).createdAt?.toMillis?.() || (b as any).createdAt?.seconds * 1000 || 0;
                 return bTime - aTime;
             });
             const vData = sortedDocs[0];
             const vStatus = vData?.status ?? 'pending';
             const vAccountType = vData?.accountType ?? 'seller';
 
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).set(
-                { serviceRegistrations: {
-                        marketplace: {
-                            status: vStatus,
-                            accountType: vAccountType,
-                            syncedFromLegacy: true,
-                            syncedAt: new Date().toISOString()
-                        }
-                    },
+            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
+                {
+                    "serviceRegistrations.marketplace.status": vStatus,
+                    "serviceRegistrations.marketplace.accountType": vAccountType,
+                    "serviceRegistrations.marketplace.syncedFromLegacy": true,
+                    "serviceRegistrations.marketplace.syncedAt": new Date().toISOString(),
                     _version: FieldValue.increment(1)
-                },
-                { merge: true }
+                }
             );
 
             logger.info(`[checkMarketplaceStatus] Backfilled from seller_verifications status '${vStatus}' for user ${session.user.id}`);
@@ -173,14 +168,14 @@ export interface SellerVerificationFormData { phoneNumber: string;
     country: string; }
 
 export type SellerVerificationState = 
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any };
+    | { success: true; error: null; data: unknown; meta?: unknown }
+    | { success: false; error: string; data: null; meta?: unknown };
 
 /**
  * Submit seller verification application
  */
 async function _submitSellerVerificationAction(
-    prevState: any,
+    prevState: unknown,
     formData: FormData
 ): Promise<ActionResponse<null>> { 
     let sessionResult;
@@ -432,7 +427,7 @@ async function _submitMarketplaceOnboardingAction(
             const accountType = formData.get("accountType") as string;
             const isBuyerOnly = accountType === "buyer";
 
-            const userUpdate: any = {
+            const userUpdate: Record<string, unknown> = {
                 phone: formData.get("phone") as string,
                 location: `${location.address}, ${location.lga}, ${location.state}`,
                 updatedAt: FieldValue.serverTimestamp(),
@@ -518,7 +513,7 @@ export type ProductActionState =
 /**
  * Create new product listing
  */
-async function _createProductAction(prevState: any, formData: FormData): Promise<ActionResponse<{ productId: string }>> { 
+async function _createProductAction(prevState: unknown, formData: FormData): Promise<ActionResponse<{ productId: string }>> { 
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -575,7 +570,7 @@ async function _createProductAction(prevState: any, formData: FormData): Promise
             return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null };
         }
 
-        const validatedData: any = { ...rawData, ...validation.data };
+        const validatedData = { ...rawData, ...validation.data };
         const productId = `product_${userId}_${Date.now()}`;
 
         // 1. Handle Image Uploads
@@ -640,7 +635,7 @@ async function _createProductAction(prevState: any, formData: FormData): Promise
             description: validatedData.description,
             category: validatedData.category,
             images: imageUrls,
-            videoUrl: validatedData.videoUrl || undefined,
+            videoUrl: (validatedData.videoUrl as string) || undefined,
             pricingTiers,
             availableQuantity: validatedData.availableQuantity,
             minimumOrderQuantity: validatedData.minimumOrderQuantity,
@@ -694,7 +689,7 @@ async function _getMarketplaceProductsAction(params: {
     try {
         const { category, search, location, sortBy, limit: limitCount = 20 } = params;
 
-        let query: any = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+        let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as FirebaseFirestore.Query;
 
         if (category && category !== "all") { 
             query = query.where("category", "==", category);
@@ -726,7 +721,7 @@ async function _getMarketplaceProductsAction(params: {
 
         if (search) { 
             const searchLower = search.toLowerCase();
-            products = products.filter((p: any) => 
+            products = products.filter((p) => 
                 p.title.toLowerCase().includes(searchLower) || 
                 p.description.toLowerCase().includes(searchLower)
             );
@@ -1009,7 +1004,7 @@ export const getSellerOrdersAction = withSafeAction("getSellerOrdersAction", _ge
 /**
  * Get seller analytics
  */
-async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: any }>> { 
+async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: unknown }>> { 
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -1346,7 +1341,7 @@ export const searchProductsAction = withSafeAction("searchProductsAction", _sear
 /**
  * Resubmit verification after rejection
  */
-async function _resubmitSellerVerificationAction(data: any): Promise<ActionResponse<{ verificationId: string }>> { 
+async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionResponse<{ verificationId: string }>> { 
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
@@ -1371,7 +1366,7 @@ async function _resubmitSellerVerificationAction(data: any): Promise<ActionRespo
         }
 
         await doc.ref.update({ 
-            ...data,
+            ...(data as any),
             status: "pending",
             submittedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
