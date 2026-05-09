@@ -12,6 +12,13 @@ import { isAdmin } from "@/lib/admin-permissions";
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface UserSegments {
+    active: number;
+    pending: number;
+    stalled: number;
+    ghost: number;
+}
+
 export interface AnalyticsData {
     platformOverview: {
         totalUsers: number;
@@ -32,12 +39,7 @@ export interface AnalyticsData {
     userGrowthByMonth: Array<{ month: string; users: number }>;
     /** Module participation breakdown for the pie chart */
     moduleUsage: Array<{ module: string; count: number }>;
-    userSegments: {
-        active: number;
-        pending: number;
-        stalled: number;
-        ghost: number;
-    };
+    userSegments: UserSegments;
     recentTransactions: Array<{
         id: string;
         type: string;
