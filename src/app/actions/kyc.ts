@@ -247,6 +247,13 @@ async function _saveKYCProfileAction(payload: { firstName: string;
             'kyc.idType': payload.idType || null,
             'kyc.idNumber': payload.idNumber || null,
             'kyc.profileSavedAt': FieldValue.serverTimestamp(),
+            // Canonical Profile Sync
+            'verificationProfile.firstName': payload.firstName,
+            'verificationProfile.lastName': payload.lastName,
+            'verificationProfile.fullName': computedFullName,
+            'verificationProfile.dob': payload.dateOfBirth,
+            'verificationProfile.phone': payload.phoneNumber,
+            'verificationProfile.lastUpdated': FieldValue.serverTimestamp(),
             // Sync PII to root user doc for Communication Hub queries
             firstName: payload.firstName,
             lastName: payload.lastName,

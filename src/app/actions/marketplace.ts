@@ -434,6 +434,36 @@ async function _submitMarketplaceOnboardingAction(
                 _version: FieldValue.increment(1) 
             };
 
+            const canonicalProfile = {
+                firstName: userDoc.data()?.firstName || "",
+                lastName: userDoc.data()?.lastName || "",
+                fullName: userDoc.data()?.fullName || "",
+                phone: formData.get("phone") as string,
+                email: userDoc.data()?.email || "",
+                business: {
+                    name: formData.get("businessName") as string,
+                    type: formData.get("businessType") as string,
+                    description: formData.get("businessDescription") as string || "",
+                    address: location.address,
+                    state: location.state,
+                    lga: location.lga,
+                    category: (formData.get("sellerCategory") as string) || "retail"
+                },
+                bankDetails: bankAccount,
+                documents: {
+                    businessDoc: businessRegistrationUrl || undefined,
+                    farmPhotos: farmPhotoUrls,
+                    productSamples: productSampleUrls
+                },
+                status: isBuyerOnly ? "approved" : "pending",
+                lastUpdated: FieldValue.serverTimestamp()
+            };
+
+            userUpdate.verificationProfile = {
+                ...canonicalProfile,
+                isCanonical: true
+            };
+
             if (isBuyerOnly) { 
                 userUpdate["serviceRegistrations.marketplace"] = {
                     status: "active",

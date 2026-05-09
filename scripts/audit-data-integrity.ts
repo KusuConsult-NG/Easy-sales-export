@@ -1,156 +1,91 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+
 import * as dotenv from "dotenv";
+import * as path from "path";
 
-// Load environment variables
-dotenv.config({ path: ".env.local" });
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
-// Initialize Firebase Admin
-if (!getApps().length) {
-    initializeApp({
-        credential: cert({
-            projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-        }),
-    });
-}
+import { db } from "../src/lib/firebase-admin";
+import { COLLECTIONS } from "../src/lib/types/firestore";
+import * as fs from "fs";
 
-const db = getFirestore();
-
-interface AuditStats {
-    totalUsers: number;
-    corruptedUsers: number;
-    legacyVerified: number;
-    missingNames: number;
-    desyncedRegistrations: number;
-    orphanedApplications: number;
-    inconsistentTimestamps: number;
-}
-
-const COLLECTIONS = {
-    USERS: "users",
-    WAVE_APPLICATIONS: "wave_applications",
-    ACADEMY_APPLICATIONS: "academy_applications",
-    EXPORT_APPLICATIONS: "export_onboarding_applications",
-    SELLER_VERIFICATIONS: "seller_verifications",
-    COOPERATIVE_ONBOARDING: "cooperative_onboarding_applications",
-};
-
-async function auditDataIntegrity() {
-    const stats: AuditStats = {
-        totalUsers: 0,
-        corruptedUsers: 0,
-        legacyVerified: 0,
-        missingNames: 0,
-        desyncedRegistrations: 0,
-        orphanedApplications: 0,
-        inconsistentTimestamps: 0,
+async function runAudit() {
+    console.log("🚀 Starting Optimized Data Integrity Audit...");
+    const stats = {
+        totalSellersChecked: 0,
+        missingBankInRoot: 0,
+        missingBankInSeller: 0,
+        missingDocsInSeller: 0,
+        desyncedPhone: 0,
+        desyncedState: 0,
+        orphanedSellerVerifications: 0,
+        usersWithMarketplaceButNoVerificationDoc: 0,
     };
 
-    console.log("🔍 Starting Platform-Wide Data Integrity Audit...");
-    console.log("=".repeat(60));
+    // 1. Audit Seller Verifications
+    console.log("📁 Fetching Seller Verifications...");
+    const sellerSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).limit(1000).get();
+    stats.totalSellersChecked = sellerSnap.size;
+    
+    const userIds = [...new Set(sellerSnap.docs.map(d => d.data().userId).filter(Boolean))];
+    console.log(`🔍 Checking ${userIds.length} unique users linked to ${sellerSnap.size} verifications...`);
 
-    try {
-        // 1. Audit Users Collection
-        const usersSnap = await db.collection(COLLECTIONS.USERS).get();
-        stats.totalUsers = usersSnap.size;
-
-        for (const userDoc of usersSnap.docs) {
-            const data = userDoc.data();
-            const userId = userDoc.id;
-            let isUserCorrupted = false;
-
-            // Check for missing names
-            if (!data.firstName || !data.lastName) {
-                stats.missingNames++;
-                isUserCorrupted = true;
-            }
-
-            // Check for legacy verification field
-            if (data.verified !== undefined && data.isVerified === undefined) {
-                stats.legacyVerified++;
-                isUserCorrupted = true;
-            }
-
-            // Check for missing serviceRegistrations
-            if (!data.serviceRegistrations) {
-                stats.desyncedRegistrations++;
-                isUserCorrupted = true;
-            }
-
-            // Check timestamps
-            if (!data.createdAt || !data.updatedAt) {
-                stats.inconsistentTimestamps++;
-                isUserCorrupted = true;
-            }
-
-            if (isUserCorrupted) stats.corruptedUsers++;
-        }
-
-        console.log(`✅ Users Audit Complete: ${stats.totalUsers} users scanned.`);
-
-        // 2. Audit Cross-Module Synchronization
-        console.log("\n📡 Auditing Cross-Module Registration Sync...");
-        
-        const moduleChecks = [
-            { col: COLLECTIONS.WAVE_APPLICATIONS, key: "wave" },
-            { col: COLLECTIONS.ACADEMY_APPLICATIONS, key: "academy" },
-            { col: COLLECTIONS.EXPORT_APPLICATIONS, key: "export" },
-            { col: COLLECTIONS.SELLER_VERIFICATIONS, key: "marketplace" },
-            { col: COLLECTIONS.COOPERATIVE_ONBOARDING, key: "cooperatives" },
-        ];
-
-        for (const check of moduleChecks) {
-            const appSnap = await db.collection(check.col).get();
-            for (const appDoc of appSnap.docs) {
-                const appData = appDoc.data();
-                const userId = appData.userId;
-
-                if (!userId) {
-                    stats.orphanedApplications++;
-                    continue;
-                }
-
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-                if (!userDoc.exists) {
-                    stats.orphanedApplications++;
-                    continue;
-                }
-
-                const userData = userDoc.data()!;
-                const reg = userData.serviceRegistrations?.[check.key];
-
-                if (!reg || reg.status !== appData.status) {
-                    stats.desyncedRegistrations++;
-                }
-            }
-        }
-
-        // 3. Final Report
-        console.log("\n" + "=".repeat(60));
-        console.log("📊 FINAL INTEGRITY REPORT");
-        console.log("=".repeat(60));
-        console.log(`Total Users Processed:   ${stats.totalUsers}`);
-        console.log(`Corrupted User Profiles: ${stats.corruptedUsers}`);
-        console.log(`Legacy Schema Fields:    ${stats.legacyVerified}`);
-        console.log(`Missing Name Fields:     ${stats.missingNames}`);
-        console.log(`Desynced Registrations:  ${stats.desyncedRegistrations}`);
-        console.log(`Orphaned Applications:   ${stats.orphanedApplications}`);
-        console.log(`Timestamp Issues:        ${stats.inconsistentTimestamps}`);
-        console.log("=".repeat(60));
-
-        if (stats.corruptedUsers > 0 || stats.desyncedRegistrations > 0) {
-            console.log("\n⚠️  ACTION REQUIRED: Data integrity issues detected.");
-            console.log("Run 'npm run recovery:data' to apply fixes.");
-        } else {
-            console.log("\n✨ SUCCESS: Platform data integrity is within high-assurance parameters.");
-        }
-
-    } catch (error) {
-        console.error("\n❌ Audit failed:", error);
-        process.exit(1);
+    // Fetch users in chunks
+    const userMap = new Map();
+    for (let i = 0; i < userIds.length; i += 30) {
+        const chunk = userIds.slice(i, i + 30);
+        const usersSnap = await db.collection(COLLECTIONS.USERS).where("__name__", "in", chunk).get();
+        usersSnap.forEach(d => userMap.set(d.id, d.data()));
+        console.log(`   - Progress: ${i + chunk.length}/${userIds.length} users fetched`);
     }
+
+    sellerSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const userId = data.userId;
+        const uData = userMap.get(userId);
+
+        if (!uData) {
+            stats.orphanedSellerVerifications++;
+            return;
+        }
+
+        // Check Bank Details
+        const hasBankInSeller = !!(data.bankDetails?.accountNumber || data.accountNumber || data.bankAccount?.accountNumber);
+        const hasBankInRoot = !!(uData.bankDetails?.accountNumber || uData.kyc?.bankDetails?.accountNumber);
+
+        if (!hasBankInSeller) stats.missingBankInSeller++;
+        if (!hasBankInRoot && hasBankInSeller) stats.missingBankInRoot++;
+
+        // Check Documents
+        const hasDocsInSeller = !!(data.documents?.businessDoc || data.documents?.idDoc || data.businessDoc || data.idDoc);
+        if (!hasDocsInSeller) stats.missingDocsInSeller++;
+
+        // Check Sync
+        if (data.phone !== uData.phone) stats.desyncedPhone++;
+        if (data.state !== uData.stateOfOrigin && data.state !== uData.kyc?.state && data.state !== uData.address?.state) stats.desyncedState++;
+    });
+
+    // 2. Audit Marketplace Status in Users
+    console.log("📁 Auditing Marketplace Statuses in Users collection...");
+    const marketUsersSnap = await db.collection(COLLECTIONS.USERS)
+        .where("serviceRegistrations.marketplace.status", "in", ["active", "approved", "pending"])
+        .limit(1000)
+        .get();
+
+    marketUsersSnap.docs.forEach(doc => {
+        const uData = doc.data();
+        const verificationId = uData.sellerVerificationId || uData.serviceRegistrations?.marketplace?.verificationId;
+        if (!verificationId) {
+            stats.usersWithMarketplaceButNoVerificationDoc++;
+        }
+    });
+
+    console.log("\n📊 AUDIT RESULTS (1000 Sample):");
+    console.table(stats);
+
+    const reportPath = "./artifacts/audit_report_sample.json";
+    fs.writeFileSync(reportPath, JSON.stringify({ stats, timestamp: new Date().toISOString() }, null, 2));
+    console.log(`\n✅ Audit report saved to ${reportPath}`);
 }
 
-auditDataIntegrity().then(() => process.exit(0));
+runAudit().catch(console.error);

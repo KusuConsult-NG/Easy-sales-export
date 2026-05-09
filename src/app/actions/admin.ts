@@ -1590,7 +1590,10 @@ async function _approveSellerVerificationAction(
                 "serviceRegistrations.marketplace.paymentStatus": "completed",
                 "serviceRegistrations.marketplace.approvedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.marketplace.approvedBy": session.user.id,
-                phone: verificationData.phoneNumber,
+                "verificationProfile.status": "approved",
+                "verificationProfile.verifiedBy": session.user.id,
+                "verificationProfile.verifiedAt": FieldValue.serverTimestamp(),
+                phone: verificationData.phoneNumber || verificationData.phone,
                 updatedAt: FieldValue.serverTimestamp(),
             });
         });
@@ -3179,14 +3182,24 @@ async function _getStandardSellerVerificationsAction(
 
         const standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
-            const userName = uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
+            
+            // Use canonical profile if available, otherwise fall back to fragmented reconstruction
+            const canonical = uData.verificationProfile || {};
+            const userName = canonical.fullName || uData.name || uData.firstName ? `${uData.firstName} ${uData.lastName || ''}`.trim() : (app.userName || app.businessName || "Unknown User");
             
             // Canonical bankDetails injection
-            const bankDetails = uData.bankDetails || {
+            const bankDetails = canonical.bankDetails || {
                 bankName: app.bankName || app.bankAccount?.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
                 accountNumber: app.accountNumber || app.bankAccountNumber || app.bankAccount?.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
                 accountName: app.accountName || app.bankAccountName || app.bankAccount?.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
                 bankCode: app.bankCode || app.bankAccount?.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+            };
+
+            // Canonical documents injection
+            const documents = canonical.documents || {
+                businessDoc: app.businessDoc || app.documents?.businessDoc || uData.documents?.businessDoc || "Not uploaded",
+                idDoc: app.idDoc || app.documents?.idDoc || uData.documents?.idDoc || "Not uploaded",
+                addressProof: app.addressProof || app.documents?.addressProof || uData.documents?.addressProof || "Not uploaded"
             };
 
             return {
@@ -3200,12 +3213,14 @@ async function _getStandardSellerVerificationsAction(
                     address: typeof uData.address === 'object' ? uData.address?.street : (uData.address || app.residentialAddress || "Unknown"),
                     state: typeof uData.address === 'object' ? uData.address?.state : (uData.stateOfOrigin || app.stateOfOrigin || "Unknown"),
                     lga: typeof uData.address === 'object' ? uData.address?.lga : (uData.lga || app.lga || "Unknown"),
-                    bankDetails
+                    bankDetails,
+                    documents
                 },
                 status: app.status || "pending",
                 data: {
                     ...app,
-                    bankDetails
+                    bankDetails,
+                    documents
                 }
             };
         });
