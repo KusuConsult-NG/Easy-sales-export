@@ -40,6 +40,7 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
     // Helper to format values
     const formatValue = (value: any): React.ReactNode => {
         if (value === null || value === undefined) return <span className="text-slate-400 italic">Not provided</span>;
+        
         if (typeof value === "boolean") {
             return value ? (
                 <span className="inline-flex items-center gap-1 text-emerald-600 font-bold">
@@ -51,25 +52,42 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                 </span>
             );
         }
+
         if (Array.isArray(value)) {
             if (value.length === 0) return <span className="text-slate-400 italic">None</span>;
             return (
                 <div className="flex flex-wrap gap-1.5 mt-1">
                     {value.map((v, i) => (
                         <span key={i} className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-xs font-semibold border border-slate-200">
-                            {String(v).replace(/_/g, ' ')}
+                            {typeof v === 'object' ? JSON.stringify(v) : String(v).replace(/_/g, ' ')}
                         </span>
                     ))}
                 </div>
             );
         }
+
         if (typeof value === "object" && value._seconds) {
             // Firestore Timestamp
             return new Date(value._seconds * 1000).toLocaleString("en-NG");
         }
+
         if (typeof value === "object") {
-            return <pre className="text-xs bg-slate-50 p-2 rounded overflow-auto max-h-32">{JSON.stringify(value, null, 2)}</pre>;
+            return (
+                <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-100 space-y-2 mt-1">
+                    {Object.entries(value).map(([k, v]) => (
+                        <div key={k} className="flex flex-col gap-0.5">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                                {formatLabel(k)}
+                            </span>
+                            <span className="text-xs font-bold text-slate-700">
+                                {typeof v === 'object' ? formatValue(v) : String(v)}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            );
         }
+
         return String(value);
     };
 
