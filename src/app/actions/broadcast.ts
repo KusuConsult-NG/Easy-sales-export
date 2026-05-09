@@ -194,6 +194,7 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
         error: null, 
         data: { 
             count: listResult.data.count, 
+            totalMatches: listResult.data.originalDocCount,
             sample: listResult.data.recipients?.slice(0, 5) || [] 
         } 
     };

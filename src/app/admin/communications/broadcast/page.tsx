@@ -36,8 +36,8 @@ const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; lab
             { value: "pending_applicants", label: "All Pending Applicants", desc: "Everyone awaiting review across Cooperative, WAVE, Academy, Farm Nation & Export" },
             { value: "unpaid_applicants", label: "Unpaid Applicants", desc: "Users who applied but have not completed their required payment" },
             { value: "abandoned_failed_transactions", label: "Abandoned / Failed Payments", desc: "Users with failed or aborted payments" },
-            { value: "stalled_users", label: "⚠️ Stalled Users (Incomplete)", desc: "1,901 users who started modules but missing Bank/Address" },
-            { value: "ghost_users", label: "👻 Ghost Users (Never Started)", desc: "17,341 users who signed up but never activated any service" },
+            { value: "stalled_users", label: "⚠️ Stalled Users", desc: "Started a module but profile is incomplete (missing bank/address)." },
+            { value: "ghost_users", label: "👻 Ghost Users", desc: "Registered but never clicked start on any service. Zero platform data." },
             { value: "csv_upload", label: "CSV Upload", desc: "Upload a CSV file containing email addresses" },
         ],
     },
@@ -156,6 +156,7 @@ export default function BroadcastComposePage() {
 
     const [estimating, setEstimating] = useState(false);
     const [recipientCount, setRecipientCount] = useState<number | null>(null);
+    const [totalMatches, setTotalMatches] = useState<number | null>(null);
     const [recipientSample, setRecipientSample] = useState<{ name: string; email: string }[]>([]);
 
     const [sending, setSending] = useState(false);
@@ -197,6 +198,7 @@ export default function BroadcastComposePage() {
                 return;
             }
             setRecipientCount(data.data.count);
+            setTotalMatches(data.data.totalMatches);
             setRecipientSample(data.data.sample);
         } catch (err: any) {
             showToast(err.message || "Failed to estimate recipients — potential timeout.", "error");
@@ -537,6 +539,11 @@ export default function BroadcastComposePage() {
                                             ? "No recipients found for these filters"
                                             : `~${recipientCount.toLocaleString()} recipients will receive this email`}
                                     </p>
+                                    {totalMatches !== null && totalMatches > recipientCount && (
+                                        <p className="text-[10px] text-green-600 font-medium opacity-80">
+                                            ({totalMatches.toLocaleString()} records matched, merged {totalMatches - recipientCount} duplicates/invalid)
+                                        </p>
+                                    )}
                                     {recipientSample.length > 0 && (
                                         <p className="text-xs text-green-700 mt-1">
                                             Sample: {recipientSample.map((r) => r.email).join(", ")}

@@ -33,8 +33,8 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     pending_applicants: "All Pending Applicants",
     unpaid_applicants: "Unpaid Applicants",
     abandoned_failed_transactions: "Abandoned / Failed Transactions",
-    stalled_users: "Stalled Users (Incomplete Profile)",
-    ghost_users: "Ghost Users (Inactive Registrants)",
+    stalled_users: "⚠️ Stalled Users",
+    ghost_users: "👻 Ghost Users",
     csv_upload: "CSV Upload",
 };
 
