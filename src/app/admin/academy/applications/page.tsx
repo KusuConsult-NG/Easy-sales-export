@@ -808,8 +808,9 @@ export default function AdminAcademyApplicationsPage() {
                                             <button
                                                 onClick={() => handleMarkUnderReview(app.id)}
                                                 disabled={!!processingId}
-                                                className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition disabled:opacity-50"
+                                                className="px-3 py-1.5 rounded-lg border border-amber-300 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition disabled:opacity-50 flex items-center gap-1.5"
                                             >
+                                                {processingId === app.id + "_review" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                                 Review
                                             </button>
                                             <button
