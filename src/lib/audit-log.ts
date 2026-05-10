@@ -54,6 +54,8 @@ export type AuditAction =
     | 'withdrawal_approve'
     | 'withdrawal_reject'
     // Admin Actions
+    | 'land_created'
+    | 'land_updated'
     | 'land_verified'
     | 'land_rejected'
     | 'land_deleted'
