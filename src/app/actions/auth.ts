@@ -277,7 +277,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
         try { await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({
                 ...userProfile,
                 createdAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() });
+                updatedAt: FieldValue.serverTimestamp() }, { merge: true });
         } catch (firestoreError: any) {
             logger.error("Firestore profile creation failed, rolling back Auth user:", firestoreError);
             // ROLLBACK: Delete the Auth user so they can try again (prevents "Ghost User" state)

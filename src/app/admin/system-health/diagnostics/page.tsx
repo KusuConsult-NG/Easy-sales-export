@@ -24,6 +24,30 @@ interface DiagnosticData {
     timestamp: string;
 }
 
+const HealthCard = ({ title, status, icon: Icon, description }: { title: string; status: boolean; icon: any; description: string }) => (
+    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+        <div className="flex items-start justify-between mb-4">
+            <div className={`p-3 rounded-xl ${status ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                <Icon className="w-6 h-6" />
+            </div>
+            <div className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${status ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                {status ? 'Healthy' : 'Down'}
+            </div>
+        </div>
+        <h3 className="font-bold text-slate-900 mb-1">{title}</h3>
+        <p className="text-sm text-slate-500">{description}</p>
+    </div>
+);
+
+const StatRow = ({ label, value, color }: { label: string; value: number; color: string }) => (
+    <div className="flex items-center justify-between py-3 border-b border-slate-50 last:border-0">
+        <span className="text-sm text-slate-600">{label}</span>
+        <span className={`text-sm font-bold ${value > 0 ? color : 'text-slate-400'}`}>
+            {value > 0 ? value : 'None'}
+        </span>
+    </div>
+);
+
 export default function AdminDiagnosticsPage() {
     const [data, setData] = useState<DiagnosticData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -44,29 +68,7 @@ export default function AdminDiagnosticsPage() {
         fetchDiagnostics();
     }, []);
 
-    const HealthCard = ({ title, status, icon: Icon, description }: { title: string; status: boolean; icon: any; description: string }) => (
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
-            <div className="flex items-start justify-between mb-4">
-                <div className={`p-3 rounded-xl ${status ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                    <Icon className="w-6 h-6" />
-                </div>
-                <div className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${status ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    {status ? 'Healthy' : 'Down'}
-                </div>
-            </div>
-            <h3 className="font-bold text-slate-900 mb-1">{title}</h3>
-            <p className="text-sm text-slate-500">{description}</p>
-        </div>
-    );
 
-    const StatRow = ({ label, value, color }: { label: string; value: number; color: string }) => (
-        <div className="flex items-center justify-between py-3 border-b border-slate-50 last:border-0">
-            <span className="text-sm text-slate-600">{label}</span>
-            <span className={`text-sm font-bold ${value > 0 ? color : 'text-slate-400'}`}>
-                {value > 0 ? value : 'None'}
-            </span>
-        </div>
-    );
 
     if (loading && !data) {
         return (

@@ -33,7 +33,9 @@
     "fix:schema": "tsx scripts/firebase-schema-fix.ts",
     "audit:data": "tsx scripts/audit-data-integrity.ts",
     "audit:routes": "tsx scripts/audit-routes.ts",
-    "audit:runtime": "tsx scripts/audit-runtime.ts"
+    "audit:runtime": "tsx scripts/audit-runtime.ts",
+    "verify:sync": "tsx scripts/verify-sync.ts",
+    "repair:schemas": "tsx scripts/repair-schemas.ts"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",

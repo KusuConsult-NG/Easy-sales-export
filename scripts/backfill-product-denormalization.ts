@@ -49,7 +49,7 @@ async function auditLegacyProducts() {
                     .limit(1)
                     .get();
                 
-                let finalSellerName = sellerName;
+                const finalSellerName = sellerName;
                 let finalVerified = sellerVerified;
 
                 if (!verificationDoc.empty) {

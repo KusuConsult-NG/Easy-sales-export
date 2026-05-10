@@ -99,7 +99,7 @@ export async function repairOrphanedUser(uid: string): Promise<{ success: boolea
             updatedAt: FieldValue.serverTimestamp(),
             _repairedAt: FieldValue.serverTimestamp(), // Mark as auto-repaired
             _repairReason: 'orphaned_auth_user',
-        });
+        }, { merge: true });
 
         logger.info('Successfully repaired orphaned user', { uid, email });
 

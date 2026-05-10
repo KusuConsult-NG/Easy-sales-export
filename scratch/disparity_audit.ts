@@ -30,7 +30,7 @@ async function analyzeDisparity() {
     });
 
     let duplicates = 0;
-    let duplicateEmails: string[] = [];
+    const duplicateEmails: string[] = [];
     emailCounts.forEach((count, email) => {
         if (count > 1) {
             duplicates += (count - 1);

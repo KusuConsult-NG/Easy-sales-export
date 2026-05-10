@@ -3275,7 +3275,7 @@ async function _getMarketplaceUsersAction(options: {
         let users = snapshot.docs.map(doc => {
             const data = doc.data();
             const marketplaceData = data.serviceRegistrations?.marketplace;
-            let dbAccountType = marketplaceData?.accountType;
+            const dbAccountType = marketplaceData?.accountType;
             // Legacy fallback
             const hasSellerRole = (data.roles || []).includes("seller");
             let buyerRole = "buyer_only";

@@ -109,7 +109,7 @@ export async function runSystemHealthDiagnostic(limit: number = 2000): Promise<
 
         // 5. Orphaned Apps Check (Sample)
         let orphanedApps = 0;
-        let desyncedRegs = 0;
+        const desyncedRegs = 0;
         const waveSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).limit(50).get();
         for (const doc of waveSnap.docs) {
             const userId = doc.data().userId;

@@ -63,7 +63,7 @@ export default function ProductDetailPage() {
             const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
             
             const savedCart = localStorage.getItem(cartKey);
-            let cart: any[] = savedCart ? JSON.parse(savedCart) : [];
+            const cart: any[] = savedCart ? JSON.parse(savedCart) : [];
 
             const existingItemIndex = cart.findIndex(item => item.id === product.id);
 

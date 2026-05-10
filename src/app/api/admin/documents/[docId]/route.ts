@@ -32,8 +32,8 @@ export async function GET(
         const data = docSnap.data()!;
 
         // Only the owner or an admin can access
-        const userRole = (session.user as any).role;
-        const isAdmin = ["admin", "super_admin", "cooperative_manager"].includes(userRole);
+        const userRoles = session.user.roles || [];
+        const isAdmin = userRoles.some(r => ["admin", "super_admin", "cooperative_manager", "superadmin"].includes(r));
         if (data.userId !== session.user.id && !isAdmin) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }

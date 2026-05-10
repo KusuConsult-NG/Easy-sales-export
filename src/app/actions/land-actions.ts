@@ -51,7 +51,7 @@ async function _createLandListing(
         // Audit log
         await createAdminAuditLog({
             userId: session.user.id,
-            action: 'land_verified', // Placeholder action
+            action: 'land_created',
             targetId: listingRef.id,
             targetType: 'land_listing',
             metadata: {
@@ -263,7 +263,7 @@ async function _updateLandListing(
         // Audit log
         await createAdminAuditLog({ 
             userId: session.user.id,
-            action: 'land_verified',
+            action: 'land_updated',
             targetId: listingId,
             targetType: 'land_listing',
             metadata: { action: 'update' } 
@@ -365,7 +365,7 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         // Audit log
         await createAdminAuditLog({ 
             userId: session.user.id,
-            action: 'land_verified',
+            action: 'land_deleted',
             targetId: listingId,
             targetType: 'land_listing',
             metadata: { action: 'delete' } 

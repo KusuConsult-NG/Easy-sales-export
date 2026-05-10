@@ -42,7 +42,7 @@ async function repairOrphanedUser() {
             ...userProfile,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         console.log('✅ Successfully created Firestore profile for user:', uid);
         console.log('User can now login and access the platform');

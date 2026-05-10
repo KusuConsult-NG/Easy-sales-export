@@ -15,7 +15,7 @@ async function auditAuthGap() {
     console.log("--- Starting Auth vs. DB Gap Audit ---");
     
     let totalAuthUsers = 0;
-    let orphans: string[] = [];
+    const orphans: string[] = [];
     let nextPageToken: string | undefined;
 
     try {

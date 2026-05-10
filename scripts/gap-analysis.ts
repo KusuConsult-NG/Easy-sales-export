@@ -11,7 +11,7 @@ async function getGapBreakdown() {
     
     const snapshot = await db.collection("users").get();
     
-    let total = snapshot.size;
+    const total = snapshot.size;
     let trueGhostUsers = 0; // No module registrations at all
     let stalledUsers = 0;   // Has at least one registration but missing Bank/Address
     let completeUsers = 0;  // Fully onboarded

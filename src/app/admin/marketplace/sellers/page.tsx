@@ -566,11 +566,15 @@ export default function AdminSellersPage() {
                                 <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
                                     <FileText className="w-5 h-5" /> Documents
                                 </h3>
-                                <div className="space-y-2 text-sm text-slate-600">
-                                    <p>• Business: {selectedVerification.data.documents?.businessDoc || "Not uploaded"}</p>
-                                    <p>• ID: {selectedVerification.data.documents?.idDoc || "Not uploaded"}</p>
-                                    <p>• Address Proof: {selectedVerification.data.documents?.addressProof || "Not uploaded"}</p>
-                                </div>
+                                    <p className="flex items-center gap-2">
+                                        • Business: {selectedVerification.data.documents?.businessDoc ? <a href={`/api/admin/documents/${selectedVerification.data.documents.businessDoc}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> View Document</a> : "Not uploaded"}
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        • ID: {selectedVerification.data.documents?.idDoc ? <a href={`/api/admin/documents/${selectedVerification.data.documents.idDoc}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> View Document</a> : "Not uploaded"}
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        • Address Proof: {selectedVerification.data.documents?.addressProof ? <a href={`/api/admin/documents/${selectedVerification.data.documents.addressProof}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline inline-flex items-center gap-1"><FileText className="w-3 h-3" /> View Document</a> : "Not uploaded"}
+                                    </p>
                             </div>
                             {selectedVerification.data.rejectionReason && (
                                 <div className="p-4 bg-red-50 rounded-lg">
