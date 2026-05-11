@@ -45,7 +45,7 @@ export type SmsAudience =
 
 export interface SmsFilters { audience: SmsAudience;
     state?: string;
-    sellerStatus?: "pending" | "approved" | "suspended";
+    sellerStatus?: "all" | "pending" | "approved" | "suspended";
     customRecipients?: string[]; }
 
 export type SmsBroadcastPreview = ActionResponse<{
@@ -185,8 +185,10 @@ async function collectSmsRecipients(
         case "sellers":
         case "wholesale_sellers":
         case "retail_sellers": { let q: FirebaseFirestore.Query = db
-                .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("status", "==", filters.sellerStatus || "approved");
+                .collection(COLLECTIONS.SELLER_VERIFICATIONS);
+            if (filters.sellerStatus && filters.sellerStatus !== "all") {
+                q = q.where("status", "==", filters.sellerStatus);
+            }
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
             
@@ -204,13 +206,16 @@ async function collectSmsRecipients(
             }
             break;
         }
-        case "marketplace_onboarded": { const stream = db
-                .collection(COLLECTIONS.USERS)
-                .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
-                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name")
-                .get();
-            for (const d of (await stream).docs) {
+        case "marketplace_onboarded": { 
+            const stream = db.collection(COLLECTIONS.USERS)
+                .select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "fullName", "name", "marketplaceAccountType", "roles", "serviceRegistrations")
+                .stream();
+            for await (const chunk of stream) {
+                const d: any = chunk;
                 const u: any = d.data();
+                const mReg = u.serviceRegistrations?.marketplace;
+                if (!(mReg || u.marketplaceAccountType || (u.roles && (u.roles.includes("buyer") || u.roles.includes("seller"))))) continue;
+
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");

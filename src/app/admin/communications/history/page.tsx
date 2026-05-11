@@ -19,7 +19,6 @@ import { formatDateTime } from "@/lib/utils";
 
 const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     all: "All Users",
-    multi_module_users: "Multi-module Users",
     buyers: "Buyers",
     sellers: "All Sellers",
     wholesale_sellers: "Wholesale Sellers",

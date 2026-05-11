@@ -50,7 +50,7 @@ export type NotificationType = Notification["type"];
 
 export interface InAppBroadcastFilters { audience: InAppAudience;
     state?: string;
-    sellerStatus?: "pending" | "approved" | "suspended"; }
+    sellerStatus?: "all" | "pending" | "approved" | "suspended"; }
 
 export type InAppBroadcastPreview = ActionResponse<{
     count: number;
@@ -181,8 +181,10 @@ export async function collectRecipientUserIds(
         case "sellers":
         case "wholesale_sellers":
         case "retail_sellers": { let q: FirebaseFirestore.Query = db
-                .collection(COLLECTIONS.SELLER_VERIFICATIONS)
-                .where("status", "==", filters.sellerStatus || "approved");
+                .collection(COLLECTIONS.SELLER_VERIFICATIONS);
+            if (filters.sellerStatus && filters.sellerStatus !== "all") {
+                q = q.where("status", "==", filters.sellerStatus);
+            }
             if (filters.audience === "wholesale_sellers") q = q.where("sellerCategory", "==", "wholesale");
             if (filters.audience === "retail_sellers") q = q.where("sellerCategory", "==", "retail");
             const snap = await q.get();
@@ -195,13 +197,16 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "marketplace_onboarded": { const stream = db
-                .collection(COLLECTIONS.USERS)
-                .where("marketplaceAccountType", "in", ["buyer", "seller", "both"])
-                .select("name", "fullName", "stateOfOrigin", "state", "address")
-                .get();
-            for (const d of (await stream).docs) {
-                const u = d.data();
+        case "marketplace_onboarded": { 
+            const stream = db.collection(COLLECTIONS.USERS)
+                .select("name", "fullName", "stateOfOrigin", "state", "address", "marketplaceAccountType", "roles", "serviceRegistrations")
+                .stream();
+            for await (const chunk of stream) {
+                const d: any = chunk;
+                const u: any = d.data();
+                const mReg = u.serviceRegistrations?.marketplace;
+                if (!(mReg || u.marketplaceAccountType || (u.roles && (u.roles.includes("buyer") || u.roles.includes("seller"))))) continue;
+
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(d.id, u.fullName || u.name || "User");

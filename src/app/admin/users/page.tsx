@@ -481,7 +481,6 @@ export default function AdminUsersPage() {
                                 className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
                             >
                                 <option value="all">All Modules</option>
-                                <option value="multi">⬡ Multi-module (2+)</option>
                                 <option value="marketplace">Marketplace</option>
                                 <option value="academy">Academy</option>
                                 <option value="wave">WAVE</option>
@@ -603,11 +602,6 @@ export default function AdminUsersPage() {
                         <div>
                             <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
                                 <Layers className="w-4 h-4" /> Module Enrolments
-                                {(selectedUserForModal.moduleCount ?? 0) >= 2 && (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                                        Multi-module user
-                                    </span>
-                                )}
                             </h4>
                             <div className="bg-slate-50 rounded-xl overflow-hidden divide-y divide-slate-100">
                                 {["marketplace","academy","wave","cooperatives","export","farmNation"].map(key => {

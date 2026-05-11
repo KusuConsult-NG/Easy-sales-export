@@ -35,7 +35,6 @@ export function categorizeUser(data: any): BroadcastAudience {
 
 export type BroadcastAudience =
     | "all"
-    | "multi_module_users"
     | "pending_applicants"
     | "unpaid_applicants"
     | "abandoned_failed_transactions"
@@ -59,7 +58,7 @@ export type BroadcastAudience =
 export interface BroadcastFilters {
     audience: BroadcastAudience;
     state?: string;
-    sellerStatus?: "pending" | "approved" | "suspended";
+    sellerStatus?: "all" | "pending" | "approved" | "suspended";
     moduleStatus?: string;
     farmNationRole?: "buyer" | "seller" | "both";
     csvEmails?: string[];
@@ -98,13 +97,23 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 "createdAt",
                 "serviceRegistrations",
                 "verificationProfile",
-                "bankDetails"
+                "bankDetails",
+                "marketplaceAccountType",
+                "roles"
             )
             .orderBy("updatedAt", "desc");
 
         const emailMap = new Map<string, Recipient>();
         let totalScanned = 0;
         let matchedAudienceCount = 0;
+
+        const moduleStats = {
+            total: 0,
+            approved: 0,
+            pending: 0,
+            rejected: 0,
+            suspended: 0
+        };
 
         // Use streaming to handle high-scale user counts (37k+) safely
         await new Promise((resolve, reject) => {
@@ -141,39 +150,58 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                             ? filters.moduleStatus
                             : null;
 
-                        if (filters.audience === "pending_applicants") {
-                            matchesAudience = Object.values(regs).some((r: any) => r.status === "pending" || r.status === "submitted");
-                        } else if (filters.audience === "unpaid_applicants") {
-                            matchesAudience = Object.values(regs).some((r: any) => r.paymentStatus === "pending" || r.paymentStatus === "failed");
-                        } else if (filters.audience === "marketplace_onboarded") {
+                        let inModule = false;
+                        let userStatus = "";
+
+                        if (filters.audience === "marketplace_onboarded") {
                             const mReg = regs.marketplace;
-                            matchesAudience = !!mReg && (statusFilter ? mReg.status === statusFilter : mReg.status === "approved");
+                            if (mReg || data.marketplaceAccountType || (data.roles && (data.roles.includes("buyer") || data.roles.includes("seller")))) { 
+                                inModule = true; 
+                                userStatus = mReg?.status || "approved"; 
+                            }
+                        } else if (filters.audience === "buyers") {
+                            if (data.marketplaceAccountType === "buyer" || data.marketplaceAccountType === "both" || (data.roles && data.roles.includes("buyer"))) { 
+                                inModule = true; 
+                                userStatus = "approved"; 
+                            }
+                        } else if (filters.audience === "sellers" || filters.audience === "wholesale_sellers" || filters.audience === "retail_sellers") {
+                            if (data.marketplaceAccountType === "seller" || data.marketplaceAccountType === "both" || (data.roles && data.roles.includes("seller"))) { 
+                                // Best effort mapping for sellers since we are reading from USERS collection
+                                inModule = true; 
+                                const mReg = regs.marketplace;
+                                userStatus = mReg?.status || "approved"; 
+                            }
                         } else if (filters.audience === "cooperative_members") {
                             const cReg = regs.cooperative;
-                            matchesAudience = !!cReg && (statusFilter ? cReg.status === statusFilter : (cReg.status === "approved" || cReg.status === "pending"));
+                            if (cReg) { inModule = true; userStatus = cReg.status || "pending"; }
                         } else if (filters.audience === "wave_applicants") {
                             const wReg = regs.wave;
-                            matchesAudience = !!wReg && (statusFilter ? wReg.status === statusFilter : true);
+                            if (wReg) { inModule = true; userStatus = wReg.status || "pending"; }
                         } else if (filters.audience === "academy_users") {
                             const aReg = regs.academy;
-                            matchesAudience = !!aReg && (statusFilter ? aReg.status === statusFilter : true);
+                            if (aReg) { inModule = true; userStatus = aReg.status || "pending"; }
                         } else if (filters.audience === "farm_nation_users") {
-                            // Support both key conventions: snake_case (new) and camelCase (legacy)
                             const fReg = regs.farm_nation || regs.farmNation;
-                            matchesAudience = !!fReg && (statusFilter ? fReg.status === statusFilter : true);
+                            if (fReg) { inModule = true; userStatus = fReg.status || "pending"; }
                         } else if (filters.audience === "export_users") {
                             const eReg = regs.export;
-                            matchesAudience = !!eReg && (statusFilter ? eReg.status === statusFilter : true);
-                        } else if (filters.audience === "multi_module_users") {
-                            const activeSet = new Set();
-                            for (const key of ['marketplace', 'academy', 'wave', 'cooperatives', 'cooperative', 'export', 'farmNation', 'farm_nation']) {
-                                const reg = regs[key];
-                                if (reg && (reg.status === 'approved' || reg.status === 'active' || reg.status === 'paid' || reg.status === 'completed')) {
-                                    const label = key === 'farm_nation' || key === 'farmNation' ? 'farm-nation' : (key === 'cooperative' ? 'cooperatives' : key);
-                                    activeSet.add(label);
-                                }
+                            if (eReg) { inModule = true; userStatus = eReg.status || "pending"; }
+                        }
+
+                        if (inModule) {
+                            moduleStats.total++;
+                            if (userStatus === "approved") moduleStats.approved++;
+                            else if (userStatus === "pending") moduleStats.pending++;
+                            else if (userStatus === "rejected") moduleStats.rejected++;
+                            else if (userStatus === "suspended") moduleStats.suspended++;
+                            
+                            matchesAudience = statusFilter ? userStatus === statusFilter : true;
+                        } else {
+                            if (filters.audience === "pending_applicants") {
+                                matchesAudience = Object.values(regs).some((r: any) => r.status === "pending" || r.status === "submitted");
+                            } else if (filters.audience === "unpaid_applicants") {
+                                matchesAudience = Object.values(regs).some((r: any) => r.paymentStatus === "pending" || r.paymentStatus === "failed");
                             }
-                            matchesAudience = activeSet.size >= 2;
                         }
                     }
 
@@ -208,7 +236,8 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             data: {
                 recipients: uniqueList,
                 count: uniqueList.length,
-                originalDocCount: totalScanned
+                originalDocCount: totalScanned,
+                moduleStats
             }
         };
 

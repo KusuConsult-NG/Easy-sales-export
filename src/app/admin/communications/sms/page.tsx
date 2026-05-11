@@ -48,7 +48,7 @@ export default function SmsBroadcastPage() {
 
     const [audience, setAudience] = useState<SmsAudience>("all");
     const [state, setState] = useState("");
-    const [sellerStatus, setSellerStatus] = useState<"approved" | "pending" | "suspended">("approved");
+    const [sellerStatus, setSellerStatus] = useState<"all" | "approved" | "pending" | "suspended">("all");
     const [customPhonesText, setCustomPhonesText] = useState("");
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [message, setMessage] = useState("");
@@ -242,12 +242,13 @@ export default function SmsBroadcastPage() {
                             </div>
                             {isSellerAudience && (
                                 <div>
-                                    <label className="block text-white/60 text-xs font-medium mb-1.5">Seller Status</label>
+                                    <label className="block text-white/60 text-xs font-medium mb-1.5">Verification Status Filter</label>
                                     <select
                                         value={sellerStatus}
                                         onChange={(e) => { setSellerStatus(e.target.value as any); setPreview(null); }}
                                         className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
                                     >
+                                        <option value="all">All Statuses</option>
                                         <option value="approved">Approved</option>
                                         <option value="pending">Pending</option>
                                         <option value="suspended">Suspended</option>

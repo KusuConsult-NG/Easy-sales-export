@@ -76,7 +76,8 @@ export async function previewBroadcastAction(broadcastData: BroadcastFilters): P
         data: { 
             count: listResult.data.count, 
             totalMatches: listResult.data.originalDocCount,
-            sample: listResult.data.recipients?.slice(0, 5) || [] 
+            sample: listResult.data.recipients?.slice(0, 5) || [],
+            moduleStats: listResult.data.moduleStats
         } 
     };
 }

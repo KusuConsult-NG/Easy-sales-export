@@ -68,6 +68,7 @@ const AUDIENCE_OPTIONS = AUDIENCE_GROUPS.flatMap(g => g.options);
 
 const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> = {
     cooperative_members: [
+        { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
@@ -114,6 +115,7 @@ const FARM_NATION_ROLES = [
 ];
 
 const SELLER_STATUS_OPTIONS = [
+    { value: "all", label: "All Statuses" },
     { value: "approved", label: "Approved" },
     { value: "pending", label: "Pending" },
     { value: "suspended", label: "Suspended" },
@@ -155,8 +157,8 @@ export default function BroadcastComposePage() {
     const [step, setStep] = useState<Step>("compose");
     const [audience, setAudience] = useState<BroadcastAudience>("all");
     const [stateFilter, setStateFilter] = useState("");
-    const [sellerStatus, setSellerStatus] = useState<"pending" | "approved" | "suspended">("approved");
-    const [moduleStatus, setModuleStatus] = useState("approved");
+    const [sellerStatus, setSellerStatus] = useState<"all" | "pending" | "approved" | "suspended">("all");
+    const [moduleStatus, setModuleStatus] = useState("all");
     const [farmNationRole, setFarmNationRole] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
@@ -170,6 +172,7 @@ export default function BroadcastComposePage() {
     const [recipientCount, setRecipientCount] = useState<number | null>(null);
     const [totalMatches, setTotalMatches] = useState<number | null>(null);
     const [recipientSample, setRecipientSample] = useState<{ name: string; email: string }[]>([]);
+    const [moduleStats, setModuleStats] = useState<any>(null);
 
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState<{ sent: number; failed: number } | null>(null);
@@ -212,6 +215,7 @@ export default function BroadcastComposePage() {
             setRecipientCount(data.data.count);
             setTotalMatches(data.data.totalMatches);
             setRecipientSample(data.data.sample);
+            setModuleStats(data.data.moduleStats || null);
         } catch (err: any) {
             showToast(err.message || "Failed to estimate recipients — potential timeout.", "error");
         }
@@ -327,7 +331,7 @@ export default function BroadcastComposePage() {
                                                             setAudience(opt.value);
                                                             setRecipientCount(null);
                                                             // Reset sub-filters when switching audience
-                                                            setModuleStatus(MODULE_STATUS_OPTIONS[opt.value]?.[0]?.value || "approved");
+                                                            setModuleStatus(MODULE_STATUS_OPTIONS[opt.value]?.[0]?.value || "all");
                                                             setFarmNationRole("");
                                                         }}
                                                         className="mt-0.5 accent-green-600" />
@@ -398,7 +402,7 @@ export default function BroadcastComposePage() {
                                     {/* Seller status filter */}
                                     {isSellerAudience && (
                                         <div>
-                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Seller Status</label>
+                                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Verification Status Filter</label>
                                             <select value={sellerStatus} onChange={(e) => { setSellerStatus(e.target.value as any); setRecipientCount(null); }}
                                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
                                                 {SELLER_STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -410,12 +414,7 @@ export default function BroadcastComposePage() {
                                     {hasModuleStatus && (
                                         <div>
                                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-                                                {audience === "cooperative_members" && "Membership Status"}
-                                                {audience === "wave_applicants" && "Application Status"}
-                                                {audience === "academy_users" && "Application Status"}
-                                                {audience === "farm_nation_users" && "Registration Status"}
-                                                {audience === "export_users" && "Registration Status"}
-                                                {audience === "marketplace_onboarded" && "Onboarding Status"}
+                                                Registration Status Filter
                                             </label>
                                             <select value={moduleStatus} onChange={(e) => { setModuleStatus(e.target.value); setRecipientCount(null); }}
                                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">
@@ -563,6 +562,33 @@ export default function BroadcastComposePage() {
                                             Sample: {recipientSample.map((r) => r.email).join(", ")}
                                             {recipientCount > 3 ? ` + ${recipientCount - 3} more` : ""}
                                         </p>
+                                    )}
+                                    {moduleStats && moduleStats.total > 0 && (
+                                        <div className="mt-3 text-xs bg-white/50 rounded-lg p-3 border border-green-200/50 shadow-sm">
+                                            <p className="font-semibold text-slate-800 mb-2 border-b border-green-200/50 pb-1">Module Membership Base (Before Filter):</p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-slate-100">
+                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Total</span>
+                                                    <span className="font-bold text-slate-900 text-sm">{moduleStats.total}</span>
+                                                </div>
+                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-green-100">
+                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Approved</span>
+                                                    <span className="font-bold text-green-700 text-sm">{moduleStats.approved}</span>
+                                                </div>
+                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-amber-100">
+                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Pending</span>
+                                                    <span className="font-bold text-amber-600 text-sm">{moduleStats.pending}</span>
+                                                </div>
+                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-red-100">
+                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Rejected</span>
+                                                    <span className="font-bold text-red-600 text-sm">{moduleStats.rejected}</span>
+                                                </div>
+                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-slate-100">
+                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Suspended</span>
+                                                    <span className="font-bold text-slate-900 text-sm">{moduleStats.suspended}</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>
