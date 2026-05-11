@@ -3299,15 +3299,11 @@ async function _getMarketplaceUsersAction(options: {
 
         q = q.orderBy("createdAt", sortDirection);
 
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.USERS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                q = q.startAfter(lastDoc);
-            }
-        }
+        // startAfter is removed in favor of memory pagination
 
-        q = q.limit(fetchLimit);
-
+        // Fetch ALL matching marketplace users (approx 600+) for accurate memory filtering
+        // We do not use q.limit() here because we filter by role *after* fetching.
+        // If we limited to 50, a seller_only filter might result in 4 users out of the 50.
         const snapshot = await q.get();
 
         // Marketplace filter
@@ -3362,13 +3358,28 @@ async function _getMarketplaceUsersAction(options: {
             );
         }
 
-        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        // Apply memory pagination
+        // The UI might pass lastDocId as a stringified page index due to useAdminData's cursor logic
+        // OR we can explicitly handle 'page' parameter if it was added. Let's handle numeric lastDocId as page.
+        const pageOption = (options as any).page;
+        let page = 0;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const limit = options.limit || 50;
+        const startIndex = page * limit;
+        const pagedUsers = users.slice(startIndex, startIndex + limit);
+        const hasMore = startIndex + limit < users.length;
+        const nextCursor = hasMore ? String(page + 1) : undefined;
 
         return { 
             error: null, success: true as const, 
-            data: users,
+            data: pagedUsers,
             lastDocId: nextCursor,
-            hasMore: !!nextCursor,
+            hasMore,
         };
 
     } catch (error: any) {
