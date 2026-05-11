@@ -35,6 +35,7 @@ export function categorizeUser(data: any): BroadcastAudience {
 
 export type BroadcastAudience =
     | "all"
+    | "multi_module_users"
     | "pending_applicants"
     | "unpaid_applicants"
     | "abandoned_failed_transactions"
@@ -163,6 +164,16 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                         } else if (filters.audience === "export_users") {
                             const eReg = regs.export;
                             matchesAudience = !!eReg && (statusFilter ? eReg.status === statusFilter : true);
+                        } else if (filters.audience === "multi_module_users") {
+                            const activeSet = new Set();
+                            for (const key of ['marketplace', 'academy', 'wave', 'cooperatives', 'cooperative', 'export', 'farmNation', 'farm_nation']) {
+                                const reg = regs[key];
+                                if (reg && (reg.status === 'approved' || reg.status === 'active' || reg.status === 'paid' || reg.status === 'completed')) {
+                                    const label = key === 'farm_nation' || key === 'farmNation' ? 'farm-nation' : (key === 'cooperative' ? 'cooperatives' : key);
+                                    activeSet.add(label);
+                                }
+                            }
+                            matchesAudience = activeSet.size >= 2;
                         }
                     }
 

@@ -27,12 +27,12 @@ import type { BroadcastAudience, BroadcastFilters } from "@/app/actions/broadcas
 import { diagnoseBroadcastAction } from "@/app/actions/diagnose-broadcast";
 import { useToast } from "@/contexts/ToastContext";
 
-// ── Audience groups ─────────────────────────────────────────────────────────
 const AUDIENCE_GROUPS: { label: string; options: { value: BroadcastAudience; label: string; desc: string }[] }[] = [
     {
         label: "📋 General",
         options: [
             { value: "all", label: "All Users", desc: "Every registered user" },
+            { value: "multi_module_users", label: "⬡ Multi-module Users (2+)", desc: "Users enrolled and active in 2 or more modules" },
             { value: "pending_applicants", label: "All Pending Applicants", desc: "Everyone awaiting review across Cooperative, WAVE, Academy, Farm Nation & Export" },
             { value: "unpaid_applicants", label: "Unpaid Applicants", desc: "Users who applied but have not completed their required payment" },
             { value: "abandoned_failed_transactions", label: "Abandoned / Failed Payments", desc: "Users with failed or aborted payments" },
