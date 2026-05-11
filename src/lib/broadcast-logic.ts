@@ -76,12 +76,137 @@ export interface Recipient {
 }
 
 /**
+ * Resolves the seller broadcast list EXCLUSIVELY from seller_verifications (source of truth).
+ * Fetches user emails from USERS collection by userId in batches of 30.
+ */
+async function getSellerBroadcastList(filters?: BroadcastFilters) {
+    const audience = filters?.audience;
+    const statusFilter = filters?.moduleStatus && filters.moduleStatus !== "all" ? filters.moduleStatus : null;
+
+    // 1. Read all seller_verifications records (source of truth — 627 records)
+    const sellerSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).get();
+
+    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
+    const sellerEntries: { userId: string; status: string }[] = [];
+
+    for (const doc of sellerSnap.docs) {
+        const d = doc.data();
+        const userId = d.userId;
+        if (!userId) continue;
+
+        let status = d.status || "pending";
+        if (status === "under_review") status = "pending";
+
+        moduleStats.total++;
+        if (status === "approved") moduleStats.approved++;
+        else if (status === "pending") moduleStats.pending++;
+        else if (status === "rejected") moduleStats.rejected++;
+        else if (status === "suspended") moduleStats.suspended++;
+
+        // Apply status filter if set
+        if (statusFilter && status !== statusFilter) continue;
+
+        sellerEntries.push({ userId, status });
+    }
+
+    // 2. Batch-resolve emails from USERS collection (chunks of 30 to avoid limits)
+    const emailMap = new Map<string, Recipient>();
+    const missingEmailUserIds: string[] = []; // fallback candidates
+    const CHUNK = 30;
+
+    for (let i = 0; i < sellerEntries.length; i += CHUNK) {
+        const chunk = sellerEntries.slice(i, i + CHUNK);
+        const refs = chunk.map(e => db.collection(COLLECTIONS.USERS).doc(e.userId));
+        const userDocs = await db.getAll(...refs);
+
+        userDocs.forEach((userDoc, idx) => {
+            if (!userDoc.exists) {
+                // User doc missing entirely — try Auth fallback
+                missingEmailUserIds.push(chunk[idx].userId);
+                return;
+            }
+            const d = userDoc.data() as any;
+            const rawEmail = d.email || d.userEmail;
+            if (!rawEmail) {
+                // User doc exists but has no email — try Auth fallback
+                missingEmailUserIds.push(userDoc.id);
+                return;
+            }
+            const normalizedEmail = rawEmail.toLowerCase().trim();
+            if (emailMap.has(normalizedEmail)) return;
+
+            const lastActiveRaw = d.updatedAt || d.createdAt;
+            emailMap.set(normalizedEmail, {
+                uid: userDoc.id,
+                email: normalizedEmail,
+                name: d.fullName || d.firstName || "Member",
+                state: d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
+                onboardingCompleted: d.onboardingCompleted || false,
+                lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
+            });
+        });
+    }
+
+    // 3. Firebase Auth fallback — recover emails for sellers whose USERS doc has no email field
+    if (missingEmailUserIds.length > 0) {
+        logger.info(`[BroadcastLogic][Sellers] Falling back to Firebase Auth for ${missingEmailUserIds.length} sellers with no USERS email...`);
+        const { getAuth } = await import("firebase-admin/auth");
+        const auth = getAuth();
+
+        for (let i = 0; i < missingEmailUserIds.length; i += 100) {
+            const chunk = missingEmailUserIds.slice(i, i + 100);
+            try {
+                const result = await auth.getUsers(chunk.map(uid => ({ uid })));
+                result.users.forEach(authUser => {
+                    if (!authUser.email) return;
+                    const normalizedEmail = authUser.email.toLowerCase().trim();
+                    if (emailMap.has(normalizedEmail)) return;
+                    emailMap.set(normalizedEmail, {
+                        uid: authUser.uid,
+                        email: normalizedEmail,
+                        name: authUser.displayName || "Member",
+                        state: "Unknown",
+                        onboardingCompleted: false,
+                        lastActive: new Date(),
+                    });
+                });
+            } catch (authErr) {
+                logger.error("[BroadcastLogic][Sellers] Auth fallback error:", authErr);
+            }
+        }
+    }
+
+    const uniqueList = Array.from(emailMap.values());
+    logger.info(`[BroadcastLogic][Sellers] seller_verifications: ${sellerSnap.size}, matched entries: ${sellerEntries.length}, unique emails: ${uniqueList.length}`);
+
+    return {
+        success: true as const,
+        error: null,
+        data: {
+            recipients: uniqueList,
+            count: uniqueList.length,
+            originalDocCount: sellerSnap.size,
+            moduleStats,
+        },
+    };
+}
+
+/**
  * Core logic for generating broadcast lists.
  * This is decoupled from 'use server' and 'server-only' to allow use in Node.js scripts.
  */
 export async function getCleanBroadcastList(filters?: BroadcastFilters) {
     try {
         logger.info(`[BroadcastLogic] Generating clean list using stream (Audience: ${filters?.audience || 'all'})...`);
+
+        // --- DEDICATED SELLER PATH (Source of Truth: seller_verifications collection) ---
+        if (
+            filters?.audience === "sellers" ||
+            filters?.audience === "wholesale_sellers" ||
+            filters?.audience === "retail_sellers"
+        ) {
+            return getSellerBroadcastList(filters);
+        }
 
         // Targeted projection to minimize bandwidth
         const query = db.collection(COLLECTIONS.USERS)
