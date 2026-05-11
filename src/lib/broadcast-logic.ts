@@ -99,7 +99,9 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 "verificationProfile",
                 "bankDetails",
                 "marketplaceAccountType",
-                "roles"
+                "roles",
+                "sellerVerificationStatus",
+                "isSeller"
             )
             .orderBy("updatedAt", "desc");
 
@@ -167,11 +169,21 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                                 userStatus = "approved"; 
                             }
                         } else if (filters.audience === "sellers" || filters.audience === "wholesale_sellers" || filters.audience === "retail_sellers") {
-                            if (data.marketplaceAccountType === "seller" || data.marketplaceAccountType === "both" || (data.roles && data.roles.includes("seller"))) { 
+                            const mReg = regs.marketplace;
+                            if (
+                                data.marketplaceAccountType === "seller" || 
+                                data.marketplaceAccountType === "both" || 
+                                (data.roles && data.roles.includes("seller")) ||
+                                data.isSeller ||
+                                data.sellerVerificationStatus ||
+                                (mReg && (mReg.accountType === "seller" || mReg.accountType === "both" || mReg.sellerCategory))
+                            ) { 
                                 // Best effort mapping for sellers since we are reading from USERS collection
                                 inModule = true; 
-                                const mReg = regs.marketplace;
-                                userStatus = mReg?.status || "approved"; 
+                                userStatus = mReg?.status || data.sellerVerificationStatus || "approved"; 
+                                
+                                // Normalize under_review to pending so it fits in the 4 basic buckets (pending, approved, rejected, suspended)
+                                if (userStatus === "under_review") userStatus = "pending";
                             }
                         } else if (filters.audience === "cooperative_members") {
                             const cReg = regs.cooperative;
