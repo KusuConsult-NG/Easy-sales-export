@@ -1411,18 +1411,24 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
 
         // ── Derive activeModules for each user (in-memory, zero extra Firestore reads) ──
         const MODULE_KEYS = ['marketplace', 'academy', 'wave', 'cooperatives', 'export', 'farmNation', 'farm_nation'];
-        const ACTIVE_STATUSES = new Set(['approved', 'active', 'paid', 'completed']);
+        const ENROLLED_STATUSES = new Set(['pending', 'under_review', 'approved', 'active', 'paid', 'completed', 'suspended']);
         const usersWithModules = users.map(u => {
             const regs = u.serviceRegistrations as Record<string, any>;
             const active: string[] = [];
             for (const key of MODULE_KEYS) {
                 const reg = regs[key];
-                if (reg && ACTIVE_STATUSES.has(reg.status)) {
+                if (reg && ENROLLED_STATUSES.has(reg.status)) {
                     // Normalise to URL-friendly label
                     const label = key === 'farmNation' || key === 'farm_nation' ? 'farm-nation' : key;
                     if (!active.includes(label)) active.push(label);
                 }
             }
+            
+            // Legacy marketplace fallback
+            if (!active.includes('marketplace') && u.accountType) {
+                active.push('marketplace');
+            }
+            
             return { ...u, activeModules: active, moduleCount: active.length };
         })
 

@@ -60,19 +60,45 @@ export async function requireSession(): Promise<
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
             if (!userDoc.exists) {
-                console.error(`[SessionGuard] Account NOT found in Firestore for ID: ${userId} (Email: ${userEmail})`);
-                return {
-                    session: null,
-                    error: {
-                        success: false,
-                        code: SESSION_EXPIRED_CODE,
-                        error: "Account not found. Please log in again.",
-                    },
-                };
+                console.warn(`[SessionGuard] Account NOT found in Firestore for ID: ${userId}. Attempting auto-repair.`);
+                try {
+                    const { FieldValue } = await import("firebase-admin/firestore");
+                    const fullName = session.user.name || "User";
+                    const nameParts = fullName.split(" ");
+                    
+                    const userProfile = {
+                        uid: userId,
+                        fullName,
+                        firstName: nameParts[0] || "User",
+                        lastName: nameParts.slice(1).join(" ") || "",
+                        email: userEmail || "",
+                        roles: ["general_user"],
+                        isVerified: true,
+                        verified: true,
+                    };
+                    
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        ...userProfile,
+                        createdAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    
+                    data = userProfile;
+                    console.log(`[SessionGuard] Successfully auto-repaired ghost account for ID: ${userId}`);
+                } catch (repairErr) {
+                    console.error(`[SessionGuard] Failed to auto-repair ghost account for ID: ${userId}`, repairErr);
+                    return {
+                        session: null,
+                        error: {
+                            success: false,
+                            code: SESSION_EXPIRED_CODE,
+                            error: "Account not found. Please log in again.",
+                        },
+                    };
+                }
+            } else {
+                data = userDoc.data();
             }
-
-
-            data = userDoc.data();
 
             // 3. Populate cache
             if (data) {
