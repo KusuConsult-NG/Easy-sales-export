@@ -373,6 +373,13 @@ export async function logoutAction() {
         // Revalidate root to clear server-side caches
         revalidatePath('/');
     } catch (e) {
+        // Re-throw NEXT_REDIRECT so Next.js can handle navigation.
+        // signOut() internally throws NEXT_REDIRECT — we must NOT swallow it.
+        if (e && typeof e === 'object' && 'digest' in e &&
+            typeof (e as any).digest === 'string' &&
+            (e as any).digest.startsWith('NEXT_REDIRECT')) {
+            throw e;
+        }
         logger.error('[logoutAction] Error clearing cookies', e);
     }
 

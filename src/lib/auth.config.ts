@@ -99,7 +99,17 @@ export const authConfig = {
                 // Identify which module is being accessed based on URL prefix
                 const moduleMatch = pathname.match(/^\/(wave|cooperatives|academy|marketplace|farm-nation|export)/);
                 if (moduleMatch) {
-                    const moduleId = moduleMatch[1].replace("-", ""); // farm-nation -> farmNation
+                    const rawSlug = moduleMatch[1]; // e.g. "farm-nation" (URL slug, used for redirect URLs)
+                    // Map URL slugs to serviceRegistrations keys (camelCase Firestore keys)
+                    const slugToKey: Record<string, string> = {
+                        'farm-nation': 'farmNation',
+                        'cooperatives': 'cooperatives',
+                        'marketplace': 'marketplace',
+                        'academy': 'academy',
+                        'wave': 'wave',
+                        'export': 'export',
+                    };
+                    const moduleId = slugToKey[rawSlug] ?? rawSlug;
                     const reg = serviceRegs[moduleId] || 
                                 (moduleId === 'farmNation' ? serviceRegs['farm_nation'] : null) ||
                                 (moduleId === 'cooperatives' ? serviceRegs['cooperative'] : null);
@@ -117,22 +127,24 @@ export const authConfig = {
                     // ── SCOPED MEMBERSHIP GUARD ─────────────────────────────────
                     // If accessing via a module-specific domain, ensure membership is active
                     const { HUB_MODULES } = await import("@/config/modules.config");
-                    const currentModule = Object.values(HUB_MODULES).find(m => m.slug === moduleId);
+                    const currentModule = Object.values(HUB_MODULES).find(m => m.slug === rawSlug || m.slug === moduleId);
                     
                     if (currentModule && !isPaymentFlow) {
                         const status = reg?.status || "pending";
                         const isApproved = status === "approved" || status === "active" || status === "paid";
                         
                         // If not approved and not on a public/onboarding path, redirect to onboarding
+                        // Use rawSlug so the URL is valid (e.g. /farm-nation/onboarding not /farmNation/onboarding)
                         if (!isApproved) {
-                            const redirectUrl = new URL(`/${moduleId}/onboarding`, nextUrl.origin);
+                            const redirectUrl = new URL(`/${rawSlug}/onboarding`, nextUrl.origin);
                             return Response.redirect(redirectUrl);
                         }
                     }
 
                     if (modulesRequiringPayment.includes(moduleId) && reg && reg.status === "approved" && reg.paymentStatus !== "completed" && !isPaymentFlow) {
                         // Redirect to the module's primary onboarding/payment entry point
-                        const redirectUrl = new URL(`/${moduleMatch[1]}/onboarding`, nextUrl.origin);
+                        // Use rawSlug for valid URL (e.g. /farm-nation/onboarding)
+                        const redirectUrl = new URL(`/${rawSlug}/onboarding`, nextUrl.origin);
                         if (moduleId === 'academy') redirectUrl.pathname = '/academy/setup';
                         return Response.redirect(redirectUrl);
                     }
