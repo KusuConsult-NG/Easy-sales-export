@@ -192,6 +192,116 @@ async function getSellerBroadcastList(filters?: BroadcastFilters) {
 }
 
 /**
+ * Resolves buyers/marketplace broadcast list using the same roles query as the Admin Buyers page.
+ * Source of truth: USERS collection filtered by roles containing marketplace-related values.
+ */
+async function getMarketplaceBroadcastList(filters?: BroadcastFilters) {
+    const audience = filters?.audience; // "buyers" | "marketplace_onboarded"
+
+    // Mirror the exact query used by getMarketplaceUsersAction in admin.ts
+    const snap = await db.collection(COLLECTIONS.USERS)
+        .where("roles", "array-contains-any", ["marketplace_buyer", "buyer", "seller", "marketplace_seller"])
+        .select("email", "userEmail", "fullName", "firstName", "roles", "serviceRegistrations", "stateOfOrigin", "address", "verificationProfile", "onboardingCompleted", "updatedAt", "createdAt", "marketplaceAccountType", "status")
+        .get();
+
+    const emailMap = new Map<string, Recipient>();
+    const missingEmailUserIds: string[] = [];
+    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
+
+    snap.docs.forEach(doc => {
+        const d = doc.data();
+        const marketplaceReg = (d.serviceRegistrations || {} as any).marketplace;
+        const dbAccountType = marketplaceReg?.accountType;
+        const hasSellerRole = (d.roles || []).some((r: string) => r === "seller" || r === "marketplace_seller");
+        const hasBuyerRole = (d.roles || []).some((r: string) => r === "buyer" || r === "marketplace_buyer");
+
+        // Compute buyerRole category
+        let buyerRole: "buyer_only" | "seller_only" | "both" = "buyer_only";
+        if (dbAccountType === "seller") buyerRole = "seller_only";
+        else if (dbAccountType === "both") buyerRole = "both";
+        else if (hasSellerRole && hasBuyerRole) buyerRole = "both";
+        else if (hasSellerRole) buyerRole = "seller_only";
+
+        // Apply audience filter
+        let matchesAudience = false;
+        if (audience === "marketplace_onboarded") {
+            matchesAudience = true; // all marketplace-registered users
+        } else if (audience === "buyers") {
+            matchesAudience = buyerRole === "buyer_only" || buyerRole === "both";
+        }
+        if (!matchesAudience) return;
+
+        moduleStats.total++;
+        const status = marketplaceReg?.status || (d.status === "active" ? "approved" : "pending");
+        if (status === "approved" || status === "active") moduleStats.approved++;
+        else if (status === "pending") moduleStats.pending++;
+        else if (status === "rejected") moduleStats.rejected++;
+        else if (status === "suspended") moduleStats.suspended++;
+        else moduleStats.approved++; // default to approved for roles-based users
+
+        const rawEmail = d.email || d.userEmail;
+        if (!rawEmail) {
+            missingEmailUserIds.push(doc.id);
+            return;
+        }
+        const normalizedEmail = rawEmail.toLowerCase().trim();
+        if (emailMap.has(normalizedEmail)) return;
+
+        const lastActiveRaw = d.updatedAt || d.createdAt;
+        emailMap.set(normalizedEmail, {
+            uid: doc.id,
+            email: normalizedEmail,
+            name: d.fullName || d.firstName || "Member",
+            state: d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
+            onboardingCompleted: d.onboardingCompleted || false,
+            lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
+        });
+    });
+
+    // Firebase Auth fallback for users with no email in USERS doc
+    if (missingEmailUserIds.length > 0) {
+        logger.info(`[BroadcastLogic][Marketplace] Auth fallback for ${missingEmailUserIds.length} users...`);
+        const { getAuth } = await import("firebase-admin/auth");
+        const auth = getAuth();
+        for (let i = 0; i < missingEmailUserIds.length; i += 100) {
+            const chunk = missingEmailUserIds.slice(i, i + 100);
+            try {
+                const result = await auth.getUsers(chunk.map(uid => ({ uid })));
+                result.users.forEach(authUser => {
+                    if (!authUser.email) return;
+                    const normalizedEmail = authUser.email.toLowerCase().trim();
+                    if (emailMap.has(normalizedEmail)) return;
+                    emailMap.set(normalizedEmail, {
+                        uid: authUser.uid,
+                        email: normalizedEmail,
+                        name: authUser.displayName || "Member",
+                        state: "Unknown",
+                        onboardingCompleted: false,
+                        lastActive: new Date(),
+                    });
+                });
+            } catch (authErr) {
+                logger.error("[BroadcastLogic][Marketplace] Auth fallback error:", authErr);
+            }
+        }
+    }
+
+    const uniqueList = Array.from(emailMap.values());
+    logger.info(`[BroadcastLogic][Marketplace][${audience}] total roles-matched: ${snap.size}, unique emails: ${uniqueList.length}`);
+
+    return {
+        success: true as const,
+        error: null,
+        data: {
+            recipients: uniqueList,
+            count: uniqueList.length,
+            originalDocCount: snap.size,
+            moduleStats,
+        },
+    };
+}
+
+/**
  * Core logic for generating broadcast lists.
  * This is decoupled from 'use server' and 'server-only' to allow use in Node.js scripts.
  */
@@ -206,6 +316,11 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             filters?.audience === "retail_sellers"
         ) {
             return getSellerBroadcastList(filters);
+        }
+
+        // --- DEDICATED BUYER / MARKETPLACE PATH (Source of Truth: roles array in USERS) ---
+        if (filters?.audience === "buyers" || filters?.audience === "marketplace_onboarded") {
+            return getMarketplaceBroadcastList(filters);
         }
 
         // Targeted projection to minimize bandwidth
