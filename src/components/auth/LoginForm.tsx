@@ -93,11 +93,20 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
 
             if (isValidCallback) {
                 // SECURITY: Even if a callback exists, if the user is an admin, 
-                // we should check if they should be forced to /admin instead of the requested path.
+                // we should check if they should be forced to their admin portal instead of the requested path.
                 const redirectResult = await getPostLoginRedirect(formData.email);
-                if (redirectResult.success && redirectResult.data?.redirectUrl === "/admin") {
-                    console.log("Admin detected, overriding callbackUrl to /admin");
-                    window.location.assign("/admin");
+                const smartUrl = redirectResult.data?.redirectUrl;
+                
+                if (redirectResult.success && smartUrl?.startsWith("/admin")) {
+                    // If they are trying to access a deep admin link (e.g. /admin/users), let them.
+                    // But if they are just trying to go to /admin or a non-admin page, force them to their specific admin portal.
+                    if (rawCallback.startsWith("/admin/") && rawCallback !== "/admin") {
+                        console.log("Admin detected, allowing deep admin link:", rawCallback);
+                        window.location.assign(rawCallback);
+                    } else {
+                        console.log(`Admin detected, overriding callbackUrl to ${smartUrl}`);
+                        window.location.assign(smartUrl);
+                    }
                 } else {
                     console.log("Using explicit callback URL:", rawCallback);
                     window.location.assign(rawCallback);

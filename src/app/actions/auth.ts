@@ -102,7 +102,7 @@ export async function getPostLoginRedirect(email: string) { try {
         // Fallback: email query (covers edge case where session isn't ready post-signIn)
         if (!userData) { logger.warn(`[getPostLoginRedirect] No session post-login — falling back to email query`, { email });
             const userSnapshot = await db.collection(COLLECTIONS.USERS)
-                .where('email', '==', email)
+                .where('email', '==', email.toLowerCase())
                 .limit(1)
                 .get();
             if (!userSnapshot.empty) { userData = userSnapshot.docs[0].data() as FirestoreUser;
