@@ -153,9 +153,11 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                         let inModule = false;
                         let userStatus = "";
 
+                        const ENROLLED_STATUSES = new Set(['pending', 'under_review', 'approved', 'active', 'paid', 'completed', 'suspended']);
+
                         if (filters.audience === "marketplace_onboarded") {
                             const mReg = regs.marketplace;
-                            if (mReg || data.marketplaceAccountType || (data.roles && (data.roles.includes("buyer") || data.roles.includes("seller")))) { 
+                            if ((mReg && ENROLLED_STATUSES.has(mReg.status)) || data.marketplaceAccountType || (data.roles && (data.roles.includes("buyer") || data.roles.includes("seller")))) { 
                                 inModule = true; 
                                 userStatus = mReg?.status || "approved"; 
                             }

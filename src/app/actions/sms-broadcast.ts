@@ -214,7 +214,8 @@ async function collectSmsRecipients(
                 const d: any = chunk;
                 const u: any = d.data();
                 const mReg = u.serviceRegistrations?.marketplace;
-                if (!(mReg || u.marketplaceAccountType || (u.roles && (u.roles.includes("buyer") || u.roles.includes("seller"))))) continue;
+                const ENROLLED_STATUSES = new Set(['pending', 'under_review', 'approved', 'active', 'paid', 'completed', 'suspended']);
+                if (!((mReg && ENROLLED_STATUSES.has(mReg.status)) || u.marketplaceAccountType || (u.roles && (u.roles.includes("buyer") || u.roles.includes("seller"))))) continue;
 
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
