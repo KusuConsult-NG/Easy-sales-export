@@ -3245,8 +3245,10 @@ async function _getMarketplaceUsersAction(options: {
 
         const fetchLimit = options.search ? 2000 : (options.limit || 50);
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
-        // Only fetch users who have explicitly onboarded to the marketplace
-        q = q.where("serviceRegistrations.marketplace.status", "in", ["active", "approved", "pending", "suspended", "rejected", "under_review"]);
+
+        // Query by roles array — flat indexed field, no composite index needed.
+        // Covers marketplace_buyer (new registrations), buyer (legacy), and seller roles.
+        q = q.where("roles", "array-contains-any", ["marketplace_buyer", "buyer", "seller", "marketplace_seller"]);
 
         const sortDirection = options.sortOrder || "desc";
         if (options.dateFrom) {
