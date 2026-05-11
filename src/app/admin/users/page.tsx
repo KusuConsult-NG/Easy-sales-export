@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download } from "lucide-react";
+import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download, Layers } from "lucide-react";
 import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
@@ -35,6 +35,9 @@ interface User {
     address?: any;
     accountType?: string;
     gender?: string;
+    serviceRegistrations?: Record<string, any>;
+    activeModules?: string[];
+    moduleCount?: number;
 }
 
 const ROLES_LIST = [
@@ -87,7 +90,8 @@ export default function AdminUsersPage() {
     });
 
     const hasActiveFilters = !!(filters.state || filters.lga || filters.fromDate || filters.toDate ||
-        (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") || (filters.sortOrder && filters.sortOrder !== "desc"));
+        (filters.role && filters.role !== "all") || (filters.status && filters.status !== "all") ||
+        (filters.sortOrder && filters.sortOrder !== "desc") || (filters.modules && filters.modules !== "all"));
 
     const clearFilters = () => {
         updateFilter("state", "all");
@@ -97,6 +101,7 @@ export default function AdminUsersPage() {
         updateFilter("role", "all");
         updateFilter("status", "all");
         updateFilter("sortOrder", "desc");
+        updateFilter("modules", "all");
     };
 
     async function handleToggleVerification(userId: string) {
@@ -182,6 +187,16 @@ export default function AdminUsersPage() {
         }
     };
 
+    // Module pill colours
+    const MODULE_COLORS: Record<string, string> = {
+        marketplace:   "bg-orange-100 text-orange-700 border-orange-200",
+        academy:       "bg-violet-100 text-violet-700 border-violet-200",
+        wave:          "bg-pink-100 text-pink-700 border-pink-200",
+        cooperatives:  "bg-cyan-100 text-cyan-700 border-cyan-200",
+        export:        "bg-indigo-100 text-indigo-700 border-indigo-200",
+        "farm-nation": "bg-green-100 text-green-700 border-green-200",
+    };
+
     const getRoleBadge = (role: string) => {
         const colors: Record<string, string> = {
             admin: "bg-purple-100 text-purple-700",
@@ -262,6 +277,35 @@ export default function AdminUsersPage() {
                     )}
                     {user.cacNumber && (
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${user.cacVerified ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`} title="CAC">CAC</span>
+                    )}
+                </div>
+            ),
+            hideOnMobile: true
+        },
+        {
+            header: "Modules",
+            accessor: (user: User) => (
+                <div className="flex flex-wrap gap-1 max-w-[160px]">
+                    {(user.activeModules && user.activeModules.length > 0) ? (
+                        <>
+                            {user.activeModules.map(mod => (
+                                <span
+                                    key={mod}
+                                    className={`px-1.5 py-0.5 rounded border text-[10px] font-bold capitalize ${
+                                        MODULE_COLORS[mod] || "bg-slate-100 text-slate-600 border-slate-200"
+                                    }`}
+                                >
+                                    {mod}
+                                </span>
+                            ))}
+                            {(user.moduleCount ?? 0) >= 2 && (
+                                <span className="px-1.5 py-0.5 rounded border text-[10px] font-bold bg-amber-100 text-amber-700 border-amber-200 flex items-center gap-0.5">
+                                    <Layers className="w-2.5 h-2.5" />{user.moduleCount}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="text-[10px] text-slate-400 italic">None</span>
                     )}
                 </div>
             ),
@@ -430,6 +474,22 @@ export default function AdminUsersPage() {
                                 ))}
                             </select>
 
+                            {/* Quick: Module Enrolment */}
+                            <select
+                                value={filters.modules || "all"}
+                                onChange={(e) => updateFilter("modules", e.target.value)}
+                                className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                            >
+                                <option value="all">All Modules</option>
+                                <option value="multi">⬡ Multi-module (2+)</option>
+                                <option value="marketplace">Marketplace</option>
+                                <option value="academy">Academy</option>
+                                <option value="wave">WAVE</option>
+                                <option value="cooperatives">Cooperatives</option>
+                                <option value="export">Export</option>
+                                <option value="farm-nation">Farm Nation</option>
+                            </select>
+
                             {/* Quick: Verification */}
                             <select
                                 value={filters.status || "all"}
@@ -536,6 +596,45 @@ export default function AdminUsersPage() {
                                 <p><span className="font-semibold text-slate-600">Name:</span> {selectedUserForModal.name}</p>
                                 <p><span className="font-semibold text-slate-600">Email:</span> {selectedUserForModal.email}</p>
                                 <p><span className="font-semibold text-slate-600">Phone:</span> {selectedUserForModal.phone || "N/A"}</p>
+                            </div>
+                        </div>
+
+                        {/* Module Enrolment Overview */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <Layers className="w-4 h-4" /> Module Enrolments
+                                {(selectedUserForModal.moduleCount ?? 0) >= 2 && (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                                        Multi-module user
+                                    </span>
+                                )}
+                            </h4>
+                            <div className="bg-slate-50 rounded-xl overflow-hidden divide-y divide-slate-100">
+                                {["marketplace","academy","wave","cooperatives","export","farmNation"].map(key => {
+                                    const reg = (selectedUserForModal.serviceRegistrations || {})[key];
+                                    const label = key === "farmNation" ? "farm-nation" : key;
+                                    const status: string = reg?.status || "not enrolled";
+                                    const statusColor =
+                                        status === "approved" || status === "active" ? "bg-emerald-100 text-emerald-700" :
+                                        status === "pending" ? "bg-amber-100 text-amber-700" :
+                                        status === "rejected" ? "bg-red-100 text-red-700" :
+                                        "bg-slate-100 text-slate-400";
+                                    return (
+                                        <div key={key} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                                            <span className={`capitalize font-medium ${
+                                                reg ? "text-slate-800" : "text-slate-400"
+                                            }`}>{label.replace("-", " ")}</span>
+                                            <div className="flex items-center gap-2">
+                                                {reg?.paymentStatus === "completed" && (
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-semibold border border-blue-100">Paid</span>
+                                                )}
+                                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded capitalize ${statusColor}`}>
+                                                    {status}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 

@@ -1255,6 +1255,7 @@ interface GetUsersOptions {
     fromDate?: string;  // ISO date string – createdAt >= fromDate
     toDate?: string;    // ISO date string – createdAt <= toDate
     sortOrder?: "asc" | "desc"; // Sort direction
+    modules?: string;   // 'all' | 'multi' | specific module slug ('academy', 'marketplace', etc.)
 }
 
 async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionResponse<any[]>> {
@@ -1399,12 +1400,34 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                     bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
                 },
                 metadata: data.metadata,
-                accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType
+                accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType,
+                // ── Module membership ────────────────────────────────────────────
+                // Pass the full serviceRegistrations map so the admin UI can render
+                // per-module status badges and detect multi-module enrolments.
+                serviceRegistrations: data.serviceRegistrations || {},
+                gender: data.gender,
             };
         });
 
+        // ── Derive activeModules for each user (in-memory, zero extra Firestore reads) ──
+        const MODULE_KEYS = ['marketplace', 'academy', 'wave', 'cooperatives', 'export', 'farmNation', 'farm_nation'];
+        const ACTIVE_STATUSES = new Set(['approved', 'active', 'paid', 'completed']);
+        const usersWithModules = users.map(u => {
+            const regs = u.serviceRegistrations as Record<string, any>;
+            const active: string[] = [];
+            for (const key of MODULE_KEYS) {
+                const reg = regs[key];
+                if (reg && ACTIVE_STATUSES.has(reg.status)) {
+                    // Normalise to URL-friendly label
+                    const label = key === 'farmNation' || key === 'farm_nation' ? 'farm-nation' : key;
+                    if (!active.includes(label)) active.push(label);
+                }
+            }
+            return { ...u, activeModules: active, moduleCount: active.length };
+        })
+
         // Client-side search + date range filtering
-        let filteredUsers = users;
+        let filteredUsers = usersWithModules;
         if (options.search) {
             const searchLower = options.search.toLowerCase();
             filteredUsers = filteredUsers.filter(user =>
@@ -1414,6 +1437,14 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 (user.state && user.state?.toLowerCase()?.includes(searchLower) && user.state !== "") ||
                 (user.lga && user.lga?.toLowerCase()?.includes(searchLower) && user.lga !== "")
             );
+        }
+        // Module filter — supports a specific module slug (e.g. 'academy') or 'multi' (2+ modules)
+        if (options.modules && options.modules !== "all") {
+            if (options.modules === "multi") {
+                filteredUsers = filteredUsers.filter(u => u.moduleCount >= 2);
+            } else {
+                filteredUsers = filteredUsers.filter(u => (u.activeModules as string[]).includes(options.modules as string));
+            }
         }
         // In-memory status filter — using the defensive chain already computed in mapping:
         // `data.isVerified ?? data.verified ?? false`
