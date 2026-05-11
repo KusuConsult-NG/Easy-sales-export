@@ -35,6 +35,8 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     abandoned_failed_transactions: "Abandoned / Failed Transactions",
     stalled_users: "⚠️ Stalled Users",
     ghost_users: "👻 Ghost Users",
+    pending_users: "Pending Users",
+    active_users: "Active Users",
     csv_upload: "CSV Upload",
 };
 

@@ -25,31 +25,12 @@ async function verifyBusinessHandler(req: NextRequest) {
             return NextResponse.json({ error: 'Company Name is required to verify CAC registration' }, { status: 400 });
         }
 
-        // --- DEVELOPMENT MOCK FALLBACK ---
+        // --- STRICT PRODUCTION CHECK: Fail if QoreID credentials missing ---
         if (!process.env.QOREID_CLIENT_ID || !process.env.QOREID_SECRET_KEY) {
-            if (process.env.NODE_ENV === 'production') {
-                logger.error('CRITICAL: QoreID credentials missing in production. Failing business verification securely.');
-                return NextResponse.json({ error: 'Verification service currently unavailable.' }, { status: 503 });
-            }
-
-            logger.warn('QOREID_CLIENT_ID or KEY not found. Returning MOCK success response for business verification.');
-
-            // Allow bypassing mock check with an intentional error string for testing UI error states
-            if (number === '0000000') {
-                return NextResponse.json({
-                    success: false,
-                    isMatch: false,
-                    error: "Mock: The Business or Tax Number was not found."
-                });
-            }
-
-            return NextResponse.json({
-                success: true,
-                isMatch: true,
-                mock: true
-            });
+            logger.error('CRITICAL: QoreID credentials missing. Failing business verification securely.');
+            return NextResponse.json({ error: 'Verification service currently unavailable.' }, { status: 503 });
         }
-        // --- END DEVELOPMENT MOCK ---
+        // --- END STRICT CHECK ---
 
         let result;
 

@@ -30,6 +30,7 @@ export type AuditAction =
     | 'account_unlock'
     | 'legacy_member_import'
     | 'legacy_member_invited'
+    | 'legacy_member_onboarded'
     // Financial Actions
     | 'payment_initiated'
     | 'payment_completed'

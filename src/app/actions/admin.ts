@@ -3548,12 +3548,16 @@ async function _onboardLegacyMemberAction(
         }
 
         if (data.services?.farmNation || data.roles.includes("farmer")) {
-            serviceRegistrations.farmNation = { 
+            const farmNationState = { 
                 status: "approved", 
                 paymentStatus: "completed",
                 onboardingCompleted: true,
                 approvedAt: now 
             };
+            // Write BOTH keys so farm_nation-based queries (broadcast-logic) and farmNation-based
+            // queries (admin actions) both resolve correctly.
+            serviceRegistrations.farmNation = farmNationState;
+            serviceRegistrations.farm_nation = farmNationState;
         }
 
         // 7. Create User Document
@@ -3698,12 +3702,71 @@ async function _onboardLegacyMemberAction(
 
         await batch.commit();
 
-        // 9. Send Welcome Email
-        await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+        // 8b. 🎓 ACADEMY DEEP-PROVISIONING: Create Enrollment & Application docs for legacy academy members
+        //     so the admin panel surfaces them and status checks never fall through.
+        if (data.services?.academy || data.roles.includes("academy_participant")) {
+            const academyBatch = db.batch();
 
-        // 8. Audit Log
+            // Enrollment record — queried by getAcademyEnrollmentsAction
+            const enrollmentRef = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).doc(userRecord.uid);
+            academyBatch.set(enrollmentRef, {
+                userId: userRecord.uid,
+                studentName: data.fullName,
+                studentEmail: data.email,
+                studentPhone: data.phone,
+                plan: data.academyPlan || "foundation",
+                status: "active",
+                paymentStatus: "completed",
+                paymentAmount: 0,
+                onboardingCompleted: true,
+                enrolledAt: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+                _legacyOnboardedBy: session.user.id,
+            });
+
+            // Application record — queried by checkAcademyStatusAction & admin application panels
+            const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(`legacy_${userRecord.uid}`);
+            academyBatch.set(appRef, {
+                userId: userRecord.uid,
+                status: "approved",
+                paymentStatus: "completed",
+                plan: data.academyPlan || "foundation",
+                personalInfo: {
+                    fullName: data.fullName,
+                    email: data.email,
+                    phone: data.phone,
+                },
+                reviewedBy: session.user.id,
+                reviewedAt: FieldValue.serverTimestamp(),
+                submittedAt: FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+            });
+
+            await academyBatch.commit();
+        }
+
+        // 9. Generate a password reset link so the user can set their own password
+        //    immediately after first login — this fulfils the "change default PIN" requirement.
+        let passwordResetLink: string | undefined;
+        try {
+            passwordResetLink = await adminAuth.generatePasswordResetLink(data.email, {
+                url: `${process.env.NEXTAUTH_URL || "https://easysalesexport.com"}/login?mode=resetPassword&legacy=true`,
+            });
+        } catch (linkErr: any) {
+            // Non-fatal — log and continue. The user can request a reset manually.
+            logger.warn("[Legacy Onboarding] Could not generate password reset link:", linkErr.message);
+        }
+
+        // 10. Send Welcome Email with the reset link included
+        await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword, passwordResetLink);
+
+        // 10. Audit Log
         await createAdminAuditLog({
-            action: "legacy_member_invited",
+            action: "legacy_member_onboarded",
             userId: session.user.id,
             targetId: userRecord.uid,
             targetType: "user",

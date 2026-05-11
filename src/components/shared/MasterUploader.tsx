@@ -1,12 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { storage, db } from "@/lib/firebase";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { Upload, X, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
-import { COLLECTIONS } from "@/lib/types/firestore";
 
 interface MasterUploaderProps {
     label: string;
@@ -22,11 +18,11 @@ interface MasterUploaderProps {
 
 /**
  * MasterUploader Component
- * 
- * Implements the "Metadata First" strategy and "Resumable Uploads".
- * 1. Creates a placeholder doc in Firestore (status: uploading).
- * 2. Uses uploadBytesResumable for connection resilience.
- * 3. Updates Firestore doc upon completion (status: ready).
+ *
+ * Uploads files to Cloudinary via the authenticated /api/upload API route.
+ *
+ * NOTE: Firebase Storage bucket is NOT provisioned on this project.
+ * All uploads are routed through Cloudinary (same pattern as useStorage hook).
  */
 export default function MasterUploader({
     label,
@@ -45,8 +41,9 @@ export default function MasterUploader({
     const [error, setError] = useState<string | null>(null);
     const [completed, setCompleted] = useState(false);
     const { showToast } = useToast();
-    
-    const uploadTaskRef = useRef<any>(null);
+
+    // AbortController for cancelling in-flight fetch
+    const abortRef = useRef<AbortController | null>(null);
 
     async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const selectedFile = e.target.files?.[0];
@@ -65,78 +62,82 @@ export default function MasterUploader({
         setCompleted(false);
         setProgress(0);
 
-        // Start Upload Immediately
         startUpload(selectedFile);
     }
 
     async function startUpload(selectedFile: File) {
         setUploading(true);
-        setProgress(0);
+        setProgress(10);
+
+        // Build the upload path: folder + moduleId context
+        const documentType = `${moduleId}_document`;
+        const uploadFolder = folder || `uploads/${moduleId}`;
+
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("folder", uploadFolder);
+        formData.append("documentType", documentType);
+
+        abortRef.current = new AbortController();
 
         try {
-            // Stage 1: The Placeholder (Metadata First)
-            const uploadId = crypto.randomUUID();
-            const storagePath = `${folder}/${moduleId}/${uploadId}_${selectedFile.name.replace(/\s+/g, '_')}`;
-            
-            const uploadMetaRef = doc(db, "system_uploads", uploadId);
-            await setDoc(uploadMetaRef, {
-                id: uploadId,
-                fileName: selectedFile.name,
-                fileSize: selectedFile.size,
-                contentType: selectedFile.type,
-                moduleId: moduleId,
-                storagePath: storagePath,
-                status: "uploading",
-                createdAt: serverTimestamp(),
-            });
+            setProgress(30);
 
-            // Stage 2: Resumable Upload
-            const storageRef = ref(storage, storagePath);
-            const uploadTask = uploadBytesResumable(storageRef, selectedFile);
-            uploadTaskRef.current = uploadTask;
-
-            uploadTask.on(
-                "state_changed",
-                (snapshot) => {
-                    const p = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    setProgress(p);
-                },
-                (err) => {
-                    console.error("Upload Error:", err);
-                    setUploading(false);
-                    setError(err.message);
-                    showToast(err.message, "error");
-                    onError?.(err.message);
-                },
-                async () => {
-                    // Stage 3: The Handshake (Success)
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    
-                    // Stage 4: Validation (Update Placeholder)
-                    await setDoc(uploadMetaRef, {
-                        status: "ready",
-                        url: downloadURL,
-                        completedAt: serverTimestamp(),
-                    }, { merge: true });
-
-                    setUploading(false);
-                    setCompleted(true);
-                    showToast("Upload completed successfully", "success");
-                    onComplete({ url: downloadURL, path: storagePath, id: uploadId });
+            const uploadWithRetry = async (attempt = 1): Promise<any> => {
+                try {
+                    const res = await fetch("/api/upload", {
+                        method: "POST",
+                        body: formData,
+                        signal: abortRef.current?.signal,
+                    });
+                    const resData = await res.json();
+                    if (!res.ok || !resData.success || !resData.url) {
+                        throw new Error(resData.error || "Upload failed");
+                    }
+                    return resData;
+                } catch (err: any) {
+                    if (err.name === "AbortError") throw err; // Don't retry on cancel
+                    if (attempt < 3) {
+                        setProgress(30 + attempt * 10);
+                        await new Promise(r => setTimeout(r, Math.pow(2, attempt - 1) * 1000));
+                        return uploadWithRetry(attempt + 1);
+                    }
+                    throw err;
                 }
-            );
-        } catch (err: any) {
-            console.error("Initiation Error:", err);
+            };
+
+            setProgress(50);
+            const result = await uploadWithRetry();
+            setProgress(100);
+
+            // Generate a stable ID for this upload
+            const uploadId = crypto.randomUUID();
+            const storagePath = `${uploadFolder}/${uploadId}_${selectedFile.name.replace(/\s+/g, '_')}`;
+
             setUploading(false);
-            setError(err.message);
-            showToast(err.message, "error");
+            setCompleted(true);
+            showToast("Upload completed successfully", "success");
+            onComplete({ url: result.url, path: storagePath, id: uploadId });
+        } catch (err: any) {
+            if (err.name === "AbortError") {
+                // User cancelled — reset silently
+                setFile(null);
+                setUploading(false);
+                setProgress(0);
+                setError(null);
+                return;
+            }
+            const message = err instanceof Error ? err.message : "Upload failed";
+            console.error("[MasterUploader] Upload error:", message);
+            setUploading(false);
+            setError(message);
+            showToast(message, "error");
+            onError?.(message);
         }
     }
 
     function handleCancel() {
-        if (uploadTaskRef.current) {
-            uploadTaskRef.current.cancel();
-        }
+        abortRef.current?.abort();
         setFile(null);
         setUploading(false);
         setProgress(0);

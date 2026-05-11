@@ -1,6 +1,37 @@
 import { db } from './firebase-admin';
 import { COLLECTIONS } from './types/firestore';
 import { logger } from './logger';
+import { User } from './types/firestore';
+
+/**
+ * High-Precision Mutually Exclusive Segmenter
+ * Categorizes users based on their engagement depth.
+ */
+export function categorizeUser(data: any): BroadcastAudience {
+    const regs = data.serviceRegistrations || {};
+    
+    // 1. Check for Active Engagement (Any approved/paid/completed module)
+    const hasApproved = Object.values(regs).some((r: any) => 
+        r.status === "approved" || r.status === "active" || r.status === "paid" || r.status === "completed"
+    );
+    if (hasApproved) return "active_users";
+
+    // 2. Check for Pending Applications
+    const hasPending = Object.values(regs).some((r: any) => 
+        r.status === "pending" || r.status === "submitted" || r.status === "under_review" || r.status === "briefing"
+    );
+    if (hasPending) return "pending_users";
+
+    // 3. Check for Stalled Progress (Started profile/KYC but no applications)
+    const hasStartedAny = Object.values(regs).some((r: any) => r.status && r.status !== "not_started");
+    const hasBank = (data.verificationProfile?.bankDetails?.bankName && data.verificationProfile?.bankDetails?.bankName !== "N/A") || (data.bankDetails?.bankName);
+    const hasAddress = (data.verificationProfile?.address?.state && data.verificationProfile?.address?.state !== "N/A") || (data.address?.state);
+    
+    if (hasStartedAny || hasBank || hasAddress) return "stalled_users";
+
+    // 4. Ghost User (No activity detected)
+    return "ghost_users";
+}
 
 export type BroadcastAudience =
     | "all"
@@ -20,6 +51,8 @@ export type BroadcastAudience =
     | "farm_nation_users"
     | "export_users"
     | "stalled_users"
+    | "pending_users"
+    | "active_users"
     | "ghost_users";
 
 export interface BroadcastFilters {
@@ -48,10 +81,10 @@ export interface Recipient {
  */
 export async function getCleanBroadcastList(filters?: BroadcastFilters) {
     try {
-        logger.info(`[BroadcastLogic] Generating clean list...`);
+        logger.info(`[BroadcastLogic] Generating clean list using stream (Audience: ${filters?.audience || 'all'})...`);
 
-        // Fetch records from the global 'users' collection
-        const snapshot = await db.collection(COLLECTIONS.USERS)
+        // Targeted projection to minimize bandwidth
+        const query = db.collection(COLLECTIONS.USERS)
             .select(
                 "email",
                 "userEmail",
@@ -63,75 +96,95 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 "updatedAt",
                 "createdAt",
                 "serviceRegistrations",
-                "verificationProfile"
+                "verificationProfile",
+                "bankDetails"
             )
-            .orderBy("updatedAt", "desc")
-            .get();
+            .orderBy("updatedAt", "desc");
 
         const emailMap = new Map<string, Recipient>();
         let totalScanned = 0;
         let matchedAudienceCount = 0;
 
-        snapshot.docs.forEach(doc => {
-            totalScanned++;
-            const data = doc.data();
-            
-            // 1. Apply Date Range Filter if present
-            if (filters?.startDate || filters?.endDate) {
-                const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
-                if (filters.startDate && created < new Date(filters.startDate)) return;
-                if (filters.endDate && created > new Date(filters.endDate)) return;
-            }
+        // Use streaming to handle high-scale user counts (37k+) safely
+        await new Promise((resolve, reject) => {
+            query.stream()
+                .on("data", (doc) => {
+                    totalScanned++;
+                    const data = doc.data();
+                    
+                    // 1. Extract and normalize email
+                    const rawEmail = data.email || data.userEmail;
+                    if (!rawEmail) return;
+                    
+                    const normalizedEmail = rawEmail.toLowerCase().trim();
 
-            // 2. Extract and normalize email
-            const rawEmail = data.email || data.userEmail;
+                    // 2. Apply Date Range Filter if present
+                    if (filters?.startDate || filters?.endDate) {
+                        const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                        if (filters.startDate && created < new Date(filters.startDate)) return;
+                        if (filters.endDate && created > new Date(filters.endDate)) return;
+                    }
 
-            if (rawEmail) {
-                const normalizedEmail = rawEmail.toLowerCase().trim();
+                    // 3. High-Precision Audience Segmenting
+                    const userSegment = categorizeUser(data);
+                    
+                    let matchesAudience = false;
+                    if (!filters || filters.audience === "all") {
+                        matchesAudience = true;
+                    } else if (filters.audience === userSegment) {
+                        matchesAudience = true;
+                    } else {
+                        // Fallback to legacy specific module filters
+                        const regs = data.serviceRegistrations || {};
+                        const statusFilter = filters.moduleStatus && filters.moduleStatus !== "all"
+                            ? filters.moduleStatus
+                            : null;
 
-                // 3. Audience Filtering
-                let matchesAudience = true;
-                const regs = data.serviceRegistrations || {};
-                const hasStartedAny = Object.values(regs).some((r: any) => r.status && r.status !== "not_started");
-                const hasBank = data.verificationProfile?.bankDetails?.bankName && data.verificationProfile?.bankDetails?.bankName !== "N/A";
-                const hasAddress = data.verificationProfile?.address?.state && data.verificationProfile?.address?.state !== "N/A";
+                        if (filters.audience === "pending_applicants") {
+                            matchesAudience = Object.values(regs).some((r: any) => r.status === "pending" || r.status === "submitted");
+                        } else if (filters.audience === "unpaid_applicants") {
+                            matchesAudience = Object.values(regs).some((r: any) => r.paymentStatus === "pending" || r.paymentStatus === "failed");
+                        } else if (filters.audience === "marketplace_onboarded") {
+                            const mReg = regs.marketplace;
+                            matchesAudience = !!mReg && (statusFilter ? mReg.status === statusFilter : mReg.status === "approved");
+                        } else if (filters.audience === "cooperative_members") {
+                            const cReg = regs.cooperative;
+                            matchesAudience = !!cReg && (statusFilter ? cReg.status === statusFilter : (cReg.status === "approved" || cReg.status === "pending"));
+                        } else if (filters.audience === "wave_applicants") {
+                            const wReg = regs.wave;
+                            matchesAudience = !!wReg && (statusFilter ? wReg.status === statusFilter : true);
+                        } else if (filters.audience === "academy_users") {
+                            const aReg = regs.academy;
+                            matchesAudience = !!aReg && (statusFilter ? aReg.status === statusFilter : true);
+                        } else if (filters.audience === "farm_nation_users") {
+                            // Support both key conventions: snake_case (new) and camelCase (legacy)
+                            const fReg = regs.farm_nation || regs.farmNation;
+                            matchesAudience = !!fReg && (statusFilter ? fReg.status === statusFilter : true);
+                        } else if (filters.audience === "export_users") {
+                            const eReg = regs.export;
+                            matchesAudience = !!eReg && (statusFilter ? eReg.status === statusFilter : true);
+                        }
+                    }
 
-                if (filters?.audience === "stalled_users") {
-                    matchesAudience = hasStartedAny && (!hasBank || !hasAddress);
-                } else if (filters?.audience === "ghost_users") {
-                    matchesAudience = !hasStartedAny;
-                } else if (filters?.audience === "pending_applicants") {
-                    matchesAudience = Object.values(regs).some((r: any) => r.status === "pending");
-                } else if (filters?.audience === "unpaid_applicants") {
-                    matchesAudience = Object.values(regs).some((r: any) => r.paymentStatus === "pending" || r.paymentStatus === "failed");
-                } else if (filters?.audience === "marketplace_onboarded") {
-                    matchesAudience = regs.marketplace?.status === "approved";
-                } else if (filters?.audience === "cooperative_members") {
-                    matchesAudience = regs.cooperative?.status === "approved" || regs.cooperative?.status === "pending";
-                } else if (filters?.audience === "wave_applicants") {
-                    matchesAudience = !!regs.wave;
-                } else if (filters?.audience === "academy_users") {
-                    matchesAudience = !!regs.academy;
-                } else if (filters?.audience === "farm_nation_users") {
-                    matchesAudience = !!regs.farm_nation;
-                } else if (filters?.audience === "export_users") {
-                    matchesAudience = !!regs.export;
-                }
-
-                if (matchesAudience) matchedAudienceCount++;
-
-                // 4. Apply Filter & Deduplication
-                if (matchesAudience && !emailMap.has(normalizedEmail)) {
-                    emailMap.set(normalizedEmail, {
-                        uid: doc.id,
-                        email: normalizedEmail,
-                        name: data.fullName || data.firstName || 'Member',
-                        state: data.stateOfOrigin || data.address?.state || 'Unknown',
-                        onboardingCompleted: data.onboardingCompleted || false,
-                        lastActive: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt
-                    });
-                }
-            }
+                    if (matchesAudience) {
+                        matchedAudienceCount++;
+                        
+                        // 4. Deduplication
+                        if (!emailMap.has(normalizedEmail)) {
+                            const lastActiveRaw = data.updatedAt || data.createdAt;
+                            emailMap.set(normalizedEmail, {
+                                uid: doc.id,
+                                email: normalizedEmail,
+                                name: data.fullName || data.firstName || 'Member',
+                                state: data.stateOfOrigin || data.address?.state || data.verificationProfile?.address?.state || 'Unknown',
+                                onboardingCompleted: data.onboardingCompleted || false,
+                                lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date())
+                            });
+                        }
+                    }
+                })
+                .on("end", resolve)
+                .on("error", reject);
         });
 
         logger.info(`[BroadcastLogic] Clean Sweep complete. Scanned: ${totalScanned}, Matched: ${matchedAudienceCount}, Unique: ${emailMap.size}`);
@@ -144,7 +197,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             data: {
                 recipients: uniqueList,
                 count: uniqueList.length,
-                originalDocCount: snapshot.size
+                originalDocCount: totalScanned
             }
         };
 

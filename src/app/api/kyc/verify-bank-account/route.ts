@@ -38,18 +38,12 @@ async function verifyBankAccountHandler(req: NextRequest) {
 
         const paystackKey = process.env.PAYSTACK_SECRET_KEY;
 
-        // --- MOCK: return success if Paystack key not configured ---
+        // --- STRICT PRODUCTION CHECK: Fail if Paystack key not configured ---
         if (!paystackKey) {
-            logger.warn('PAYSTACK_SECRET_KEY not found. Returning MOCK response for bank account verification.');
-            return NextResponse.json({
-                success: true,
-                accountName: 'MOCK ACCOUNT NAME',
-                accountNumber,
-                bankId: null,
-                mock: true,
-            });
+            logger.error('CRITICAL: PAYSTACK_SECRET_KEY not found. Failing bank account verification securely.');
+            return NextResponse.json({ error: 'Verification service currently unavailable.' }, { status: 503 });
         }
-        // --- END MOCK ---
+        // --- END STRICT CHECK ---
 
         const url = `https://api.paystack.co/bank/resolve?account_number=${accountNumber}&bank_code=${bankCode}`;
 

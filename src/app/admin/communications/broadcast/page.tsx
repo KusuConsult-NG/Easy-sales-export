@@ -71,6 +71,7 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
     cooperative_members: [
         { value: "approved", label: "Approved" },
         { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
         { value: "suspended", label: "Suspended" },
     ],
     wave_applicants: [
@@ -87,6 +88,18 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
         { value: "under_review", label: "Under Review" },
     ],
     farm_nation_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+    export_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+    marketplace_onboarded: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
         { value: "pending", label: "Pending" },
@@ -402,6 +415,8 @@ export default function BroadcastComposePage() {
                                                 {audience === "wave_applicants" && "Application Status"}
                                                 {audience === "academy_users" && "Application Status"}
                                                 {audience === "farm_nation_users" && "Registration Status"}
+                                                {audience === "export_users" && "Registration Status"}
+                                                {audience === "marketplace_onboarded" && "Onboarding Status"}
                                             </label>
                                             <select value={moduleStatus} onChange={(e) => { setModuleStatus(e.target.value); setRecipientCount(null); }}
                                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent">

@@ -31,7 +31,6 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSuccess, setIsSuccess] = useState(false);
-    const [tempPassword, setTempPassword] = useState("");
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -96,7 +95,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl">
                         <p className="text-sm text-indigo-800">
-                            Create a direct account for a legacy member. They will be immediately provisioned with full access to selected services. A default PIN will be generated and emailed.
+                            Fill in the member's details below. Their account will be created immediately with full access to the selected services, and a welcome email containing a secure <strong>password setup link</strong> will be sent directly to them.
                         </p>
                     </div>
 
@@ -239,8 +238,8 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
                     </div>
                     <h3 className="text-2xl font-bold text-slate-900 mb-2">Successfully Onboarded!</h3>
                     <p className="text-slate-600 mb-8 max-w-sm mx-auto">
-                        <strong>{formData.fullName}</strong> has been provisioned as a legacy member. 
-                        Their login credentials and temporary PIN have been sent to <strong>{formData.email}</strong>.
+                        <strong>{formData.fullName}</strong> has been successfully onboarded as a legacy member with full platform access.
+                        A welcome email with a secure <strong>password setup link</strong> has been sent to <strong>{formData.email}</strong>.
                     </p>
 
                     <button

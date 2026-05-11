@@ -27,6 +27,26 @@ async function testNewSegments() {
     } else {
         console.error("❌ Ghost segment failed:", ghosts.error);
     }
+
+    // 3. Test Pending Users
+    console.log("\n📡 Segment: PENDING_USERS");
+    const pending = await getCleanBroadcastList({ audience: "pending_users" });
+    if (pending.success && pending.data) {
+        console.log(`✅ Found: ${pending.data.count} recipients`);
+        console.log(`📝 Sample: ${pending.data.recipients.slice(0, 2).map(r => r.email).join(", ")}`);
+    } else {
+        console.error("❌ Pending segment failed:", pending.error);
+    }
+
+    // 4. Test Active Users
+    console.log("\n📡 Segment: ACTIVE_USERS");
+    const active = await getCleanBroadcastList({ audience: "active_users" });
+    if (active.success && active.data) {
+        console.log(`✅ Found: ${active.data.count} recipients`);
+        console.log(`📝 Sample: ${active.data.recipients.slice(0, 2).map(r => r.email).join(", ")}`);
+    } else {
+        console.error("❌ Active segment failed:", active.error);
+    }
 }
 
 // Mocking required session/admin logic for test script
