@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Activity, ShieldCheck, Database, Server, RefreshCw, AlertTriangle, CheckCircle, XCircle, Info, Loader2 } from "lucide-react";
 import { runSystemDiagnosticAction } from "@/app/actions/admin";
 import { useToast } from "@/contexts/ToastContext";
@@ -53,7 +53,7 @@ export default function AdminDiagnosticsPage() {
     const [loading, setLoading] = useState(true);
     const { showToast } = useToast();
 
-    async function fetchDiagnostics() {
+    const fetchDiagnostics = useCallback(async () => {
         setLoading(true);
         const result = await runSystemDiagnosticAction();
         if (result.success && result.data) {
@@ -62,11 +62,11 @@ export default function AdminDiagnosticsPage() {
             showToast(result.error || "Failed to load diagnostics", "error");
         }
         setLoading(false);
-    }
+    }, [showToast]);
 
     useEffect(() => {
         fetchDiagnostics();
-    }, []);
+    }, [fetchDiagnostics]);
 
 
 

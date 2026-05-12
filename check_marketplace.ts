@@ -6,7 +6,7 @@ async function run() {
     const db = getAdminDb();
     const usersSnap = await db.collection("users").get();
     let count = 0;
-    let statuses = new Map();
+    const statuses = new Map();
     let noReg = 0;
     
     usersSnap.forEach(doc => {

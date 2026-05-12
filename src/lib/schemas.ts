@@ -259,11 +259,18 @@ export const LegacyOnboardingSchema = z.object({
     email: strictEmailSchema,
     phone: strictPhoneSchema,
     gender: z.enum(["male", "female"]).optional(),
+    dateOfBirth: z.string().optional(),
+    occupation: z.string().optional(),
     roles: z.array(UserRoleSchema).min(1, "At least one role is required"),
     state: z.string().min(2, "State is required").optional(),
     lga: z.string().min(2, "LGA is required").optional(),
     city: z.string().min(2, "City is required").optional(),
     address: z.string().min(5, "Complete address is required").optional(),
+    // Next of Kin
+    nextOfKinName: z.string().optional(),
+    nextOfKinPhone: z.string().optional(),
+    nextOfKinRelationship: z.string().optional(),
+    nextOfKinAddress: z.string().optional(),
     // Financial Details
     bankName: z.string().optional(),
     accountNumber: z.string().regex(/^\d{10}$/, "Account number must be 10 digits").optional(),
@@ -272,6 +279,10 @@ export const LegacyOnboardingSchema = z.object({
     // KYC Details
     nin: z.string().length(11, "NIN must be 11 digits").optional(),
     bvn: z.string().length(11, "BVN must be 11 digits").optional(),
+    // Document uploads (Cloudinary URLs set by admin during legacy onboarding)
+    validIdUrl: z.string().url("Valid ID must be a valid URL").optional(),
+    passportPhotoUrl: z.string().url("Passport photo must be a valid URL").optional(),
+    proofOfAddressUrl: z.string().url("Proof of address must be a valid URL").optional(),
     // Academy Plan selection
     academyPlan: z.enum(["foundation", "standard", "elite"]).optional(),
     // Optional service-specific pre-approvals

@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import DocumentUpload from "@/components/shared/DocumentUpload";
-import { FileText, Image, Package } from "lucide-react";
+import { FileText, Image as ImageIcon, Package } from "lucide-react";
 
 interface BusinessVerificationData {
     businessRegistration?: { name: string; url: string };
@@ -144,7 +144,7 @@ export default function BusinessVerificationStep({ data = {}, onChange, onNext, 
                 {/* Farm/Business Location Photos */}
                 <div>
                     <div className="flex items-center gap-2 mb-3">
-                        <Image className="w-5 h-5 text-slate-600" />
+                        <ImageIcon className="w-5 h-5 text-slate-600" />
                         <label className="block text-sm font-semibold text-slate-900">
                             Farm/Business Location Photos (Optional)
                         </label>

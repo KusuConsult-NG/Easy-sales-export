@@ -163,6 +163,7 @@ export const CertificateDocument = ({
                 <View style={styles.bottomStripe} />
 
                 {/* Logo */}
+                {/* eslint-disable-next-line jsx-a11y/alt-text */}
                 <Image src={`${baseUrl}/images/logo.jpg`} style={styles.logo} />
                 
                 <Text style={styles.orgName}>EASY SALES EXPORT LTD</Text>
