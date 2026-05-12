@@ -44,7 +44,7 @@ export default function CooperativePendingPage() {
             const status = sortedDocs[0].data().membershipStatus;
             setApplicationStatus(status);
 
-            if (status === "approved") {
+            if (status === "approved" || status === "active") {
                 router.replace("/dashboard/cooperatives");
             } else if (status === "rejected" || status === "revision_required") {
                 router.replace("/cooperatives/onboarding");

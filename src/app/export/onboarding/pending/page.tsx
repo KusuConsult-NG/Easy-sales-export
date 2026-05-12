@@ -27,7 +27,7 @@ export default function ExportOnboardingPendingPage() {
 
         // Listen on the user doc for export status changes
         const q = query(
-            collection(db, "export_applications"),
+            collection(db, "export_onboarding_applications"),
             where("userId", "==", session.user.id)
         );
 

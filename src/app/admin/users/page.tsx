@@ -109,7 +109,11 @@ export default function AdminUsersPage() {
         const result = await toggleUserVerificationAction(userId);
 
         if (result.success) {
-            setData(prev => prev.map(u => u.id === userId ? { ...u, isVerified: !u.isVerified } : u));
+            setData(prev => prev.map(u => u.id === userId ? { 
+                ...u, 
+                isVerified: !u.isVerified,
+                kycStatus: !u.isVerified ? 'verified' : 'pending' 
+            } : u));
             showToast(result.message, "success");
         } else {
             showToast(result.error, "error");
@@ -672,7 +676,21 @@ export default function AdminUsersPage() {
                                                                     item.key === 'nin' ? 'ninVerified' :
                                                                         item.key === 'bvn' ? 'bvnVerified' :
                                                                             item.key === 'tin' ? 'tinVerified' : 'cacVerified';
-                                                                const updatedUser = { ...selectedUserForModal, [verifyField]: !item.verified };
+                                                                
+                                                                // Optimistically recalculate kycStatus
+                                                                const isNin = item.key === 'nin';
+                                                                const isBvn = item.key === 'bvn';
+                                                                let newKycStatus = selectedUserForModal.kycStatus;
+                                                                if (isNin || isBvn) {
+                                                                    const otherVerified = isNin ? selectedUserForModal.bvnVerified : selectedUserForModal.ninVerified;
+                                                                    newKycStatus = (!item.verified && otherVerified) ? 'verified' : 'pending';
+                                                                }
+
+                                                                const updatedUser = { 
+                                                                    ...selectedUserForModal, 
+                                                                    [verifyField]: !item.verified,
+                                                                    kycStatus: newKycStatus
+                                                                };
                                                                 setSelectedUserForModal(updatedUser as User);
                                                                 setData(prev => prev.map(u => u.id === selectedUserForModal.id ? updatedUser as User : u));
                                                                 showToast(result.message, "success");

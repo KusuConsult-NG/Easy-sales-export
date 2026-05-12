@@ -258,6 +258,8 @@ async function _toggleUserVerificationAction(
         const { safeUpdate } = await import("@/lib/firestore-utils");
         await safeUpdate(COLLECTIONS.USERS, userId, {
             isVerified: newVerificationStatus,
+            "kyc.status": newVerificationStatus ? "verified" : "pending",
+            kycStatus: newVerificationStatus ? "verified" : "pending",
             verifiedBy: session.user.id,
             verifiedAt: newVerificationStatus ? FieldValue.serverTimestamp() : null,
         });
