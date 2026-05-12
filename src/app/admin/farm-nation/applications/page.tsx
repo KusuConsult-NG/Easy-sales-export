@@ -11,6 +11,7 @@ import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X, Eye } from "
 import Modal from "@/components/ui/Modal";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
+import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 
 interface SellerProfile {
     id: string;
@@ -42,6 +43,7 @@ export default function FarmNationApplicationsPage() {
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [stats, setStats] = useState<{ totalApplications: number } | null>(null);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [exportConfig, setExportConfig] = useState({
@@ -344,20 +346,29 @@ export default function FarmNationApplicationsPage() {
                 onPrevPage={onPrevPage}
                 pageIndex={pageIndex}
                 actionButtons={
-                    <button
-                        onClick={() => {
-                            setExportConfig({
-                                status: filters.status || "all",
-                                limit: 5000
-                            });
-                            setIsExportModalOpen(true);
-                        }}
-                        disabled={processingId === "export"}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
-                    >
-                        {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                        {processingId === "export" ? "Exporting..." : "Export CSV"}
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setIsImportModalOpen(true)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all shadow-sm"
+                        >
+                            <Users className="w-4 h-4" />
+                            Legacy Member
+                        </button>
+                        <button
+                            onClick={() => {
+                                setExportConfig({
+                                    status: filters.status || "all",
+                                    limit: 5000
+                                });
+                                setIsExportModalOpen(true);
+                            }}
+                            disabled={processingId === "export"}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                        >
+                            {processingId === "export" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                            {processingId === "export" ? "Exporting..." : "Export CSV"}
+                        </button>
+                    </div>
                 }
                 filters={
                     <>
@@ -573,6 +584,12 @@ export default function FarmNationApplicationsPage() {
                     </div>
                 </div>
             )}
+
+            <ImportLegacyModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => refresh()}
+            />
         </div>
     );
 }

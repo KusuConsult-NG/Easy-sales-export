@@ -22,6 +22,7 @@ import {
     X,
     Save,
     MessageSquare,
+    Users,
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
@@ -45,6 +46,7 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
+import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 
 type AppStatus = "pending_review" | "approved" | "rejected" | "revision_required" | "pending";
 
@@ -141,6 +143,7 @@ export default function AdminExportApplicationsPage() {
     const [rejectingAppId, setRejectingAppId] = useState<string | null>(null);
     const [selectedApp, setSelectedApp] = useState<StandardPendingForm<ExportApplication> | null>(null);
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Edit/Revision Note modal state
     const [editingApp, setEditingApp] = useState<ExportApplication | null>(null);
@@ -287,13 +290,22 @@ export default function AdminExportApplicationsPage() {
                         Review and action Export Windows onboarding submissions
                     </p>
                 </div>
-                <button
-                    onClick={handleExportCSV}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
-                >
-                    <Download className="w-4 h-4" />
-                    Export CSV
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 border border-transparent rounded-xl text-sm font-medium text-white hover:bg-blue-700 transition shadow-sm"
+                    >
+                        <Users className="w-4 h-4" />
+                        Legacy Member
+                    </button>
+                    <button
+                        onClick={handleExportCSV}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+                    >
+                        <Download className="w-4 h-4" />
+                        Export CSV
+                    </button>
+                </div>
             </div>
 
             {/* Stats Row */}
@@ -675,6 +687,12 @@ export default function AdminExportApplicationsPage() {
                     </div>
                 </div>
             )}
+            
+            <ImportLegacyModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => fetchData()}
+            />
         </div>
     );
 }

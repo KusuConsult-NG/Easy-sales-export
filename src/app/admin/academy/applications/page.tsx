@@ -5,7 +5,7 @@ import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
     Search, Eye, BookOpen, GraduationCap, DollarSign,
     X, User, Phone, Mail, MapPin, Briefcase, Calendar,
-    Target, Award, Download
+    Target, Award, Download, Users
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -19,6 +19,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { useEffect } from "react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
+import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type ApplicationStatus = "pending" | "under_review" | "approved" | "rejected";
@@ -372,6 +373,7 @@ export default function AdminAcademyApplicationsPage() {
     const [stats, setStats] = useState<{ totalApplications: number; pending: number; under_review: number; approved: number; rejected: number; } | null>(null);
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     useEffect(() => {
         getAcademyApplicationStatsAction().then(res => {
@@ -657,6 +659,13 @@ export default function AdminAcademyApplicationsPage() {
                             {processingId === "export" ? "Exporting..." : "Export CSV"}
                         </button>
                     )}
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold transition shadow-sm border border-slate-700 flex items-center gap-2"
+                    >
+                        <Users className="w-4 h-4" />
+                        Legacy Member
+                    </button>
                     <button
                         onClick={() => setIsEnrollModalOpen(true)}
                         className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition shadow-sm border border-blue-500"
@@ -992,6 +1001,12 @@ export default function AdminAcademyApplicationsPage() {
                     title={`Raw Details: ${selectedApp.personalInfo.fullName}`}
                 />
             )}
+            
+            <ImportLegacyModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => fetchData()}
+            />
         </div>
     );
 }

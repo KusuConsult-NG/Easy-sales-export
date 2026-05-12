@@ -11,6 +11,7 @@ import { useAdminData } from "@/hooks/useAdminData";
 import { getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 
 interface WaveMember {
     id: string; // userId
@@ -94,6 +95,7 @@ export default function AdminWaveMembersPage() {
     const [filtered, setFiltered] = useState<WaveMember[]>([]);
     const [selectedMember, setSelectedMember] = useState<WaveMember | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Filter using searchQuery inside useAdminData fetch action natively when search param expands
     useEffect(() => {
@@ -212,6 +214,14 @@ export default function AdminWaveMembersPage() {
                         <span className="text-slate-500 block text-xs uppercase font-bold tracking-wider mb-0.5">Total Members</span>
                         <span className="text-xl font-black text-slate-900">{(meta as any)?.totalCount ?? members.length}</span>
                     </div>
+                    {/* Add Legacy Member */}
+                    <button
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all shadow-sm"
+                    >
+                        <Users className="w-4 h-4" />
+                        Legacy Member
+                    </button>
                     {/* CSV Export */}
                     <button
                         onClick={handleExportCSV}
@@ -421,6 +431,12 @@ export default function AdminWaveMembersPage() {
                     </div>
                 </div>
             )}
+            
+            <ImportLegacyModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSuccess={() => loadMembers()}
+            />
         </div>
     );
 }
