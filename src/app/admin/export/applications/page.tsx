@@ -692,6 +692,7 @@ export default function AdminExportApplicationsPage() {
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => fetchData()}
+                module="export"
             />
         </div>
     );

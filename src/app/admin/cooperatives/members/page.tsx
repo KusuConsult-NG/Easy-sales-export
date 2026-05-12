@@ -900,6 +900,7 @@ export default function CooperativeMembersPage() {
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => loadApplications()}
+                module="cooperative"
             />
 
             {selectedApplication && (

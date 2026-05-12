@@ -1006,6 +1006,7 @@ export default function AdminAcademyApplicationsPage() {
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => fetchData()}
+                module="academy"
             />
         </div>
     );

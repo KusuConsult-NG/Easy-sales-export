@@ -294,6 +294,28 @@ export const LegacyOnboardingSchema = z.object({
         academy: z.boolean().default(false),
         farmNation: z.boolean().default(false),
     }).optional(),
+    exportInfo: z.object({
+        companyName: z.string().optional(),
+        rcNumber: z.string().optional(),
+        yearEstablished: z.string().optional(),
+        businessType: z.string().optional(),
+        industry: z.string().optional(),
+    }).optional(),
+    farmNationInfo: z.object({
+        role: z.enum(["buyer", "seller", "both"]).optional(),
+        farmSize: z.string().optional(),
+        cropTypes: z.array(z.string()).optional(),
+        propertyTypes: z.array(z.string()).optional(),
+        listingTypes: z.array(z.string()).optional(),
+        totalAcreage: z.string().optional(),
+    }).optional(),
+    waveInfo: z.object({
+        residentialState: z.string().optional(),
+        surname: z.string().optional(),
+    }).optional(),
+    cooperativeInfo: z.object({
+        amount: z.number().optional(),
+    }).optional(),
 });
 
 export type LegacyOnboardingFormData = z.infer<typeof LegacyOnboardingSchema>;

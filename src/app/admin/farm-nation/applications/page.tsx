@@ -589,6 +589,7 @@ export default function FarmNationApplicationsPage() {
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => refresh()}
+                module="farmNation"
             />
         </div>
     );

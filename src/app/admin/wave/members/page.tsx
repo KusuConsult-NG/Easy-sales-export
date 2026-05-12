@@ -436,6 +436,7 @@ export default function AdminWaveMembersPage() {
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
                 onSuccess={() => loadMembers()}
+                module="wave"
             />
         </div>
     );

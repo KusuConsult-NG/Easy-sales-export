@@ -19,6 +19,7 @@ import { onboardLegacyMemberAction } from "@/app/actions/admin";
 import { ACADEMY_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
 
 interface ImportLegacyModalProps {
+    module: "academy" | "export" | "wave" | "farmNation" | "cooperative";
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
@@ -32,10 +33,11 @@ const NIGERIAN_STATES = [
     "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
 ];
 
-const STEPS = ["Identity", "Location", "Next of Kin", "Documents", "Financial", "Services"] as const;
+
+const STEPS = ["Identity", "Location", "Next of Kin", "Documents", "Financial", "Module Details"] as const;
 type Step = (typeof STEPS)[number];
 
-export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: ImportLegacyModalProps) {
+export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }: ImportLegacyModalProps) {
     const [step, setStep] = useState<number>(0);
     const [formData, setFormData] = useState({
         // Step 1 – Identity
@@ -68,6 +70,18 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
         bvn: "",
         // Step 6 – Services
         academyPlan: "foundation" as "foundation" | "standard" | "elite",
+        // Module Specific
+        exportCompanyName: "",
+        exportRcNumber: "",
+        exportYearEstablished: "",
+        exportBusinessType: "sole_proprietorship",
+        exportIndustry: "agriculture",
+        waveSurname: "",
+        waveResidentialState: "",
+        farmNationRole: "farmer" as "farmer" | "buyer" | "seller" | "both",
+        farmNationFarmSize: "",
+        farmNationCropTypes: "",
+        cooperativeAmount: "",
         services: {
             cooperative: true,
             academy: true,
@@ -137,7 +151,8 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
         if (formData.services.wave) roles.push("wave_participant");
         if (formData.services.farmNation) roles.push("farmer");
 
-        const payload = {
+        
+        const payload: any = {
             fullName: formData.fullName,
             email: formData.email,
             phone: formData.phone,
@@ -149,26 +164,56 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
             lga: formData.lga,
             city: formData.city || undefined,
             address: formData.address,
-            // Next of Kin – only include if provided
             ...(formData.nextOfKinName ? { nextOfKinName: formData.nextOfKinName } : {}),
             ...(formData.nextOfKinPhone ? { nextOfKinPhone: formData.nextOfKinPhone } : {}),
             ...(formData.nextOfKinRelationship ? { nextOfKinRelationship: formData.nextOfKinRelationship } : {}),
             ...(formData.nextOfKinAddress ? { nextOfKinAddress: formData.nextOfKinAddress } : {}),
-            // Documents – only include if uploaded
             ...(formData.validIdUrl ? { validIdUrl: formData.validIdUrl } : {}),
             ...(formData.passportPhotoUrl ? { passportPhotoUrl: formData.passportPhotoUrl } : {}),
             ...(formData.proofOfAddressUrl ? { proofOfAddressUrl: formData.proofOfAddressUrl } : {}),
-            // Financials – only include if provided
             ...(formData.accountNumber ? { accountNumber: formData.accountNumber } : {}),
             ...(formData.accountName ? { accountName: formData.accountName } : {}),
             ...(formData.bankName ? { bankName: formData.bankName } : {}),
             ...(formData.bankCode ? { bankCode: formData.bankCode } : {}),
-            // KYC – only include if provided
             ...(formData.nin ? { nin: formData.nin } : {}),
             ...(formData.bvn ? { bvn: formData.bvn } : {}),
-            academyPlan: formData.academyPlan,
-            services: formData.services,
+            services: {
+                cooperative: module === "cooperative",
+                academy: module === "academy",
+                marketplace: false,
+                export: module === "export",
+                wave: module === "wave",
+                farmNation: module === "farmNation",
+            },
         };
+
+        if (module === "academy") {
+            payload.academyPlan = formData.academyPlan;
+        } else if (module === "export") {
+            payload.exportInfo = {
+                companyName: formData.exportCompanyName || undefined,
+                rcNumber: formData.exportRcNumber || undefined,
+                yearEstablished: formData.exportYearEstablished || undefined,
+                businessType: formData.exportBusinessType || undefined,
+                industry: formData.exportIndustry || undefined,
+            };
+        } else if (module === "wave") {
+            payload.waveInfo = {
+                surname: formData.waveSurname || undefined,
+                residentialState: formData.waveResidentialState || undefined,
+            };
+        } else if (module === "farmNation") {
+            payload.farmNationInfo = {
+                role: formData.farmNationRole || undefined,
+                farmSize: formData.farmNationFarmSize || undefined,
+                cropTypes: formData.farmNationCropTypes ? formData.farmNationCropTypes.split(",") : undefined,
+            };
+        } else if (module === "cooperative") {
+            payload.cooperativeInfo = {
+                amount: formData.cooperativeAmount ? Number(formData.cooperativeAmount) : undefined,
+            };
+        }
+
 
         const result = await onboardLegacyMemberAction(payload);
         setIsLoading(false);
@@ -183,18 +228,23 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess }: Import
 
     // ── reset / close ────────────────────────────────────────────────────────
     function handleClose() {
-        setFormData({
+                setFormData({
             fullName: "", email: "", phone: "", gender: "",
-            dateOfBirth: "", occupation: "",
-            state: "", lga: "", city: "", address: "",
-            nextOfKinName: "", nextOfKinPhone: "", nextOfKinRelationship: "", nextOfKinAddress: "",
-            validIdUrl: "", passportPhotoUrl: "", proofOfAddressUrl: "",
-            accountNumber: "", accountName: "", bankName: "", bankCode: "",
-            nin: "", bvn: "",
-            academyPlan: "foundation",
+            dateOfBirth: "", occupation: "", state: "", lga: "",
+            city: "", address: "", nextOfKinName: "", nextOfKinPhone: "",
+            nextOfKinRelationship: "", nextOfKinAddress: "", validIdUrl: "",
+            passportPhotoUrl: "", proofOfAddressUrl: "", accountNumber: "",
+            accountName: "", bankName: "", bankCode: "", nin: "", bvn: "",
+            academyPlan: "foundation" as "foundation" | "standard" | "elite",
+            exportCompanyName: "", exportRcNumber: "", exportYearEstablished: "",
+            exportBusinessType: "sole_proprietorship", exportIndustry: "agriculture",
+            waveSurname: "", waveResidentialState: "",
+            farmNationRole: "farmer" as "farmer" | "buyer" | "seller" | "both",
+            farmNationFarmSize: "", farmNationCropTypes: "",
+            cooperativeAmount: "",
             services: {
-                cooperative: true, academy: true,
-                marketplace: false, export: false, wave: false, farmNation: false,
+                marketplace: false, export: false, cooperative: false,
+                wave: false, academy: false, farmNation: false,
             },
         });
         setStep(0);
