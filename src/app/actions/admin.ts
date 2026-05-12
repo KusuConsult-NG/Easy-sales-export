@@ -3504,10 +3504,8 @@ async function _onboardLegacyMemberAction(
         const data = validated.data;
 
         // 1. Check if user already exists (Email)
-        const existingAuth = await adminAuth.getUserByEmail(data.email).catch(() => null);
-        if (existingAuth) {
-            return { error: "A user with this email already exists in Auth", success: false as const };
-        }
+        let userRecord = await adminAuth.getUserByEmail(data.email).catch(() => null);
+        const isNewUser = !userRecord;
 
         // 2. 🔒 DEDUP GUARD: Check phone uniqueness (Fraud Prevention)
         const phoneCheck = await db.collection(COLLECTIONS.USERS)
@@ -3515,19 +3513,24 @@ async function _onboardLegacyMemberAction(
             .limit(1)
             .get();
         if (!phoneCheck.empty) {
-            return { error: "An account with this phone number already exists in the system.", success: false as const };
+            const existingUser = phoneCheck.docs[0].data();
+            if (!userRecord || existingUser.uid !== userRecord.uid) {
+                return { error: "An account with this phone number already exists in the system.", success: false as const };
+            }
         }
 
         // 3. Generate default numeric PIN (6 digits)
         const tempPassword = Math.floor(100000 + Math.random() * 900000).toString(); 
 
-        // 4. Create Firebase Auth user
-        const userRecord = await adminAuth.createUser({
-            email: data.email,
-            password: tempPassword,
-            displayName: data.fullName,
-            emailVerified: true,
-        });
+        // 4. Create Firebase Auth user if not exists
+        if (!userRecord) {
+            userRecord = await adminAuth.createUser({
+                email: data.email,
+                password: tempPassword,
+                displayName: data.fullName,
+                emailVerified: true,
+            });
+        }
 
         // 5. Prepare structured name
         const nameParts = data.fullName.trim().split(/\s+/);
@@ -3683,7 +3686,7 @@ async function _onboardLegacyMemberAction(
         };
 
         const batch = db.batch();
-        batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc);
+        batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc, { merge: true });
 
         // 8. 🏗️ DEEP PROVISIONING: Initialize Service Documents
         // Cooperative Member Document
@@ -3724,7 +3727,7 @@ async function _onboardLegacyMemberAction(
                 bankName: data.bankName,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-            });
+            }, { merge: true });
         }
 
         // Vendor Settings / Seller Profile Document
@@ -3757,7 +3760,7 @@ async function _onboardLegacyMemberAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
-            });
+            }, { merge: true });
 
             batch.set(db.collection(COLLECTIONS.VENDOR_SETTINGS).doc(userRecord.uid), {
                 userId: userRecord.uid,
@@ -3778,7 +3781,7 @@ async function _onboardLegacyMemberAction(
                 },
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
-            });
+            }, { merge: true });
         }
 
         await batch.commit();
@@ -3805,7 +3808,7 @@ async function _onboardLegacyMemberAction(
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
                 _legacyOnboardedBy: session.user.id,
-            });
+            }, { merge: true });
 
             // Application record — queried by checkAcademyStatusAction & admin application panels
             const appRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(`legacy_${userRecord.uid}`);
@@ -3825,7 +3828,7 @@ async function _onboardLegacyMemberAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
-            });
+            }, { merge: true });
 
             await academyBatch.commit();
         }
@@ -3860,7 +3863,7 @@ async function _onboardLegacyMemberAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
-            });
+            }, { merge: true });
             await exportBatch.commit();
         }
 
@@ -3885,7 +3888,7 @@ async function _onboardLegacyMemberAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
-            });
+            }, { merge: true });
             
             // WAVE Member Profile
             const waveMemberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userRecord.uid);
@@ -3901,7 +3904,7 @@ async function _onboardLegacyMemberAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
-            });
+            }, { merge: true });
             await waveBatch.commit();
         }
 
@@ -3930,7 +3933,7 @@ async function _onboardLegacyMemberAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _isLegacy: true,
-            });
+            }, { merge: true });
             await farmBatch.commit();
         }
 
@@ -3964,7 +3967,9 @@ async function _onboardLegacyMemberAction(
 
         return { 
             error: null, success: true as const, 
-            message: `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
+            message: isNewUser 
+                ? `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
+                : `Legacy member ${data.fullName} successfully updated. Password reset link sent to ${data.email}.`
         };
 
     } catch (error: any) {
