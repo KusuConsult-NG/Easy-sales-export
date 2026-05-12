@@ -3830,6 +3830,105 @@ async function _onboardLegacyMemberAction(
             await academyBatch.commit();
         }
 
+        // 8c. 🌍 EXPORT DEEP-PROVISIONING
+        if (data.services?.export || data.roles.includes("export_participant")) {
+            const exportBatch = db.batch();
+            const exportAppRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(`legacy_${userRecord.uid}`);
+            exportBatch.set(exportAppRef, {
+                userId: userRecord.uid,
+                status: "approved",
+                profile: {
+                    firstName,
+                    lastName,
+                    otherName,
+                    email: data.email,
+                    phone: data.phone,
+                    gender: data.gender,
+                    dateOfBirth: data.dateOfBirth,
+                },
+                companyInfo: {
+                    companyName: `${firstName}'s Export Co.`,
+                    rcNumber: "LEGACY-N/A",
+                    yearEstablished: new Date().getFullYear().toString(),
+                    businessType: "sole_proprietorship",
+                    industry: "agriculture",
+                },
+                state: data.state || "",
+                lga: data.lga || "",
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+            });
+            await exportBatch.commit();
+        }
+
+        // 8d. 🌊 WAVE DEEP-PROVISIONING
+        if (data.services?.wave || data.roles.includes("wave_participant")) {
+            const waveBatch = db.batch();
+            // WAVE Application
+            const waveAppRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(`legacy_${userRecord.uid}`);
+            waveBatch.set(waveAppRef, {
+                userId: userRecord.uid,
+                userEmail: data.email,
+                firstName,
+                surname: lastName,
+                email: data.email,
+                phoneNumber: data.phone,
+                state: data.state || "",
+                residentialState: data.state || "",
+                status: "approved",
+                applicationDate: FieldValue.serverTimestamp(),
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+            });
+            
+            // WAVE Member Profile
+            const waveMemberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(userRecord.uid);
+            waveBatch.set(waveMemberRef, {
+                userId: userRecord.uid,
+                email: data.email,
+                name: data.fullName,
+                phone: data.phone,
+                joinDate: FieldValue.serverTimestamp(),
+                status: "active",
+                tier: "standard",
+                points: 0,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+            });
+            await waveBatch.commit();
+        }
+
+        // 8e. 🧑‍🌾 FARM NATION DEEP-PROVISIONING
+        if (data.services?.farmNation || data.roles.includes("farmer")) {
+            const farmBatch = db.batch();
+            const farmAppRef = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(`legacy_${userRecord.uid}`);
+            farmBatch.set(farmAppRef, {
+                userId: userRecord.uid,
+                status: "approved",
+                role: "farmer",
+                profile: {
+                    fullName: data.fullName,
+                    firstName,
+                    lastName,
+                    email: data.email,
+                    phone: data.phone,
+                },
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: session.user.id,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _isLegacy: true,
+            });
+            await farmBatch.commit();
+        }
+
         // 9. Generate a password reset link so the user can set their own password
         //    immediately after first login — this fulfils the "change default PIN" requirement.
         let passwordResetLink: string | undefined;
