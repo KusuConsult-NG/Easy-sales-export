@@ -28,7 +28,7 @@ import {
     UserKycVerificationSchema,
     LegacyOnboardingSchema
 } from "@/lib/schemas";
-import { sendLegacyMemberWelcomeEmail } from "@/lib/email-notifications";
+import { sendLegacyMemberWelcomeEmail, sendPasswordResetEmail } from "@/lib/email-notifications";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { atomicUpdateUser } from "@/lib/services/userService";
@@ -3953,6 +3953,11 @@ async function _onboardLegacyMemberAction(
 
         // 10. Send Welcome Email with the reset link included
         await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword, passwordResetLink);
+        
+        if (passwordResetLink) {
+            // Send explicit password reset notification to satisfy "change password" requirement
+            await sendPasswordResetEmail(data.email, passwordResetLink);
+        }
 
         // 10. Audit Log
         await createAdminAuditLog({
