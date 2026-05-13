@@ -3505,34 +3505,64 @@ async function _onboardLegacyMemberAction(
 
         const data = validated.data;
 
-        // 1. Check if user already exists (Email)
-        let userRecord = await adminAuth.getUserByEmail(data.email).catch(() => null);
-        const isNewUser = !userRecord;
+        // 1. Resolve Identity and Enforce Uniqueness
+        let targetUid: string | null = null;
 
-        // 2. 🔒 DEDUP GUARD: Check phone uniqueness (Fraud Prevention)
+        // Check Firebase Auth by email
+        let authRecord = await adminAuth.getUserByEmail(data.email).catch(() => null);
+        if (authRecord) targetUid = authRecord.uid;
+
+        // Check Firestore by email to prevent ghost documents
+        const emailCheck = await db.collection(COLLECTIONS.USERS)
+            .where("email", "==", data.email.toLowerCase())
+            .limit(1)
+            .get();
+        if (!emailCheck.empty) {
+            const firestoreUid = emailCheck.docs[0].id;
+            if (targetUid && targetUid !== firestoreUid) {
+                return { error: "Data conflict: Email exists in Auth but belongs to a different Firestore user.", success: false as const };
+            }
+            targetUid = firestoreUid;
+        }
+
+        // 2. 🔒 DEDUP GUARD: Check Firestore by phone (Fraud Prevention)
         const phoneCheck = await db.collection(COLLECTIONS.USERS)
             .where("phone", "==", data.phone)
             .limit(1)
             .get();
         if (!phoneCheck.empty) {
-            const existingUser = phoneCheck.docs[0].data();
-            if (!userRecord || existingUser.uid !== userRecord.uid) {
-                return { error: "An account with this phone number already exists in the system.", success: false as const };
+            const phoneUid = phoneCheck.docs[0].id;
+            if (targetUid && targetUid !== phoneUid) {
+                return { error: "An account with this phone number already exists under a different email.", success: false as const };
             }
+            targetUid = phoneUid;
         }
+
+        const isNewUser = !targetUid;
 
         // 3. Generate default numeric PIN (6 digits)
         const tempPassword = Math.floor(100000 + Math.random() * 900000).toString(); 
 
         // 4. Create Firebase Auth user if not exists
-        if (!userRecord) {
-            userRecord = await adminAuth.createUser({
+        if (!authRecord) {
+            const createParams: any = {
                 email: data.email,
                 password: tempPassword,
                 displayName: data.fullName,
                 emailVerified: true,
-            });
+            };
+            if (targetUid) {
+                createParams.uid = targetUid; // Link to existing Firestore document
+            }
+            authRecord = await adminAuth.createUser(createParams);
+            targetUid = authRecord.uid;
         }
+
+        if (!targetUid) {
+            return { error: "System Error: Failed to resolve user identity.", success: false as const };
+        }
+
+        const userRecord = { uid: targetUid };
 
         // 5. Prepare structured name
         const nameParts = data.fullName.trim().split(/\s+/);
@@ -3670,7 +3700,6 @@ async function _onboardLegacyMemberAction(
             } : undefined,
             isVerifiedBadge: true, 
             // Security & Onboarding
-            requiresPasswordChange: true, 
             serviceRegistrations,
             onboardingCompleted: true, 
             consentVersion: "1.0.0",
@@ -3686,6 +3715,10 @@ async function _onboardLegacyMemberAction(
             legacyOnboardedAt: FieldValue.serverTimestamp(),
             _system_safe_write: true, // Mark as hardened
         };
+
+        if (isNewUser) {
+            userDoc.requiresPasswordChange = true;
+        }
 
         const batch = db.batch();
         batch.set(db.collection(COLLECTIONS.USERS).doc(userRecord.uid), userDoc, { merge: true });
