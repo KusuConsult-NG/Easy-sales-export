@@ -22,7 +22,8 @@ async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     
     // Strict Role Check - Allow 'admin', 'super_admin' and module admins using synchronized live roles
     const roles = sessionResult.session?.user?.roles || ["admin"];
-    const hasAdminAccess = canAccessAdminRoute(roles, pathname);
+    const { isAdmin } = await import("@/lib/admin-permissions");
+    const hasAdminAccess = isAdmin(roles);
 
     if (!hasAdminAccess) {
         redirect("/dashboard");
