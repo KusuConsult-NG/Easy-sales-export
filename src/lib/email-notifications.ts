@@ -202,8 +202,8 @@ export async function sendPasswordResetEmail(
                         Reset Password
                     </a>
                 </div>
-                <p style="color: #666; font-size: 14px;">
-                    This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.
+                <p style="color: #ef4444; font-size: 14px; font-weight: bold; margin-top: 24px;">
+                    ⚠️ This link will expire in 1 hour. If it expires, please go to the login page and click "Forgot Password" to request a new one.
                 </p>
                 <p style="color: #666; font-size: 14px;">
                     For security, never share this email or link with anyone.
@@ -862,6 +862,9 @@ export async function sendLegacyMemberWelcomeEmail(
                             <li>Create a secure password.</li>
                             <li>Log in to your dashboard to start using the platform.</li>
                         </ol>
+                        <p style="margin: 16px 0 0; color: #ef4444; font-size: 13px; font-weight: bold;">
+                            ⚠️ Note: For your security, this link expires in 1 hour. If it expires, simply go to the login page and click "Forgot Password" to request a new one.
+                        </p>
                     </div>
                     
                     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
