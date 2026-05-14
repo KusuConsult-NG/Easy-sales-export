@@ -52,7 +52,18 @@ export async function getCleanBroadcastListAction(filters?: BroadcastFilters) { 
 
         return await getCleanBroadcastList(filters);
 
-    } catch (error) { logger.error("[Broadcast] List generation failed:", error);
+    } catch (error: any) { 
+        logger.error("[Broadcast] List generation failed:", error);
+        try {
+            const { getAdminDb } = await import("@/lib/firebase-admin");
+            const db = getAdminDb();
+            await db.collection("audit_logs").add({
+                action: "broadcast_list_generation_error",
+                error: error.message || String(error),
+                stack: error.stack,
+                timestamp: new Date()
+            });
+        } catch(e) {}
         return { success: false as const, error: "Failed to generate broadcast list.", data: null };
     }
 }

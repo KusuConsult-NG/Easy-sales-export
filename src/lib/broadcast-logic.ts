@@ -191,6 +191,161 @@ async function getSellerBroadcastList(filters?: BroadcastFilters) {
     };
 }
 
+async function getAbandonedFailedBroadcastList(filters?: BroadcastFilters) {
+    logger.info(`[BroadcastLogic] Generating abandoned/failed transactions list...`);
+    const emailMap = new Map<string, Recipient>();
+    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
+    
+    const snap = await db.collection(COLLECTIONS.FAILED_PAYMENTS).get();
+    const userIdsToResolve: string[] = [];
+
+    for (const doc of snap.docs) {
+        const data = doc.data();
+        if (data.email) {
+            const normalizedEmail = data.email.toLowerCase().trim();
+            if (!emailMap.has(normalizedEmail)) {
+                emailMap.set(normalizedEmail, {
+                    uid: data.userId || doc.id,
+                    email: normalizedEmail,
+                    name: data.customerName || data.fullName || "User",
+                    state: "Unknown",
+                    onboardingCompleted: false,
+                    lastActive: new Date()
+                });
+            }
+        } else if (data.userId) {
+            userIdsToResolve.push(data.userId);
+        }
+    }
+
+    if (userIdsToResolve.length > 0) {
+        const uniqueIds = Array.from(new Set(userIdsToResolve));
+        for (let i = 0; i < uniqueIds.length; i += 100) {
+            const chunk = uniqueIds.slice(i, i + 100);
+            const snaps = await db.getAll(...chunk.map(id => db.collection(COLLECTIONS.USERS).doc(id)));
+            snaps.forEach((userSnap: any) => {
+                if (userSnap.exists) {
+                    const u = userSnap.data();
+                    const rawEmail = u?.email || u?.userEmail;
+                    if (rawEmail) {
+                        const normalizedEmail = rawEmail.toLowerCase().trim();
+                        if (!emailMap.has(normalizedEmail)) {
+                            emailMap.set(normalizedEmail, {
+                                uid: userSnap.id,
+                                email: normalizedEmail,
+                                name: u?.fullName || u?.name || "User",
+                                state: u?.state || u?.stateOfOrigin || u?.address?.state || "Unknown",
+                                onboardingCompleted: false,
+                                lastActive: new Date()
+                            });
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    const uniqueList = Array.from(emailMap.values());
+    logger.info(`[BroadcastLogic] abandoned/failed: ${snap.size}, unique emails: ${uniqueList.length}`);
+
+    return {
+        success: true as const,
+        error: null,
+        data: {
+            recipients: uniqueList,
+            count: uniqueList.length,
+            originalDocCount: snap.size,
+            moduleStats,
+        },
+    };
+}
+
+async function getUnpaidApplicantsBroadcastList(filters?: BroadcastFilters) {
+    logger.info(`[BroadcastLogic] Generating unpaid applicants list...`);
+    const emailMap = new Map<string, Recipient>();
+    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
+    
+    const [coopSnap, acadSnap] = await Promise.all([
+        db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("paymentStatus", "in", ["pending", "unpaid", "failed"]).get(),
+        db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("paymentStatus", "in", ["pending", "unpaid", "failed"]).get(),
+    ]);
+
+    const userIdsToResolve: string[] = [];
+
+    const processDoc = (doc: any, isAcademy = false) => {
+        const data = doc.data();
+        let rawEmail = data.email || data.userEmail;
+        let name = data.fullName || `${data.firstName || ''} ${data.lastName || ''}`.trim() || "User";
+        let state = data.state || data.address?.state || "Unknown";
+
+        if (isAcademy && data.personalInfo) {
+            rawEmail = rawEmail || data.personalInfo.email;
+            name = data.personalInfo.fullName || `${data.personalInfo.firstName || ''} ${data.personalInfo.lastName || ''}`.trim() || name;
+            state = data.personalInfo.state || data.personalInfo.stateOfOrigin || state;
+        }
+
+        if (rawEmail) {
+            const normalizedEmail = rawEmail.toLowerCase().trim();
+            if (!emailMap.has(normalizedEmail)) {
+                emailMap.set(normalizedEmail, {
+                    uid: data.userId || doc.id,
+                    email: normalizedEmail,
+                    name,
+                    state,
+                    onboardingCompleted: false,
+                    lastActive: new Date()
+                });
+            }
+        } else if (data.userId) {
+            userIdsToResolve.push(data.userId);
+        }
+    };
+
+    coopSnap.docs.forEach((d: any) => processDoc(d));
+    acadSnap.docs.forEach((d: any) => processDoc(d, true));
+
+    if (userIdsToResolve.length > 0) {
+        const uniqueIds = Array.from(new Set(userIdsToResolve));
+        for (let i = 0; i < uniqueIds.length; i += 100) {
+            const chunk = uniqueIds.slice(i, i + 100);
+            const snaps = await db.getAll(...chunk.map(id => db.collection(COLLECTIONS.USERS).doc(id)));
+            snaps.forEach((userSnap: any) => {
+                if (userSnap.exists) {
+                    const u = userSnap.data();
+                    const rawEmail = u?.email || u?.userEmail;
+                    if (rawEmail) {
+                        const normalizedEmail = rawEmail.toLowerCase().trim();
+                        if (!emailMap.has(normalizedEmail)) {
+                            emailMap.set(normalizedEmail, {
+                                uid: userSnap.id,
+                                email: normalizedEmail,
+                                name: u?.fullName || u?.name || "User",
+                                state: u?.state || u?.stateOfOrigin || u?.address?.state || "Unknown",
+                                onboardingCompleted: false,
+                                lastActive: new Date()
+                            });
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    const uniqueList = Array.from(emailMap.values());
+    logger.info(`[BroadcastLogic] unpaid applicants: coop=${coopSnap.size}, acad=${acadSnap.size}, unique emails: ${uniqueList.length}`);
+
+    return {
+        success: true as const,
+        error: null,
+        data: {
+            recipients: uniqueList,
+            count: uniqueList.length,
+            originalDocCount: coopSnap.size + acadSnap.size,
+            moduleStats,
+        },
+    };
+}
+
 
 
 /**
@@ -237,7 +392,15 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             return getSellerBroadcastList(filters);
         }
 
+        // --- DEDICATED ABANDONED / FAILED TRANSACTIONS PATH ---
+        if (filters?.audience === "abandoned_failed_transactions") {
+            return getAbandonedFailedBroadcastList(filters);
+        }
 
+        // --- DEDICATED UNPAID APPLICANTS PATH ---
+        if (filters?.audience === "unpaid_applicants") {
+            return getUnpaidApplicantsBroadcastList(filters);
+        }
 
         // Targeted projection to minimize bandwidth
         const query = db.collection(COLLECTIONS.USERS)
