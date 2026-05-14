@@ -191,115 +191,7 @@ async function getSellerBroadcastList(filters?: BroadcastFilters) {
     };
 }
 
-/**
- * Resolves buyers/marketplace broadcast list using the same roles query as the Admin Buyers page.
- * Source of truth: USERS collection filtered by roles containing marketplace-related values.
- */
-async function getMarketplaceBroadcastList(filters?: BroadcastFilters) {
-    const audience = filters?.audience; // "buyers" | "marketplace_onboarded"
 
-    // Mirror the exact query used by getMarketplaceUsersAction in admin.ts
-    const snap = await db.collection(COLLECTIONS.USERS)
-        .where("roles", "array-contains-any", ["marketplace_buyer", "buyer", "seller", "marketplace_seller"])
-        .select("email", "userEmail", "fullName", "firstName", "roles", "serviceRegistrations", "state", "stateOfOrigin", "address", "verificationProfile", "onboardingCompleted", "updatedAt", "createdAt", "marketplaceAccountType", "status")
-        .get();
-
-    const emailMap = new Map<string, Recipient>();
-    const missingEmailUserIds: string[] = [];
-    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
-
-    snap.docs.forEach(doc => {
-        const d = doc.data();
-        const marketplaceReg = (d.serviceRegistrations || {} as any).marketplace;
-        const dbAccountType = marketplaceReg?.accountType;
-        const hasSellerRole = (d.roles || []).some((r: string) => r === "seller" || r === "marketplace_seller");
-        const hasBuyerRole = (d.roles || []).some((r: string) => r === "buyer" || r === "marketplace_buyer");
-
-        // Compute buyerRole category
-        let buyerRole: "buyer_only" | "seller_only" | "both" = "buyer_only";
-        if (dbAccountType === "seller") buyerRole = "seller_only";
-        else if (dbAccountType === "both") buyerRole = "both";
-        else if (hasSellerRole && hasBuyerRole) buyerRole = "both";
-        else if (hasSellerRole) buyerRole = "seller_only";
-
-        // Apply audience filter
-        let matchesAudience = false;
-        if (audience === "marketplace_onboarded") {
-            matchesAudience = true; // all marketplace-registered users
-        } else if (audience === "buyers") {
-            matchesAudience = buyerRole === "buyer_only" || buyerRole === "both";
-        }
-        if (!matchesAudience) return;
-
-        moduleStats.total++;
-        const status = marketplaceReg?.status || (d.status === "active" ? "approved" : "pending");
-        if (status === "approved" || status === "active") moduleStats.approved++;
-        else if (status === "pending") moduleStats.pending++;
-        else if (status === "rejected") moduleStats.rejected++;
-        else if (status === "suspended") moduleStats.suspended++;
-        else moduleStats.approved++; // default to approved for roles-based users
-
-        const rawEmail = d.email || d.userEmail;
-        if (!rawEmail) {
-            missingEmailUserIds.push(doc.id);
-            return;
-        }
-        const normalizedEmail = rawEmail.toLowerCase().trim();
-        if (emailMap.has(normalizedEmail)) return;
-
-        const lastActiveRaw = d.updatedAt || d.createdAt;
-        emailMap.set(normalizedEmail, {
-            uid: doc.id,
-            email: normalizedEmail,
-            name: d.fullName || d.firstName || "Member",
-            state: d.state || d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
-            onboardingCompleted: d.onboardingCompleted || false,
-            lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
-        });
-    });
-
-    // Firebase Auth fallback for users with no email in USERS doc
-    if (missingEmailUserIds.length > 0) {
-        logger.info(`[BroadcastLogic][Marketplace] Auth fallback for ${missingEmailUserIds.length} users...`);
-        const { getAuth } = await import("firebase-admin/auth");
-        const auth = getAuth();
-        for (let i = 0; i < missingEmailUserIds.length; i += 100) {
-            const chunk = missingEmailUserIds.slice(i, i + 100);
-            try {
-                const result = await auth.getUsers(chunk.map(uid => ({ uid })));
-                result.users.forEach(authUser => {
-                    if (!authUser.email) return;
-                    const normalizedEmail = authUser.email.toLowerCase().trim();
-                    if (emailMap.has(normalizedEmail)) return;
-                    emailMap.set(normalizedEmail, {
-                        uid: authUser.uid,
-                        email: normalizedEmail,
-                        name: authUser.displayName || "Member",
-                        state: "Unknown",
-                        onboardingCompleted: false,
-                        lastActive: new Date(),
-                    });
-                });
-            } catch (authErr) {
-                logger.error("[BroadcastLogic][Marketplace] Auth fallback error:", authErr);
-            }
-        }
-    }
-
-    const uniqueList = Array.from(emailMap.values());
-    logger.info(`[BroadcastLogic][Marketplace][${audience}] total roles-matched: ${snap.size}, unique emails: ${uniqueList.length}`);
-
-    return {
-        success: true as const,
-        error: null,
-        data: {
-            recipients: uniqueList,
-            count: uniqueList.length,
-            originalDocCount: snap.size,
-            moduleStats,
-        },
-    };
-}
 
 /**
  * Core logic for generating broadcast lists.
@@ -308,6 +200,33 @@ async function getMarketplaceBroadcastList(filters?: BroadcastFilters) {
 export async function getCleanBroadcastList(filters?: BroadcastFilters) {
     try {
         logger.info(`[BroadcastLogic] Generating clean list using stream (Audience: ${filters?.audience || 'all'})...`);
+
+        // --- DEDICATED CSV UPLOAD PATH ---
+        if (filters?.audience === "csv_upload") {
+            if (!filters.csvEmails || filters.csvEmails.length === 0) {
+                return { success: false as const, error: "No emails provided in CSV upload.", data: null };
+            }
+            const uniqueEmails = Array.from(new Set(filters.csvEmails.map(e => e.toLowerCase().trim())));
+            const recipients = uniqueEmails.map(email => ({
+                uid: email,
+                email: email,
+                name: "Member",
+                state: "Unknown",
+                onboardingCompleted: false,
+                lastActive: new Date()
+            }));
+
+            return {
+                success: true as const,
+                error: null,
+                data: {
+                    recipients,
+                    count: recipients.length,
+                    originalDocCount: filters.csvEmails.length,
+                    moduleStats: { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 }
+                }
+            };
+        }
 
         // --- DEDICATED SELLER PATH (Source of Truth: seller_verifications collection) ---
         if (
@@ -318,10 +237,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             return getSellerBroadcastList(filters);
         }
 
-        // --- DEDICATED BUYER / MARKETPLACE PATH (Source of Truth: roles array in USERS) ---
-        if (filters?.audience === "buyers" || filters?.audience === "marketplace_onboarded") {
-            return getMarketplaceBroadcastList(filters);
-        }
+
 
         // Targeted projection to minimize bandwidth
         const query = db.collection(COLLECTIONS.USERS)
@@ -344,12 +260,12 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 "sellerVerificationStatus",
                 "status",
                 "isSeller"
-            )
-            .orderBy("updatedAt", "desc");
+            );
 
         const emailMap = new Map<string, Recipient>();
         let totalScanned = 0;
         let matchedAudienceCount = 0;
+        const missingEmailUserIds: { uid: string; data: any }[] = [];
 
         const moduleStats = {
             total: 0,
@@ -366,11 +282,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                     totalScanned++;
                     const data = doc.data();
                     
-                    // 1. Extract and normalize email
-                    const rawEmail = data.email || data.userEmail;
-                    if (!rawEmail) return;
-                    
-                    const normalizedEmail = rawEmail.toLowerCase().trim();
+                    // Delay email extraction until matchesAudience is confirmed
 
                     // 2. Apply Date Range Filter if present
                     if (filters?.startDate || filters?.endDate) {
@@ -457,12 +369,23 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                                 matchesAudience = Object.values(regs).some((r: any) => r.status === "pending" || r.status === "submitted");
                             } else if (filters.audience === "unpaid_applicants") {
                                 matchesAudience = Object.values(regs).some((r: any) => r.paymentStatus === "pending" || r.paymentStatus === "failed");
+                            } else if (filters.audience === "abandoned_failed_transactions") {
+                                matchesAudience = Object.values(regs).some((r: any) => r.paymentStatus === "failed" || r.paymentStatus === "abandoned");
                             }
                         }
                     }
 
                     if (matchesAudience) {
                         matchedAudienceCount++;
+                        
+                        // Handle missing email fallback
+                        const rawEmail = data.email || data.userEmail;
+                        if (!rawEmail) {
+                            missingEmailUserIds.push({ uid: doc.id, data });
+                            return;
+                        }
+                        
+                        const normalizedEmail = rawEmail.toLowerCase().trim();
                         
                         // 4. Deduplication
                         if (!emailMap.has(normalizedEmail)) {
@@ -481,6 +404,38 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 .on("end", resolve)
                 .on("error", reject);
         });
+
+        // 5. Firebase Auth fallback for users with no email in USERS doc
+        if (missingEmailUserIds.length > 0) {
+            logger.info(`[BroadcastLogic] Falling back to Firebase Auth for ${missingEmailUserIds.length} users with no USERS email...`);
+            const { getAuth } = await import("firebase-admin/auth");
+            const auth = getAuth();
+            for (let i = 0; i < missingEmailUserIds.length; i += 100) {
+                const chunk = missingEmailUserIds.slice(i, i + 100);
+                try {
+                    const result = await auth.getUsers(chunk.map(u => ({ uid: u.uid })));
+                    result.users.forEach(authUser => {
+                        if (!authUser.email) return;
+                        const normalizedEmail = authUser.email.toLowerCase().trim();
+                        if (emailMap.has(normalizedEmail)) return;
+                        
+                        const data = chunk.find(c => c.uid === authUser.uid)?.data || {};
+                        const lastActiveRaw = data.updatedAt || data.createdAt;
+                        
+                        emailMap.set(normalizedEmail, {
+                            uid: authUser.uid,
+                            email: normalizedEmail,
+                            name: authUser.displayName || data.fullName || data.firstName || "Member",
+                            state: data.state || data.stateOfOrigin || data.address?.state || data.verificationProfile?.address?.state || "Unknown",
+                            onboardingCompleted: data.onboardingCompleted || false,
+                            lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
+                        });
+                    });
+                } catch (authErr) {
+                    logger.error("[BroadcastLogic] Auth fallback error:", authErr);
+                }
+            }
+        }
 
         logger.info(`[BroadcastLogic] Clean Sweep complete. Scanned: ${totalScanned}, Matched: ${matchedAudienceCount}, Unique: ${emailMap.size}`);
 

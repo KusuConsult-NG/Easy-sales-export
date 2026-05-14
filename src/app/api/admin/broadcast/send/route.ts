@@ -77,53 +77,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, sent: 0, failed: 0, error: "No recipients matched the selected filters." });
         }
 
-        // Filter bounced emails
-        const bouncedSnap = await db.collection(COLLECTIONS.BOUNCED_EMAILS).get();
-        const bouncedSet = new Set(bouncedSnap.docs.map(doc => doc.id.toLowerCase()));
-        const validRecipients = allRecipients.filter(r => {
-            const norm = r.email.toLowerCase().replace(/\//g, "_");
-            return !bouncedSet.has(norm) && !bouncedSet.has(r.email.toLowerCase());
-        });
-
-        if (validRecipients.length === 0) {
-            return NextResponse.json({ success: false, sent: 0, failed: 0, error: "All matched recipients have previously bounced." });
-        }
-
-        let successCount = 0;
-        let failCount = 0;
-        const BATCH = 100;
-
-        for (let i = 0; i < validRecipients.length; i += BATCH) {
-            const chunk = validRecipients.slice(i, i + BATCH);
-            const payload = chunk.map(r => ({
-                to: r.email,
-                subject,
-                message: buildEmailHtml(subject, body, r.email),
-                metadata: { type: "admin_broadcast" },
-                headers: {
-                    "List-Unsubscribe": `<mailto:unsubscribe@easysalesexport.com?subject=unsubscribe%20${encodeURIComponent(r.email)}>`,
-                    "Precedence": "bulk"
-                }
-            }));
-
-            const res = await sendBatchEmailNotifications(payload);
-            if (res.success) {
-                successCount += chunk.length;
-            } else {
-                failCount += chunk.length;
-                logger.error("[Broadcast API] Batch failure:", res.error);
-            }
-
-            if (i + BATCH < validRecipients.length) await sleep(500);
-        }
-
         // Omit csvEmails to avoid huge Firestore documents
         const logFilters = { ...filters };
         if (logFilters.csvEmails) {
             delete logFilters.csvEmails;
         }
 
-        // Log to Firestore
+        // Log to Firestore immediately to create the record
         const logRef = await db.collection(COLLECTIONS.BROADCAST_LOGS).add({
             subject,
             body,
@@ -133,17 +93,90 @@ export async function POST(req: NextRequest) {
             sentByName: userData?.fullName || userData?.name || "Admin",
             sentAt: FieldValue.serverTimestamp(),
             totalRecipients: allRecipients.length,
-            excludedBounced: allRecipients.length - validRecipients.length,
-            successCount,
-            failCount,
-            status: failCount === 0 ? "done" : successCount === 0 ? "partial" : "partial",
+            excludedBounced: 0,
+            successCount: 0,
+            failCount: 0,
+            status: "sending",
+        });
+
+        // Background Processing to avoid Railway Proxy Timeout (100s limit)
+        Promise.resolve().then(async () => {
+            try {
+                let successCount = 0;
+                let failCount = 0;
+                let excludedBounced = 0;
+                const BATCH = 100;
+
+                for (let i = 0; i < allRecipients.length; i += BATCH) {
+                    const chunk = allRecipients.slice(i, i + BATCH);
+
+                    // 1. Efficient Batched Bounce Check (Prevents OOM on large BOUNCED_EMAILS collection)
+                    const refs: FirebaseFirestore.DocumentReference[] = [];
+                    chunk.forEach(r => {
+                        refs.push(db.collection(COLLECTIONS.BOUNCED_EMAILS).doc(r.email.toLowerCase()));
+                        const norm = r.email.toLowerCase().replace(/\//g, "_");
+                        if (norm !== r.email.toLowerCase()) {
+                            refs.push(db.collection(COLLECTIONS.BOUNCED_EMAILS).doc(norm));
+                        }
+                    });
+
+                    const bounceDocs = await db.getAll(...refs);
+                    const bouncedIds = new Set(bounceDocs.filter(d => d.exists).map(d => d.id));
+
+                    const validChunk = chunk.filter(r => {
+                        const isBounced = bouncedIds.has(r.email.toLowerCase()) || bouncedIds.has(r.email.toLowerCase().replace(/\//g, "_"));
+                        if (isBounced) excludedBounced++;
+                        return !isBounced;
+                    });
+
+                    if (validChunk.length > 0) {
+                        const payload = validChunk.map(r => ({
+                            to: r.email,
+                            subject,
+                            message: buildEmailHtml(subject, body, r.email),
+                            metadata: { type: "admin_broadcast" },
+                            headers: {
+                                "List-Unsubscribe": `<mailto:unsubscribe@easysalesexport.com?subject=unsubscribe%20${encodeURIComponent(r.email)}>`,
+                                "Precedence": "bulk"
+                            }
+                        }));
+
+                        const res = await sendBatchEmailNotifications(payload);
+                        if (res.success) {
+                            successCount += validChunk.length;
+                        } else {
+                            failCount += validChunk.length;
+                            logger.error("[Broadcast API] Batch failure:", res.error);
+                        }
+                    }
+
+                    // Periodically update the Firestore log to show progress
+                    if (i > 0 && i % 1000 === 0) {
+                        await logRef.update({ successCount, failCount, excludedBounced });
+                    }
+
+                    if (i + BATCH < allRecipients.length) await sleep(500);
+                }
+
+                // Final completion state
+                await logRef.update({
+                    successCount,
+                    failCount,
+                    excludedBounced,
+                    status: failCount === 0 ? "done" : successCount === 0 ? "failed" : "partial"
+                });
+
+            } catch (err) {
+                logger.error("[Broadcast API] Background send error:", err);
+                await logRef.update({ status: "failed" });
+            }
         });
 
         return NextResponse.json({
             success: true,
-            sent: successCount,
-            failed: failCount,
-            total: validRecipients.length,
+            sent: allRecipients.length,
+            failed: 0,
+            total: allRecipients.length,
             logId: logRef.id,
         });
     } catch (error: any) {
