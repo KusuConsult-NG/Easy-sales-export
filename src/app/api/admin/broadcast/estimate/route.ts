@@ -13,15 +13,21 @@ export async function POST(req: NextRequest) {
         }
 
         const filters = await req.json();
-        const res = await previewBroadcastAction(filters);
+        const { getCleanBroadcastList } = await import("@/lib/broadcast-logic");
+        const listResult = await getCleanBroadcastList(filters);
 
-        if (!res.success) {
-            return NextResponse.json({ success: false, error: res.error }, { status: 500 });
+        if (!listResult.success || !listResult.data) {
+            return NextResponse.json({ success: false, error: listResult.error || "Failed to estimate recipients" }, { status: 500 });
         }
 
         return NextResponse.json({
             success: true,
-            data: res.data
+            data: {
+                count: listResult.data.count,
+                totalMatches: listResult.data.originalDocCount,
+                sample: listResult.data.recipients.slice(0, 5).map(r => ({ name: r.name, email: r.email })),
+                moduleStats: listResult.data.moduleStats
+            }
         });
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });

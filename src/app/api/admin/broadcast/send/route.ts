@@ -71,10 +71,13 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
         }
 
-        // Collect recipients using centralized stream-safe logic
-        const allRecipients = await collectRecipients(filters);
+        // Collect recipients using centralized stream-safe logic directly
+        const { getCleanBroadcastList } = await import("@/lib/broadcast-logic");
+        const listResult = await getCleanBroadcastList(filters);
+        const allRecipients = listResult.success && listResult.data?.recipients ? listResult.data.recipients : [];
+        
         if (allRecipients.length === 0) {
-            return NextResponse.json({ success: false, sent: 0, failed: 0, error: "No recipients matched the selected filters." });
+            return NextResponse.json({ success: false, sent: 0, failed: 0, error: listResult.error || "No recipients matched the selected filters." });
         }
 
         // Omit csvEmails to avoid huge Firestore documents
