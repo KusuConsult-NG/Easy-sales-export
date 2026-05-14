@@ -889,10 +889,19 @@ async function _getAllExportRequestsAction(
 
         const nextCursorId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
+        let serializedData: any[];
+        try {
+            serializedData = JSON.parse(JSON.stringify(exportsList));
+        } catch (e: any) {
+            const msg = e instanceof Error ? e.message : "Unknown serialization error";
+            logger.error(`[Serialization Test] Failed to stringify export records. Reason: ${msg}`);
+            return { error: "Failed to serialize export records: " + msg, success: false as const, data: null };
+        }
+
         return {
             error: null,
             success: true as const,
-            data: exportsList,
+            data: serializedData,
             lastDocId: nextCursorId,
             hasMore: snapshot.docs.length >= limit,
         };
@@ -1484,10 +1493,13 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         const offset = page * pageSize;
         const pagedUsers = filteredUsers.slice(offset, offset + pageSize);
         
+        // Strip Firestore class instances (e.g. Timestamps in serviceRegistrations) to avoid Next.js Server Action serialization errors
+        const serializedUsers = JSON.parse(JSON.stringify(pagedUsers));
+
         return {
             error: null,
             success: true as const,
-            data: pagedUsers,
+            data: serializedUsers,
             lastDocId: String(page + 1),
             hasMore: offset + pageSize < filteredUsers.length,
             meta: {

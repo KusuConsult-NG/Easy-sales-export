@@ -85,7 +85,7 @@ const authMiddleware = auth((req: any) => {
     return response;
 });
 
-export default async function middleware(req: any, event: any) {
+export default async function proxy(req: any, event: any) {
     const res = await authMiddleware(req, event);
     
     // ── 4. Zombie Session Recovery ───────────────────────────────────────────

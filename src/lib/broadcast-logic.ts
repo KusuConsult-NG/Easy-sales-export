@@ -140,7 +140,7 @@ async function getSellerBroadcastList(filters?: BroadcastFilters) {
                 uid: userDoc.id,
                 email: normalizedEmail,
                 name: d.fullName || d.firstName || "Member",
-                state: d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
+                state: d.state || d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
                 onboardingCompleted: d.onboardingCompleted || false,
                 lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
             });
@@ -201,7 +201,7 @@ async function getMarketplaceBroadcastList(filters?: BroadcastFilters) {
     // Mirror the exact query used by getMarketplaceUsersAction in admin.ts
     const snap = await db.collection(COLLECTIONS.USERS)
         .where("roles", "array-contains-any", ["marketplace_buyer", "buyer", "seller", "marketplace_seller"])
-        .select("email", "userEmail", "fullName", "firstName", "roles", "serviceRegistrations", "stateOfOrigin", "address", "verificationProfile", "onboardingCompleted", "updatedAt", "createdAt", "marketplaceAccountType", "status")
+        .select("email", "userEmail", "fullName", "firstName", "roles", "serviceRegistrations", "state", "stateOfOrigin", "address", "verificationProfile", "onboardingCompleted", "updatedAt", "createdAt", "marketplaceAccountType", "status")
         .get();
 
     const emailMap = new Map<string, Recipient>();
@@ -252,7 +252,7 @@ async function getMarketplaceBroadcastList(filters?: BroadcastFilters) {
             uid: doc.id,
             email: normalizedEmail,
             name: d.fullName || d.firstName || "Member",
-            state: d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
+            state: d.state || d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
             onboardingCompleted: d.onboardingCompleted || false,
             lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
         });
@@ -330,6 +330,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 "userEmail",
                 "fullName",
                 "firstName",
+                "state",
                 "stateOfOrigin",
                 "address",
                 "onboardingCompleted",
@@ -341,6 +342,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                 "marketplaceAccountType",
                 "roles",
                 "sellerVerificationStatus",
+                "status",
                 "isSeller"
             )
             .orderBy("updatedAt", "desc");
@@ -469,7 +471,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                                 uid: doc.id,
                                 email: normalizedEmail,
                                 name: data.fullName || data.firstName || 'Member',
-                                state: data.stateOfOrigin || data.address?.state || data.verificationProfile?.address?.state || 'Unknown',
+                                state: data.state || data.stateOfOrigin || data.address?.state || data.verificationProfile?.address?.state || 'Unknown',
                                 onboardingCompleted: data.onboardingCompleted || false,
                                 lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date())
                             });

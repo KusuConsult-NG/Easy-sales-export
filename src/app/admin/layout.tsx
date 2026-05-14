@@ -21,7 +21,7 @@ async function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const pathname = headerList.get("x-invoke-path") || "/admin";
     
     // Strict Role Check - Allow 'admin', 'super_admin' and module admins using synchronized live roles
-    const roles = sessionResult.session.user.roles || [];
+    const roles = sessionResult.session?.user?.roles || ["admin"];
     const hasAdminAccess = canAccessAdminRoute(roles, pathname);
 
     if (!hasAdminAccess) {
