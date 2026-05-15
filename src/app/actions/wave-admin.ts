@@ -767,18 +767,33 @@ async function _getStandardWaveApplicationsAction(options: {
             });
         }
 
-        const lastDocId = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
-        const hasMore = snapshot.docs.length === fetchLimit;
+        const limit = options.limit || 50;
+        let page = 0;
+        if ((options as any).page !== undefined) {
+            page = Number((options as any).page);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = options.search ? finalForms.slice(offset, offset + limit) : finalForms;
+        const _hasMore = options.search 
+            ? (offset + limit < finalForms.length) 
+            : (snapshot.docs.length === fetchLimit);
+            
+        const nextCursor = options.search 
+            ? (_hasMore ? String(page + 1) : null)
+            : (_hasMore ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
 
         return { 
             error: null, success: true as const, 
-            data: finalForms,
-            lastDocId,
-            hasMore,
+            data: paged,
+            lastDocId: nextCursor,
+            hasMore: _hasMore,
             meta: {
                 totalFetched: applications.length,
                 totalCount: totalCount,
-                hasMore
+                hasMore: _hasMore
             }
         };
     } catch (error) {
@@ -910,17 +925,32 @@ async function _getStandardWaveWithdrawalsAction(options: {
             });
         }
 
+        const limit = options.limit || 25;
+        let page = 0;
+        if ((options as any).page !== undefined) {
+            page = Number((options as any).page);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
 
-        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+        const offset = page * limit;
+        const paged = options.search ? enrichedWithdrawals.slice(offset, offset + limit) : enrichedWithdrawals;
+        const _hasMore = options.search 
+            ? (offset + limit < enrichedWithdrawals.length) 
+            : hasMore;
+            
+        const nextCursor = options.search 
+            ? (_hasMore ? String(page + 1) : null)
+            : (_hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined);
 
         return { 
             error: null, success: true as const, 
-            data: enrichedWithdrawals,
+            data: paged,
             lastDocId: nextCursor,
-            hasMore: !!nextCursor,
+            hasMore: _hasMore,
             meta: {
                 totalFetched: enrichedWithdrawals.length,
-                hasMore: !!nextCursor
+                hasMore: _hasMore
             }
         };
     } catch (error) {

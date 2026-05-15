@@ -284,12 +284,28 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                     app.data?.lastName,
                     app.data?.fullName,
                     app.data?.stateOfOrigin
-                ].filter(Boolean).join(" ").toLowerCase();
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }
 
-        const lastDoc = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1] : null;
+        const limit = options.limit || 50;
+        let page = 0;
+        if ((options as any).page !== undefined) {
+            page = Number((options as any).page);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = options.search ? finalApplications.slice(offset, offset + limit) : finalApplications;
+        const hasMore = options.search 
+            ? (offset + limit < finalApplications.length) 
+            : (snapshot.docs.length === fetchLimit);
+            
+        const nextCursor = options.search 
+            ? (hasMore ? String(page + 1) : null)
+            : (hasMore ? snapshot.docs[snapshot.docs.length - 1].id : null);
 
         await createAdminAuditLog({
             action: "data_access",
@@ -303,11 +319,11 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         return { 
             success: true, 
             error: null, 
-            data: finalApplications, 
+            data: paged, 
             meta: {
                 totalFetched: finalApplications.length, 
-                hasMore: snapshot.docs.length === fetchLimit,
-                lastDocId: lastDoc?.id || null
+                hasMore: hasMore,
+                lastDocId: nextCursor
             }
         };
     } catch (error: any) {
