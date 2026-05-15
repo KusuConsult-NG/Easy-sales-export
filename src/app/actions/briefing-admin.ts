@@ -179,11 +179,12 @@ export async function getBriefingRegistrationsAction(
         });
 
         // --- Client-side free-text search (Firestore has no full-text search) ---
-        if (searchQuery) { data = data.filter(r =>
-                r.fullName?.toLowerCase().includes(searchQuery!) ||
-                r.email?.toLowerCase().includes(searchQuery!) ||
-                r.phoneNumber?.toLowerCase().includes(searchQuery!)
-            );
+        if (searchQuery) { 
+            const q = searchQuery.toLowerCase().trim();
+            data = data.filter((r: any) => {
+                const searchString = [r.fullName, r.email, r.phoneNumber].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(q);
+            });
         }
 
         const nextCursor = hasMore && docs.length > 0

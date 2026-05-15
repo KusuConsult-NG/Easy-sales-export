@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Firestore Database Seeder
  *

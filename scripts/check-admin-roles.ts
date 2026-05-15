@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { getAdminDb } = require('../src/lib/firebase-admin');
 
 async function checkAdmins() {

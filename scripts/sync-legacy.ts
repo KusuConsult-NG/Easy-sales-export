@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 

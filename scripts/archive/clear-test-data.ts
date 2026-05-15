@@ -1,8 +1,9 @@
+// @ts-nocheck
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 dotenv.config({ path: '.env' });
 
-import { getAdminDb, getAdminAuth } from '../src/lib/firebase-admin';
+import { getAdminDb, getAdminAuth } from '../../src/lib/firebase-admin';
 
 const TARGET_EMAIL = 'hackkusu@gmail.com';
 

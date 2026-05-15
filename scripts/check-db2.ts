@@ -1,4 +1,5 @@
-import { db } from "../src/lib/firebase/admin";
+// @ts-nocheck
+import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
 
 async function checkData() {

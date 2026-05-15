@@ -143,15 +143,23 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         }));
 
         // Client-side search if specified
-        if (options.search) { const s = options.search.toLowerCase();
-            transactions = transactions.filter((t: any) => 
-                t.buyerEmail?.toLowerCase().includes(s) || 
-                t.sellerEmail?.toLowerCase().includes(s) || 
-                t.productName?.toLowerCase().includes(s) ||
-                t.paymentReference?.toLowerCase().includes(s) ||
-                t.buyerDetails?.email?.toLowerCase().includes(s) ||
-                t.sellerDetails?.email?.toLowerCase().includes(s)
-            );
+        if (options.search) { 
+            const s = options.search.toLowerCase().trim();
+            transactions = transactions.filter((t: any) => {
+                const searchString = [
+                    t.buyerEmail,
+                    t.sellerEmail,
+                    t.productName,
+                    t.paymentReference,
+                    t.buyerDetails?.email,
+                    t.sellerDetails?.email,
+                    t.buyerDetails?.phoneNumber,
+                    t.sellerDetails?.phoneNumber,
+                    t.buyerDetails?.firstName,
+                    t.sellerDetails?.firstName
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
         }
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;

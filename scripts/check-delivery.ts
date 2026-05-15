@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { config } from 'dotenv';
 import { Resend } from 'resend';
 

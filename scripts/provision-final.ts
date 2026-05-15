@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";

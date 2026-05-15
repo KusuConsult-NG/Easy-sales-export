@@ -2152,12 +2152,18 @@ async function _getStandardExportApplicationsAction(options: {
         // Client-side search application if specified
         let finalForms = standardForms;
         if (options.search) {
-            const s = options.search.toLowerCase();
-            finalForms = standardForms.filter((f: any) => 
-                f.user.name?.toLowerCase().includes(s) || 
-                f.user.email?.toLowerCase().includes(s) || 
-                f.user.phone?.includes(s)
-            );
+            const s = options.search.toLowerCase().trim();
+            finalForms = standardForms.filter((f: any) => {
+                const searchString = [
+                    f.user?.name,
+                    f.user?.email,
+                    f.user?.phone,
+                    f.data?.firstName,
+                    f.data?.lastName,
+                    f.data?.phone
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
         }
 
         return { 
@@ -3376,11 +3382,18 @@ async function _getMarketplaceUsersAction(options: {
         }
 
         if (options.search) {
-            const s = options.search.toLowerCase();
-            users = users.filter((u: any) => 
-                u.name?.toLowerCase().includes(s) || 
-                u.email?.toLowerCase().includes(s)
-            );
+            const s = options.search.toLowerCase().trim();
+            users = users.filter((u: any) => {
+                const searchString = [
+                    u.name,
+                    u.email,
+                    u.phone,
+                    u.phoneNumber,
+                    u.firstName,
+                    u.lastName
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
         }
 
         // Apply memory pagination

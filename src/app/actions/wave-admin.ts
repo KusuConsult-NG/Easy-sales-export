@@ -762,7 +762,7 @@ async function _getStandardWaveApplicationsAction(options: {
                     f.data?.stateOfOrigin,
                     f.data?.nin,
                     f.data?.bvn
-                ].filter(Boolean).join(" ").toLowerCase();
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }
@@ -905,7 +905,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
                     w.reference,
                     w.status,
                     w.type
-                ].filter(Boolean).join(" ").toLowerCase();
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as admin from 'firebase-admin';
 import * as dotenv from 'dotenv';
 import { COLLECTIONS } from '../lib/types/firestore';

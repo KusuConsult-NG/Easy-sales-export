@@ -112,12 +112,11 @@ async function _getFarmNationRegistrantsAction(options: {
         }
 
         if (options.search) {
-            const q = options.search.toLowerCase();
-            users = users.filter(u =>
-                u.name?.toLowerCase().includes(q) ||
-                u.email?.toLowerCase().includes(q) ||
-                u.phone?.includes(q)
-            );
+            const q = options.search.toLowerCase().trim();
+            users = users.filter((u: any) => {
+                const searchString = [u.name, u.email, u.phone].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(q);
+            });
         }
 
         users.sort((a, b) => {
@@ -477,12 +476,13 @@ async function _getAdminLandVerificationsAction(options: {
         }));
 
         if (options.search) {
-            const q = options.search.toLowerCase();
-            verifications = verifications.filter(v => 
-                v.ownerName?.toLowerCase().includes(q) ||
-                v.name?.toLowerCase().includes(q) ||
-                v.state?.toLowerCase().includes(q)
-            );
+            const q = options.search.toLowerCase().trim();
+            verifications = verifications.filter((v: any) => {
+                const searchString = [
+                    v.ownerName, v.name, v.state, v.lga, v.size, v.pricePerUnit
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(q);
+            });
         }
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;

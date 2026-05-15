@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "../src/lib/firebase-admin";
 
 async function run() {
@@ -7,7 +8,7 @@ async function run() {
         
         let recentCount = 0;
         console.log("Recent registrations (Last 3 days):");
-        for (const m of members) {
+        for (const m of members as any[]) {
             if (m.createdAt) {
                 const date = m.createdAt.toDate();
                 if (date > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)) {

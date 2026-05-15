@@ -13,7 +13,7 @@ async function main() {
             .where('action', '==', 'legacy_member_import')
             .get();
             
-        let count = snap.size;
+        const count = snap.size;
         console.log(`Found ${count} legacy_member_import logs.`);
         
         process.exit(0);

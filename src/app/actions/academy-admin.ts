@@ -472,7 +472,7 @@ async function _getAcademyEnrollmentsAction(options?: {
                     e.status,
                     e.userProfile?.name,
                     e.userProfile?.email
-                ].filter(Boolean).join(" ").toLowerCase();
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }
@@ -552,7 +552,7 @@ async function _getAcademyCoursesAction(options?: {
                     c.instructorName,
                     c.category,
                     c.level
-                ].filter(Boolean).join(" ").toLowerCase();
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }
@@ -936,7 +936,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                     f.data?.fullName,
                     f.data?.stateOfOrigin,
                     f.data?.phone
-                ].filter(Boolean).join(" ").toLowerCase();
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }

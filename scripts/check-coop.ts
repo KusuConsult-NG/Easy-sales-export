@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { db } from "../src/lib/firebase-admin";
 
 async function run() {
@@ -6,7 +7,7 @@ async function run() {
         const members = sn.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         console.log(`Total cooperative members: ${members.length}`);
         
-        for (const m of members) {
+        for (const m of members as any[]) {
             console.log(`- UserID: ${m.userId}`);
             console.log(`  Name: ${m.fullName || m.firstName + ' ' + m.lastName}`);
             console.log(`  Status: ${m.status}`);

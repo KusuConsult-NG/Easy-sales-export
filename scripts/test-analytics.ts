@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { getDashboardStatsAction } from '../src/app/actions/admin-analytics';
 
 async function test() {

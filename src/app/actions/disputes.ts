@@ -254,15 +254,19 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
             sellerDetails: d.sellerId ? userProfiles[d.sellerId] : null
         }));
 
-        if (options.search) { const q = options.search.toLowerCase();
-            disputes = disputes.filter(d => 
-                d.id?.toLowerCase().includes(q) ||
-                d.orderId?.toLowerCase().includes(q) ||
-                d.reason?.toLowerCase().includes(q) ||
-                d.description?.toLowerCase().includes(q) ||
-                d.buyerDetails?.email?.toLowerCase().includes(q) ||
-                d.sellerDetails?.email?.toLowerCase().includes(q)
-            );
+        if (options.search) { 
+            const q = options.search.toLowerCase().trim();
+            disputes = disputes.filter(d => {
+                const searchString = [
+                    d.id,
+                    d.orderId,
+                    d.reason,
+                    d.description,
+                    d.buyerDetails?.email,
+                    d.sellerDetails?.email
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(q);
+            });
         }
 
         const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;

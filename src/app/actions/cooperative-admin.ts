@@ -1294,12 +1294,18 @@ export async function getStandardCooperativeMembersAction(
         });
 
         if (search) {
-            const s = search.toLowerCase();
-            standardForms = standardForms.filter((f: any) => 
-                f.user.name?.toLowerCase().includes(s) || 
-                f.user.email?.toLowerCase().includes(s) || 
-                f.user.phone?.includes(s)
-            );
+            const s = search.toLowerCase().trim();
+            standardForms = standardForms.filter((f: any) => {
+                const searchString = [
+                    f.user?.name,
+                    f.user?.email,
+                    f.user?.phone,
+                    f.data?.firstName,
+                    f.data?.lastName,
+                    f.data?.phone
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
         }
 
         return paginatedOk(standardForms, nextCursorId);

@@ -750,11 +750,11 @@ async function _getMarketplaceProductsAction(params: {
         });
 
         if (search) { 
-            const searchLower = search.toLowerCase();
-            products = products.filter((p) => 
-                p.title.toLowerCase().includes(searchLower) || 
-                p.description.toLowerCase().includes(searchLower)
-            );
+            const searchLower = search.toLowerCase().trim();
+            products = products.filter((p) => {
+                const searchString = [p.title, p.description].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(searchLower);
+            });
         }
 
         return { error: null, success: true as const, data: { products } };
@@ -996,14 +996,16 @@ async function _getSellerOrdersAction(options: { limit?: number;
 
         // Server-assisted search
         if (search) { 
-            const q = search.toLowerCase();
+            const q = search.toLowerCase().trim();
             orders = orders.filter((o: any) => {
-                return (
-                    o.id?.toLowerCase().includes(q) ||
-                    o.buyerName?.toLowerCase().includes(q) ||
-                    o.buyerEmail?.toLowerCase().includes(q) ||
-                    o.items?.some((item: any) => item.title?.toLowerCase().includes(q))
-                );
+                const itemTitles = o.items?.map((item: any) => item.title).filter(Boolean) || [];
+                const searchString = [
+                    o.id,
+                    o.buyerName,
+                    o.buyerEmail,
+                    ...itemTitles
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(q);
             }).slice(0, limit);
         }
 
