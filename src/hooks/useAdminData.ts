@@ -36,14 +36,24 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     // Cursor stack: cursors[i] is the lastDocId to use when fetching page i+1.
     const cursorStack = useRef<(string | undefined)[]>([undefined]);
 
-    // Keep a ref to the latest values to avoid stale closures in fetchData.
-    const latestRef = useRef({ search, filters, fetchAction, limit });
-    useEffect(() => {
-        latestRef.current = { search, filters, fetchAction, limit };
-    });
-
     // Track the latest fetch request to prevent race conditions
     const fetchIdRef = useRef(0);
+
+    // Use a local debounce to prevent rapid firing while typing
+    const [debouncedSearch, setDebouncedSearch] = useState(search);
+    
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    // Keep a ref to the latest values to avoid stale closures in fetchData.
+    const latestRef = useRef({ search: debouncedSearch, filters, fetchAction, limit });
+    useEffect(() => {
+        latestRef.current = { search: debouncedSearch, filters, fetchAction, limit };
+    });
 
     const fetchData = useCallback(async (page: number, resetCursors = false) => {
         const currentFetchId = ++fetchIdRef.current;
@@ -137,7 +147,7 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
 
 
     // Serialize search/filters so the effect correctly detects deep changes.
-    const searchKey = search;
+    const searchKey = debouncedSearch;
     const filtersKey = JSON.stringify(filters);
     const depsKey = JSON.stringify(dependencies);
 

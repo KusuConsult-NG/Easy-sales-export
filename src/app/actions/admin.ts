@@ -3343,16 +3343,31 @@ async function _getMarketplaceUsersAction(options: {
 
         q = q.orderBy("createdAt", sortDirection);
 
-        // startAfter is removed in favor of memory pagination
-
         // Fetch ALL matching marketplace users (approx 600+) for accurate memory filtering
-        // We do not use q.limit() here because we filter by role *after* fetching.
-        // If we limited to 50, a seller_only filter might result in 4 users out of the 50.
         const snapshot = await q.get();
 
-        // Marketplace filter
-        let users = snapshot.docs.map(doc => {
-            const data = doc.data();
+        let filteredDocs = snapshot.docs;
+
+        if (options.search) {
+            const searchLower = options.search.toLowerCase().trim();
+            filteredDocs = filteredDocs.filter(doc => {
+                const data = doc.data() as any;
+                const searchString = [
+                    data.name,
+                    data.fullName,
+                    data.firstName,
+                    data.lastName,
+                    data.email,
+                    data.phone,
+                    data.phoneNumber,
+                    data.businessName
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(searchLower);
+            });
+        }
+
+        let users = filteredDocs.map(doc => {
+            const data = doc.data() as any;
             const marketplaceData = data.serviceRegistrations?.marketplace;
             const dbAccountType = marketplaceData?.accountType;
             // Legacy fallback
@@ -3405,20 +3420,6 @@ async function _getMarketplaceUsersAction(options: {
             });
         }
 
-        if (options.search) {
-            const s = options.search.toLowerCase().trim();
-            users = users.filter((u: any) => {
-                const searchString = [
-                    u.name,
-                    u.email,
-                    u.phone,
-                    u.phoneNumber,
-                    u.firstName,
-                    u.lastName
-                ].filter(Boolean).map(String).join(" ").toLowerCase();
-                return searchString.includes(s);
-            });
-        }
 
         // Apply memory pagination
         // The UI might pass lastDocId as a stringified page index due to useAdminData's cursor logic
