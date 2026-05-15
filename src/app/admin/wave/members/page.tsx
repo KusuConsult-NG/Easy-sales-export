@@ -35,12 +35,12 @@ interface WaveMember {
 
 export default function AdminWaveMembersPage() {
     const { showToast } = useToast();
-    const [searchQuery, setSearchQuery] = useState("");
-
     const {
         data: members,
         loading: isLoading,
         error,
+        search: searchQuery,
+        setSearch: setSearchQuery,
         hasMore,
         onNextPage,
         onPrevPage,
@@ -52,7 +52,7 @@ export default function AdminWaveMembersPage() {
             const result = await getStandardWaveApplicationsAction({
                 status: "approved",
                 limit: opts.limit || 25,
-                search: searchQuery,
+                search: opts.search,
                 lastDocId: opts.lastDocId
             });
             
@@ -89,7 +89,6 @@ export default function AdminWaveMembersPage() {
             };
         },
         limit: 25,
-        dependencies: [searchQuery]
     });
 
     const [filtered, setFiltered] = useState<WaveMember[]>([]);

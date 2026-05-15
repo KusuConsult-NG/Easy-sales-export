@@ -366,7 +366,6 @@ export default function AdminAcademyApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
     const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-    const [search, setSearch] = useState("");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
@@ -390,14 +389,16 @@ export default function AdminAcademyApplicationsPage() {
         refresh: fetchData,
         onNextPage,
         onPrevPage,
-        pageIndex
+        pageIndex,
+        search,
+        setSearch,
     } = useAdminData<AcademyApplication>({
         fetchAction: async (opts) => {
             try {
                 const result = await getStandardAcademyApplicationsAction({
                     limit: opts.limit || 50,
                     lastDocId: opts.lastDocId,
-                    search: search.trim() ? search : undefined,
+                    search: opts.search?.trim() || undefined,
                     status: statusFilter === "all" ? undefined : statusFilter,
                     sortOrder: sortOrder,
                     dateFrom: dateRange.from || undefined,
@@ -461,7 +462,7 @@ export default function AdminAcademyApplicationsPage() {
             }
         },
         limit: 50,
-        dependencies: [statusFilter, search, sortOrder, dateRange]
+        dependencies: [statusFilter, sortOrder, dateRange]
     });
 
     async function handleApprove(id: string) {
