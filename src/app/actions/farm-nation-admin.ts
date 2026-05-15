@@ -80,7 +80,7 @@ async function _getFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
-        const pageSize = options.search ? 2000 : (options.limit || 20);
+        const pageSize = options.search ? 5000 : (options.limit || 20);
         const page = options.page ?? 0;
 
         // Note: This fetches a large set of users and filters in memory. 
@@ -170,7 +170,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const applicationsSortDirection = options.sortOrder || "desc";
 
         // 1. Query the dedicated applications collection (Authoritative Record)
@@ -399,7 +399,7 @@ async function _getAdminLandVerificationsAction(options: {
             return { success: false, error: "Unauthorized: Permission required", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).orderBy("createdAt", orderDirection);
 

@@ -964,7 +964,7 @@ async function _getSellerOrdersAction(options: { limit?: number;
         const userId = session.user.id;
         const { limit = 20, lastId, status, search } = options;
 
-        const fetchLimit = search ? Math.min(limit * 5, 100) : limit;
+        const fetchLimit = search ? 5000 : limit;
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
             .where("sellerIds", "array-contains", userId)

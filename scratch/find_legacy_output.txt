@@ -1,0 +1,140 @@
+Searching for yangedoris40@gmail.com...
+
+Collection: users - Found 3 records
+3e1006f8-98b9-4694-bb90-332181a980b3 => {
+  "firstName": "User",
+  "lastName": "",
+  "uid": "3e1006f8-98b9-4694-bb90-332181a980b3",
+  "createdAt": {
+    "_seconds": 1778576561,
+    "_nanoseconds": 837000000
+  },
+  "isVerified": true,
+  "roles": [
+    "general_user"
+  ],
+  "verified": true,
+  "fullName": "User",
+  "email": "yangedoris40@gmail.com",
+  "updatedAt": {
+    "_seconds": 1778576561,
+    "_nanoseconds": 837000000
+  }
+}
+b5f0943f-5a27-46d8-9cdf-fcd621f433a9 => {
+  "firstName": "User",
+  "lastName": "",
+  "uid": "b5f0943f-5a27-46d8-9cdf-fcd621f433a9",
+  "createdAt": {
+    "_seconds": 1778574450,
+    "_nanoseconds": 961000000
+  },
+  "isVerified": true,
+  "roles": [
+    "general_user"
+  ],
+  "verified": true,
+  "fullName": "User",
+  "email": "yangedoris40@gmail.com",
+  "updatedAt": {
+    "_seconds": 1778574450,
+    "_nanoseconds": 961000000
+  }
+}
+hvM2F6uLPmYvtjsP84XLBBLXh862 => {
+  "verified": true,
+  "_version": 0,
+  "status": "active",
+  "notifications": {
+    "email": true,
+    "push": false,
+    "sms": true
+  },
+  "gender": "other",
+  "lastName": "Doris Mrumun",
+  "address": {
+    "street": "Off Adi-Agor Road Gboko Hill new G.R.A",
+    "city": "N/A",
+    "state": "Benue",
+    "lga": "Logo",
+    "country": "Nigeria"
+  },
+  "schemaVersion": 10,
+  "isVerified": true,
+  "roles": [
+    "general_user"
+  ],
+  "fullName": "Yange Doris Mrumun ",
+  "dateOfBirth": "1979-07-09",
+  "verificationProfile": {
+    "status": "not_started",
+    "bankDetails": {
+      "bankName": "GTBANK ",
+      "accountNumber": "0118086823",
+      "accountName": "Yange Doris Mrumun ",
+      "bankCode": ""
+    },
+    "address": {
+      "street": "Off Adi-Agor Road Gboko Hill new G.R.A",
+      "city": "N/A",
+      "state": "Benue",
+      "lga": "Logo",
+      "country": "Nigeria"
+    },
+    "documents": {},
+    "isCanonical": true,
+    "schemaVersion": 8,
+    "nin": "71936730822",
+    "bvn": "22264885410"
+  },
+  "serviceRegistrations": {
+    "marketplace": {
+      "status": "not_started"
+    },
+    "cooperative": {
+      "status": "pending"
+    },
+    "wave": {
+      "status": "pending"
+    },
+    "academy": {
+      "status": "not_started"
+    },
+    "export": {
+      "status": "not_started"
+    },
+    "farmNation": {
+      "status": "not_started"
+    }
+  },
+  "bankDetails": {
+    "bankName": "GTBANK ",
+    "accountNumber": "0118086823",
+    "accountName": "Yange Doris Mrumun ",
+    "bankCode": ""
+  },
+  "createdAt": {
+    "_seconds": 1772526633,
+    "_nanoseconds": 269000000
+  },
+  "firstName": "Yange",
+  "uid": "hvM2F6uLPmYvtjsP84XLBBLXh862",
+  "nin": "71936730822",
+  "phone": "07031158796",
+  "bvn": "22264885410",
+  "onboardingCompleted": true,
+  "email": "yangedoris40@gmail.com",
+  "_schemaVersion": 2,
+  "updatedAt": {
+    "_seconds": 1778402142,
+    "_nanoseconds": 558000000
+  }
+}
+
+Collection: legacyMembers - Found 0 records
+
+Collection: serviceRegistrations - Found 0 records
+
+Collection: legacy_forms - Found 0 records
+
+Collection: legacyForms - Found 0 records

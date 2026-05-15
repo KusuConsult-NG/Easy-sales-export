@@ -661,7 +661,7 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
         let countQ: Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
@@ -814,7 +814,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.limit || 25;
+        const fetchLimit = options.search ? 5000 : (options.limit || 25);
         const orderDirection = options.sortOrder || "desc";
         let q: any = db.collection(COLLECTIONS.WAVE_WITHDRAWALS);
         if (options.status && options.status !== "all") {
@@ -878,7 +878,7 @@ async function _getStandardWaveWithdrawalsAction(options: {
             });
         }
 
-        const enrichedWithdrawals = withdrawals.map((w: any) => ({
+        let enrichedWithdrawals = withdrawals.map((w: any) => ({
             ...w,
             user: userMap[w.userId] || null,
             // Fallback for UI components expecting root bankDetails
@@ -889,6 +889,26 @@ async function _getStandardWaveWithdrawalsAction(options: {
                 bankCode: "N/A"
             }
         }));
+
+        if (options.search) {
+            const s = options.search.toLowerCase().trim();
+            enrichedWithdrawals = enrichedWithdrawals.filter((w: any) => {
+                const searchString = [
+                    w.id,
+                    w.userId,
+                    w.user?.name,
+                    w.user?.email,
+                    w.user?.phone,
+                    w.bankDetails?.bankName,
+                    w.bankDetails?.accountNumber,
+                    w.bankDetails?.accountName,
+                    w.reference,
+                    w.status,
+                    w.type
+                ].filter(Boolean).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
+        }
 
 
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;

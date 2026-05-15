@@ -74,7 +74,7 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         if (!callerRoles.includes("admin") && !callerRoles.includes("super_admin")) { return { success: false as const, error: "Admin access required", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", sortDirection);
 

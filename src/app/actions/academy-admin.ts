@@ -420,7 +420,7 @@ async function _getAcademyEnrollmentsAction(options?: {
         }
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS);
-        const fetchLimit = options?.search ? 1000 : (options?.limit || 50);
+        const fetchLimit = options?.search ? 5000 : (options?.limit || 50);
         q = q.orderBy("enrolledAt", "desc").limit(fetchLimit);
 
         const snapshot = await q.get();
@@ -537,7 +537,7 @@ async function _getAcademyCoursesAction(options?: {
         }
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_COURSES);
-        const fetchLimit = options?.search ? 1000 : (options?.limit || 50);
+        const fetchLimit = options?.search ? 5000 : (options?.limit || 50);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
         const snapshot = await q.get();
@@ -819,7 +819,7 @@ async function _getStandardAcademyApplicationsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         
         // 1. Query dedicated collection

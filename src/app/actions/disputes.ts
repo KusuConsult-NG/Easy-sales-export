@@ -187,7 +187,7 @@ async function _getAdminDisputesAction(options: { status?: "open" | "under_revie
         if (!hasRole(userData?.roles || [], "admin")) { return { success: false as const, error: "Not authorized as admin", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const sortDirection = options.sortOrder || "desc";
         let queryRef = db.collection(COLLECTIONS.DISPUTES).orderBy("createdAt", sortDirection);
 

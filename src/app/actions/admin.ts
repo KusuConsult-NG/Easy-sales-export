@@ -1284,7 +1284,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             };
         }
 
-        const pageSize = options.search ? 2000 : (options.limit || 50);
+        const pageSize = options.search ? 5000 : (options.limit || 50);
         const page = options.page ?? 0; // page offset (0-indexed)
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
@@ -2049,7 +2049,7 @@ async function _getStandardExportApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
         if (options.status && options.status !== "all") {
             if (options.status === "pending") {
@@ -3294,7 +3294,7 @@ async function _getMarketplaceUsersAction(options: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 2000 : (options.limit || 50);
+        const fetchLimit = options.search ? 5000 : (options.limit || 50);
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
 
         // Query by roles array — flat indexed field, no composite index needed.
@@ -3326,11 +3326,22 @@ async function _getMarketplaceUsersAction(options: {
             const marketplaceData = data.serviceRegistrations?.marketplace;
             const dbAccountType = marketplaceData?.accountType;
             // Legacy fallback
-            const hasSellerRole = (data.roles || []).includes("seller");
+            const roles = data.roles || [];
+            const hasSellerRole = roles.includes("seller") || roles.includes("marketplace_seller");
+            const hasBuyerRole = roles.includes("buyer") || roles.includes("marketplace_buyer");
+            
             let buyerRole = "buyer_only";
-            if (dbAccountType === "seller") buyerRole = "seller_only";
-            else if (dbAccountType === "both") buyerRole = "both";
-            else if (hasSellerRole) buyerRole = "both";
+            if (dbAccountType === "seller") {
+                buyerRole = "seller_only";
+            } else if (dbAccountType === "both") {
+                buyerRole = "both";
+            } else if (hasSellerRole && hasBuyerRole) {
+                buyerRole = "both";
+            } else if (hasSellerRole && !hasBuyerRole) {
+                buyerRole = "seller_only";
+            } else {
+                buyerRole = "buyer_only";
+            }
 
             return {
                 id: doc.id,

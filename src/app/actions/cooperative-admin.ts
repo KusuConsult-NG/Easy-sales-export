@@ -265,7 +265,7 @@ async function _getAllMembersAction(options?: {
             q = q.where("membershipStatus", "==", options.status);
         }
 
-        const fetchLimit = options?.search ? 2000 : (options?.limit ? options.limit * 10 : 500);
+        const fetchLimit = options?.search ? 5000 : (options?.limit ? options.limit * 10 : 500);
         q = q.orderBy("createdAt", "desc").limit(fetchLimit);
 
         let snapshot;
@@ -1173,10 +1173,13 @@ export async function getStandardCooperativeMembersAction(
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const fetchLimit = search ? 2000 : limitCount;
+        const fetchLimit = search ? 5000 : limitCount;
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).orderBy("createdAt", "desc");
+        // Build query with all where() clauses BEFORE orderBy() to satisfy
+        // Firestore composite index requirements (FAILED_PRECONDITION otherwise)
+        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
+
         if (adminScope) {
             q = q.where("cooperativeId", "==", adminScope);
         }
@@ -1200,6 +1203,9 @@ export async function getStandardCooperativeMembersAction(
             const toTs = new Date(options.dateTo + "T23:59:59");
             q = q.where("createdAt", "<=", toTs);
         }
+
+        // orderBy must come after all where() clauses
+        q = q.orderBy("createdAt", "desc");
 
         if (cursorSnap && cursorSnap.exists) {
             q = q.startAfter(cursorSnap);

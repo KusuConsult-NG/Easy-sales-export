@@ -405,9 +405,15 @@ export default function ExportBuyerPage() {
     }, []);
 
     const filteredProducts = liveProducts.filter((product) => {
-        const matchesSearch =
-            product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            product.origin.toLowerCase().includes(searchQuery.toLowerCase());
+        const q = searchQuery.toLowerCase().trim();
+        const matchesSearch = !q || [
+            product.name,
+            product.origin,
+            product.category,
+            product.season,
+            ...(product.certifications || []),
+            ...(product.grades || []),
+        ].some(field => field?.toLowerCase().includes(q));
         const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
         return matchesSearch && matchesCategory;
     });

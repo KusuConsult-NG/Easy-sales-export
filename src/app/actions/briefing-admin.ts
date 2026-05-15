@@ -82,7 +82,7 @@ export async function getBriefingRegistrationsAction(
         if (!hasAdminRole) { return { success: false as const, error: "Unauthorized: Admin access required", meta: { cursor: null, hasMore: false } };
         }
 
-        const pageSize = Math.min(Math.max(limit, 1), 5000);
+        const pageSize = searchQuery ? 5000 : Math.min(Math.max(limit, 1), 5000);
 
         // --- Build Firestore query with server-side filters ---
         let query: FirebaseFirestore.Query = db

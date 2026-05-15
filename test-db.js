@@ -1,9 +1,4 @@
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-const serviceAccount = require('./serviceAccountKey.json');
-initializeApp({ credential: cert(serviceAccount) });
-const db = getFirestore();
-db.collection('processed_payments').limit(1).get().then(snap => {
-    console.log(snap.docs[0].data());
-    process.exit(0);
-});
+const admin = require("firebase-admin");
+const serviceAccount = require("./service-account.json"); // Assuming this exists or I'll get it from env
+
+// Actually, let's use the provided mcp tools!
