@@ -201,16 +201,23 @@ async function getAbandonedFailedBroadcastList(filters?: BroadcastFilters) {
 
     for (const doc of snap.docs) {
         const data = doc.data();
-        if (data.email) {
-            const normalizedEmail = data.email.toLowerCase().trim();
+        // Paystack stores email as `customerEmail`, NOT `email`.
+        // Also check metadata.email and generic `email` as fallbacks.
+        const rawEmail = data.customerEmail || data.email || data.metadata?.email;
+        const rawName = data.customerName || data.name || data.metadata?.name || "User";
+        const failedAt = data.failedAt || data.abandonedAt;
+        const lastActive = failedAt?.toDate ? failedAt.toDate() : (failedAt ? new Date(failedAt) : new Date());
+
+        if (rawEmail) {
+            const normalizedEmail = rawEmail.toLowerCase().trim();
             if (!emailMap.has(normalizedEmail)) {
                 emailMap.set(normalizedEmail, {
                     uid: data.userId || doc.id,
                     email: normalizedEmail,
-                    name: data.customerName || data.fullName || "User",
+                    name: rawName,
                     state: "Unknown",
                     onboardingCompleted: false,
-                    lastActive: new Date()
+                    lastActive,
                 });
             }
         } else if (data.userId) {
@@ -218,12 +225,16 @@ async function getAbandonedFailedBroadcastList(filters?: BroadcastFilters) {
         }
     }
 
+    logger.info(`[BroadcastLogic][AbandonedFailed] snap.size=${snap.size}, from_email=${emailMap.size}, userIds_to_resolve=${userIdsToResolve.length}`);
+
     if (userIdsToResolve.length > 0) {
         const uniqueIds = Array.from(new Set(userIdsToResolve));
+        const missingAuthIds: string[] = [];
+
         for (let i = 0; i < uniqueIds.length; i += 100) {
             const chunk = uniqueIds.slice(i, i + 100);
             const snaps = await db.getAll(...chunk.map(id => db.collection(COLLECTIONS.USERS).doc(id)));
-            snaps.forEach((userSnap: any) => {
+            snaps.forEach((userSnap: any, idx: number) => {
                 if (userSnap.exists) {
                     const u = userSnap.data();
                     const rawEmail = u?.email || u?.userEmail;
@@ -233,20 +244,54 @@ async function getAbandonedFailedBroadcastList(filters?: BroadcastFilters) {
                             emailMap.set(normalizedEmail, {
                                 uid: userSnap.id,
                                 email: normalizedEmail,
-                                name: u?.fullName || u?.name || "User",
+                                name: u?.fullName || u?.firstName || u?.name || "User",
                                 state: u?.state || u?.stateOfOrigin || u?.address?.state || "Unknown",
-                                onboardingCompleted: false,
-                                lastActive: new Date()
+                                onboardingCompleted: u?.onboardingCompleted || false,
+                                lastActive: new Date(),
                             });
                         }
+                    } else {
+                        // User doc exists but no email field — try Auth fallback
+                        missingAuthIds.push(userSnap.id);
                     }
+                } else {
+                    // User doc missing entirely — try Auth fallback
+                    missingAuthIds.push(chunk[idx]);
                 }
             });
+        }
+
+        // Firebase Auth fallback for users with no Firestore email
+        if (missingAuthIds.length > 0) {
+            logger.info(`[BroadcastLogic][AbandonedFailed] Auth fallback for ${missingAuthIds.length} users...`);
+            try {
+                const { getAuth } = await import("firebase-admin/auth");
+                const auth = getAuth();
+                for (let i = 0; i < missingAuthIds.length; i += 100) {
+                    const chunk = missingAuthIds.slice(i, i + 100);
+                    const result = await auth.getUsers(chunk.map(uid => ({ uid })));
+                    result.users.forEach(authUser => {
+                        if (!authUser.email) return;
+                        const normalizedEmail = authUser.email.toLowerCase().trim();
+                        if (emailMap.has(normalizedEmail)) return;
+                        emailMap.set(normalizedEmail, {
+                            uid: authUser.uid,
+                            email: normalizedEmail,
+                            name: authUser.displayName || "User",
+                            state: "Unknown",
+                            onboardingCompleted: false,
+                            lastActive: new Date(),
+                        });
+                    });
+                }
+            } catch (authErr) {
+                logger.error("[BroadcastLogic][AbandonedFailed] Auth fallback error:", authErr);
+            }
         }
     }
     
     const uniqueList = Array.from(emailMap.values());
-    logger.info(`[BroadcastLogic] abandoned/failed: ${snap.size}, unique emails: ${uniqueList.length}`);
+    logger.info(`[BroadcastLogic][AbandonedFailed] FINAL: ${snap.size} payment docs -> ${uniqueList.length} unique recipients`);
 
     return {
         success: true as const,
@@ -259,7 +304,6 @@ async function getAbandonedFailedBroadcastList(filters?: BroadcastFilters) {
         },
     };
 }
-
 async function getUnpaidApplicantsBroadcastList(filters?: BroadcastFilters) {
     logger.info(`[BroadcastLogic] Generating unpaid applicants list...`);
     const emailMap = new Map<string, Recipient>();

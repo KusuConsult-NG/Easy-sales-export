@@ -195,10 +195,6 @@ export default function BroadcastComposePage() {
     });
 
     async function handleEstimate() {
-        if (!subject.trim() || !body.trim()) {
-            showToast("Please fill in subject and message before estimating.", "error");
-            return;
-        }
         setEstimating(true);
         try {
             const res = await fetch("/api/admin/broadcast/estimate", {
