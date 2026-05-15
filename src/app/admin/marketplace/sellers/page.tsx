@@ -73,7 +73,8 @@ export default function AdminSellersPage() {
                 opts.limit || 50,
                 opts.sortOrder as "asc" | "desc",
                 dateRange.from || undefined,
-                dateRange.to || undefined
+                dateRange.to || undefined,
+                opts.search
             );
         },
         limit: 50,
@@ -128,7 +129,8 @@ export default function AdminSellersPage() {
                 config.limit,
                 undefined,
                 dateRange.from || undefined,
-                dateRange.to || undefined
+                dateRange.to || undefined,
+                searchQuery
             );
             if (!result || !result.success || !result.data || result.data.length === 0) {
                 showToast("No data available to export", "error");

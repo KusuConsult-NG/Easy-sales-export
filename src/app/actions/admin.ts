@@ -1293,7 +1293,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // *** IMPORTANT: We deliberately avoid orderBy('createdAt') because Firestore
         // silently excludes any document where that field is null/missing.
         // All sorting is done in-memory after fetching. ***
-        if (options.search) {
+        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options)); if (options.search) {
             const search = options.search.trim();
             // Email exact match
             if (search.includes("@")) {
@@ -1343,7 +1343,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             }
         }
         // For search (email/phone), count directly against the filter
-        if (options.search) {
+        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options)); if (options.search) {
             const search = options.search.trim();
             if (search.includes("@")) {
                 countQuery = countQuery.where("email", "==", search.toLowerCase());
@@ -1445,7 +1445,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
 
         // Client-side search + date range filtering
         let filteredUsers = usersWithModules;
-        if (options.search) {
+        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options)); if (options.search) {
             const s = options.search.toLowerCase().trim();
             filteredUsers = filteredUsers.filter(user => {
                 const searchString = [
@@ -2158,15 +2158,16 @@ async function _getStandardExportApplicationsAction(options: {
         let finalForms = standardForms;
         if (options.search) {
             const s = options.search.toLowerCase().trim();
-            finalForms = standardForms.filter((f: any) => {
+            finalForms = finalForms.filter((f: any) => {
                 const searchString = [
                     f.user?.name,
                     f.user?.email,
                     f.user?.phone,
+                    f.data?.fullName,
+                    f.data?.businessName,
                     f.data?.firstName,
-                    f.data?.lastName,
-                    f.data?.phone
-                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                    f.data?.lastName
+                ].filter(Boolean).join(" ").toLowerCase();
                 return searchString.includes(s);
             });
         }
@@ -3208,7 +3209,8 @@ async function _getStandardSellerVerificationsAction(
     limitCount: number = 50,
     sortOrder?: "asc" | "desc",
     dateFrom?: string,
-    dateTo?: string
+    dateTo?: string,
+    search?: string
 ): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
@@ -3240,13 +3242,15 @@ async function _getStandardSellerVerificationsAction(
             q = q.where("createdAt", "<=", toTs);
         }
 
-        if (cursorSnap && cursorSnap.exists) {
+        if (cursorSnap && cursorSnap.exists && !search) {
             q = q.startAfter(cursorSnap);
         }
-        q = q.limit(limitCount);
+        
+        const fetchLimit = search ? 5000 : limitCount;
+        q = q.limit(fetchLimit);
 
         const snapshot = await q.get();
-        const applications = serializeDocs(snapshot.docs);
+        let applications = serializeDocs(snapshot.docs);
         const nextCursorId = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
 
 
@@ -3299,7 +3303,40 @@ async function _getStandardSellerVerificationsAction(
             };
         });
 
-        return { success: true as const, data: standardForms, error: null, meta: { lastDocId: nextCursorId } };
+        let finalForms = standardForms;
+        if (search) {
+            const s = search.toLowerCase().trim();
+            finalForms = finalForms.filter((app: any) => {
+                const searchString = [
+                    app.user?.name,
+                    app.user?.email,
+                    app.user?.phone,
+                    app.data?.businessName,
+                    app.data?.businessRegNumber
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
+        }
+
+        // Apply pagination after search filter if search is present
+        let nextCursorIdToReturn = nextCursorId;
+        if (search) {
+            const page = cursorId ? parseInt(cursorId, 10) : 0;
+            const startIndex = page * limitCount;
+            const hasMoreSearch = startIndex + limitCount < finalForms.length;
+            finalForms = finalForms.slice(startIndex, startIndex + limitCount);
+            nextCursorIdToReturn = hasMoreSearch ? String(page + 1) : undefined;
+        }
+
+        return { 
+            success: true as const, 
+            data: finalForms, 
+            error: null, 
+            meta: { 
+                lastDocId: nextCursorIdToReturn,
+                hasMore: !!nextCursorIdToReturn
+            } 
+        };
     } catch (error) {
         logger.error("Get standard seller verifications error:", error);
         return { success: false as const, error: "Failed to fetch normalized applications", meta: null, data: null };
@@ -3348,6 +3385,7 @@ async function _getMarketplaceUsersAction(options: {
 
         let filteredDocs = snapshot.docs;
 
+        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options));
         if (options.search) {
             const searchLower = options.search.toLowerCase().trim();
             filteredDocs = filteredDocs.filter(doc => {

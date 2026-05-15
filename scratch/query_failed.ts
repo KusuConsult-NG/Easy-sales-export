@@ -1,18 +1,18 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
-import { getAdminDb } from "../src/lib/firebase-admin";
+import { getStandardCooperativeMembersAction } from "./src/app/actions/cooperative-admin";
+import { headers } from "next/headers";
 
-async function query() {
-    const db = getAdminDb();
-    
-    const snap = await db.collection("failed_payments").limit(5).get();
-    console.log("FAILED_PAYMENTS collection count:", snap.size);
-    if (snap.size > 0) {
-        console.log("Sample:", snap.docs[0].data());
+// Mocking headers for Next.js
+jest.mock("next/headers", () => ({
+    headers: () => new Map(),
+}));
+
+async function run() {
+    try {
+        const res = await getStandardCooperativeMembersAction({ search: "admin" });
+        console.log("Success:", res?.data?.length);
+    } catch (e: any) {
+        console.log("Error:", e.message);
     }
-
-    const usersSnap = await db.collection("users").limit(10).get();
-    console.log("Sample users regs:", usersSnap.docs.map(d => d.data().serviceRegistrations));
+    process.exit(0);
 }
-
-query().then(() => process.exit(0)).catch(console.error);
+run();
