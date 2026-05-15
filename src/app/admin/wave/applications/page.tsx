@@ -242,47 +242,66 @@ export default function AdminWaveApplicationsPage() {
             </div>
 
             {/* Filter */}
-            <div className="flex flex-wrap items-center gap-4 mb-6">
-                <Filter className="w-5 h-5 text-slate-500" />
-                <select
-                    value={statusFilter}
-                    onChange={(e) => updateFilter("status", e.target.value)}
-                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
-                >
-                    <option value="all">All Applications</option>
-                    <option value="pending">Pending</option>
-                    <option value="under_review">Under Review</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                </select>
-                <select
-                    value={filters.sortOrder || "desc"}
-                    onChange={(e) => updateFilter("sortOrder", e.target.value)}
-                    className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900"
-                >
-                    <option value="desc">Newest First</option>
-                    <option value="asc">Oldest First</option>
-                </select>
-                <DateRangeFilter
-                    value={dateRange}
-                    onChange={setDateRange}
-                    label="Filter by date"
-                />
-                {/* Refresh indicator */}
-                <button onClick={fetchData} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors">
-                    <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
-                    <span className="text-xs font-semibold text-slate-600">Refresh</span>
-                </button>
-                {/* CSV Export */}
-                {applications.length > 0 && (
-                    <button
-                        onClick={handleExportCSV}
-                        className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all"
+            <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6">
+                <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl border border-slate-300">
+                    <Filter className="w-5 h-5 text-slate-500 ml-2" />
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => updateFilter("status", e.target.value)}
+                        className="px-3 py-1.5 rounded-lg text-slate-900 outline-none hover:bg-slate-50 cursor-pointer"
                     >
-                        <Download className="w-4 h-4" />
-                        Export CSV ({(meta as any)?.totalCount ?? applications.length})
+                        <option value="all">All Applications</option>
+                        <option value="pending">Pending</option>
+                        <option value="under_review">Under Review</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <div className="w-px h-6 bg-slate-200"></div>
+                    <select
+                        value={filters.sortOrder || "desc"}
+                        onChange={(e) => updateFilter("sortOrder", e.target.value)}
+                        className="px-3 py-1.5 rounded-lg text-slate-900 outline-none hover:bg-slate-50 cursor-pointer"
+                    >
+                        <option value="desc">Newest First</option>
+                        <option value="asc">Oldest First</option>
+                    </select>
+                </div>
+                
+                <div className="relative flex-1 sm:min-w-[250px] sm:max-w-xs">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FileText className="h-4 w-4 text-slate-400" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search by name, phone, or email..."
+                        value={search || ""}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                    />
+                </div>
+
+                <div className="flex items-center gap-2 ml-auto">
+                    <DateRangeFilter
+                        value={dateRange}
+                        onChange={setDateRange}
+                        label="Filter by date"
+                    />
+                    {/* Refresh indicator */}
+                    <button onClick={fetchData} className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-100 rounded-lg transition-colors">
+                        <RefreshCw className={`w-4 h-4 text-slate-500 ${isLoading ? 'animate-spin' : ''}`} />
+                        <span className="text-xs font-semibold text-slate-600">Refresh</span>
                     </button>
-                )}
+                    {/* CSV Export */}
+                    {applications.length > 0 && (
+                        <button
+                            onClick={handleExportCSV}
+                            className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-semibold text-sm transition-all"
+                        >
+                            <Download className="w-4 h-4" />
+                            Export CSV ({(meta as any)?.totalCount ?? applications.length})
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Loading State */}

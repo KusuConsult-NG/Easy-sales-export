@@ -55,12 +55,15 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
         latestRef.current = { search: debouncedSearch, filters, fetchAction, limit };
     });
 
-    const fetchData = useCallback(async (page: number, resetCursors = false) => {
+    const fetchData = useCallback(async (page: number, resetCursors = false, overrideSearch?: string, overrideFilters?: any) => {
         const currentFetchId = ++fetchIdRef.current;
         setLoading(true);
         setError(null);
 
-        const { search: s, filters: f, fetchAction: fn, limit: lim } = latestRef.current;
+        const s = overrideSearch !== undefined ? overrideSearch : latestRef.current.search;
+        const f = overrideFilters !== undefined ? overrideFilters : latestRef.current.filters;
+        const fn = latestRef.current.fetchAction;
+        const lim = latestRef.current.limit;
 
         try {
             const cursor = resetCursors ? undefined : cursorStack.current[page] ?? undefined;
@@ -151,11 +154,10 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     const filtersKey = JSON.stringify(filters);
     const depsKey = JSON.stringify(dependencies);
 
-    // Reset to page 0 whenever search, filters, or explicit deps change.
     useEffect(() => {
         cursorStack.current = [undefined];
         setPageIndex(0);
-        fetchData(0, true);
+        fetchData(0, true, searchKey, filters);
         // fetchData is stable (never changes) — this is intentional, see comment above.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchKey, filtersKey, depsKey]);

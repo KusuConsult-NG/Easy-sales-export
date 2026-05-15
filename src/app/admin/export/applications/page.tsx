@@ -23,6 +23,7 @@ import {
     Save,
     MessageSquare,
     Users,
+    Search,
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { db } from "@/lib/firebase";
@@ -324,21 +325,33 @@ export default function AdminExportApplicationsPage() {
             </div>
 
             {/* Filter Row */}
-            <div className="flex flex-wrap items-center gap-3 mb-6 bg-white p-3 rounded-xl border border-slate-200">
-                <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-                {(["pending_review", "approved", "rejected", "revision_required", "all"] as const).map((f) => (
-                    <button
-                        key={f}
-                        onClick={() => updateFilter("status", f)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition ${statusFilter === f
-                            ? "bg-orange-600 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
-                            }`}
-                    >
-                        {f === "pending_review" ? "Pending" : f.replace("_", " ")}
-                    </button>
-                ))}
-                <div className="ml-auto">
+            <div className="flex flex-col sm:flex-row gap-3 mb-6 bg-white p-3 rounded-xl border border-slate-200">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+                    {(["pending_review", "approved", "rejected", "revision_required", "all"] as const).map((f) => (
+                        <button
+                            key={f}
+                            onClick={() => updateFilter("status", f)}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition ${statusFilter === f
+                                ? "bg-orange-600 text-white"
+                                : "text-slate-600 hover:bg-slate-100"
+                                }`}
+                        >
+                            {f === "pending_review" ? "Pending" : f.replace("_", " ")}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex flex-1 flex-col sm:flex-row gap-3 sm:ml-auto items-center sm:justify-end">
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Search by name or email..."
+                            value={search || ""}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        />
+                    </div>
                     <DateRangeFilter
                         value={dateRange}
                         onChange={setDateRange}
