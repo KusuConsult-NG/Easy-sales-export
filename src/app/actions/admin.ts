@@ -1446,14 +1446,19 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // Client-side search + date range filtering
         let filteredUsers = usersWithModules;
         if (options.search) {
-            const searchLower = options.search.toLowerCase();
-            filteredUsers = filteredUsers.filter(user =>
-                user.name?.toLowerCase()?.includes(searchLower) ||
-                user.email?.toLowerCase()?.includes(searchLower) ||
-                (user.phone && user.phone.includes(searchLower)) ||
-                (user.state && user.state?.toLowerCase()?.includes(searchLower) && user.state !== "") ||
-                (user.lga && user.lga?.toLowerCase()?.includes(searchLower) && user.lga !== "")
-            );
+            const s = options.search.toLowerCase().trim();
+            filteredUsers = filteredUsers.filter(user => {
+                const searchString = [
+                    user.name,
+                    user.firstName,
+                    user.lastName,
+                    user.email,
+                    user.phone,
+                    user.state,
+                    user.lga
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
         }
         // Module filter — supports a specific module slug (e.g. 'academy') or 'multi' (2+ modules)
         if (options.modules && options.modules !== "all") {
@@ -2166,14 +2171,33 @@ async function _getStandardExportApplicationsAction(options: {
             });
         }
 
+        const limit = options.limit || 50;
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = options.search ? finalForms.slice(offset, offset + limit) : finalForms;
+        const _hasMore = options.search 
+            ? (offset + limit < finalForms.length)
+            : hasMore;
+
+        const _nextCursor = options.search 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : nextCursor;
+
         return { 
             error: null, success: true as const, 
-            data: finalForms,
-            lastDocId: nextCursor,
-            hasMore: hasMore,
+            data: paged,
+            lastDocId: _nextCursor,
+            hasMore: _hasMore,
             meta: {
                 totalFetched: applications.length,
-                hasMore: hasMore
+                hasMore: _hasMore
             }
         };
     } catch (error) {
@@ -3351,9 +3375,9 @@ async function _getMarketplaceUsersAction(options: {
 
             return {
                 id: doc.id,
-                name: data.fullName || data.name || "Unknown",
+                name: data.fullName || data.name || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "Unknown"),
                 email: data.email,
-                phone: data.phone || "",
+                phone: data.phone || data.phoneNumber || "",
                 state: data.address?.state || data.stateOfOrigin || "",
                 lga: data.address?.lga || data.lga || "",
                 roles: data.roles || [],

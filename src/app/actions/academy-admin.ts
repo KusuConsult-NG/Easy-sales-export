@@ -941,7 +941,24 @@ async function _getStandardAcademyApplicationsAction(options: {
             });
         }
 
-        const nextCursor = snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
+        const limit = options.limit || 50;
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = options.search ? finalForms.slice(offset, offset + limit) : finalForms;
+        const _hasMore = options.search 
+            ? (offset + limit < finalForms.length)
+            : (snapshot.docs.length === fetchLimit);
+
+        const _nextCursor = options.search 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : (snapshot.docs.length === fetchLimit ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
 
         await createAdminAuditLog({
             action: "data_access",
@@ -955,11 +972,11 @@ async function _getStandardAcademyApplicationsAction(options: {
         return { 
             success: true,
             error: null, 
-            data: finalForms,
+            data: paged,
             meta: {
                 totalFetched: finalForms.length,
-                hasMore: !!nextCursor,
-                lastDocId: nextCursor || null
+                hasMore: _hasMore,
+                lastDocId: _nextCursor || null
             }
         };
     } catch (error: any) {
