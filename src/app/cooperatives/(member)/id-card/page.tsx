@@ -125,25 +125,28 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
 
         setIsLoadingImage(true);
         let isMounted = true;
-        // Append a cache-buster to prevent CORS issues with cached images
-        const url = data.passportPhotoUrl + (data.passportPhotoUrl.includes('?') ? '&' : '?') + 'cb=' + Date.now();
 
-        fetch(url, { mode: 'cors' })
-            .then(res => res.blob())
-            .then(blob => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (isMounted) {
-                        setImgSrc(reader.result as string);
-                        setIsLoadingImage(false);
-                    }
-                };
-                reader.readAsDataURL(blob);
+        // Fetch through our server-side proxy — the server fetches from Cloudinary
+        // with no browser CORS restrictions, then returns a base64 data URI.
+        // This is the only reliable approach on mobile browsers.
+        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(data.passportPhotoUrl)}`;
+
+        fetch(proxyUrl)
+            .then(res => {
+                if (!res.ok) throw new Error(`Proxy returned ${res.status}`);
+                return res.json();
+            })
+            .then(({ dataUri }: { dataUri: string }) => {
+                if (isMounted) {
+                    setImgSrc(dataUri);
+                    setIsLoadingImage(false);
+                }
             })
             .catch(err => {
-                console.error("Failed to fetch passport photo as blob:", err);
+                console.error("[IdCardFace] proxy fetch failed:", err);
                 if (isMounted) {
-                    setImgSrc(data.passportPhotoUrl); // Fallback
+                    // Last-resort fallback: use raw URL (may taint canvas on mobile)
+                    setImgSrc(data.passportPhotoUrl);
                     setIsLoadingImage(false);
                 }
             });
