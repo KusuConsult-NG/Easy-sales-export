@@ -77,11 +77,16 @@ export const registerSchema = z
 export type RegisterFormData = z.infer<typeof registerSchema>;
 
 /**
- * WAVE Program Application Schema
- * Women's Agro-Value Expansion program enrollment
- * CRITICAL: WAVE is female-only - gender validation enforced
+/**
+ * @deprecated Legacy WAVE application schema — used ONLY by platform.ts
+ * submitWaveApplicationAction (the old single-page form).
+ *
+ * The current multi-step WAVE application uses a separate, comprehensive
+ * 50-field schema defined in src/app/actions/wave.ts.
+ *
+ * Do NOT extend this schema or use it for new code.
  */
-export const waveApplicationSchema = z.object({
+export const waveLegacyApplicationSchema = z.object({
     fullName: strictNameSchema,
     email: strictEmailSchema,
     phone: strictNigerianPhoneSchema,
@@ -97,7 +102,11 @@ export const waveApplicationSchema = z.object({
     reasonForApplying: z.string().min(50, "Please provide at least 50 characters explaining why"),
 });
 
-export type WaveApplicationFormData = z.infer<typeof waveApplicationSchema>;
+/** @deprecated Alias for backward compatibility with platform.ts */
+export const waveApplicationSchema = waveLegacyApplicationSchema;
+
+export type WaveApplicationFormData = z.infer<typeof waveLegacyApplicationSchema>;
+
 
 
 /**
