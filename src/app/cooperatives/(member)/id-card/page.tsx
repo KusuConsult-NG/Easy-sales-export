@@ -354,32 +354,37 @@ export default function CooperativeIdCardPage() {
     };
 
     async function handleDownload() {
+        if (!result?.data) return;
         setDownloading(true);
         try {
-            const html2canvas = (await import("html2canvas")).default;
-            const jsPDF = (await import("jspdf")).jsPDF;
-
-            const el = document.getElementById("cooperative-id-card");
-            if (!el) return;
-
-            const canvas = await html2canvas(el, {
-                scale: 3,
-                useCORS: true,
-                backgroundColor: null,
-                logging: false,
+            // ── Server-side PDF generation ────────────────────────────────────────
+            // html2canvas cannot resolve Tailwind v4 CSS custom properties
+            // (var(--color-*), color-mix()) on mobile browsers. This caused the
+            // "Download failed" error. We now generate the PDF on the server,
+            // which has zero CSS/CORS/canvas constraints.
+            const res = await fetch("/api/id-card/pdf", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(result.data),
             });
 
-            const imgData = canvas.toDataURL("image/png");
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `Server returned ${res.status}`);
+            }
 
-            // CR80 card: 86mm × 54mm — landscape
-            const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [86, 54] });
-            pdf.addImage(imgData, "PNG", 0, 0, 86, 54);
-
-            const fileName = `ESE-CoopID-${result?.data?.memberNumber || "card"}.pdf`;
-            pdf.save(fileName);
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `ESE-CoopID-${result.data.memberNumber || "card"}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
             showToast("ID card downloaded!", "success");
         } catch (e) {
-            console.error("Download failed:", e);
+            console.error("[handleDownload] PDF generation failed:", e);
             showToast("Download failed — please try again.", "error");
         } finally {
             setDownloading(false);
