@@ -279,6 +279,39 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     };
 
     async function handleComplete() {
+        // ── Pre-submission validation guard ───────────────────────────────────
+        // Runs BEFORE the server action so users on Step 4 (who skipped Steps 1–3
+        // after a Paystack redirect with empty localStorage) get a clear error
+        // and are taken back to the correct step to fix it.
+        const missingPersonal =
+            !personalInfo.firstName.trim() || personalInfo.firstName.trim().length < 2 ||
+            !personalInfo.lastName.trim() || personalInfo.lastName.trim().length < 2 ||
+            !personalInfo.phone.trim() ||
+            !personalInfo.email.trim() ||
+            !personalInfo.gender ||
+            !personalInfo.occupation.trim() ||
+            !personalInfo.address.state ||
+            !personalInfo.address.street.trim();
+
+        const missingNok =
+            !nextOfKin.fullName.trim() || nextOfKin.fullName.trim().length < 2 ||
+            !nextOfKin.phone.trim() ||
+            !nextOfKin.address.trim();
+
+        if (missingPersonal) {
+            showToast("Please complete your personal information before submitting.", "error");
+            setCurrentStep(1);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+        if (missingNok) {
+            showToast("Please complete the Next of Kin information before submitting.", "error");
+            setCurrentStep(2);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         setIsSubmitting(true);
         try {
             const formData = new FormData();
