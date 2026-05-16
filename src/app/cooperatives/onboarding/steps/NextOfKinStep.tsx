@@ -26,6 +26,7 @@ export default function NextOfKinStep({ data, onChange, onNext, onBack }: NextOf
     const validate = () => {
         const e: Record<string, string> = {};
         if (!data.fullName.trim()) e.fullName = "Next of kin name is required";
+        else if (data.fullName.trim().length < 2) e.fullName = "Next of kin name must be at least 2 characters";
         if (!data.relationship) e.relationship = "Please select relationship";
         if (!data.phone.trim()) e.phone = "Phone number is required";
         else if (!/^0\d{10}$/.test(data.phone.replace(/\s/g, ""))) e.phone = "Enter a valid 11-digit phone number";

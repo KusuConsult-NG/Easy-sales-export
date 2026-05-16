@@ -42,7 +42,9 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
         const newErrors: Record<string, string> = {};
 
         if (!data.surname.trim()) newErrors.surname = "Surname is required";
+        else if (data.surname.trim().length < 2) newErrors.surname = "Surname must be at least 2 characters";
         if (!data.firstName.trim()) newErrors.firstName = "First name is required";
+        else if (data.firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
 
         // Phone validation: Strict 11 digits
         if (!data.phone.trim()) {
@@ -66,8 +68,10 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
         if (!data.lgaOfResidence.trim()) newErrors.lgaOfResidence = "LGA of residence is required";
         if (!data.maritalStatus) newErrors.maritalStatus = "Marital status is required";
         if (!data.nextOfKinName.trim()) newErrors.nextOfKinName = "Next of kin name is required";
+        else if (data.nextOfKinName.trim().length < 2) newErrors.nextOfKinName = "Next of kin name must be at least 2 characters";
         if (!data.nextOfKinPhone.trim()) newErrors.nextOfKinPhone = "Next of kin phone is required";
         if (!data.nextOfKinRelationship.trim()) newErrors.nextOfKinRelationship = "Relationship is required";
+        else if (data.nextOfKinRelationship.trim().length < 2) newErrors.nextOfKinRelationship = "Relationship must be at least 2 characters";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;

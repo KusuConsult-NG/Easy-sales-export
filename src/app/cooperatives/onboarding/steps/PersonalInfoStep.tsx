@@ -35,11 +35,14 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
     const validate = () => {
         const newErrors: Record<string, string> = {};
         if (!data.firstName.trim()) newErrors.firstName = "First name is required";
+        else if (data.firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
         if (!data.lastName.trim()) newErrors.lastName = "Last name is required";
+        else if (data.lastName.trim().length < 2) newErrors.lastName = "Last name must be at least 2 characters";
         if (!data.phone.trim()) newErrors.phone = "Phone number is required";
         if (!data.email.trim()) newErrors.email = "Email address is required";
         if (!data.gender) newErrors.gender = "Gender is required";
         if (!data.occupation.trim()) newErrors.occupation = "Occupation is required";
+        else if (data.occupation.trim().length < 2) newErrors.occupation = "Occupation must be at least 2 characters";
         if (!data.address.state) newErrors.state = "State is required";
         if (!data.address.lga) newErrors.lga = "LGA is required";
         if (!data.address.street.trim()) newErrors.street = "Street address is required";

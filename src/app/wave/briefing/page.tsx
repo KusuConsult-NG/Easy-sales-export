@@ -102,6 +102,22 @@ export default function WaveBriefingPage() {
         e.preventDefault();
         setError("");
 
+        // Client-side validation — mirrors server strictNameSchema (min 2 chars)
+        const fullName = [formData.firstName, formData.otherName, formData.lastName]
+            .filter(Boolean).join(" ").trim();
+        if (formData.firstName.trim().length < 2) {
+            setError("First name must be at least 2 characters.");
+            return;
+        }
+        if (formData.lastName.trim().length < 2) {
+            setError("Last name must be at least 2 characters.");
+            return;
+        }
+        if (fullName.length < 2) {
+            setError("Please provide your full name.");
+            return;
+        }
+
         if (typeof navigator !== "undefined" && !navigator.onLine) {
             localStorage.setItem("wave_briefing_pending_sync", JSON.stringify(formData));
             setIsOfflinePending(true);
@@ -113,8 +129,7 @@ export default function WaveBriefingPage() {
         try {
             const payload = {
                 ...formData,
-                fullName: [formData.firstName, formData.otherName, formData.lastName]
-                    .filter(Boolean).join(" ").trim(),
+                fullName,
             };
             const result = await registerForBriefingAction(payload);
             if (result.success) {
