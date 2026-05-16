@@ -203,7 +203,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                         </div>
                     ) : imgSrc ? (
                         <div className="relative w-20 h-24 rounded-lg border-2 border-white/40 shadow-lg overflow-hidden bg-white/10 flex items-center justify-center">
-                            {/* Using base64 imgSrc to bypass html2canvas CORS issues entirely */}
+                            {/* base64 imgSrc from server proxy — avoids CORS on mobile browsers */}
                             <img
                                 src={imgSrc}
                                 alt="Passport"
