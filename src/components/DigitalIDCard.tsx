@@ -96,7 +96,8 @@ export default function DigitalIDCard({
             {/* Digital ID Card */}
             <div
                 id="digital-id-card"
-                className="relative bg-linear-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-2xl p-8 shadow-2xl max-w-2xl mx-auto"
+                style={{ background: "linear-gradient(to bottom right, #2563eb, #1d4ed8, #3730a3)" }}
+                className="relative rounded-2xl p-8 shadow-2xl max-w-2xl mx-auto"
             >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">

@@ -113,12 +113,54 @@ function PassportUploadWidget({ onUploaded }: { onUploaded: (url: string, name: 
 // ── ID Card Component ─────────────────────────────────────────────────────────
 
 function IdCardFace({ data }: { data: MemberIdCardData }) {
+    const [imgSrc, setImgSrc] = useState<string | null>(null);
+    const [isLoadingImage, setIsLoadingImage] = useState<boolean>(!!data.passportPhotoUrl);
+
+    useEffect(() => {
+        if (!data.passportPhotoUrl) {
+            setImgSrc(null);
+            setIsLoadingImage(false);
+            return;
+        }
+
+        setIsLoadingImage(true);
+        let isMounted = true;
+        // Append a cache-buster to prevent CORS issues with cached images
+        const url = data.passportPhotoUrl + (data.passportPhotoUrl.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+
+        fetch(url, { mode: 'cors' })
+            .then(res => res.blob())
+            .then(blob => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    if (isMounted) {
+                        setImgSrc(reader.result as string);
+                        setIsLoadingImage(false);
+                    }
+                };
+                reader.readAsDataURL(blob);
+            })
+            .catch(err => {
+                console.error("Failed to fetch passport photo as blob:", err);
+                if (isMounted) {
+                    setImgSrc(data.passportPhotoUrl); // Fallback
+                    setIsLoadingImage(false);
+                }
+            });
+
+        return () => { isMounted = false; };
+    }, [data.passportPhotoUrl]);
+
     return (
         <div
             id="cooperative-id-card"
-            style={{ fontFamily: "'Arial', sans-serif", width: "340px", minHeight: "210px" }}
-            className={`relative overflow-hidden rounded-2xl shadow-2xl select-none
-                bg-linear-to-br from-purple-800 via-purple-700 to-indigo-800`}
+            style={{ 
+                fontFamily: "'Arial', sans-serif", 
+                width: "340px", 
+                minHeight: "210px",
+                background: "linear-gradient(to bottom right, #6b21a8, #7e22ce, #3730a3)"
+            }}
+            className="relative overflow-hidden rounded-2xl shadow-2xl select-none"
         >
             {/* Decorative circles */}
             <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-white/5" />
@@ -150,13 +192,16 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
             <div className="relative px-5 pt-3 pb-4 flex items-start gap-4">
                 {/* Passport photo */}
                 <div className="shrink-0">
-                    {data.passportPhotoUrl ? (
-                        <div className="relative w-20 h-24 rounded-lg border-2 border-white/40 shadow-lg overflow-hidden">
-                            {/* Using standard img to bypass Next.js Image proxy CORS issues for html2canvas */}
+                    {isLoadingImage ? (
+                        <div className="w-20 h-24 rounded-lg border-2 border-white/30 bg-white/10 flex items-center justify-center">
+                            <Loader2 className="w-6 h-6 text-white/60 animate-spin" />
+                        </div>
+                    ) : imgSrc ? (
+                        <div className="relative w-20 h-24 rounded-lg border-2 border-white/40 shadow-lg overflow-hidden bg-white/10 flex items-center justify-center">
+                            {/* Using base64 imgSrc to bypass html2canvas CORS issues entirely */}
                             <img
-                                src={data.passportPhotoUrl}
+                                src={imgSrc}
                                 alt="Passport"
-                                crossOrigin="anonymous"
                                 className="w-full h-full object-cover"
                             />
                         </div>
