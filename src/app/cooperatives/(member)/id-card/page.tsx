@@ -152,13 +152,12 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                 <div className="shrink-0">
                     {data.passportPhotoUrl ? (
                         <div className="relative w-20 h-24 rounded-lg border-2 border-white/40 shadow-lg overflow-hidden">
-                            <Image
+                            {/* Using standard img to bypass Next.js Image proxy CORS issues for html2canvas */}
+                            <img
                                 src={data.passportPhotoUrl}
                                 alt="Passport"
-                                fill
                                 crossOrigin="anonymous"
-                                className="object-cover"
-                                sizes="80px"
+                                className="w-full h-full object-cover"
                             />
                         </div>
                     ) : (
