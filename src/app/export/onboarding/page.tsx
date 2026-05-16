@@ -187,6 +187,36 @@ export default function ExportOnboardingPage() {
     };
 
     async function handleSubmit(finalData: any) {
+        // ── Pre-submission guard ────────────────────────────────────────────────
+        // The server action has no Zod validation — it stores whatever it receives.
+        // An empty submission creates a blank Firestore record. Catch it here.
+        const profile = finalData.profile || {};
+        const kyc = finalData.kyc || {};
+        const bank = finalData.bank || {};
+        const terms = finalData.terms || {};
+
+        if (!profile.investmentAmount && !profile.investmentRange && !profile.firstName) {
+            showToast("Investment profile is incomplete — please review Step 1.", "error");
+            setCurrentStepId("profile");
+            return;
+        }
+        if (!kyc.kycData && !kyc.fullName && !kyc.firstName) {
+            showToast("Identity verification is incomplete — please review Step 2.", "error");
+            setCurrentStepId("kyc");
+            return;
+        }
+        if (!bank.bankName && !bank.accountNumber) {
+            showToast("Bank account details are incomplete — please review Step 3.", "error");
+            setCurrentStepId("bank");
+            return;
+        }
+        if (!terms.accepted && !terms.agreedToTerms) {
+            showToast("You must accept the terms and conditions.", "error");
+            setCurrentStepId("terms");
+            return;
+        }
+        // ────────────────────────────────────────────────────────────────────────
+
         try {
             if (isRevisionMode || isEditMode) {
                 // Resubmit — send text fields only (no file re-upload required)

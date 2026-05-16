@@ -224,6 +224,36 @@ export default function MarketplaceOnboarding() {
     };
 
     async function handleSubmit() {
+        // ── Pre-submission guard ────────────────────────────────────────────────
+        // Server action has no Zod validation — stores whatever it receives.
+        // Empty submission creates a blank Firestore record breaking admin listings.
+        if (!formData.accountType) {
+            toast.error("Please select an account type.");
+            setCurrentStep(1);
+            return;
+        }
+        if (!formData.businessName?.trim() || formData.businessName.trim().length < 2) {
+            toast.error("Business name is required — please review Step 2.");
+            setCurrentStep(2);
+            return;
+        }
+        if (!formData.phone?.trim()) {
+            toast.error("Phone number is required — please review Step 2.");
+            setCurrentStep(2);
+            return;
+        }
+        if (!formData.termsAccepted) {
+            toast.error("You must accept the terms and conditions.");
+            setCurrentStep(4);
+            return;
+        }
+        if (isSeller && (!formData.bankAccount?.bankName || !formData.bankAccount?.accountNumber)) {
+            toast.error("Bank account details are required for sellers — please review Step 6.");
+            setCurrentStep(6);
+            return;
+        }
+        // ────────────────────────────────────────────────────────────────────────
+
         try {
             if (isRevisionMode || isEditMode) {
                 const { resubmitSellerVerificationAction } = await import("@/app/actions/marketplace");
