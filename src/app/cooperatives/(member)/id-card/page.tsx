@@ -145,8 +145,10 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
             .catch(err => {
                 console.error("[IdCardFace] proxy fetch failed:", err);
                 if (isMounted) {
-                    // Last-resort fallback: use raw URL (may taint canvas on mobile)
-                    setImgSrc(data.passportPhotoUrl);
+                    // Do NOT fall back to the raw Cloudinary URL — it will taint
+                    // the canvas on mobile and break the PDF download.
+                    // Instead show the no-photo placeholder; user can still download.
+                    setImgSrc(null);
                     setIsLoadingImage(false);
                 }
             });

@@ -332,7 +332,30 @@ export default function AcademyApplicationPage() {
     };
 
     async function handleSubmit() {
-        if (!validateStep(4)) return;
+        // ── Pre-submission guard — validate ALL steps before server call ──────
+        // validateStep(4) only checks terms. Also run steps 1-3 here so a
+        // localStorage-restored draft with incomplete data is caught before
+        // hitting the server action.
+        if (!validateStep(1)) {
+            showToast("Personal information is incomplete. Please review Step 1.", "error");
+            setCurrentStep(1);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+        if (!validateStep(2)) {
+            showToast("Education details are incomplete. Please review Step 2.", "error");
+            setCurrentStep(2);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+        if (!validateStep(3)) {
+            showToast("Please select at least one learning path and provide your goals.", "error");
+            setCurrentStep(3);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+        if (!validateStep(4)) return; // Terms acceptance check
+        // ─────────────────────────────────────────────────────────────────────
 
         setIsSubmitting(true);
 
@@ -369,7 +392,7 @@ export default function AcademyApplicationPage() {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <div className="bg-linear-to-r from-blue-600 to-indigo-600 text-white py-12">
+            <div style={{ background: "linear-gradient(to right, #2563eb, #4f46e5)" }} className="text-white py-12">
                 <div className="max-w-4xl mx-auto px-6 text-center">
                     <h1 className="text-3xl md:text-4xl font-bold mb-2">Academy Learner Application</h1>
                     <p className="text-blue-100 mb-2">

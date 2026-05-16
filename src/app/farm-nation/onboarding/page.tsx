@@ -185,6 +185,20 @@ export default function FarmNationOnboardingPage() {
     };
 
     async function handleSubmit(finalData: any) {
+        // ── Pre-submission guard ────────────────────────────────────────────────
+        const profile = finalData.profile || {};
+        if (!finalData.role) {
+            showToast("Please select an account type before submitting.", "error");
+            setCurrentStepId("role");
+            return;
+        }
+        if (!profile.firstName?.trim() || profile.firstName.trim().length < 2 ||
+            !profile.lastName?.trim() || profile.lastName.trim().length < 2) {
+            showToast("Profile name is incomplete — please check your first and last name.", "error");
+            setCurrentStepId("profile");
+            return;
+        }
+        // ────────────────────────────────────────────────────────────────
         try {
             if (isRevisionMode || isEditMode) {
                 const result = await resubmitFarmNationApplicationAction(finalData);
@@ -263,7 +277,7 @@ export default function FarmNationOnboardingPage() {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <div className="bg-linear-to-r from-teal-600 to-cyan-600 text-white py-6 px-4 md:px-8">
+            <div style={{ background: "linear-gradient(to right, #0d9488, #0891b2)" }} className="text-white py-6 px-4 md:px-8">
                 <div className="max-w-4xl mx-auto">
                     <div className="flex items-center justify-between mb-3">
                         <Link
