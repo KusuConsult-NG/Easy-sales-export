@@ -331,6 +331,43 @@ export default function WaveApplicationPage() {
     };
 
     async function handleSubmit() {
+        // ── Pre-submission validation guard ───────────────────────────────────
+        // Validates critical fields before hitting the server. Catches cases where
+        // localStorage-restored data is empty or too short (Zod min-2 rule).
+        const missingPersonal =
+            !formData.surname.trim() || formData.surname.trim().length < 2 ||
+            !formData.firstName.trim() || formData.firstName.trim().length < 2 ||
+            !formData.phone.trim() ||
+            !formData.dateOfBirth ||
+            !formData.stateOfOrigin ||
+            !formData.stateOfResidence ||
+            !formData.maritalStatus;
+
+        const missingNok =
+            !formData.nextOfKinName.trim() || formData.nextOfKinName.trim().length < 2 ||
+            !formData.nextOfKinPhone.trim();
+
+        const missingFinancial =
+            !formData.bankName.trim() || formData.bankName.trim().length < 2 ||
+            !formData.accountNumber.trim();
+
+        if (missingPersonal) {
+            showToast("Personal details are incomplete — please review Section A.", "error");
+            goToStep(0);
+            return;
+        }
+        if (missingNok) {
+            showToast("Next of kin information is incomplete — please review Section A.", "error");
+            goToStep(0);
+            return;
+        }
+        if (missingFinancial) {
+            showToast("Financial details are incomplete — please review Section E.", "error");
+            goToStep(4);
+            return;
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         setSubmitting(true);
         try {
             const result = (isRevisionMode || isEditMode)
