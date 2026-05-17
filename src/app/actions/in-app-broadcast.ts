@@ -50,7 +50,8 @@ export type NotificationType = Notification["type"];
 
 export interface InAppBroadcastFilters { audience: InAppAudience;
     state?: string;
-    sellerStatus?: "all" | "pending" | "approved" | "suspended"; }
+    sellerStatus?: "all" | "pending" | "approved" | "suspended";
+    moduleStatus?: string; }
 
 export type InAppBroadcastPreview = ActionResponse<{
     count: number;
@@ -208,6 +209,17 @@ export async function collectRecipientUserIds(
                 const ENROLLED_STATUSES = new Set(['pending', 'under_review', 'approved', 'active', 'paid', 'completed', 'suspended']);
                 if (!((mReg && ENROLLED_STATUSES.has(mReg.status)) || u.marketplaceAccountType || (u.roles && (u.roles.includes("buyer") || u.roles.includes("seller"))))) continue;
 
+                const userStatus = mReg?.status || "approved";
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved") {
+                        if (userStatus === "approved" || userStatus === "active") continue;
+                    } else if (filters.moduleStatus === "approved") {
+                        if (userStatus !== "approved" && userStatus !== "active") continue;
+                    } else {
+                        if (userStatus !== filters.moduleStatus) continue;
+                    }
+                }
+
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(d.id, u.fullName || u.name || "User");
@@ -216,11 +228,22 @@ export async function collectRecipientUserIds(
         }
         case "cooperative_members": { // We use .get() for smaller auxiliary queries but we select minimum fields
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .select("userId", "firstName", "lastName", "state", "address")
+                .select("userId", "firstName", "lastName", "state", "address", "membershipStatus", "status")
                 .get();
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
+                const currentStatus = m.membershipStatus || m.status || "pending";
+                
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved") {
+                        if (currentStatus === "approved" || currentStatus === "active") continue;
+                    } else if (filters.moduleStatus === "approved") {
+                        if (currentStatus !== "approved" && currentStatus !== "active") continue;
+                    } else {
+                        if (currentStatus !== filters.moduleStatus) continue;
+                    }
+                }
                 const uid = m.userId || d.id;
                 
                 let userState = m.state || (m.address && m.address.state);
@@ -236,7 +259,15 @@ export async function collectRecipientUserIds(
             break;
         }
         case "wave_applicants": {
-            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q
                 .select("userId", "firstName", "surname", "state", "residentialState")
                 .get();
             for (const d of (await stream).docs) {
@@ -246,7 +277,16 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "academy_users": { const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+        case "academy_users": { 
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q
                 .select("userId", "personalInfo", "state")
                 .get();
             for (const d of (await stream).docs) {
@@ -257,7 +297,16 @@ export async function collectRecipientUserIds(
             }
             break;
         }
-        case "export_users": { const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+        case "export_users": { 
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q
                 .select("userId", "profile", "companyInfo", "state")
                 .get();
             for (const d of (await stream).docs) {
@@ -269,7 +318,15 @@ export async function collectRecipientUserIds(
             break;
         }
         case "farm_nation_users": {
-            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES)
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q
                 .select("userId", "firstName", "lastName", "state")
                 .get();
             for (const d of (await stream).docs) {

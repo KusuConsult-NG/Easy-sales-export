@@ -570,7 +570,11 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                             else if (userStatus === "rejected") moduleStats.rejected++;
                             else if (userStatus === "suspended") moduleStats.suspended++;
                             
-                            matchesAudience = statusFilter ? userStatus === statusFilter : true;
+                            if (statusFilter === "not_approved") {
+                                matchesAudience = userStatus !== "approved";
+                            } else {
+                                matchesAudience = statusFilter ? userStatus === statusFilter : true;
+                            }
                         } else {
                             if (filters.audience === "pending_applicants") {
                                 matchesAudience = Object.values(regs).some((r: any) => r.status === "pending" || r.status === "submitted");

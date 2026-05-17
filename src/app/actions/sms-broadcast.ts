@@ -46,6 +46,7 @@ export type SmsAudience =
 export interface SmsFilters { audience: SmsAudience;
     state?: string;
     sellerStatus?: "all" | "pending" | "approved" | "suspended";
+    moduleStatus?: string;
     customRecipients?: string[]; }
 
 export type SmsBroadcastPreview = ActionResponse<{
@@ -217,17 +218,41 @@ async function collectSmsRecipients(
                 const ENROLLED_STATUSES = new Set(['pending', 'under_review', 'approved', 'active', 'paid', 'completed', 'suspended']);
                 if (!((mReg && ENROLLED_STATUSES.has(mReg.status)) || u.marketplaceAccountType || (u.roles && (u.roles.includes("buyer") || u.roles.includes("seller"))))) continue;
 
+                const userStatus = mReg?.status || "approved";
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved") {
+                        if (userStatus === "approved" || userStatus === "active") continue;
+                    } else if (filters.moduleStatus === "approved") {
+                        if (userStatus !== "approved" && userStatus !== "active") continue;
+                    } else {
+                        if (userStatus !== filters.moduleStatus) continue;
+                    }
+                }
+
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add(u.phone || u.phoneNumber, u.fullName || u.name || "User");
             }
             break;
         }
-        case "cooperative_members": { const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name").get();
+        case "cooperative_members": { 
+            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName", "name", "membershipStatus", "status").get();
             const userIds: string[] = [];
             const members: any[] = [];
             for (const d of (await stream).docs) {
                 const m: any = d.data();
+                const currentStatus = m.membershipStatus || m.status || "pending";
+                
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved") {
+                        if (currentStatus === "approved" || currentStatus === "active") continue;
+                    } else if (filters.moduleStatus === "approved") {
+                        if (currentStatus !== "approved" && currentStatus !== "active") continue;
+                    } else {
+                        if (currentStatus !== filters.moduleStatus) continue;
+                    }
+                }
+
                 members.push(m);
                 if (m.userId) userIds.push(m.userId);
             }
@@ -250,7 +275,15 @@ async function collectSmsRecipients(
             break;
         }
         case "wave_applicants": {
-            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").get();
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q.select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
@@ -259,7 +292,15 @@ async function collectSmsRecipients(
             break;
         }
         case "academy_users": { // Primary: academy_applications collection
-            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").get();
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q.select("personalInfo", "state", "phone", "phoneNumber").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
@@ -288,7 +329,16 @@ async function collectSmsRecipients(
             }
             break;
         }
-        case "export_users": { const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("profile", "companyInfo", "state", "phone", "phoneNumber").get();
+        case "export_users": { 
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
+            }
+            const stream = q.select("profile", "companyInfo", "state", "phone", "phoneNumber").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
@@ -309,7 +359,11 @@ async function collectSmsRecipients(
             break;
         }
         case "farm_nation_users": {
-            const stream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").get();
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES);
+            if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                q = q.where("status", "==", filters.moduleStatus);
+            }
+            const stream = q.select("state", "phone", "phoneNumber", "firstName", "lastName").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
                 if (filters.state && !isStateMatch(a.state, filters.state)) continue;

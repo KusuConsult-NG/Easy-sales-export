@@ -70,6 +70,7 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
     cooperative_members: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
         { value: "suspended", label: "Suspended" },
@@ -77,12 +78,14 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
     wave_applicants: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
     ],
     academy_users: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
         { value: "under_review", label: "Under Review" },
@@ -90,18 +93,21 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
     farm_nation_users: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
     ],
     export_users: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
     ],
     marketplace_onboarded: [
         { value: "all", label: "All Statuses" },
         { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
     ],

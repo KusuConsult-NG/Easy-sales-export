@@ -46,12 +46,60 @@ const NOTIFICATION_TYPES: { value: NotificationType; label: string; color: strin
     { value: "general", label: "📢 General", color: "teal" },
 ];
 
+const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> = {
+    cooperative_members: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+        { value: "suspended", label: "Suspended" },
+    ],
+    wave_applicants: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+    academy_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+        { value: "under_review", label: "Under Review" },
+    ],
+    farm_nation_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+    export_users: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+    marketplace_onboarded: [
+        { value: "all", label: "All Statuses" },
+        { value: "approved", label: "Approved" },
+        { value: "not_approved", label: "Not Approved (Pending, etc.)" },
+        { value: "pending", label: "Pending" },
+        { value: "rejected", label: "Rejected" },
+    ],
+};
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function InAppBroadcastPage() {
     const [audience, setAudience] = useState<InAppAudience>("all");
     const [state, setState] = useState("");
     const [sellerStatus, setSellerStatus] = useState<"all" | "approved" | "pending" | "suspended">("all");
+    const [moduleStatus, setModuleStatus] = useState("all");
     const [notifType, setNotifType] = useState<NotificationType>("info");
     const [title, setTitle] = useState("");
     const [message, setMessage] = useState("");
@@ -64,11 +112,13 @@ export default function InAppBroadcastPage() {
     const [result, setResult] = useState<{ success: boolean; delivered: number; error?: string } | null>(null);
 
     const isSellerAudience = ["sellers", "wholesale_sellers", "retail_sellers"].includes(audience);
+    const hasModuleStatus = audience in MODULE_STATUS_OPTIONS;
 
     const buildFilters = (): InAppBroadcastFilters => ({
         audience,
         state: state || undefined,
         sellerStatus: isSellerAudience ? sellerStatus : undefined,
+        moduleStatus: hasModuleStatus ? moduleStatus : undefined,
     });
 
     async function handlePreview() {
@@ -150,7 +200,11 @@ export default function InAppBroadcastPage() {
                         {AUDIENCES.map((a) => (
                             <button
                                 key={a.value}
-                                onClick={() => { setAudience(a.value); setPreview(null); }}
+                                onClick={() => { 
+                                    setAudience(a.value); 
+                                    setPreview(null); 
+                                    setModuleStatus(MODULE_STATUS_OPTIONS[a.value]?.[0]?.value || "all");
+                                }}
                                 className={`text-left p-3 rounded-xl border transition-all ${
                                     audience === a.value
                                         ? "border-emerald-500 bg-emerald-500/10"
@@ -189,6 +243,22 @@ export default function InAppBroadcastPage() {
                                     <option value="approved">Approved</option>
                                     <option value="pending">Pending</option>
                                     <option value="suspended">Suspended</option>
+                                </select>
+                            </div>
+                        )}
+                        {hasModuleStatus && (
+                            <div>
+                                <label className="block text-white/60 text-xs font-medium mb-1.5">
+                                    Registration Status Filter
+                                </label>
+                                <select
+                                    value={moduleStatus}
+                                    onChange={(e) => { setModuleStatus(e.target.value); setPreview(null); }}
+                                    className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm focus:outline-none focus:border-emerald-500"
+                                >
+                                    {MODULE_STATUS_OPTIONS[audience].map((s) => (
+                                        <option key={s.value} value={s.value}>{s.label}</option>
+                                    ))}
                                 </select>
                             </div>
                         )}
