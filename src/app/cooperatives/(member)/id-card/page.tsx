@@ -225,7 +225,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                     <div className="space-y-0.5">
                         <div className="flex justify-between text-xs">
                             <span className="text-white/60">Gender</span>
-                            <span className="text-white font-semibold capitalize">{data.gender}</span>
+                            <span className="text-white font-semibold capitalize">{data.gender || "—"}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                             <span className="text-white/60">State</span>
@@ -514,7 +514,7 @@ export default function CooperativeIdCardPage() {
                                     ["Full Name", result.data.fullName],
                                     ["Member No.", result.data.memberNumber],
                                     ["Tier", "Member"],
-                                    ["Gender", result.data.gender],
+                                    ["Gender", result.data.gender || "—"],
                                     ["State of Origin", result.data.stateOfOrigin],
                                     ["Issue Date", fmt(result.data.joinedAt)],
                                     ["Valid Until", fmt(result.data.validUntil)],

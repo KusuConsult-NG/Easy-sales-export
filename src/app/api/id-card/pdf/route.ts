@@ -4,14 +4,28 @@
  * Server-side PDF generator for the Cooperative Membership ID Card.
  *
  * WHY: html2canvas cannot resolve Tailwind v4 CSS custom properties
- * (var(--color-*), color-mix()) on mobile browsers. Any attempt to
- * capture the card element via html2canvas on Android/iOS causes a
- * blank/corrupt canvas or an outright throw, showing the user
- * "Download failed". Generating the PDF on the server avoids all
- * CSS, CORS, and canvas constraints entirely.
+ * (var(--color-*), color-mix()) on mobile browsers — causes blank/corrupt
+ * canvas or throws on Android/iOS. Server-side generation has zero CSS,
+ * CORS, or canvas constraints.
  *
- * OUTPUT: CR80 card (86mm × 54mm), landscape, returned as
- *         application/pdf so the browser prompts a save dialog.
+ * OUTPUT: CR80 card (86mm × 54mm), landscape.
+ *
+ * LAYOUT (all units: mm):
+ *   ┌──────────────────────────────────────────────────────────────────────────┐
+ *   │ shimmer strip (h=1)                                                       │
+ *   ├──────────────────────────────────────────────────────────────────────────┤
+ *   │ EASY SALES EXPORT LTD       [MEMBER badge]    y=2..10                    │
+ *   │ COOPERATIVE MEMBERSHIP                                                    │
+ *   ├──────────────────────────────────────────────────────────────────────────┤
+ *   │ [photo 18×24]  Full Name                      y=12..44                   │
+ *   │                Member No                                                  │
+ *   │                Gender      ___                                            │
+ *   │                State       ___                                            │
+ *   │                Issued      ___                                            │
+ *   │                Valid Until ___                                            │
+ *   ├──────────────────────────────────────────────────────────────────────────┤
+ *   │ • • • • • • • • • • •  easysalesexport.com    y=45..53                  │
+ *   └──────────────────────────────────────────────────────────────────────────┘
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -24,13 +38,21 @@ import { logger } from "@/lib/logger";
 function fmtShort(iso: string): string {
     if (!iso) return "—";
     try {
-        return new Intl.DateTimeFormat("en-NG", { year: "numeric", month: "short" }).format(new Date(iso));
+        return new Intl.DateTimeFormat("en-NG", {
+            year: "numeric",
+            month: "short",
+        }).format(new Date(iso));
     } catch {
         return iso;
     }
 }
 
-/** Fetch a remote image and return it as a base64 data URI (jpeg). */
+function capitalize(s: string): string {
+    if (!s) return "—";
+    return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+/** Fetch a remote image → base64 data URI. Runs server-side, no CORS. */
 async function fetchImageAsBase64(url: string): Promise<string | null> {
     try {
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -43,11 +65,29 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
     }
 }
 
+// ── Layout constants (mm) ────────────────────────────────────────────────────
+
+const W = 86;   // card width
+const H = 54;   // card height
+const PAD = 4;  // horizontal padding
+
+const HEADER_H = 11;         // header section height
+const FOOTER_H = 9;          // footer section height
+const BODY_TOP = HEADER_H + 1;
+const BODY_H = H - HEADER_H - FOOTER_H - 1;
+
+const PHOTO_X = PAD;
+const PHOTO_Y = BODY_TOP;
+const PHOTO_W = 18;
+const PHOTO_H = BODY_H;      // fills full body height
+
+const DETAIL_X = PHOTO_X + PHOTO_W + 3;
+const DETAIL_W = W - DETAIL_X - PAD;
+
 // ── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
     try {
-        // Auth guard — must be a logged-in user
         const sessionResult = await requireSession();
         if (!sessionResult.session) {
             return NextResponse.json({ error: "Authentication required" }, { status: 401 });
@@ -55,63 +95,68 @@ export async function POST(req: NextRequest) {
 
         const data = await req.json();
         const {
-            fullName,
-            memberNumber,
-            gender,
-            stateOfOrigin,
-            joinedAt,
-            validUntil,
-            passportPhotoUrl,
+            fullName = "",
+            memberNumber = "",
+            gender = "",
+            stateOfOrigin = "",
+            joinedAt = "",
+            validUntil = "",
+            passportPhotoUrl = null,
         } = data;
 
-        // ── Generate PDF ──────────────────────────────────────────────────────
+        // ── PDF canvas ───────────────────────────────────────────────────────
+        const pdf = new jsPDF({
+            orientation: "landscape",
+            unit: "mm",
+            format: [W, H],
+        });
 
-        // CR80 card: 86mm × 54mm — landscape
-        const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [86, 54] });
+        // ── Background: 3-stop purple gradient simulation ────────────────────
+        pdf.setFillColor(107, 33, 168);   // #6b21a8
+        pdf.rect(0, 0, 30, H, "F");
+        pdf.setFillColor(120, 30, 195);   // #7820c3
+        pdf.rect(30, 0, 28, H, "F");
+        pdf.setFillColor(55, 48, 163);    // #3730a3
+        pdf.rect(58, 0, W - 58, H, "F");
 
-        // ── Background gradient simulation (3 rectangles) ──────────────────
-        // Purple gradient: #6b21a8 → #7e22ce → #3730a3
-        pdf.setFillColor(107, 33, 168);
-        pdf.rect(0, 0, 29, 54, "F");
-        pdf.setFillColor(126, 34, 206);
-        pdf.rect(29, 0, 28, 54, "F");
-        pdf.setFillColor(55, 48, 163);
-        pdf.rect(57, 0, 29, 54, "F");
-
-        // ── Holographic shimmer strip ──────────────────────────────────────
+        // ── Holographic shimmer strip (top 1mm) ──────────────────────────────
         pdf.setFillColor(255, 255, 255);
-        pdf.setGState(new (pdf as any).GState({ opacity: 0.3 }));
-        pdf.rect(0, 0, 86, 1.5, "F");
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.35 }));
+        pdf.rect(0, 0, W, 1, "F");
         pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
 
-        // ── Header ────────────────────────────────────────────────────────
+        // ── Header ───────────────────────────────────────────────────────────
+        // Title
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(7);
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("EASY SALES EXPORT LTD", PAD, 6);
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(4);
+        pdf.setTextColor(200, 180, 255);
+        pdf.text("COOPERATIVE MEMBERSHIP", PAD, 9.5);
+
+        // MEMBER badge — top right
+        const badgeW = 15;
+        const badgeH = 5;
+        const badgeX = W - PAD - badgeW;
+        const badgeY = 3;
+        pdf.setFillColor(196, 181, 253); // purple-300
+        pdf.roundedRect(badgeX, badgeY, badgeW, badgeH, 1.2, 1.2, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(4.5);
+        pdf.setTextColor(88, 28, 135); // purple-900
+        pdf.text("MEMBER", badgeX + badgeW / 2, badgeY + 3.3, { align: "center" });
+
+        // Header divider
         pdf.setDrawColor(255, 255, 255);
         pdf.setLineWidth(0.2);
-        pdf.line(5, 11, 81, 11); // border-b white/20
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.25 }));
+        pdf.line(PAD, HEADER_H, W - PAD, HEADER_H);
+        pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
 
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(6.5);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("EASY SALES EXPORT LTD", 5, 7);
-        pdf.setFontSize(4.5);
-        pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(200, 180, 255);
-        pdf.text("COOPERATIVE MEMBERSHIP", 5, 10);
-
-        // MEMBER badge (top-right)
-        pdf.setFillColor(196, 181, 253); // purple-300
-        pdf.roundedRect(68, 3, 13, 4.5, 1, 1, "F");
-        pdf.setTextColor(88, 28, 135); // purple-900
-        pdf.setFontSize(4);
-        pdf.setFont("helvetica", "bold");
-        pdf.text("MEMBER", 74.5, 6.2, { align: "center" });
-
-        // ── Passport photo ────────────────────────────────────────────────
-        const photoX = 5;
-        const photoY = 13;
-        const photoW = 17;
-        const photoH = 22;
-
+        // ── Passport photo ───────────────────────────────────────────────────
         let photoBase64: string | null = null;
         if (passportPhotoUrl) {
             photoBase64 = await fetchImageAsBase64(passportPhotoUrl);
@@ -119,73 +164,105 @@ export async function POST(req: NextRequest) {
 
         // Photo border
         pdf.setDrawColor(255, 255, 255);
-        pdf.setLineWidth(0.4);
-        pdf.roundedRect(photoX, photoY, photoW, photoH, 1, 1, "S");
+        pdf.setLineWidth(0.5);
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.5 }));
+        pdf.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 1, 1, "S");
+        pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
 
         if (photoBase64) {
-            pdf.addImage(photoBase64, "JPEG", photoX, photoY, photoW, photoH);
+            pdf.addImage(photoBase64, "JPEG", PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H);
         } else {
-            // Placeholder
-            pdf.setFillColor(255, 255, 255, 0.1);
-            pdf.roundedRect(photoX, photoY, photoW, photoH, 1, 1, "F");
-            pdf.setTextColor(200, 200, 255);
+            pdf.setFillColor(120, 80, 200);
+            pdf.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_W, PHOTO_H, 1, 1, "F");
+            pdf.setTextColor(200, 180, 255);
+            pdf.setFont("helvetica", "normal");
             pdf.setFontSize(4);
-            pdf.text("No Photo", photoX + photoW / 2, photoY + photoH / 2, { align: "center" });
+            pdf.text("No\nPhoto", PHOTO_X + PHOTO_W / 2, PHOTO_Y + PHOTO_H / 2 - 2, {
+                align: "center",
+            });
         }
 
-        // ── Member details ─────────────────────────────────────────────────
-        const detailX = 25;
-        const detailY = 15;
+        // ── Member details (right of photo) ──────────────────────────────────
+        let dy = BODY_TOP + 4;
 
-        pdf.setTextColor(255, 255, 255);
-        pdf.setFontSize(7);
+        // Full name
         pdf.setFont("helvetica", "bold");
-        pdf.text(fullName || "—", detailX, detailY);
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(255, 255, 255);
+        // Truncate long names to fit card width
+        const maxNameW = DETAIL_W;
+        let displayName = fullName || "—";
+        while (
+            pdf.getTextWidth(displayName) > maxNameW && displayName.length > 3
+        ) {
+            displayName = displayName.slice(0, -4) + "…";
+        }
+        pdf.text(displayName, DETAIL_X, dy);
+        dy += 4.5;
 
-        pdf.setFontSize(4);
+        // Member number
         pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(200, 180, 255);
-        pdf.text(memberNumber || "—", detailX, detailY + 4);
+        pdf.setFontSize(4);
+        pdf.setTextColor(180, 150, 240);
+        pdf.text(memberNumber || "—", DETAIL_X, dy);
+        dy += 5.5;
 
-        const rows = [
-            ["Gender", gender || "—"],
-            ["State", stateOfOrigin || "—"],
-            ["Issued", fmtShort(joinedAt)],
+        // Divider under member number
+        pdf.setDrawColor(255, 255, 255);
+        pdf.setLineWidth(0.15);
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.2 }));
+        pdf.line(DETAIL_X, dy - 1, W - PAD, dy - 1);
+        pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
+
+        // Detail rows
+        const rows: [string, string][] = [
+            ["Gender",     capitalize(gender)],
+            ["State",      stateOfOrigin || "—"],
+            ["Issued",     fmtShort(joinedAt)],
             ["Valid Until", fmtShort(validUntil)],
         ];
 
-        let rowY = detailY + 8;
+        const ROW_H = 5.2;
         rows.forEach(([label, value]) => {
-            pdf.setTextColor(180, 160, 240);
-            pdf.setFontSize(4);
-            pdf.text(label, detailX, rowY);
-
-            pdf.setTextColor(255, 255, 255);
-            pdf.setFont("helvetica", "bold");
-            pdf.text(value, 81, rowY, { align: "right" });
+            // Label
             pdf.setFont("helvetica", "normal");
-            rowY += 4.5;
+            pdf.setFontSize(4);
+            pdf.setTextColor(160, 140, 220);
+            pdf.text(label, DETAIL_X, dy);
+
+            // Value — right-aligned
+            pdf.setFont("helvetica", "bold");
+            pdf.setFontSize(4.5);
+            pdf.setTextColor(255, 255, 255);
+            pdf.text(value, W - PAD, dy, { align: "right" });
+
+            dy += ROW_H;
         });
 
-        // ── Footer ────────────────────────────────────────────────────────
+        // ── Footer divider ───────────────────────────────────────────────────
+        const footerY = H - FOOTER_H;
         pdf.setDrawColor(255, 255, 255);
         pdf.setLineWidth(0.15);
-        pdf.line(5, 46, 81, 46);
+        pdf.setGState(new (pdf as any).GState({ opacity: 0.2 }));
+        pdf.line(PAD, footerY, W - PAD, footerY);
+        pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
 
         // Dots
-        for (let i = 0; i < 20; i++) {
+        const dotY = footerY + 4;
+        for (let i = 0; i < 22; i++) {
             pdf.setFillColor(255, 255, 255);
-            pdf.setGState(new (pdf as any).GState({ opacity: 0.2 }));
-            pdf.circle(5 + i * 3, 49, 0.5, "F");
+            pdf.setGState(new (pdf as any).GState({ opacity: 0.22 }));
+            pdf.circle(PAD + i * 3.5, dotY, 0.55, "F");
         }
         pdf.setGState(new (pdf as any).GState({ opacity: 1 }));
 
-        pdf.setTextColor(180, 160, 220);
-        pdf.setFontSize(3.5);
+        // Website text
         pdf.setFont("helvetica", "normal");
-        pdf.text("easysalesexport.com", 81, 49, { align: "right" });
+        pdf.setFontSize(3.5);
+        pdf.setTextColor(160, 140, 210);
+        pdf.text("easysalesexport.com", W - PAD, dotY + 0.5, { align: "right" });
 
-        // ── Return PDF ────────────────────────────────────────────────────
+        // ── Output ───────────────────────────────────────────────────────────
         const pdfBuffer = Buffer.from(pdf.output("arraybuffer"));
 
         return new NextResponse(pdfBuffer, {
