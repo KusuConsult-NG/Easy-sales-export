@@ -99,8 +99,9 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             : new Set();
 
         const totalMembersCount = allMembers.length;
-        const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.id));
-        const paidMembersCount = paidUserIds.size;
+        // A user is only a "paid member" in this context if they actually have a member document
+        const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.userId) || paidUserIds.has(m.id));
+        const paidMembersCount = paidMembersList.length;
 
         const activeMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "active" || m.membershipStatus === "approved" ||
