@@ -412,48 +412,67 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
         paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
     }
 
-    for (const doc of moduleSnap.docs) {
-        const d = doc.data();
-        const userId = d[userIdField] || doc.id; // Fallback to doc id if userId is missing
-        if (!userId) continue;
+    if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
+        // Cooperative Members are defined by their payment. Some might not have a member doc yet.
+        const memberDocs = new Map(moduleSnap.docs.map(doc => [doc.data()[userIdField] || doc.id, doc.data()]));
+        
+        for (const userId of paidUserIds!) {
+            const d = memberDocs.get(userId) || {};
+            let status = d[statusField] || d.membershipStatus || d.status || "pending";
+            if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
 
-        let status = d[statusField] || d.membershipStatus || d.status || "pending";
-        if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
+            moduleStats.total++;
+            if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
+            else if (status === "pending") moduleStats.pending++;
+            else if (status === "rejected") moduleStats.rejected++;
+            else if (status === "suspended") moduleStats.suspended++;
 
-        // Enforce payment condition for Cooperative Members
-        if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
-            // A cooperative member must have a completed payment to be counted as valid (pending or approved)
-            if (!paidUserIds?.has(userId)) {
+            if (statusFilter === "not_approved") {
+                if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+            } else if (statusFilter === "approved") {
+                if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
+            } else if (statusFilter && status !== statusFilter) {
                 continue;
             }
-        }
 
-        // Enforce payment condition for Academy
-        if (collectionName === COLLECTIONS.ACADEMY_APPLICATIONS) {
-            if (status !== "approved" && !["completed", "paid", "successful"].includes(d.paymentStatus)) {
+            userEntries.push({ userId, status });
+        }
+    } else {
+        for (const doc of moduleSnap.docs) {
+            const d = doc.data();
+            const userId = d[userIdField] || doc.id; // Fallback to doc id if userId is missing
+            if (!userId) continue;
+
+            let status = d[statusField] || d.membershipStatus || d.status || "pending";
+            if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
+
+            // Enforce payment condition for Academy
+            if (collectionName === COLLECTIONS.ACADEMY_APPLICATIONS) {
+                if (status !== "approved" && !["completed", "paid", "successful"].includes(d.paymentStatus)) {
+                    continue;
+                }
+            }
+
+            // Must not count "not_started" users as enrolled
+            if (status === "not_started") continue;
+
+            moduleStats.total++;
+            if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
+            else if (status === "pending") moduleStats.pending++;
+            else if (status === "rejected") moduleStats.rejected++;
+            else if (status === "suspended") moduleStats.suspended++;
+
+            // Apply status filter if set
+            if (statusFilter === "not_approved") {
+                if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+            } else if (statusFilter === "approved") {
+                if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
+            } else if (statusFilter && status !== statusFilter) {
                 continue;
             }
+
+            userEntries.push({ userId, status });
         }
-
-        // Must not count "not_started" users as enrolled
-        if (status === "not_started") continue;
-
-        moduleStats.total++;
-        if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
-        else if (status === "pending") moduleStats.pending++;
-        else if (status === "rejected") moduleStats.rejected++;
-        else if (status === "suspended") moduleStats.suspended++;
-
-        // Apply status filter if set
-        if (statusFilter === "not_approved") {
-            if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
-        } else if (statusFilter === "approved") {
-            if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
-        } else if (statusFilter && status !== statusFilter) {
-            continue;
-        }
-
-        userEntries.push({ userId, status });
     }
 
     // Batch-resolve emails from USERS collection (chunks of 30 to avoid limits)
