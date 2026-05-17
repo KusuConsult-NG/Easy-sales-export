@@ -30,6 +30,7 @@ function isStateMatch(dbState: any, filterState: string | undefined): boolean { 
 
 export type InAppAudience =
     | "all"
+    | "all_except_approved_coop"
     | "buyers"
     | "sellers"
     | "marketplace_onboarded"
@@ -103,12 +104,23 @@ export async function collectRecipientUserIds(
     const add = (userId: string, name: string) => { if (userId && !recipients.has(userId)) recipients.set(userId, { userId, name });
     };
 
-    switch (filters.audience) { case "all": {
+    switch (filters.audience) { 
+        case "all": 
+        case "all_except_approved_coop": {
+            const excludeIds = new Set<string>();
+            if (filters.audience === "all_except_approved_coop") {
+                const approvedCoopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("membershipStatus", "==", "approved").get();
+                const activeCoopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "==", "approved").get();
+                approvedCoopSnap.docs.forEach(doc => excludeIds.add(doc.data().userId || doc.id));
+                activeCoopSnap.docs.forEach(doc => excludeIds.add(doc.data().userId || doc.id));
+            }
+
             // 1. Primary: root users collection
             const stream = db.collection(COLLECTIONS.USERS)
                 .select("name", "fullName", "stateOfOrigin", "state", "address")
                 .get();
             for (const d of (await stream).docs) {
+                if (excludeIds.has(d.id)) continue;
                 const u = d.data();
                 const userState = u.stateOfOrigin || u.state || u.address?.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
@@ -119,49 +131,61 @@ export async function collectRecipientUserIds(
             const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "firstName", "lastName").get();
             for (const d of (await cmStream).docs) {
                 const m = d.data();
+                const uid = m.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 const userState = m.state || (m.address && m.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                if (m.userId) add(m.userId, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
+                if (uid) add(uid, m.firstName ? `${m.firstName} ${m.lastName || ""}`.trim() : "Member");
             }
 
             // 3. Supplement: wave_applications
             const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("userId", "state", "residentialState", "firstName", "surname").get();
             for (const d of (await waveStream).docs) {
                 const a = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
-                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
+                if (uid) add(uid, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
             }
 
             // 4. Supplement: academy_applications
             const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state").get();
             for (const d of (await academyStream).docs) { const a = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 const userState = a.personalInfo?.state || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
+                if (uid) add(uid, a.personalInfo?.fullName || "Academy User");
             }
 
             // 5. Supplement: wave_briefing_registrations
             const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).where("status", "==", "registered").select("userId", "name", "firstName", "surname", "state").get();
             for (const d of (await briefStream).docs) {
                 const r = d.data();
+                const uid = r.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
-                if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
+                if (uid) add(uid, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             }
 
             // 6. Supplement: farm_nation_applications
             const fnStream = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).select("userId", "profile").get();
             for (const d of (await fnStream).docs) {
                 const a = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
-                if (a.userId) add(a.userId, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
+                if (uid) add(uid, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
             }
 
             // 7. Supplement: export_applications
             const exportStream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).select("userId", "profile", "companyInfo", "state").get();
             for (const d of (await exportStream).docs) { const a = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
-                if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
+                if (uid) add(uid, a.profile?.fullName || "Export User");
             }
 
             break;
@@ -228,12 +252,15 @@ export async function collectRecipientUserIds(
         }
         case "cooperative_members": { // We use .get() for smaller auxiliary queries but we select minimum fields
             const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .select("userId", "firstName", "lastName", "state", "address", "membershipStatus", "status")
+                .select("userId", "firstName", "lastName", "state", "address", "membershipStatus", "status", "paymentStatus")
                 .get();
             const uMap = await resolveUsers(db, snap.docs.map(d => d.data().userId));
             for (const d of snap.docs) {
                 const m = d.data();
                 const currentStatus = m.membershipStatus || m.status || "pending";
+                if (currentStatus !== "approved" && m.paymentStatus !== "completed") {
+                    continue; // Skip unpaid applications
+                }
                 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
                     if (filters.moduleStatus === "not_approved") {

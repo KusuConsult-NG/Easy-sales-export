@@ -28,6 +28,7 @@ function isStateMatch(dbState: any, filterState: string | undefined): boolean { 
 
 export type SmsAudience =
     | "all"
+    | "all_except_approved_coop"
     | "buyers"
     | "sellers"
     | "marketplace_onboarded"
@@ -105,11 +106,21 @@ async function collectSmsRecipients(
         // from every module sub-collection for users whose phone was never
         // synced to their root profile (legacy data gap).
         // ─────────────────────────────────────────────────────────────────
-        case "all": {
+        case "all": 
+        case "all_except_approved_coop": {
+            const excludeIds = new Set<string>();
+            if (filters.audience === "all_except_approved_coop") {
+                const approvedCoopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("membershipStatus", "==", "approved").get();
+                const activeCoopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "==", "approved").get();
+                approvedCoopSnap.docs.forEach(doc => excludeIds.add(doc.data().userId || doc.id));
+                activeCoopSnap.docs.forEach(doc => excludeIds.add(doc.data().userId || doc.id));
+            }
+
             // 1. Primary: root users collection
             const usersStream = db.collection(COLLECTIONS.USERS).select("stateOfOrigin", "state", "address", "phone", "phoneNumber", "kyc", "fullName", "name").get();
             const seenUserIds = new Set<string>();
             for (const d of (await usersStream).docs) {
+                if (excludeIds.has(d.id)) continue;
                 const u: any = d.data();
                 seenUserIds.add(u.id || d.id);
                 const userState = u.stateOfOrigin || u.state || (u.address && u.address.state);
@@ -118,8 +129,10 @@ async function collectSmsRecipients(
             }
 
             // 2. Supplement: cooperative_members (phone may be stored here only)
-            const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("state", "address", "phone", "phoneNumber", "firstName", "lastName").get();
+            const cmStream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).select("userId", "state", "address", "phone", "phoneNumber", "firstName", "lastName").get();
             for (const d of (await cmStream).docs) { const m: any = d.data();
+                const uid = m.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 const userState = m.state || (m.address && m.address.state);
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = m.phone || m.phoneNumber;
@@ -128,8 +141,10 @@ async function collectSmsRecipients(
             }
 
             // 3. Supplement: wave_applications
-            const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName").get();
+            const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select("userId", "state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName").get();
             for (const d of (await waveStream).docs) { const a: any = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 const phone = a.phone || a.alternativePhone || a.phoneNumber;
                 const name = [a.firstName, a.surname || a.lastName].filter(Boolean).join(" ") || "Applicant";
@@ -137,8 +152,10 @@ async function collectSmsRecipients(
             }
 
             // 4. Supplement: academy_applications
-            const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("personalInfo", "state", "phone", "phoneNumber").get();
+            const academyStream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).select("userId", "personalInfo", "state", "phone", "phoneNumber").get();
             for (const d of (await academyStream).docs) { const a: any = d.data();
+                const uid = a.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 const phone = (a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber;
@@ -147,8 +164,10 @@ async function collectSmsRecipients(
             }
 
             // 5. Supplement: wave_briefing_registrations
-            const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("state", "phone", "phoneNumber", "name", "firstName", "surname").get();
+            const briefStream = db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS).select("userId", "state", "phone", "phoneNumber", "name", "firstName", "surname").get();
             for (const d of (await briefStream).docs) { const r: any = d.data();
+                const uid = r.userId || d.id;
+                if (excludeIds.has(uid)) continue;
                 if (filters.state && !isStateMatch(r.state, filters.state)) continue;
                 add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
             }
@@ -242,6 +261,9 @@ async function collectSmsRecipients(
             for (const d of (await stream).docs) {
                 const m: any = d.data();
                 const currentStatus = m.membershipStatus || m.status || "pending";
+                if (currentStatus !== "approved" && m.paymentStatus !== "completed") {
+                    continue; // Skip unpaid applications
+                }
                 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
                     if (filters.moduleStatus === "not_approved") {

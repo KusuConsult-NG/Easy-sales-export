@@ -53,7 +53,8 @@ export type BroadcastAudience =
     | "stalled_users"
     | "pending_users"
     | "active_users"
-    | "ghost_users";
+    | "ghost_users"
+    | "all_except_approved_coop";
 
 export interface BroadcastFilters {
     audience: BroadcastAudience;
@@ -410,6 +411,14 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
         let status = d[statusField] || d.membershipStatus || d.status || "pending";
         if (status === "under_review" || status === "submitted") status = "pending";
 
+        // Enforce payment condition for Cooperative Members
+        if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
+            // A pending cooperative member MUST have paid to be considered a true pending applicant
+            if (status !== "approved" && d.paymentStatus !== "completed") {
+                continue;
+            }
+        }
+
         // Must not count "not_started" users as enrolled
         if (status === "not_started") continue;
 
@@ -617,6 +626,15 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             suspended: 0
         };
 
+        // If audience requires excluding approved cooperative members, fetch their IDs first
+        const excludeIds = new Set<string>();
+        if (filters?.audience === "all_except_approved_coop") {
+            const approvedCoopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("membershipStatus", "==", "approved").get();
+            const activeCoopSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).where("status", "==", "approved").get();
+            approvedCoopSnap.docs.forEach(doc => excludeIds.add(doc.data().userId || doc.id));
+            activeCoopSnap.docs.forEach(doc => excludeIds.add(doc.data().userId || doc.id));
+        }
+
         // Use streaming to handle high-scale user counts (37k+) safely
         await new Promise((resolve, reject) => {
             query.stream()
@@ -637,7 +655,14 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                     const userSegment = categorizeUser(data);
                     
                     let matchesAudience = false;
-                    if (!filters || filters.audience === "all") {
+                    
+                    // Exclude approved cooperative members if requested
+                    if (filters?.audience === "all_except_approved_coop") {
+                        if (excludeIds.has(doc.id)) {
+                            return; // Skip this user
+                        }
+                        matchesAudience = true;
+                    } else if (!filters || filters.audience === "all") {
                         matchesAudience = true;
                     } else if (filters.audience === userSegment) {
                         matchesAudience = true;

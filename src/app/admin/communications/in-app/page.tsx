@@ -14,6 +14,7 @@ import {
 
 const AUDIENCES: { value: InAppAudience; label: string; description: string }[] = [
     { value: "all", label: "All Users", description: "Every registered user on the platform" },
+    { value: "all_except_approved_coop", label: "All (Exclude Approved Coop)", description: "Everyone EXCEPT active Cooperative Members" },
     { value: "buyers", label: "Buyers", description: "Users with a buyer marketplace account" },
     { value: "sellers", label: "All Sellers", description: "Approved sellers (wholesale + retail)" },
     { value: "wholesale_sellers", label: "Wholesale Sellers", description: "Approved wholesale sellers only" },
