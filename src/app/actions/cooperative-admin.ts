@@ -108,6 +108,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         ).length;
 
         const pendingMembers = paidMembersCount - activeMembers;
+        const unpaidMembers = allMembers.length - paidMembersList.length;
 
         const suspendedMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "suspended" || m.status === "suspended"
@@ -190,6 +191,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
                 stats: {
                     totalMembers: Math.max(totalMembersCount, paidMembersCount),
                     paidMembers: paidMembersCount,
+                    unpaidMembers,
                     activeMembers,
                     pendingMembers,
                     suspendedMembers,
@@ -1148,7 +1150,7 @@ export async function requestCooperativeRevisionAction(
 export async function getStandardCooperativeMembersAction(
     options: {
         status?: "pending" | "approved" | "suspended" | "under_review" | "all";
-        paymentStatus?: "pending" | "completed" | "failed" | "all";
+        paymentStatus?: "pending" | "completed" | "failed" | "unpaid" | "all";
         cursorId?: string;
         limit?: number;
         search?: string;
@@ -1191,7 +1193,13 @@ export async function getStandardCooperativeMembersAction(
         // Server-side paymentStatus filter — prevents client-side filter on paginated data
         // causing mismatch between stat counts and table rows.
         if (paymentFilter && paymentFilter !== "all") {
-            q = q.where("paymentStatus", "==", paymentFilter);
+            if (paymentFilter === "completed") {
+                q = q.where("paymentStatus", "==", "completed");
+            } else if (paymentFilter === "unpaid" || paymentFilter === "pending") {
+                q = q.where("paymentStatus", "in", ["pending", "unpaid", "failed"]);
+            } else {
+                q = q.where("paymentStatus", "==", paymentFilter);
+            }
         }
 
         // Server-side date range filter

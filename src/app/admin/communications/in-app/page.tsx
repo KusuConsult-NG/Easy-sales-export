@@ -55,6 +55,7 @@ const MODULE_STATUS_OPTIONS: Record<string, { value: string; label: string }[]> 
         { value: "pending", label: "Pending" },
         { value: "rejected", label: "Rejected" },
         { value: "suspended", label: "Suspended" },
+        { value: "unpaid", label: "Unpaid" },
     ],
     wave_applicants: [
         { value: "all", label: "All Statuses" },

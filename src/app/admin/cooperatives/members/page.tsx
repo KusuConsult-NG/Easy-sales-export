@@ -85,7 +85,7 @@ export default function CooperativeMembersPage() {
     const statusFilter = (filters.status as any) || "all";
     const paymentStatusFilter = (filters.payment || "all") as any;
 
-    const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
+    const [stats, setStats] = useState<{ totalMembers: number; paidMembers?: number; unpaidMembers?: number; pendingMembers: number; activeMembers: number; } | null>(null);
     const [selectedApplication, setSelectedApplication] = useState<StandardPendingForm<MembershipApplication> | null>(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isRawDetailOpen, setIsRawDetailOpen] = useState(false);
@@ -359,7 +359,7 @@ export default function CooperativeMembersPage() {
                         >
                             <option value="all">All Payment Statuses</option>
                             <option value="completed">Paid Only</option>
-                            <option value="pending">Unpaid Only</option>
+                            <option value="unpaid">Unpaid Only</option>
                         </select>
                     </div>
                 </div>
@@ -428,7 +428,7 @@ export default function CooperativeMembersPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
                     <div className="flex items-center justify-between">
                         <div>
@@ -463,6 +463,18 @@ export default function CooperativeMembersPage() {
                             <p className="text-xs text-slate-500 mt-1">Out of {stats ? stats.totalMembers : applications.length} applications</p>
                         </div>
                         <Users className="w-12 h-12 text-slate-400 opacity-50" />
+                    </div>
+                </div>
+
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm text-red-600 mb-1">Unpaid Members</p>
+                            <p className="text-3xl font-bold text-red-700">
+                                {stats?.unpaidMembers !== undefined ? stats.unpaidMembers : applications.filter(a => a.data.paymentStatus !== "completed").length}
+                            </p>
+                        </div>
+                        <Users className="w-12 h-12 text-red-500 opacity-50" />
                     </div>
                 </div>
             </div>

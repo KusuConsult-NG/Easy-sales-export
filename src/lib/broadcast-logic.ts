@@ -413,10 +413,23 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
     }
 
     if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
-        // Cooperative Members are defined by their payment. Some might not have a member doc yet.
+        // Cooperative Members are defined by their payment, but we also want to target unpaid members
         const memberDocs = new Map(moduleSnap.docs.map(doc => [doc.data()[userIdField] || doc.id, doc.data()]));
         
-        for (const userId of paidUserIds!) {
+        let targetUserIds: string[] = [];
+        
+        if (statusFilter === "unpaid") {
+            // Target users who have a member document but NO payment
+            targetUserIds = Array.from(memberDocs.keys()).filter(userId => !paidUserIds!.has(userId));
+        } else if (statusFilter === "all" || !statusFilter) {
+            // Target everyone
+            targetUserIds = Array.from(memberDocs.keys());
+        } else {
+            // Target paid users only for other specific statuses like "approved", "pending" (payment completed but membership pending), etc.
+            targetUserIds = Array.from(paidUserIds!);
+        }
+
+        for (const userId of targetUserIds) {
             const d = memberDocs.get(userId) || {};
             let status = d[statusField] || d.membershipStatus || d.status || "pending";
             if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
@@ -427,7 +440,9 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             else if (status === "rejected") moduleStats.rejected++;
             else if (status === "suspended") moduleStats.suspended++;
 
-            if (statusFilter === "not_approved") {
+            if (statusFilter === "unpaid") {
+                // Already filtered out paid users, include everyone else
+            } else if (statusFilter === "not_approved") {
                 if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
             } else if (statusFilter === "approved") {
                 if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
