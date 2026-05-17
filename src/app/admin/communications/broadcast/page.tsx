@@ -583,7 +583,7 @@ export default function BroadcastComposePage() {
                                                     <span className="text-[10px] uppercase tracking-wider mb-1">Pending</span>
                                                     <span className="font-bold text-amber-600 text-sm">{moduleStats.pending}</span>
                                                 </div>
-                                                {moduleStats.unpaid !== undefined && (
+                                                {moduleStats.unpaid > 0 && (
                                                     <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-orange-100">
                                                         <span className="text-[10px] uppercase tracking-wider mb-1">Unpaid</span>
                                                         <span className="font-bold text-orange-600 text-sm">{moduleStats.unpaid}</span>
