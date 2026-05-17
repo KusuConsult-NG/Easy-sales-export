@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
         }
 
         const filters = await req.json();
+        console.log("=== ESTIMATE ENDPOINT HIT === v7", filters);
         const { getCleanBroadcastList } = await import("@/lib/broadcast-logic");
         const listResult = await getCleanBroadcastList(filters);
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: listResult.error || "Failed to estimate recipients" }, { status: 500 });
         }
 
-        return NextResponse.json({
+        const responseData = {
             success: true,
             data: {
                 count: listResult.data.count,
@@ -28,7 +29,14 @@ export async function POST(req: NextRequest) {
                 sample: listResult.data.recipients.slice(0, 5).map(r => ({ name: r.name, email: r.email })),
                 moduleStats: listResult.data.moduleStats
             }
-        });
+        };
+
+        const response = NextResponse.json(responseData);
+        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        response.headers.set('Pragma', 'no-cache');
+        response.headers.set('Expires', '0');
+        
+        return response;
     } catch (error: any) {
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
