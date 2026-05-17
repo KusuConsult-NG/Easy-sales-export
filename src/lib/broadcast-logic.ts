@@ -548,19 +548,27 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                             }
                         } else if (filters.audience === "cooperative_members") {
                             const cReg = regs.cooperative;
-                            if (cReg) { inModule = true; userStatus = cReg.status || "pending"; }
+                            if (cReg && (cReg.status || cReg.membershipStatus || cReg.memberId || Object.keys(cReg).length > 0)) {
+                                const currentStatus = cReg.membershipStatus || cReg.status || "pending";
+                                // Empty objects shouldn't count as users if they just have empty keys, but we check length > 0
+                                // Actually, let's be strict: must have status or be explicitly marked.
+                                if ((cReg.status && cReg.status !== "not_started") || cReg.membershipStatus) {
+                                    inModule = true; 
+                                    userStatus = currentStatus; 
+                                }
+                            }
                         } else if (filters.audience === "wave_applicants") {
                             const wReg = regs.wave;
-                            if (wReg) { inModule = true; userStatus = wReg.status || "pending"; }
+                            if (wReg && wReg.status && wReg.status !== "not_started") { inModule = true; userStatus = wReg.status; }
                         } else if (filters.audience === "academy_users") {
                             const aReg = regs.academy;
-                            if (aReg) { inModule = true; userStatus = aReg.status || "pending"; }
+                            if (aReg && aReg.status && aReg.status !== "not_started") { inModule = true; userStatus = aReg.status; }
                         } else if (filters.audience === "farm_nation_users") {
                             const fReg = regs.farm_nation || regs.farmNation;
-                            if (fReg) { inModule = true; userStatus = fReg.status || "pending"; }
+                            if (fReg && fReg.status && fReg.status !== "not_started") { inModule = true; userStatus = fReg.status; }
                         } else if (filters.audience === "export_users") {
                             const eReg = regs.export;
-                            if (eReg) { inModule = true; userStatus = eReg.status || "pending"; }
+                            if (eReg && eReg.status && eReg.status !== "not_started") { inModule = true; userStatus = eReg.status; }
                         }
 
                         if (inModule) {
