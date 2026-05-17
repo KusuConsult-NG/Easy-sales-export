@@ -357,11 +357,10 @@ export default function CooperativeIdCardPage() {
         if (!result?.data) return;
         setDownloading(true);
         try {
-            // ── Server-side PDF generation ────────────────────────────────────────
-            // html2canvas cannot resolve Tailwind v4 CSS custom properties
-            // (var(--color-*), color-mix()) on mobile browsers. This caused the
-            // "Download failed" error. We now generate the PDF on the server,
-            // which has zero CSS/CORS/canvas constraints.
+            // ── Server-side ID card generation (PNG via SVG + sharp) ─────────────
+            // Generates a high-resolution 900×567px PNG of the ID card.
+            // PNG downloads directly to files/gallery on Android and iOS with
+            // no PDF viewer chrome, no black borders, no scaling issues.
             const res = await fetch("/api/id-card/pdf", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -377,14 +376,14 @@ export default function CooperativeIdCardPage() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `ESE-CoopID-${result.data.memberNumber || "card"}.pdf`;
+            a.download = `ESE-CoopID-${result.data.memberNumber || "card"}.png`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
             showToast("ID card downloaded!", "success");
         } catch (e) {
-            console.error("[handleDownload] PDF generation failed:", e);
+            console.error("[handleDownload] ID card generation failed:", e);
             showToast("Download failed — please try again.", "error");
         } finally {
             setDownloading(false);
