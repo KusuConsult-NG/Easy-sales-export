@@ -153,11 +153,11 @@ async function collectSmsRecipients(
                 add(r.phone || r.phoneNumber, r.name || [r.firstName, r.surname].filter(Boolean).join(" ") || "Registrant");
             }
 
-            // 6. Supplement: farm_nation_inquiries
-            const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("state", "phone", "phoneNumber", "firstName", "lastName").get();
+            // 6. Supplement: farm_nation_applications
+            const fnStream = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).select("profile").get();
             for (const d of (await fnStream).docs) { const a: any = d.data();
-                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
-                add(a.phone || a.phoneNumber, [a.firstName, a.lastName].filter(Boolean).join(" ") || "Farm Nation User");
+                if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
+                add(a.profile?.phone, a.profile?.fullName || [a.profile?.firstName, a.profile?.lastName].filter(Boolean).join(" ") || "Farm Nation User");
             }
 
             // 7. Supplement: export_onboarding_applications
@@ -359,15 +359,19 @@ async function collectSmsRecipients(
             break;
         }
         case "farm_nation_users": {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES);
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS);
             if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                q = q.where("status", "==", filters.moduleStatus);
+                if (filters.moduleStatus === "not_approved") {
+                    q = q.where("status", "!=", "approved");
+                } else {
+                    q = q.where("status", "==", filters.moduleStatus);
+                }
             }
-            const stream = q.select("state", "phone", "phoneNumber", "firstName", "lastName").get();
+            const stream = q.select("profile").get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
-                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
-                add(a.phone || a.phoneNumber, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+                if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
+                add(a.profile?.phone, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
             }
 
             // Supplement: processedPayments for farm_nation

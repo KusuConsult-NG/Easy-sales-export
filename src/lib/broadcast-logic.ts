@@ -390,6 +390,124 @@ async function getUnpaidApplicantsBroadcastList(filters?: BroadcastFilters) {
     };
 }
 
+/**
+ * Resolves the broadcast list EXCLUSIVELY from a specific module collection (source of truth).
+ * Fetches user emails from USERS collection by userId in batches of 30.
+ */
+async function getCollectionBroadcastList(collectionName: string, filters?: BroadcastFilters, statusField: string = "status", userIdField: string = "userId") {
+    const statusFilter = filters?.moduleStatus && filters.moduleStatus !== "all" ? filters.moduleStatus : null;
+
+    const moduleSnap = await db.collection(collectionName).get();
+
+    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
+    const userEntries: { userId: string; status: string }[] = [];
+
+    for (const doc of moduleSnap.docs) {
+        const d = doc.data();
+        const userId = d[userIdField];
+        if (!userId) continue;
+
+        let status = d[statusField] || d.membershipStatus || d.status || "pending";
+        if (status === "under_review" || status === "submitted") status = "pending";
+
+        // Must not count "not_started" users as enrolled
+        if (status === "not_started") continue;
+
+        moduleStats.total++;
+        if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
+        else if (status === "pending") moduleStats.pending++;
+        else if (status === "rejected") moduleStats.rejected++;
+        else if (status === "suspended") moduleStats.suspended++;
+
+        // Apply status filter if set
+        if (statusFilter === "not_approved") {
+            if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+        } else if (statusFilter && status !== statusFilter) {
+            continue;
+        }
+
+        userEntries.push({ userId, status });
+    }
+
+    // Batch-resolve emails from USERS collection (chunks of 30 to avoid limits)
+    const emailMap = new Map<string, Recipient>();
+    const missingEmailUserIds: string[] = []; // fallback candidates
+    const CHUNK = 30;
+
+    for (let i = 0; i < userEntries.length; i += CHUNK) {
+        const chunk = userEntries.slice(i, i + CHUNK);
+        const refs = chunk.map(e => db.collection(COLLECTIONS.USERS).doc(e.userId));
+        const userDocs = await db.getAll(...refs);
+
+        userDocs.forEach((userDoc, idx) => {
+            if (!userDoc.exists) {
+                missingEmailUserIds.push(chunk[idx].userId);
+                return;
+            }
+            const d = userDoc.data() as any;
+            const rawEmail = d.email || d.userEmail;
+            if (!rawEmail) {
+                missingEmailUserIds.push(userDoc.id);
+                return;
+            }
+            const normalizedEmail = rawEmail.toLowerCase().trim();
+            if (emailMap.has(normalizedEmail)) return;
+
+            const lastActiveRaw = d.updatedAt || d.createdAt;
+            emailMap.set(normalizedEmail, {
+                uid: userDoc.id,
+                email: normalizedEmail,
+                name: d.fullName || d.firstName || "Member",
+                state: d.state || d.stateOfOrigin || d.address?.state || d.verificationProfile?.address?.state || "Unknown",
+                onboardingCompleted: d.onboardingCompleted || false,
+                lastActive: lastActiveRaw?.toDate ? lastActiveRaw.toDate() : (lastActiveRaw ? new Date(lastActiveRaw) : new Date()),
+            });
+        });
+    }
+
+    // Firebase Auth fallback
+    if (missingEmailUserIds.length > 0) {
+        logger.info(`[BroadcastLogic][${collectionName}] Falling back to Auth for ${missingEmailUserIds.length} users with no USERS email...`);
+        const { getAuth } = await import("firebase-admin/auth");
+        const auth = getAuth();
+
+        for (let i = 0; i < missingEmailUserIds.length; i += 100) {
+            const chunk = missingEmailUserIds.slice(i, i + 100);
+            try {
+                const result = await auth.getUsers(chunk.map(uid => ({ uid })));
+                result.users.forEach(authUser => {
+                    if (!authUser.email) return;
+                    const normalizedEmail = authUser.email.toLowerCase().trim();
+                    if (emailMap.has(normalizedEmail)) return;
+                    emailMap.set(normalizedEmail, {
+                        uid: authUser.uid,
+                        email: normalizedEmail,
+                        name: authUser.displayName || "Member",
+                        state: "Unknown",
+                        onboardingCompleted: false,
+                        lastActive: new Date(),
+                    });
+                });
+            } catch (authErr) {
+                logger.error(`[BroadcastLogic][${collectionName}] Auth fallback error:`, authErr);
+            }
+        }
+    }
+
+    const uniqueList = Array.from(emailMap.values());
+    logger.info(`[BroadcastLogic][${collectionName}] Docs: ${moduleSnap.size}, matched: ${userEntries.length}, emails: ${uniqueList.length}`);
+
+    return {
+        success: true as const,
+        error: null,
+        data: {
+            recipients: uniqueList,
+            count: uniqueList.length,
+            originalDocCount: moduleSnap.size,
+            moduleStats,
+        },
+    };
+}
 
 
 /**
@@ -444,6 +562,23 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
         // --- DEDICATED UNPAID APPLICANTS PATH ---
         if (filters?.audience === "unpaid_applicants") {
             return getUnpaidApplicantsBroadcastList(filters);
+        }
+
+        // --- DEDICATED MODULE PATHS (Source of Truth: Module specific collections) ---
+        if (filters?.audience === "cooperative_members") {
+            return getCollectionBroadcastList(COLLECTIONS.COOPERATIVE_MEMBERS, filters, "membershipStatus");
+        }
+        if (filters?.audience === "wave_applicants") {
+            return getCollectionBroadcastList(COLLECTIONS.WAVE_APPLICATIONS, filters, "status");
+        }
+        if (filters?.audience === "farm_nation_users") {
+            return getCollectionBroadcastList(COLLECTIONS.FARM_NATION_APPLICATIONS, filters, "status");
+        }
+        if (filters?.audience === "export_users") {
+            return getCollectionBroadcastList(COLLECTIONS.EXPORT_APPLICATIONS, filters, "status");
+        }
+        if (filters?.audience === "academy_users") {
+            return getCollectionBroadcastList(COLLECTIONS.ACADEMY_APPLICATIONS, filters, "status");
         }
 
         // Targeted projection to minimize bandwidth
@@ -529,46 +664,6 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                                 inModule = true; 
                                 userStatus = "approved"; 
                             }
-                        } else if (filters.audience === "sellers" || filters.audience === "wholesale_sellers" || filters.audience === "retail_sellers") {
-                            const mReg = regs.marketplace;
-                            if (
-                                data.marketplaceAccountType === "seller" || 
-                                data.marketplaceAccountType === "both" || 
-                                (data.roles && data.roles.includes("seller")) ||
-                                data.isSeller ||
-                                data.sellerVerificationStatus ||
-                                (mReg && (mReg.accountType === "seller" || mReg.accountType === "both" || mReg.sellerCategory))
-                            ) { 
-                                // Best effort mapping for sellers since we are reading from USERS collection
-                                inModule = true; 
-                                userStatus = mReg?.status || data.sellerVerificationStatus || "approved"; 
-                                
-                                // Normalize under_review to pending so it fits in the 4 basic buckets (pending, approved, rejected, suspended)
-                                if (userStatus === "under_review") userStatus = "pending";
-                            }
-                        } else if (filters.audience === "cooperative_members") {
-                            const cReg = regs.cooperative;
-                            if (cReg && (cReg.status || cReg.membershipStatus || cReg.memberId || Object.keys(cReg).length > 0)) {
-                                const currentStatus = cReg.membershipStatus || cReg.status || "pending";
-                                // Empty objects shouldn't count as users if they just have empty keys, but we check length > 0
-                                // Actually, let's be strict: must have status or be explicitly marked.
-                                if ((cReg.status && cReg.status !== "not_started") || cReg.membershipStatus) {
-                                    inModule = true; 
-                                    userStatus = currentStatus; 
-                                }
-                            }
-                        } else if (filters.audience === "wave_applicants") {
-                            const wReg = regs.wave;
-                            if (wReg && wReg.status && wReg.status !== "not_started") { inModule = true; userStatus = wReg.status; }
-                        } else if (filters.audience === "academy_users") {
-                            const aReg = regs.academy;
-                            if (aReg && aReg.status && aReg.status !== "not_started") { inModule = true; userStatus = aReg.status; }
-                        } else if (filters.audience === "farm_nation_users") {
-                            const fReg = regs.farm_nation || regs.farmNation;
-                            if (fReg && fReg.status && fReg.status !== "not_started") { inModule = true; userStatus = fReg.status; }
-                        } else if (filters.audience === "export_users") {
-                            const eReg = regs.export;
-                            if (eReg && eReg.status && eReg.status !== "not_started") { inModule = true; userStatus = eReg.status; }
                         }
 
                         if (inModule) {

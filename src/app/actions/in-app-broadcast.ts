@@ -148,12 +148,12 @@ export async function collectRecipientUserIds(
                 if (r.userId) add(r.userId, r.name || `${r.firstName || ""} ${r.surname || ""}`.trim() || "Registrant");
             }
 
-            // 6. Supplement: farm_nation_inquiries
-            const fnStream = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES).select("userId", "firstName", "lastName", "state").get();
+            // 6. Supplement: farm_nation_applications
+            const fnStream = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).select("userId", "profile").get();
             for (const d of (await fnStream).docs) {
                 const a = d.data();
-                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
-                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+                if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
+                if (a.userId) add(a.userId, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
             }
 
             // 7. Supplement: export_applications
@@ -318,7 +318,7 @@ export async function collectRecipientUserIds(
             break;
         }
         case "farm_nation_users": {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_INQUIRIES);
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS);
             if (filters.moduleStatus && filters.moduleStatus !== "all") {
                 if (filters.moduleStatus === "not_approved") {
                     q = q.where("status", "!=", "approved");
@@ -327,12 +327,12 @@ export async function collectRecipientUserIds(
                 }
             }
             const stream = q
-                .select("userId", "firstName", "lastName", "state")
+                .select("userId", "profile")
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
-                if (filters.state && !isStateMatch(a.state, filters.state)) continue;
-                if (a.userId) add(a.userId, `${a.firstName || ""} ${a.lastName || ""}`.trim() || "Farm Nation User");
+                if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
+                if (a.userId) add(a.userId, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
             }
             break;
         }
