@@ -461,3 +461,232 @@ export async function startSupportConversationAction(module?: string) { try {
         return { error: "Failed to start support conversation", conversationId: null };
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cooperative Member Broadcast Messaging
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ApprovedCoopMember {
+    uid: string;
+    fullName: string;
+    email: string;
+    memberNumber: string;
+    stateOfOrigin: string;
+    gender: string;
+    membershipStatus: string;
+    approvedAt: string | null;
+}
+
+/**
+ * Admin-only: Fetch all approved cooperative members for the broadcast selector.
+ * "Approved" = membershipStatus is "active" or "approved".
+ */
+export async function getApprovedCooperativeMembersAction(): Promise<{
+    success: boolean;
+    data: ApprovedCoopMember[];
+    error: string | null;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, data: [], error: "Authentication required" };
+        }
+        const { session } = sessionResult;
+
+        // Admin guard
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const roles: string[] = userDoc.data()?.roles ?? [];
+        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+        if (!isAdmin) {
+            return { success: false, data: [], error: "Access denied" };
+        }
+
+        // Fetch members with active/approved status
+        const [activeSnap, approvedSnap] = await Promise.all([
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("membershipStatus", "==", "active")
+                .get(),
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("membershipStatus", "==", "approved")
+                .get(),
+        ]);
+
+        const seen = new Set<string>();
+        const members: ApprovedCoopMember[] = [];
+
+        const process = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+            if (seen.has(doc.id)) return;
+            seen.add(doc.id);
+            const d = doc.data();
+            const joinYear = d.createdAt?.toDate
+                ? d.createdAt.toDate().getFullYear()
+                : new Date().getFullYear();
+            const memberNumber = `ESE-COOP-${joinYear}-${doc.id.slice(0, 6).toUpperCase()}`;
+            const approvedAt = d.approvedAt?.toDate
+                ? d.approvedAt.toDate().toISOString()
+                : null;
+
+            members.push({
+                uid: doc.id,
+                fullName: `${d.firstName || ""} ${d.lastName || ""}`.trim() || d.fullName || "—",
+                email: d.email || "",
+                memberNumber,
+                stateOfOrigin: d.stateOfOrigin || "",
+                gender: d.gender || "",
+                membershipStatus: d.membershipStatus || "active",
+                approvedAt,
+            });
+        };
+
+        activeSnap.docs.forEach(process);
+        approvedSnap.docs.forEach(process);
+
+        // Sort by full name
+        members.sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+        return { success: true, data: members, error: null };
+    } catch (error) {
+        logger.error("getApprovedCooperativeMembersAction error:", error);
+        return { success: false, data: [], error: "Failed to load members" };
+    }
+}
+
+/**
+ * Admin-only: Broadcast a message to a list of approved cooperative members.
+ * For each member UID, creates a conversation (or reuses existing), then sends
+ * the message. Returns per-member success/failure results.
+ */
+export async function broadcastToCooperativeMembersAction(
+    memberUids: string[],
+    message: string,
+): Promise<{
+    success: boolean;
+    sent: number;
+    failed: number;
+    errors: string[];
+    error: string | null;
+}> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, sent: 0, failed: 0, errors: [], error: "Authentication required" };
+        }
+        const { session } = sessionResult;
+        const adminId = session.user.id;
+
+        // Admin guard
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(adminId).get();
+        const roles: string[] = userDoc.data()?.roles ?? [];
+        const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith("_admin"));
+        if (!isAdmin) {
+            return { success: false, sent: 0, failed: 0, errors: [], error: "Access denied" };
+        }
+
+        const trimmedMsg = message.trim();
+        if (!trimmedMsg) {
+            return { success: false, sent: 0, failed: 0, errors: [], error: "Message cannot be empty" };
+        }
+        if (memberUids.length === 0) {
+            return { success: false, sent: 0, failed: 0, errors: [], error: "No members selected" };
+        }
+
+        let sent = 0;
+        let failed = 0;
+        const errors: string[] = [];
+
+        // Get admin's display name once
+        const adminName = session.user.name || "Easy Sales Export Admin";
+        const adminEmail = session.user.email || "";
+
+        for (const memberUid of memberUids) {
+            try {
+                // ── Find or create conversation ───────────────────────────────
+                let conversationId: string | null = null;
+
+                // Look for existing direct conversation between admin and this member
+                const existingSnap = await db.collection(COLLECTIONS.CONVERSATIONS)
+                    .where("participants", "array-contains", adminId)
+                    .get();
+
+                for (const doc of existingSnap.docs) {
+                    const conv = doc.data();
+                    if (
+                        conv.participants.includes(memberUid) &&
+                        conv.participants.length === 2 &&
+                        !conv.productId &&
+                        !conv.orderId
+                    ) {
+                        conversationId = doc.id;
+                        break;
+                    }
+                }
+
+                if (!conversationId) {
+                    // Get member user profile
+                    const memberDoc = await db.collection(COLLECTIONS.USERS).doc(memberUid).get();
+                    const memberData = memberDoc.data() || {};
+
+                    const convData: Record<string, any> = {
+                        participants: [adminId, memberUid],
+                        participantDetails: {
+                            [adminId]: {
+                                uid: adminId,
+                                name: adminName,
+                                email: adminEmail,
+                                lastRead: null,
+                            },
+                            [memberUid]: {
+                                uid: memberUid,
+                                name: memberData.fullName || memberData.email || "Member",
+                                email: memberData.email || "",
+                                lastRead: null,
+                            },
+                        },
+                        lastMessage: null,
+                        context: "cooperative_broadcast",
+                        createdAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    };
+
+                    const newConv = await db.collection(COLLECTIONS.CONVERSATIONS).add(convData);
+                    conversationId = newConv.id;
+                }
+
+                // ── Send message ──────────────────────────────────────────────
+                const convRef = db.collection(COLLECTIONS.CONVERSATIONS).doc(conversationId);
+                await convRef.collection(COLLECTIONS.MESSAGES).add({
+                    senderId: adminId,
+                    senderName: adminName,
+                    senderEmail: adminEmail,
+                    text: trimmedMsg,
+                    timestamp: FieldValue.serverTimestamp(),
+                    read: false,
+                    type: "text",
+                    isBroadcast: true,
+                });
+
+                await convRef.update({
+                    lastMessage: {
+                        text: trimmedMsg,
+                        senderId: adminId,
+                        senderName: adminName,
+                        timestamp: FieldValue.serverTimestamp(),
+                    },
+                    updatedAt: FieldValue.serverTimestamp(),
+                    lastMessageAt: FieldValue.serverTimestamp(),
+                });
+
+                sent++;
+            } catch (e: any) {
+                failed++;
+                errors.push(`${memberUid}: ${e.message}`);
+                logger.error(`broadcastToCooperativeMembersAction: failed for ${memberUid}`, e);
+            }
+        }
+
+        return { success: failed === 0, sent, failed, errors, error: null };
+    } catch (error) {
+        logger.error("broadcastToCooperativeMembersAction error:", error);
+        return { success: false, sent: 0, failed: 0, errors: [], error: "Failed to send broadcast" };
+    }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Users, CreditCard, LayoutDashboard } from "lucide-react";
+import { Building2, Users, CreditCard, LayoutDashboard, MessageSquare } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminCooperativesPage() {
@@ -33,9 +33,17 @@ export default function AdminCooperativesPage() {
             title: "Loans",
             description: "Manage cooperative loan applications",
             icon: Building2,
-            href: "/admin/cooperatives/loans", // Nested path
+            href: "/admin/cooperatives/loans",
             color: "text-amber-600",
             bg: "bg-amber-100"
+        },
+        {
+            title: "Message Members",
+            description: "Send messages to approved cooperative members",
+            icon: MessageSquare,
+            href: "/admin/cooperatives/messaging",
+            color: "text-violet-600",
+            bg: "bg-violet-100"
         }
     ];
 
