@@ -598,6 +598,9 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
         if (filters?.audience === "wave_applicants") {
             return getCollectionBroadcastList(COLLECTIONS.WAVE_APPLICATIONS, filters, "status");
         }
+        if (filters?.audience === "wave_briefing_registrants") {
+            return getCollectionBroadcastList(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS, filters, "status");
+        }
         if (filters?.audience === "farm_nation_users") {
             return getCollectionBroadcastList(COLLECTIONS.FARM_NATION_APPLICATIONS, filters, "status");
         }
