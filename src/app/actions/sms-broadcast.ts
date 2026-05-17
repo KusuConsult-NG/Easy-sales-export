@@ -297,34 +297,46 @@ async function collectSmsRecipients(
             break;
         }
         case "wave_applicants": {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q.select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name").get();
+            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .select("state", "residentialState", "phone", "alternativePhone", "phoneNumber", "firstName", "surname", "lastName", "name", "status")
+                .get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 add(a.phone || a.alternativePhone || a.phoneNumber, `${a.firstName || ""} ${a.surname || a.lastName || ""}`.trim() || a.name || "Applicant");
             }
             break;
         }
         case "academy_users": { // Primary: academy_applications collection
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q.select("personalInfo", "state", "phone", "phoneNumber").get();
+            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .select("personalInfo", "state", "phone", "phoneNumber", "status", "paymentStatus")
+                .get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+                
+                if (currentStatus !== "approved" && !["completed", "paid", "successful"].includes(a.paymentStatus)) {
+                    continue; // Skip unpaid Academy applications
+                }
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 const userState = (a.personalInfo && a.personalInfo.state) || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add((a.personalInfo && a.personalInfo.phone) || a.phone || a.phoneNumber, (a.personalInfo && a.personalInfo.fullName) || [a.personalInfo && a.personalInfo.firstName, a.personalInfo && a.personalInfo.lastName].filter(Boolean).join(" ") || "Academy User");
@@ -352,17 +364,21 @@ async function collectSmsRecipients(
             break;
         }
         case "export_users": { 
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q.select("profile", "companyInfo", "state", "phone", "phoneNumber").get();
+            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .select("profile", "companyInfo", "state", "phone", "phoneNumber", "status")
+                .get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 const userState = (a.profile && a.profile.state) || (a.companyInfo && a.companyInfo.state) || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 add((a.profile && a.profile.phone) || a.phone || a.phoneNumber, (a.profile && a.profile.fullName) || "Export User");
@@ -381,17 +397,21 @@ async function collectSmsRecipients(
             break;
         }
         case "farm_nation_users": {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q.select("profile").get();
+            const stream = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .select("profile", "status")
+                .get();
             for (const d of (await stream).docs) {
                 const a: any = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
                 add(a.profile?.phone, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
             }

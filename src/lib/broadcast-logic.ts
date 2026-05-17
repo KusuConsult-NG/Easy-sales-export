@@ -409,12 +409,19 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
         if (!userId) continue;
 
         let status = d[statusField] || d.membershipStatus || d.status || "pending";
-        if (status === "under_review" || status === "submitted") status = "pending";
+        if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
 
         // Enforce payment condition for Cooperative Members
         if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
             // A pending cooperative member MUST have paid to be considered a true pending applicant
             if (status !== "approved" && d.paymentStatus !== "completed") {
+                continue;
+            }
+        }
+
+        // Enforce payment condition for Academy
+        if (collectionName === COLLECTIONS.ACADEMY_APPLICATIONS) {
+            if (status !== "approved" && !["completed", "paid", "successful"].includes(d.paymentStatus)) {
                 continue;
             }
         }

@@ -286,38 +286,46 @@ export async function collectRecipientUserIds(
             break;
         }
         case "wave_applicants": {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q
-                .select("userId", "firstName", "surname", "state", "residentialState")
+            const stream = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .select("userId", "firstName", "surname", "state", "residentialState", "status")
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 if (filters.state && !isStateMatch(a.state, filters.state) && !isStateMatch(a.residentialState, filters.state)) continue;
                 if (a.userId) add(a.userId, `${a.firstName || ""} ${a.surname || ""}`.trim() || "Applicant");
             }
             break;
         }
         case "academy_users": { 
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q
-                .select("userId", "personalInfo", "state")
+            const stream = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .select("userId", "personalInfo", "state", "status", "paymentStatus")
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+                
+                if (currentStatus !== "approved" && !["completed", "paid", "successful"].includes(a.paymentStatus)) {
+                    continue; // Skip unpaid Academy applications
+                }
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 const userState = a.personalInfo?.state || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (a.userId) add(a.userId, a.personalInfo?.fullName || "Academy User");
@@ -325,19 +333,21 @@ export async function collectRecipientUserIds(
             break;
         }
         case "export_users": { 
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q
-                .select("userId", "profile", "companyInfo", "state")
+            const stream = db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .select("userId", "profile", "companyInfo", "state", "status")
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 const userState = a.profile?.state || a.companyInfo?.state || a.state;
                 if (filters.state && !isStateMatch(userState, filters.state)) continue;
                 if (a.userId) add(a.userId, a.profile?.fullName || "Export User");
@@ -345,19 +355,21 @@ export async function collectRecipientUserIds(
             break;
         }
         case "farm_nation_users": {
-            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS);
-            if (filters.moduleStatus && filters.moduleStatus !== "all") {
-                if (filters.moduleStatus === "not_approved") {
-                    q = q.where("status", "!=", "approved");
-                } else {
-                    q = q.where("status", "==", filters.moduleStatus);
-                }
-            }
-            const stream = q
-                .select("userId", "profile")
+            const stream = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .select("userId", "profile", "status")
                 .get();
             for (const d of (await stream).docs) {
                 const a = d.data();
+                
+                let currentStatus = a.status || "pending";
+                if (currentStatus === "under_review" || currentStatus === "submitted" || currentStatus === "pending_review") currentStatus = "pending";
+
+                if (filters.moduleStatus && filters.moduleStatus !== "all") {
+                    if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
+                }
+
                 if (filters.state && !isStateMatch(a.profile?.state, filters.state)) continue;
                 if (a.userId) add(a.userId, a.profile?.fullName || `${a.profile?.firstName || ""} ${a.profile?.lastName || ""}`.trim() || "Farm Nation User");
             }

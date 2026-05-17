@@ -19,6 +19,7 @@ import { formatDateTime } from "@/lib/utils";
 
 const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     all: "All Users",
+    all_except_approved_coop: "All (Exclude Approved Coop)",
     buyers: "Buyers",
     sellers: "All Sellers",
     wholesale_sellers: "Wholesale Sellers",
