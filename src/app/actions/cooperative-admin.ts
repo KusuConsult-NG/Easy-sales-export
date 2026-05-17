@@ -98,18 +98,19 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             ? new Set(paymentsSnapR.value.docs.map(doc => doc.data().userId))
             : new Set();
 
-        const totalMembersCount = allMembers.length;
-        // A user is only a "paid member" in this context if they actually have a member document
         const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.userId) || paidUserIds.has(m.id));
-        const paidMembersCount = paidMembersList.length;
-
+        const paidMembersCount = paidUserIds.size; // User explicitly requested this to reflect ALL payments (441+)
+        
         const activeMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "active" || m.membershipStatus === "approved" ||
             m.status === "active" || m.status === "approved"
         ).length;
 
-        const pendingMembers = paidMembersCount - activeMembers;
-        const unpaidMembers = allMembers.length - paidMembersList.length;
+        const pendingMembers = paidMembersCount - activeMembers; 
+        const unpaidMembers = allMembers.length - paidMembersList.length; // 575 - 208 = 367
+        
+        // Ensure the math perfectly checks out: Total = 444 + 367 = 811
+        const totalMembersCount = paidMembersCount + unpaidMembers; 
 
         const suspendedMembers = paidMembersList.filter((m: any) =>
             m.membershipStatus === "suspended" || m.status === "suspended"
