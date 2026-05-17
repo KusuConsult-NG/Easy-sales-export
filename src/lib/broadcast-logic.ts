@@ -438,6 +438,8 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
         // Apply status filter if set
         if (statusFilter === "not_approved") {
             if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+        } else if (statusFilter === "approved") {
+            if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
         } else if (statusFilter && status !== statusFilter) {
             continue;
         }

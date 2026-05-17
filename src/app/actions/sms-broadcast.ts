@@ -308,7 +308,7 @@ async function collectSmsRecipients(
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
                     if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -333,7 +333,7 @@ async function collectSmsRecipients(
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
                     if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -375,7 +375,7 @@ async function collectSmsRecipients(
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
                     if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
@@ -408,7 +408,7 @@ async function collectSmsRecipients(
 
                 if (filters.moduleStatus && filters.moduleStatus !== "all") {
                     if (filters.moduleStatus === "not_approved" && (currentStatus === "approved" || currentStatus === "active")) continue;
-                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active") continue;
+                    else if (filters.moduleStatus === "approved" && currentStatus !== "approved" && currentStatus !== "active" && currentStatus !== "paid" && currentStatus !== "completed") continue;
                     else if (filters.moduleStatus !== "not_approved" && filters.moduleStatus !== "approved" && currentStatus !== filters.moduleStatus) continue;
                 }
 
