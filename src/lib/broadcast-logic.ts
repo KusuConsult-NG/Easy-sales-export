@@ -795,7 +795,7 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
             data: {
                 recipients: uniqueList,
                 count: uniqueList.length,
-                originalDocCount: totalScanned,
+                originalDocCount: matchedAudienceCount,
                 moduleStats
             }
         };
