@@ -402,10 +402,19 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
 
     const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
     const userEntries: { userId: string; status: string }[] = [];
+    
+    let paidUserIds: Set<string> | null = null;
+    if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
+        const paymentsSnap = await db.collection("processedPayments")
+            .where("type", "==", "cooperative_membership_registration")
+            .where("status", "==", "completed")
+            .get();
+        paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
+    }
 
     for (const doc of moduleSnap.docs) {
         const d = doc.data();
-        const userId = d[userIdField];
+        const userId = d[userIdField] || doc.id; // Fallback to doc id if userId is missing
         if (!userId) continue;
 
         let status = d[statusField] || d.membershipStatus || d.status || "pending";
@@ -413,8 +422,8 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
 
         // Enforce payment condition for Cooperative Members
         if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
-            // A pending cooperative member MUST have paid to be considered a true pending applicant
-            if (status !== "approved" && d.paymentStatus !== "completed") {
+            // A cooperative member must have a completed payment to be counted as valid (pending or approved)
+            if (!paidUserIds?.has(userId)) {
                 continue;
             }
         }
