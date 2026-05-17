@@ -1150,12 +1150,22 @@ export async function getCooperativeMemberIdCardAction(): Promise<
             };
         }
 
-        // Deterministic member number — no extra write needed
-        const joinedAt: Date = d.createdAt?.toDate ? d.createdAt.toDate() : new Date();
-        const joinYear = joinedAt.getFullYear();
+        // Deterministic member number (based on application year, not approval year)
+        const applicationDate: Date = d.createdAt?.toDate ? d.createdAt.toDate() : new Date();
+        const joinYear = applicationDate.getFullYear();
         const memberNumber = `ESE-COOP-${joinYear}-${userId.slice(0, 6).toUpperCase()}`;
 
-        const validUntil = new Date(joinedAt);
+        // Issue date = approvedAt (when admin approved) — not createdAt (when applied).
+        // A membership card is only valid from the date of admin approval.
+        // Fall back to createdAt for legacy records that pre-date the approvedAt field.
+        const issuedAt: Date =
+            d.approvedAt?.toDate
+                ? d.approvedAt.toDate()
+                : d.approvedAt instanceof Date
+                    ? d.approvedAt
+                    : applicationDate;
+
+        const validUntil = new Date(issuedAt);
         validUntil.setFullYear(validUntil.getFullYear() + 1);
 
         return { error: null, success: true as const, data: {
@@ -1165,7 +1175,7 @@ export async function getCooperativeMemberIdCardAction(): Promise<
                 gender: d.gender || "",
                 stateOfOrigin: d.stateOfOrigin || "",
                 passportPhotoUrl: d.documents?.passportPhoto?.url || null,
-                joinedAt: joinedAt.toISOString(),
+                joinedAt: issuedAt.toISOString(),
                 validUntil: validUntil.toISOString(),
                 membershipStatus: d.membershipStatus,
                 paymentStatus: d.paymentStatus } };
