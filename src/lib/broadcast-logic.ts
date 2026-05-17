@@ -400,7 +400,7 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
 
     const moduleSnap = await db.collection(collectionName).get();
 
-    const moduleStats = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0 };
+    const moduleStats: any = { total: 0, approved: 0, pending: 0, rejected: 0, suspended: 0, unpaid: 0 };
     const userEntries: { userId: string; status: string }[] = [];
     
     let paidUserIds: Set<string> | null = null;
@@ -426,10 +426,15 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
 
             moduleStats.total++;
-            if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
-            else if (status === "pending") moduleStats.pending++;
-            else if (status === "rejected") moduleStats.rejected++;
-            else if (status === "suspended") moduleStats.suspended++;
+            
+            if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS && !paidUserIds!.has(userId)) {
+                moduleStats.unpaid++;
+            } else {
+                if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
+                else if (status === "pending") moduleStats.pending++;
+                else if (status === "rejected") moduleStats.rejected++;
+                else if (status === "suspended") moduleStats.suspended++;
+            }
 
             if (statusFilter === "unpaid") {
                 if (!unpaidUserIds.has(userId)) continue;

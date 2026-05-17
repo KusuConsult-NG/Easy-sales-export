@@ -583,14 +583,24 @@ export default function BroadcastComposePage() {
                                                     <span className="text-[10px] uppercase tracking-wider mb-1">Pending</span>
                                                     <span className="font-bold text-amber-600 text-sm">{moduleStats.pending}</span>
                                                 </div>
-                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-red-100">
-                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Rejected</span>
-                                                    <span className="font-bold text-red-600 text-sm">{moduleStats.rejected}</span>
-                                                </div>
-                                                <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-slate-100">
-                                                    <span className="text-[10px] uppercase tracking-wider mb-1">Suspended</span>
-                                                    <span className="font-bold text-slate-900 text-sm">{moduleStats.suspended}</span>
-                                                </div>
+                                                {moduleStats.unpaid !== undefined && (
+                                                    <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-orange-100">
+                                                        <span className="text-[10px] uppercase tracking-wider mb-1">Unpaid</span>
+                                                        <span className="font-bold text-orange-600 text-sm">{moduleStats.unpaid}</span>
+                                                    </div>
+                                                )}
+                                                {moduleStats.rejected > 0 && (
+                                                    <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-red-100">
+                                                        <span className="text-[10px] uppercase tracking-wider mb-1">Rejected</span>
+                                                        <span className="font-bold text-red-600 text-sm">{moduleStats.rejected}</span>
+                                                    </div>
+                                                )}
+                                                {moduleStats.suspended > 0 && (
+                                                    <div className="text-slate-600 flex flex-col items-center p-1 bg-white rounded shadow-sm border border-slate-100">
+                                                        <span className="text-[10px] uppercase tracking-wider mb-1">Suspended</span>
+                                                        <span className="font-bold text-slate-900 text-sm">{moduleStats.suspended}</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
