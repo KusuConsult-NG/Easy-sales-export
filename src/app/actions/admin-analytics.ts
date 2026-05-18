@@ -145,18 +145,49 @@ export async function getDashboardStatsAction(options?: {
 
     const { getPlatformMetricsAction, getGlobalPendingApprovalsAction } = await import("./global-aggregation");
 
-    const [metricsResult, pendingResult, usersSnap] = await Promise.all([
-        getPlatformMetricsAction(),
-        getGlobalPendingApprovalsAction(),
-        db.collection(COLLECTIONS.USERS).select("serviceRegistrations", "bankAccountNumber", "address").get()
-    ]);
+    const isDateFiltered = !!(options?.dateFrom || options?.dateTo);
 
-    const totalUsers = metricsResult.success ? (metricsResult.data?.totalUsers ?? 0) : 0;
-    const totalTransactions = metricsResult.success ? (metricsResult.data?.totalTransactions ?? 0) : 0;
-    const totalRevenue = metricsResult.success ? (metricsResult.data?.totalRevenue ?? 0) : 0;
-    const pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
+    let totalUsers: number;
+    let totalRevenue: number;
+    let totalTransactions: number;
+    let pendingApprovals: number;
 
-    // Active users: users who logged in within the last 30 days.
+    if (isDateFiltered) {
+        // When a date range is active, count NEW registrations and revenue within that window
+        const [newUsersSnap, paymentsSnap, pendingRes] = await Promise.allSettled([
+            db.collection(COLLECTIONS.USERS)
+                .where("createdAt", ">=", filterFrom)
+                .where("createdAt", "<=", filterTo)
+                .count()
+                .get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("status", "==", "completed")
+                .where("processedAt", ">=", filterFrom)
+                .where("processedAt", "<=", filterTo)
+                .select("amount")
+                .get(),
+            getGlobalPendingApprovalsAction(),
+        ]);
+        totalUsers = newUsersSnap.status === "fulfilled" ? (newUsersSnap.value.data().count ?? 0) : 0;
+        totalRevenue = paymentsSnap.status === "fulfilled"
+            ? paymentsSnap.value.docs.reduce((sum: number, d: any) => sum + (Number(d.data().amount) || 0), 0)
+            : 0;
+        totalTransactions = paymentsSnap.status === "fulfilled" ? paymentsSnap.value.size : 0;
+        pendingApprovals = pendingRes.status === "fulfilled" && pendingRes.value.success ? (pendingRes.value.data?.totalPending ?? 0) : 0;
+    } else {
+        const [metricsResult, pendingResult] = await Promise.all([
+            getPlatformMetricsAction(),
+            getGlobalPendingApprovalsAction(),
+        ]);
+        totalUsers = metricsResult.success ? (metricsResult.data?.totalUsers ?? 0) : 0;
+        totalTransactions = metricsResult.success ? (metricsResult.data?.totalTransactions ?? 0) : 0;
+        totalRevenue = metricsResult.success ? (metricsResult.data?.totalRevenue ?? 0) : 0;
+        pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
+    }
+
+    const usersSnap = await db.collection(COLLECTIONS.USERS).select("serviceRegistrations", "bankAccountNumber", "address").get();
+
+    // Active users: users who logged in within the filter window
     const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
 
     const pendingEscrows = pendingEscrowsCount.status === "fulfilled" ? pendingEscrowsCount.value : 0;
@@ -219,18 +250,19 @@ export async function getDashboardStatsAction(options?: {
     ].filter((m) => m.count > 0);
 
 
-    // ── Recent transactions: pulling completely from unified platform ledger
+    // ── Recent transactions: filtered by date range when active ────────────
     const recentTransactions: AnalyticsData["recentTransactions"] = [];
 
     try {
-        const [txSnap, coopSnap, escrowSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc").limit(15).get(),
-            db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get(),
-            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", "desc").limit(15).get()
-        ]);
+        let txQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc");
+        if (isDateFiltered) {
+            txQuery = txQuery
+                .where("processedAt", ">=", filterFrom)
+                .where("processedAt", "<=", filterTo);
+        }
+        const [txSnap] = await Promise.allSettled([txQuery.limit(15).get()]);
 
         const allDocs: any[] = [];
-        
         if (txSnap.status === "fulfilled") {
             txSnap.value.docs.forEach(d => allDocs.push(d.data()));
         }

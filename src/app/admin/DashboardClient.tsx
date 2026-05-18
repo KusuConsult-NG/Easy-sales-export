@@ -114,11 +114,11 @@ export default function AdminDashboardPage() {
 
     const statCards = [
         {
-            label: "Total Users",
+            label: (dateRange.from || dateRange.to) ? "New Registrations" : "Total Users",
             value: (stats.platformOverview?.totalUsers ?? 0).toLocaleString(),
             icon: Users,
             color: "blue",
-            change: "Total registered accounts",
+            change: (dateRange.from || dateRange.to) ? "Registered in selected period" : "Total registered accounts",
             href: "/admin/users",
         },
         {
@@ -130,11 +130,11 @@ export default function AdminDashboardPage() {
             href: "/admin/users",
         },
         {
-            label: "Total Revenue",
+            label: (dateRange.from || dateRange.to) ? "Revenue in Range" : "Total Revenue",
             value: `₦${(stats.platformOverview.totalRevenue ?? 0).toLocaleString()}`,
             icon: DollarSign,
             color: "purple",
-            change: "Based on transaction volume",
+            change: (dateRange.from || dateRange.to) ? "Payments in selected period" : "Based on transaction volume",
             href: "/admin/finance",
         },
         {
