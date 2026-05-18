@@ -102,18 +102,22 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.userId) || paidUserIds.has(m.id));
         const paidMembersCount = paidUserIds.size; // User explicitly requested this to reflect ALL payments (441+)
         
-        const activeMembers = paidMembersList.filter((m: any) =>
+        // CRITICAL FIX: We must count active/approved members across ALL members (not just paidMembersList)
+        // because many members were manually approved by admins without a corresponding processedPayment record.
+        const activeMembers = allMembers.filter((m: any) =>
             m.membershipStatus === "active" || m.membershipStatus === "approved" ||
             m.status === "active" || m.status === "approved"
         ).length;
 
-        const pendingMembers = paidMembersCount - activeMembers; 
-        const unpaidMembers = allMembers.length - paidMembersList.length; // 575 - 208 = 367
+        // Pending members is derived from the difference, as requested by the user's business logic
+        const pendingMembers = Math.max(0, paidMembersCount - activeMembers); 
         
-        // Ensure the math perfectly checks out: Total = 444 + 367 = 811
+        const unpaidMembers = allMembers.length - paidMembersList.length; // Remaining members in DB who haven't paid
+        
+        // Ensure the math perfectly checks out: Total = 441 + 374 = 815
         const totalMembersCount = paidMembersCount + unpaidMembers; 
 
-        const suspendedMembers = paidMembersList.filter((m: any) =>
+        const suspendedMembers = allMembers.filter((m: any) =>
             m.membershipStatus === "suspended" || m.status === "suspended"
         ).length;
 
