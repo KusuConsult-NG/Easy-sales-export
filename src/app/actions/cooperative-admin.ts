@@ -84,11 +84,12 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
 
         const [membersSnapR, paymentsSnapR] = await Promise.allSettled([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .limit(5000)
+                .select("userId", "membershipStatus", "status")
                 .get(),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "cooperative_membership_registration")
                 .where("status", "==", "completed")
+                .select("userId")
                 .get()
         ]);
 
@@ -112,19 +113,27 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             m.status === "active" || m.status === "approved"
         ).length;
 
-        // Pending members literally
-        const pendingMembers = allMembers.filter((m: any) =>
-            m.membershipStatus === "pending" || m.status === "pending" ||
-            (!m.membershipStatus && !m.status)
-        ).length;
+        // Suspended members literally (mutually exclusive from active)
+        const suspendedMembers = allMembers.filter((m: any) => {
+            const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" ||
+                             m.status === "active" || m.status === "approved";
+            if (isActive) return false;
+            return m.membershipStatus === "suspended" || m.status === "suspended";
+        }).length;
+
+        // Pending members literally (mutually exclusive from active and suspended)
+        const pendingMembers = allMembers.filter((m: any) => {
+            const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" ||
+                             m.status === "active" || m.status === "approved";
+            const isSuspended = m.membershipStatus === "suspended" || m.status === "suspended";
+            if (isActive || isSuspended) return false;
+            
+            return m.membershipStatus === "pending" || m.status === "pending" ||
+                   (!m.membershipStatus && !m.status);
+        }).length;
 
         // Total applications
         const totalMembersCount = allMembers.length; 
-
-        // Suspended members literally
-        const suspendedMembers = allMembers.filter((m: any) =>
-            m.membershipStatus === "suspended" || m.status === "suspended"
-        ).length;
 
         // Add any active/approved members to the paid set
         allMembers.forEach((m: any) => {
