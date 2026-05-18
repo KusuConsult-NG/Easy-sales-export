@@ -122,14 +122,24 @@ export default function CooperativeMembersPage() {
     }
     // Date filtering is now handled server-side via dateRange state
 
-    // Load Global Stats
+    // Load Global Stats (only when no date range is active)
     useEffect(() => {
-        getCooperativeStatsAction().then(res => {
-            if (res.success && res.data?.stats) {
-                setStats(res.data.stats);
-            }
-        });
-    }, []);
+        if (!dateRange.from && !dateRange.to) {
+            getCooperativeStatsAction().then(res => {
+                if (res.success && res.data?.stats) {
+                    setStats(res.data.stats);
+                }
+            });
+        }
+    }, [dateRange]);
+
+    // When a date range is active, derive stats from the filtered data
+    const isDateFiltered = !!(dateRange.from || dateRange.to);
+    const displayStats = isDateFiltered ? null : stats;
+    const filteredPending = filteredApplications.filter(a => a.status === "pending" || a.data?.membershipStatus === "pending").length;
+    const filteredApproved = filteredApplications.filter(a => a.status === "approved" || a.data?.membershipStatus === "approved").length;
+    const filteredPaid = filteredApplications.filter(a => a.data?.paymentStatus === "completed").length;
+    const filteredUnpaid = filteredApplications.filter(a => a.data?.paymentStatus !== "completed").length;
 
     async function handleApprove(applicationId: string) {
         if (!confirm("Are you sure you want to approve this membership application?")) {
@@ -429,12 +439,17 @@ export default function CooperativeMembersPage() {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                {isDateFiltered && (
+                    <div className="col-span-full bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 text-sm text-blue-700 font-medium">
+                        📅 Showing stats for filtered date range: {dateRange.from || "—"} → {dateRange.to || "—"}
+                    </div>
+                )}
                 <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm text-yellow-600 mb-1">Pending</p>
                             <p className="text-3xl font-bold text-yellow-700">
-                                {stats ? stats.pendingMembers : applications.filter(a => a.status === "pending").length}
+                                {isDateFiltered ? filteredPending : (displayStats ? displayStats.pendingMembers : filteredPending)}
                             </p>
                         </div>
                         <Clock className="w-12 h-12 text-yellow-500 opacity-50" />
@@ -446,7 +461,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-green-600 mb-1">Approved</p>
                             <p className="text-3xl font-bold text-green-700">
-                                {stats ? stats.activeMembers : applications.filter(a => a.status === "approved").length}
+                                {isDateFiltered ? filteredApproved : (displayStats ? displayStats.activeMembers : filteredApproved)}
                             </p>
                         </div>
                         <CheckCircle className="w-12 h-12 text-green-500 opacity-50" />
@@ -458,9 +473,9 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-slate-600 mb-1">Total Paid Members</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {stats ? stats.paidMembers : applications.filter(a => a.data.paymentStatus === "completed").length}
+                                {isDateFiltered ? filteredPaid : (displayStats ? displayStats.paidMembers : filteredPaid)}
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">Out of {stats ? stats.totalMembers : applications.length} applications</p>
+                            <p className="text-xs text-slate-500 mt-1">Out of {isDateFiltered ? filteredApplications.length : (displayStats ? displayStats.totalMembers : filteredApplications.length)} applications</p>
                         </div>
                         <Users className="w-12 h-12 text-slate-400 opacity-50" />
                     </div>
@@ -471,7 +486,7 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-red-600 mb-1">Unpaid Members</p>
                             <p className="text-3xl font-bold text-red-700">
-                                {stats?.unpaidMembers !== undefined ? stats.unpaidMembers : applications.filter(a => a.data.paymentStatus !== "completed").length}
+                                {isDateFiltered ? filteredUnpaid : (displayStats?.unpaidMembers !== undefined ? displayStats.unpaidMembers : filteredUnpaid)}
                             </p>
                         </div>
                         <Users className="w-12 h-12 text-red-500 opacity-50" />
