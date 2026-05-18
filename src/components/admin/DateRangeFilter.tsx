@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Calendar, X, ChevronDown } from "lucide-react";
 
 export interface DateRange {
@@ -70,20 +70,43 @@ export default function DateRangeFilter({
 }: DateRangeFilterProps) {
     const [open, setOpen] = useState(false);
 
-    const hasFilter = Boolean(value.from || value.to);
+    // Internal draft state — only committed to parent on "Apply"
+    const [draft, setDraft] = useState<DateRange>({ from: value.from, to: value.to });
 
+    // Sync draft when the dropdown opens so it always reflects the current committed value
+    useEffect(() => {
+        if (open) {
+            setDraft({ from: value.from, to: value.to });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
+
+    const hasFilter = Boolean(value.from || value.to);
+    const draftHasValue = Boolean(draft.from || draft.to);
+
+    // Preset buttons apply immediately and close the panel
     const handlePreset = useCallback(
         (preset: (typeof PRESETS)[number]) => {
-            onChange(preset.getDates());
+            const dates = preset.getDates();
+            onChange(dates);
+            setDraft(dates);
             setOpen(false);
         },
         [onChange]
     );
 
+    // Apply commits the draft to the parent (triggering the data fetch)
+    const handleApply = useCallback(() => {
+        onChange(draft);
+        setOpen(false);
+    }, [onChange, draft]);
+
     const handleClear = useCallback(
         (e: React.MouseEvent) => {
             e.stopPropagation();
-            onChange({ from: "", to: "" });
+            const empty = { from: "", to: "" };
+            setDraft(empty);
+            onChange(empty);
             setOpen(false);
         },
         [onChange]
@@ -135,7 +158,7 @@ export default function DateRangeFilter({
             {/* Dropdown panel */}
             {open && (
                 <>
-                    {/* Backdrop */}
+                    {/* Backdrop — closing without applying does NOT commit the draft */}
                     <div
                         className="fixed inset-0 z-20"
                         onClick={() => setOpen(false)}
@@ -168,9 +191,9 @@ export default function DateRangeFilter({
                                 <label className="block text-xs text-slate-500 mb-1 font-medium">From</label>
                                 <input
                                     type="date"
-                                    value={value.from}
-                                    max={value.to || undefined}
-                                    onChange={(e) => onChange({ ...value, from: e.target.value })}
+                                    value={draft.from}
+                                    max={draft.to || undefined}
+                                    onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
                                     className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                             </div>
@@ -178,9 +201,9 @@ export default function DateRangeFilter({
                                 <label className="block text-xs text-slate-500 mb-1 font-medium">To</label>
                                 <input
                                     type="date"
-                                    value={value.to}
-                                    min={value.from || undefined}
-                                    onChange={(e) => onChange({ ...value, to: e.target.value })}
+                                    value={draft.to}
+                                    min={draft.from || undefined}
+                                    onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
                                     className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 />
                             </div>
@@ -197,8 +220,9 @@ export default function DateRangeFilter({
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setOpen(false)}
-                                className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition"
+                                onClick={handleApply}
+                                disabled={!draftHasValue}
+                                className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 Apply
                             </button>
