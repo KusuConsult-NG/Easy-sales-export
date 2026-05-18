@@ -106,8 +106,10 @@ export async function invalidateAdminGlobalStats(): Promise<void> {
             deleteCache("admin:coop-stats:global"),
             deleteCache("admin:coop-reports:global"),
         ]);
-        // Also trigger Next.js tag revalidation
+        // Also trigger Next.js tag and path revalidation
         revalidateTag("module-registration-stats", "page");
+        revalidatePath("/admin", "layout");
+        revalidatePath("/admin/dashboard", "page");
         console.log(`[Cache Invalidation] Cleared global admin stats and tags`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing global admin stats:`, error);

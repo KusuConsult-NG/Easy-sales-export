@@ -186,8 +186,6 @@ export async function getDashboardStatsAction(options?: {
         pendingApprovals = pendingResult.success ? (pendingResult.data?.totalPending ?? 0) : 0;
     }
 
-    const usersSnap = await db.collection(COLLECTIONS.USERS).select("serviceRegistrations", "bankAccountNumber", "address").get();
-
     // Active users: users who logged in within the filter window
     const activeUsers = activeUsersSnap.status === "fulfilled" ? (activeUsersSnap.value.data().count ?? 0) : 0;
 
@@ -295,31 +293,17 @@ export async function getDashboardStatsAction(options?: {
     }
 
     // ── User Segmentation (Mutually Exclusive) ──────────────────────────────
+    const { getUserMetricsAction } = await import("./global-aggregation");
+    const userMetricsRes = await getUserMetricsAction();
     const userSegments = { active: 0, pending: 0, stalled: 0, ghost: 0 };
     
-    // We already have the users from the module registration fetch
-    // BUT we need to iterate them to categorize. 
-    // To avoid redundant fetches, we'll refactor slightly if needed, 
-    // but for now, let's process the usersSnap we have.
-    
-    usersSnap.docs.forEach(doc => {
-        const data = doc.data();
-        const regs = data.serviceRegistrations || {};
-        
-        const hasModule = Object.values(regs).some((m: any) => m && m.status && m.status !== "not_started");
-        const isApproved = Object.values(regs).some((m: any) => m && m.status === "approved" || m.status === "active");
-        
-        // Logical segments
-        if (isApproved) {
-            userSegments.active++;
-        } else if (hasModule) {
-            userSegments.pending++;
-        } else if (data.bankAccountNumber || data.address?.street) {
-            userSegments.stalled++;
-        } else {
-            userSegments.ghost++;
-        }
-    });
+    if (userMetricsRes.success && userMetricsRes.data) {
+        // Fast O(1) aggregation mapping
+        userSegments.active = userMetricsRes.data.active;
+        userSegments.pending = userMetricsRes.data.unverified;
+        userSegments.stalled = Math.max(0, userMetricsRes.data.total - userMetricsRes.data.active - userMetricsRes.data.unverified);
+        userSegments.ghost = 0; // Deprecated due to memory overhead
+    }
 
     const payload: AnalyticsData = {
         platformOverview: {
@@ -530,58 +514,42 @@ export interface ModuleRegistrationStats {
 
 const fetchModuleRegistrationStats = unstable_cache(
     async (): Promise<ModuleRegistrationStats> => {
-        // HYBRID AUDIT: Combining direct collection counts with serviceRegistrations
-        // to capture all submitted applications (not just approved/active)
         const [
             waveBriefing,
             waveApplications,
             cooperativeOnboarding,
             exportOnboarding,
-            usersSnap,
+            academySnap,
+            cooperativesSnap,
+            farmNationSnap,
+            marketplaceSnap,
         ] = await Promise.all([
             safeCount(db.collection(COLLECTIONS.WAVE_BRIEFING_REGISTRATIONS)),
             safeCount(db.collection(COLLECTIONS.WAVE_APPLICATIONS)),
             safeCount(db.collection(COLLECTIONS.COOPERATIVE_ONBOARDING)),
             safeCount(db.collection(COLLECTIONS.EXPORT_APPLICATIONS)),
-            db.collection(COLLECTIONS.USERS).select("serviceRegistrations").get(),
+            safeCount(db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)),
+            safeCount(db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)),
+            safeCount(db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)),
+            safeCount(db.collection(COLLECTIONS.SELLER_VERIFICATIONS)),
         ]);
 
         const stats: ModuleRegistrationStats = {
             wave: waveApplications,
             waveBriefing,
-            academy: 0,
-            cooperatives: 0,
+            academy: academySnap,
+            cooperatives: cooperativesSnap,
             cooperativeOnboarding,
-            farmNation: 0,
-            exportHub: 0,
+            farmNation: farmNationSnap,
+            exportHub: exportOnboarding, // Represents Export Hub registrants
             exportOnboarding,
-            marketplace: 0
+            marketplace: marketplaceSnap
         };
-
-        // Process serviceRegistrations for modules NOT covered by direct collection counts
-        // or to find additional registrations in established modules.
-        usersSnap.docs.forEach(doc => {
-            const data = doc.data();
-            const regs = data.serviceRegistrations || {};
-            
-            const isStarted = (m: any) => m && m.status && m.status !== "not_started";
-
-            // Academy, Cooperatives, Farm Nation, Marketplace, Export Hub
-            // are primarily tracked in serviceRegistrations
-            if (isStarted(regs.academy)) stats.academy++;
-            if (isStarted(regs.cooperative)) stats.cooperatives++;
-            if (isStarted(regs.farm_nation) || isStarted(regs.farmNation)) stats.farmNation++;
-            if (isStarted(regs.marketplace)) stats.marketplace++;
-            if (isStarted(regs.export)) stats.exportHub++;
-            
-            // Note: wave and briefings are already set from safeCount(COLLECTIONS...) 
-            // which captures all submissions (the user's primary requirement).
-        });
 
         return stats;
     },
     ["module-registration-stats"],
-    { revalidate: 300, tags: ["module-registration-stats"] }
+    { revalidate: 60, tags: ["module-registration-stats"] }
 );
 
 export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistrationStats> {

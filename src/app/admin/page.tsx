@@ -21,8 +21,9 @@ export default async function AdminDashboard() {
     const isAcadAdmin = roles.includes("academy_admin");
 
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
+    const isSuperAdmin = roles.includes("super_admin");
 
-    if (isModuleAdmin) {
+    if (isModuleAdmin && !isSuperAdmin) {
         // They are a module admin, redirect them to their specific silo
         if (isWaveAdmin) redirect("/admin/wave");
         if (isCoopAdmin) redirect("/admin/cooperatives");

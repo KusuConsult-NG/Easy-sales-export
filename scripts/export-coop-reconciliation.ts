@@ -1,4 +1,5 @@
-import { db, admin } from "../src/lib/firebase-admin";
+import { db } from "../src/lib/firebase-admin";
+import { FieldPath } from "firebase-admin/firestore";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -37,7 +38,7 @@ async function generateCSV() {
         if (chunk.length === 0) continue;
         
         try {
-            const usersSnap = await db.collection("users").where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+            const usersSnap = await db.collection("users").where(FieldPath.documentId(), "in", chunk).get();
             usersSnap.docs.forEach(doc => {
                 userProfiles.set(doc.id, doc.data());
             });

@@ -101,3 +101,110 @@ export async function getGlobalPendingApprovalsAction() { try {
         return { success: false as const, error: error.message, data: null };
     }
 }
+
+/**
+ * Computes exact user metrics.
+ */
+export async function getUserMetricsAction() {
+    try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+        const [totalSnap, activeSnap, verifiedSnap] = await Promise.all([
+            db.collection(COLLECTIONS.USERS).count().get(),
+            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
+            db.collection(COLLECTIONS.USERS).where("isVerified", "==", true).count().get()
+        ]);
+
+        const total = totalSnap.data().count || 0;
+        const active = activeSnap.data().count || 0;
+        const verified = verifiedSnap.data().count || 0;
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                total,
+                active,
+                verified,
+                unverified: total - verified,
+            }
+        };
+    } catch (error: any) {
+        logger.error("Failed to compute user metrics:", error);
+        return { success: false as const, error: error.message, data: null };
+    }
+}
+
+/**
+ * Computes exact marketplace metrics.
+ */
+export async function getMarketplaceMetricsAction() {
+    try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
+
+        const [
+            totalSellersSnap,
+            pendingSellersSnap,
+            totalEscrowsSnap,
+            pendingEscrowsSnap,
+            completedEscrowsSnap,
+            totalOrdersSnap
+        ] = await Promise.all([
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS).count().get(),
+            db.collection(COLLECTIONS.SELLER_VERIFICATIONS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).count().get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "completed").count().get(),
+            db.collection(COLLECTIONS.MARKETPLACE_ORDERS).count().get()
+        ]);
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                totalSellers: totalSellersSnap.data().count || 0,
+                pendingSellers: pendingSellersSnap.data().count || 0,
+                totalEscrows: totalEscrowsSnap.data().count || 0,
+                pendingEscrows: pendingEscrowsSnap.data().count || 0,
+                completedEscrows: completedEscrowsSnap.data().count || 0,
+                totalOrders: totalOrdersSnap.data().count || 0
+            }
+        };
+    } catch (error: any) {
+        logger.error("Failed to compute marketplace metrics:", error);
+        return { success: false as const, error: error.message, data: null };
+    }
+}
+
+/**
+ * Computes exact communications metrics.
+ */
+export async function getCommunicationsMetricsAction() {
+    try {
+        const sessionResult = await requireAdmin();
+        if ('error' in sessionResult) return { success: false as const, error: sessionResult.error, data: null };
+
+        const [totalDisputesSnap, openDisputesSnap, resolvedDisputesSnap] = await Promise.all([
+            db.collection(COLLECTIONS.DISPUTES).count().get(),
+            db.collection(COLLECTIONS.DISPUTES).where("status", "in", ["open", "pending"]).count().get(),
+            db.collection(COLLECTIONS.DISPUTES).where("status", "==", "resolved").count().get()
+        ]);
+
+        return {
+            success: true as const,
+            error: null,
+            data: {
+                totalDisputes: totalDisputesSnap.data().count || 0,
+                openDisputes: openDisputesSnap.data().count || 0,
+                resolvedDisputes: resolvedDisputesSnap.data().count || 0
+            }
+        };
+    } catch (error: any) {
+        logger.error("Failed to compute communications metrics:", error);
+        return { success: false as const, error: error.message, data: null };
+    }
+}
