@@ -1294,7 +1294,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // *** IMPORTANT: We deliberately avoid orderBy('createdAt') because Firestore
         // silently excludes any document where that field is null/missing.
         // All sorting is done in-memory after fetching. ***
-        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options)); if (options.search) {
+        if (options.search) {
             const search = options.search.trim();
             // Email exact match
             if (search.includes("@")) {
@@ -1344,7 +1344,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             }
         }
         // For search (email/phone), count directly against the filter
-        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options)); if (options.search) {
+        if (options.search) {
             const search = options.search.trim();
             if (search.includes("@")) {
                 countQuery = countQuery.where("email", "==", search.toLowerCase());
@@ -1370,9 +1370,17 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             // 1. New schema: firstName + lastName stored separately (onboarding post-April 2026)
             // 2. Legacy schema: fullName stored as single string
             // 3. Auth-only schema: name stored from Firebase Auth display name
-            const derivedName = data.firstName
-                ? [data.firstName, data.otherName, data.lastName].filter(Boolean).join(" ").trim()
-                : (data.fullName || data.name || data.displayName || data.email || "Unknown");
+            // IMPORTANT: Reject placeholder values like "User" or "Unknown" that were
+            // written by the ghost-account auto-repair before April 2026. Fall through
+            // to the email address so the admin table shows something meaningful.
+            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user"]);
+            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+
+            const derivedFirstName = !isPlaceholder(data.firstName) ? data.firstName : null;
+            const derivedFullName  = !isPlaceholder(data.fullName)  ? data.fullName  : null;
+            const derivedName = derivedFirstName
+                ? [derivedFirstName, data.otherName, data.lastName].filter(Boolean).join(" ").trim()
+                : (derivedFullName || data.displayName || data.email || "Unknown");
             return {
                 id: doc.id,
                 name: derivedName,
@@ -1446,7 +1454,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
 
         // Client-side search + date range filtering
         let filteredUsers = usersWithModules;
-        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options)); if (options.search) {
+        if (options.search) {
             const s = options.search.toLowerCase().trim();
             filteredUsers = filteredUsers.filter(user => {
                 const searchString = [
@@ -3386,7 +3394,7 @@ async function _getMarketplaceUsersAction(options: {
 
         let filteredDocs = snapshot.docs;
 
-        console.log("[DEBUG] getMarketplaceUsersAction options:", JSON.stringify(options));
+
         if (options.search) {
             const searchLower = options.search.toLowerCase().trim();
             filteredDocs = filteredDocs.filter(doc => {

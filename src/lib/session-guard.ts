@@ -63,19 +63,29 @@ export async function requireSession(): Promise<
                 console.warn(`[SessionGuard] Account NOT found in Firestore for ID: ${userId}. Attempting auto-repair.`);
                 try {
                     const { FieldValue } = await import("firebase-admin/firestore");
-                    const fullName = session.user.name || "User";
-                    const nameParts = fullName.split(" ");
-                    
-                    const userProfile = {
+                    // IMPORTANT: session.user.name can be literally "User" when NextAuth
+                    // reads an empty Firebase Auth displayName. Do NOT write that into Firestore
+                    // or the admin table will show "User" for every such account.
+                    const rawName = session.user.name;
+                    const isPlaceholderName = !rawName || rawName === "User" || rawName === "Unknown";
+                    const fullName = isPlaceholderName ? (userEmail || "") : rawName;
+                    const nameParts = isPlaceholderName ? [] : fullName.split(" ");
+
+                    const userProfile: Record<string, any> = {
                         uid: userId,
-                        fullName,
-                        firstName: nameParts[0] || "User",
-                        lastName: nameParts.slice(1).join(" ") || "",
                         email: userEmail || "",
                         roles: ["general_user"],
                         isVerified: true,
                         verified: true,
                     };
+
+                    // Only write name fields when we have a real name — avoids
+                    // polluting the DB with placeholder strings like "User".
+                    if (!isPlaceholderName) {
+                        userProfile.fullName = fullName;
+                        userProfile.firstName = nameParts[0] || "";
+                        userProfile.lastName = nameParts.slice(1).join(" ") || "";
+                    }
                     
                     await db.collection(COLLECTIONS.USERS).doc(userId).set({
                         ...userProfile,

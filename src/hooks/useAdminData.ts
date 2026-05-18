@@ -82,7 +82,8 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
             };
 
             logger.debug('[useAdminData] Fetching', { page, cursor, search: s, filters: f });
-            console.log('[DEBUG useAdminData] params to fn:', JSON.stringify(params));
+
+
 
             const result = await fn(params);
 
