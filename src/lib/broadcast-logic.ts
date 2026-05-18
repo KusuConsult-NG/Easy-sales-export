@@ -427,8 +427,15 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
                 const createdRaw = d.createdAt || d.appliedAt || d.timestamp;
                 if (createdRaw) {
                     const created = createdRaw.toDate ? createdRaw.toDate() : new Date(createdRaw);
+                    if (isNaN(created.getTime())) {
+                        continue;
+                    }
                     if (filters.startDate && created < new Date(filters.startDate)) continue;
-                    if (filters.endDate && created > new Date(filters.endDate)) continue;
+                    if (filters.endDate) {
+                        const endD = new Date(filters.endDate);
+                        endD.setUTCHours(23, 59, 59, 999);
+                        if (created > endD) continue;
+                    }
                 } else {
                     continue; // Skip if we have date filters but the document has no date
                 }
@@ -477,8 +484,15 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
                 const createdRaw = d.createdAt || d.appliedAt || d.timestamp;
                 if (createdRaw) {
                     const created = createdRaw.toDate ? createdRaw.toDate() : new Date(createdRaw);
+                    if (isNaN(created.getTime())) {
+                        continue;
+                    }
                     if (filters.startDate && created < new Date(filters.startDate)) continue;
-                    if (filters.endDate && created > new Date(filters.endDate)) continue;
+                    if (filters.endDate) {
+                        const endD = new Date(filters.endDate);
+                        endD.setUTCHours(23, 59, 59, 999);
+                        if (created > endD) continue;
+                    }
                 } else {
                     continue; // Skip if we have date filters but the document has no date
                 }
@@ -727,9 +741,17 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
 
                     // 2. Apply Date Range Filter if present
                     if (filters?.startDate || filters?.endDate) {
-                        const created = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt);
+                        const createdRaw = data.createdAt || data.appliedAt || data.registeredAt || data.timestamp;
+                        if (!createdRaw) return; // Skip if no date is found
+                        const created = createdRaw.toDate ? createdRaw.toDate() : new Date(createdRaw);
+                        if (isNaN(created.getTime())) return; // Skip if date is invalid
+
                         if (filters.startDate && created < new Date(filters.startDate)) return;
-                        if (filters.endDate && created > new Date(filters.endDate)) return;
+                        if (filters.endDate) {
+                            const endD = new Date(filters.endDate);
+                            endD.setUTCHours(23, 59, 59, 999);
+                            if (created > endD) return;
+                        }
                     }
 
                     // 3. High-Precision Audience Segmenting
