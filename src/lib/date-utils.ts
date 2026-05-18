@@ -39,3 +39,26 @@ export function formatLocalDate(date: any): string {
 export function formatLocalDateTime(date: any): string {
     return toDate(date).toLocaleString();
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Date range boundary helpers (used for ALL Firestore server-side queries)
+// Both functions produce explicit UTC timestamps so the server's local timezone
+// never causes off-by-one range leakage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the UTC start of a given YYYY-MM-DD date string.
+ * e.g. "2026-05-15" → 2026-05-15T00:00:00.000Z
+ */
+export function dateRangeStart(yyyyMmDd: string): Date {
+    return new Date(yyyyMmDd + "T00:00:00.000Z");
+}
+
+/**
+ * Returns the UTC end of a given YYYY-MM-DD date string (inclusive, end of day).
+ * e.g. "2026-05-18" → 2026-05-18T23:59:59.999Z
+ */
+export function dateRangeEnd(yyyyMmDd: string): Date {
+    return new Date(yyyyMmDd + "T23:59:59.999Z");
+}
+

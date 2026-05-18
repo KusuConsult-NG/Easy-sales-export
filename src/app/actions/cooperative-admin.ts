@@ -4,6 +4,7 @@
  */
 
 "use server";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -1206,11 +1207,11 @@ export async function getStandardCooperativeMembersAction(
 
         // Server-side date range filter
         if (options.dateFrom) {
-            const fromTs = new Date(options.dateFrom);
+            const fromTs = dateRangeStart(options.dateFrom);
             q = q.where("createdAt", ">=", fromTs);
         }
         if (options.dateTo) {
-            const toTs = new Date(options.dateTo + "T23:59:59");
+            const toTs = dateRangeEnd(options.dateTo);
             q = q.where("createdAt", "<=", toTs);
         }
 

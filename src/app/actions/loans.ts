@@ -1,4 +1,5 @@
 "use server";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -244,11 +245,11 @@ export async function getAdminLoanApplicationsAction(options: {
 
         // Server-side date range filter
         if (options.dateFrom) {
-            const fromTs = new Date(options.dateFrom);
+            const fromTs = dateRangeStart(options.dateFrom);
             query = query.where("appliedAt", ">=", fromTs);
         }
         if (options.dateTo) {
-            const toTs = new Date(options.dateTo + "T23:59:59");
+            const toTs = dateRangeEnd(options.dateTo);
             query = query.where("appliedAt", "<=", toTs);
         }
 

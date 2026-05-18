@@ -1,4 +1,5 @@
 "use server";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
@@ -113,8 +114,8 @@ export async function getDashboardStatsAction(options?: {
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Respect date filter or default to last 30 days
-    const filterFrom = options?.dateFrom ? new Date(options.dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const filterTo   = options?.dateTo   ? new Date(options.dateTo + "T23:59:59") : now;
+    const filterFrom = options?.dateFrom ? dateRangeStart(options.dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const filterTo   = options?.dateTo   ? dateRangeEnd(options.dateTo) : now;
     const thirtyDaysAgo = filterFrom;
 
     // ── Parallel Firestore queries ───────────────────────────────────────────

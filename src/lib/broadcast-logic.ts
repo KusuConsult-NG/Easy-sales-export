@@ -2,6 +2,7 @@ import { db } from './firebase-admin';
 import { COLLECTIONS } from './types/firestore';
 import { logger } from './logger';
 import { User } from './types/firestore';
+import { dateRangeStart, dateRangeEnd } from './date-utils';
 
 /**
  * High-Precision Mutually Exclusive Segmenter
@@ -430,11 +431,9 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
                     if (isNaN(created.getTime())) {
                         continue;
                     }
-                    if (filters.startDate && created < new Date(filters.startDate)) continue;
+                    if (filters.startDate && created < dateRangeStart(filters.startDate.slice(0,10))) continue;
                     if (filters.endDate) {
-                        const endD = new Date(filters.endDate);
-                        endD.setUTCHours(23, 59, 59, 999);
-                        if (created > endD) continue;
+                        if (created > dateRangeEnd(filters.endDate.slice(0,10))) continue;
                     }
                 } else {
                     continue; // Skip if we have date filters but the document has no date
@@ -487,11 +486,9 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
                     if (isNaN(created.getTime())) {
                         continue;
                     }
-                    if (filters.startDate && created < new Date(filters.startDate)) continue;
+                    if (filters.startDate && created < dateRangeStart(filters.startDate.slice(0,10))) continue;
                     if (filters.endDate) {
-                        const endD = new Date(filters.endDate);
-                        endD.setUTCHours(23, 59, 59, 999);
-                        if (created > endD) continue;
+                        if (created > dateRangeEnd(filters.endDate.slice(0,10))) continue;
                     }
                 } else {
                     continue; // Skip if we have date filters but the document has no date
@@ -746,11 +743,9 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
                         const created = createdRaw.toDate ? createdRaw.toDate() : new Date(createdRaw);
                         if (isNaN(created.getTime())) return; // Skip if date is invalid
 
-                        if (filters.startDate && created < new Date(filters.startDate)) return;
+                        if (filters.startDate && created < dateRangeStart(filters.startDate.slice(0,10))) return;
                         if (filters.endDate) {
-                            const endD = new Date(filters.endDate);
-                            endD.setUTCHours(23, 59, 59, 999);
-                            if (created > endD) return;
+                            if (created > dateRangeEnd(filters.endDate.slice(0,10))) return;
                         }
                     }
 

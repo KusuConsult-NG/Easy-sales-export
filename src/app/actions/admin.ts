@@ -1,4 +1,5 @@
 "use server";
+import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
 
 import { versionedUpdate } from "@/lib/optimistic-locking";
 import { z, ZodError } from "zod";
@@ -2065,11 +2066,11 @@ async function _getStandardExportApplicationsAction(options: {
         }
         // Server-side date range filter
         if (options.dateFrom) {
-            const fromTs = new Date(options.dateFrom);
+            const fromTs = dateRangeStart(options.dateFrom);
             q = q.where("createdAt", ">=", fromTs);
         }
         if (options.dateTo) {
-            const toTs = new Date(options.dateTo + "T23:59:59");
+            const toTs = dateRangeEnd(options.dateTo);
             q = q.where("createdAt", "<=", toTs);
         }
 
@@ -3234,11 +3235,11 @@ async function _getStandardSellerVerificationsAction(
         }
 
         if (dateFrom) {
-            const fromTs = new Date(dateFrom);
+            const fromTs = dateRangeStart(dateFrom);
             q = q.where("createdAt", ">=", fromTs);
         }
         if (dateTo) {
-            const toTs = new Date(dateTo + "T23:59:59");
+            const toTs = dateRangeEnd(dateTo);
             q = q.where("createdAt", "<=", toTs);
         }
 
@@ -3370,11 +3371,11 @@ async function _getMarketplaceUsersAction(options: {
 
         const sortDirection = options.sortOrder || "desc";
         if (options.dateFrom) {
-            const fromTs = new Date(options.dateFrom);
+            const fromTs = dateRangeStart(options.dateFrom);
             q = q.where("createdAt", ">=", fromTs);
         }
         if (options.dateTo) {
-            const toTs = new Date(options.dateTo + "T23:59:59");
+            const toTs = dateRangeEnd(options.dateTo);
             q = q.where("createdAt", "<=", toTs);
         }
 
