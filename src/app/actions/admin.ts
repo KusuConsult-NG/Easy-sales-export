@@ -1406,6 +1406,18 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             let bestPhone = data.phone;
             let bestState = data.address?.state || data.state;
             let bestLga = data.address?.lga || data.lga;
+            
+            // Aggressive KYC extraction from modules
+            let bestBvn = data.kyc?.bvn || data.bvn;
+            let bestBvnVerified = data.kyc?.bvnVerified ?? data.bvnVerified ?? false;
+            let bestNin = data.kyc?.nin || data.nin;
+            let bestNinVerified = data.kyc?.ninVerified ?? data.ninVerified ?? false;
+            let bestBankDetails = data.bankDetails || {
+                bankName: data.bankName || data.bankAccount?.bankName,
+                accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber,
+                accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName,
+                bankCode: data.bankCode || data.bankAccount?.bankCode
+            };
 
             if (data.serviceRegistrations) {
                 Object.values(data.serviceRegistrations).forEach((reg: any) => {
@@ -1420,6 +1432,19 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                     if (isPlaceholder(bestPhone) && profile.phone && !isPlaceholder(profile.phone)) bestPhone = profile.phone;
                     if (isPlaceholder(bestState) && profile.state && !isPlaceholder(profile.state)) bestState = profile.state;
                     if (isPlaceholder(bestLga) && profile.lga && !isPlaceholder(profile.lga)) bestLga = profile.lga;
+                    
+                    // Extract KYC from module verificationProfile if available
+                    const vp = profile.verificationProfile || reg.verificationProfile;
+                    if (vp) {
+                        if (!bestBvn && vp.bvn) bestBvn = vp.bvn;
+                        if (!bestBvnVerified && vp.bvnVerified) bestBvnVerified = vp.bvnVerified;
+                        if (!bestNin && vp.nin) bestNin = vp.nin;
+                        if (!bestNinVerified && vp.ninVerified) bestNinVerified = vp.ninVerified;
+                        
+                        if (vp.bankDetails && !bestBankDetails?.accountNumber) {
+                            bestBankDetails = vp.bankDetails;
+                        }
+                    }
                 });
             }
 
@@ -1448,12 +1473,12 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 lga: bestLga || "",
                 // KYC fields — prefer nested kyc.* (written by live QoreID actions),
                 // fall back to legacy top-level fields for existing records
-                bvn: data.kyc?.bvn || data.bvn,
-                bvnVerified: data.kyc?.bvnVerified ?? data.bvnVerified ?? false,
-                bvnStatus: data.kyc?.bvnStatus || (data.bvnVerified ? 'verified' : undefined),
-                nin: data.kyc?.nin || data.nin,
-                ninVerified: data.kyc?.ninVerified ?? data.ninVerified ?? false,
-                ninStatus: data.kyc?.ninStatus || (data.ninVerified ? 'verified' : undefined),
+                bvn: bestBvn,
+                bvnVerified: bestBvnVerified,
+                bvnStatus: data.kyc?.bvnStatus || (bestBvnVerified ? 'verified' : undefined),
+                nin: bestNin,
+                ninVerified: bestNinVerified,
+                ninStatus: data.kyc?.ninStatus || (bestNinVerified ? 'verified' : undefined),
                 kycStatus: data.kyc?.status || data.kycStatus || 'pending',
                 taxId: data.taxId,
                 tinVerified: data.tinVerified,
@@ -1461,11 +1486,11 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 cacVerified: data.cacVerified,
                 idType: data.kyc?.idType || data.idType,
                 // Other
-                bankDetails: data.bankDetails || {
-                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                bankDetails: {
+                    bankName: bestBankDetails?.bankName || "N/A",
+                    accountNumber: bestBankDetails?.accountNumber || "N/A",
+                    accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? `${bestFirstName} ${bestLastName}` : "N/A"),
+                    bankCode: bestBankDetails?.bankCode || "N/A"
                 },
                 metadata: data.metadata,
                 accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType,
@@ -1564,14 +1589,17 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 filteredUsers = filteredUsers.filter(u => (u.activeModules as string[]).includes(options.modules as string));
             }
         }
+
         // In-memory status filter — using the defensive chain already computed in mapping:
-        // `data.isVerified ?? data.verified ?? false`
-        // This ensures legacy users (verified:true, no isVerified) are included correctly.
         if (options.status === "verified") {
             filteredUsers = filteredUsers.filter(u => u.isVerified === true);
         } else if (options.status === "unverified") {
             filteredUsers = filteredUsers.filter(u => !u.isVerified);
         }
+
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        // This resolves the bug where Firestore cross-type ordering (Strings > Timestamps)
+        // caused legacy string-based createdAt dates to leak past the `query.where(">=", Timestamp)` boundary.
         if (options.fromDate) {
             const from = new Date(options.fromDate);
             from.setHours(0, 0, 0, 0);
@@ -3414,6 +3442,18 @@ async function _getStandardSellerVerificationsAction(
             });
         }
 
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (dateFrom) {
+            const from = new Date(dateFrom);
+            from.setHours(0, 0, 0, 0);
+            finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) >= from);
+        }
+        if (dateTo) {
+            const to = new Date(dateTo);
+            to.setHours(23, 59, 59, 999);
+            finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) <= to);
+        }
+
         // Apply pagination after search filter if search is present
         let nextCursorIdToReturn = nextCursorId;
         if (search) {
@@ -3554,6 +3594,17 @@ async function _getMarketplaceUsersAction(options: {
             });
         }
 
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (options.dateFrom) {
+            const from = new Date(options.dateFrom);
+            from.setHours(0, 0, 0, 0);
+            users = users.filter((u: any) => new Date(u.createdAt) >= from);
+        }
+        if (options.dateTo) {
+            const to = new Date(options.dateTo);
+            to.setHours(23, 59, 59, 999);
+            users = users.filter((u: any) => new Date(u.createdAt) <= to);
+        }
 
         // Apply memory pagination
         // The UI might pass lastDocId as a stringified page index due to useAdminData's cursor logic
