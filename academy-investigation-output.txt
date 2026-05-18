@@ -1,0 +1,25 @@
+Found 11 academy apps with completed payment.
+App User: IUGsR0OZveW4o3A825K1hrcJtYb2, Plan: registration, amount: 0
+App User: 88rbe3I2txUNuTFsJe0ZgjBIAEo1, Plan: elite, amount: 100000
+App User: Tov0owSJUCTNlYuH6idhxKG8Yij2, Plan: foundation, amount: 25000
+App User: RVNemA9gH6NceueRnTuXlIq00Y03, Plan: standard, amount: 50000
+App User: 3BaoxUkxkPPXGS8SfrWhl74ngRW2, Plan: advanced, amount: 100000
+App User: PiXZD0abyafWDdCUBvEeUNFAWEK2, Plan: advanced, amount: 100000
+App User: LXQrstLmwGVcON02iNfvSNam8GR2, Plan: foundation, amount: 25000
+App User: 4d4eq6ChsmXcKwshvWLOZ9DcEP92, Plan: standard, amount: 50000
+App User: FA3yH8EK59f38vQ2GLPM4vqbPwI2, Plan: advanced, amount: 100000
+App User: 7nQnLGU4WkZQttTg4a2LIM9H8gT2, Plan: foundation, amount: undefined
+App User: mPKjq10VIBdAdIBjMeKyWpe2GBp2, Plan: advanced, amount: 100000
+Checking processedPayments for these users...
+Found payment for user mPKjq10VIBdAdIBjMeKyWpe2GBp2: Type = academy_registration, Amount = 100000, Date = 2026-03-17T11:51:23.000Z
+Found payment for user Tov0owSJUCTNlYuH6idhxKG8Yij2: Type = academy_registration, Amount = 25000, Date = 2026-04-13T14:48:34.000Z
+Found payment for user FA3yH8EK59f38vQ2GLPM4vqbPwI2: Type = academy_registration, Amount = 100000, Date = 2026-03-17T10:12:15.000Z
+Found payment for user PiXZD0abyafWDdCUBvEeUNFAWEK2: Type = academy_registration, Amount = 100000, Date = 2026-02-28T12:03:52.000Z
+Found payment for user 88rbe3I2txUNuTFsJe0ZgjBIAEo1: Type = academy_registration, Amount = 100000, Date = undefined
+Found payment for user LXQrstLmwGVcON02iNfvSNam8GR2: Type = academy_registration, Amount = 25000, Date = 2026-03-02T11:49:26.000Z
+Found payment for user 3BaoxUkxkPPXGS8SfrWhl74ngRW2: Type = cooperative_membership_registration, Amount = 10000, Date = 2026-03-25T19:10:38.000Z
+Found payment for user FA3yH8EK59f38vQ2GLPM4vqbPwI2: Type = cooperative_membership_registration, Amount = 10000, Date = 2026-03-11T18:42:17.000Z
+Found payment for user RVNemA9gH6NceueRnTuXlIq00Y03: Type = academy_registration, Amount = 50000, Date = 2026-04-03T18:47:20.000Z
+Found payment for user 88rbe3I2txUNuTFsJe0ZgjBIAEo1: Type = cooperative_membership_registration, Amount = 10000, Date = 2026-05-05T14:28:45.849Z
+Found payment for user 3BaoxUkxkPPXGS8SfrWhl74ngRW2: Type = academy_registration, Amount = 100000, Date = 2026-04-16T09:10:19.859Z
+Found payment for user 4d4eq6ChsmXcKwshvWLOZ9DcEP92: Type = academy_registration, Amount = 50000, Date = 2026-04-04T12:30:18.000Z

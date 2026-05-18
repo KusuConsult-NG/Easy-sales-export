@@ -1,0 +1,28 @@
+Found 12 users with completed academy payment status.
+User: 3BaoxUkxkPPXGS8SfrWhl74ngRW2, Name: Aminat Ajibola, Email: abike.foodsandstores@gmail.com, Plan: advanced
+User: 4d4eq6ChsmXcKwshvWLOZ9DcEP92, Name: Sanusi Ruth Adenike, Email: sanusiruthadenike@gmail.com, Plan: standard
+User: 7nQnLGU4WkZQttTg4a2LIM9H8gT2, Name: Emuze Bamidele, Email: artisticteacher1@gmail.com, Plan: foundation
+User: 88rbe3I2txUNuTFsJe0ZgjBIAEo1, Name: Adedayo Oluwo, Email: adedayooluwo2@gmail.com, Plan: elite
+User: FA3yH8EK59f38vQ2GLPM4vqbPwI2, Name: Ogungbuyi Ajoke Rhoda, Email: oyebunmiajoke@gmail.com, Plan: advanced
+User: IUGsR0OZveW4o3A825K1hrcJtYb2, Name: OREKYEH ULOMA, Email: orekyehqueen@gmail.com, Plan: registration
+User: LXQrstLmwGVcON02iNfvSNam8GR2, Name: Obi Petrus chisomaga, Email: obipetrus9@gmail.com, Plan: foundation
+User: PiXZD0abyafWDdCUBvEeUNFAWEK2, Name: Samuel Olawunmi, Email: samolat90@gmail.com, Plan: advanced
+User: RVNemA9gH6NceueRnTuXlIq00Y03, Name: Maryam muhammad, Email: maryamswtie1@gmail.com, Plan: standard
+User: Tov0owSJUCTNlYuH6idhxKG8Yij2, Name: IPAYE OLADIPO MICHAEL, Email: oladipo_ipaye@yahoo.com, Plan: foundation
+User: ZheLddDFdeZETK1xxMgP9az6TqR2, Name: Test User (academyuser02), Email: academyuser02@gmail.com, Plan: standard
+User: mPKjq10VIBdAdIBjMeKyWpe2GBp2, Name: Ibrahim Abdulkareem, Email: ibrahimolowode@gmail.com, Plan: advanced
+
+Checking academy_applications for these users...
+App found for IUGsR0OZveW4o3A825K1hrcJtYb2. PaymentStatus: completed, Amount: 0
+App found for 88rbe3I2txUNuTFsJe0ZgjBIAEo1. PaymentStatus: pending, Amount: 0
+App found for 88rbe3I2txUNuTFsJe0ZgjBIAEo1. PaymentStatus: completed, Amount: 100000
+App found for Tov0owSJUCTNlYuH6idhxKG8Yij2. PaymentStatus: completed, Amount: 25000
+App found for RVNemA9gH6NceueRnTuXlIq00Y03. PaymentStatus: completed, Amount: 50000
+App found for 3BaoxUkxkPPXGS8SfrWhl74ngRW2. PaymentStatus: completed, Amount: 100000
+App found for PiXZD0abyafWDdCUBvEeUNFAWEK2. PaymentStatus: completed, Amount: 100000
+App found for LXQrstLmwGVcON02iNfvSNam8GR2. PaymentStatus: completed, Amount: 25000
+App found for 4d4eq6ChsmXcKwshvWLOZ9DcEP92. PaymentStatus: completed, Amount: 50000
+App found for FA3yH8EK59f38vQ2GLPM4vqbPwI2. PaymentStatus: completed, Amount: 100000
+App found for 7nQnLGU4WkZQttTg4a2LIM9H8gT2. PaymentStatus: completed, Amount: undefined
+App found for mPKjq10VIBdAdIBjMeKyWpe2GBp2. PaymentStatus: completed, Amount: 100000
+MISSING APP FOR USER: ZheLddDFdeZETK1xxMgP9az6TqR2

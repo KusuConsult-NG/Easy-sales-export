@@ -5,6 +5,7 @@
 
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UserMetricsService } from "@/services/userMetrics.service";
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -82,10 +83,8 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             if (cached) return cached;
         } catch (e) {}
 
-        const [membersSnapR, paymentsSnapR] = await Promise.allSettled([
-            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .select("userId", "membershipStatus", "status", "paymentStatus")
-                .get(),
+        const [metrics, paymentsSnapR] = await Promise.allSettled([
+            UserMetricsService.getCooperativeMemberMetrics(adminScope || undefined),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "cooperative_membership_registration")
                 .where("status", "==", "completed")
@@ -93,56 +92,24 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
                 .get()
         ]);
 
-        const allMembers = membersSnapR.status === "fulfilled"
-            ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
-            : [];
-            
-        // For Paid Members, we count anybody who has a completed payment
-        // OR is manually approved/active (since manual approval implies payment)
-        const paidUserIds = new Set<string>();
-        if (paymentsSnapR.status === "fulfilled") {
-            paymentsSnapR.value.docs.forEach(doc => {
-                const data = doc.data();
-                if (data.userId) paidUserIds.add(data.userId);
-            });
-        }
+        const metricsData = metrics.status === "fulfilled" ? metrics.value : {
+            totalApplications: 0,
+            paidMembersCount: 0,
+            unpaidMembers: 0,
+            pendingCount: 0,
+            approvedCount: 0,
+            suspendedCount: 0
+        };
 
-        // Count active/approved members literally
-        const activeMembers = allMembers.filter((m: any) =>
-            m.membershipStatus === "active" || m.membershipStatus === "approved" ||
-            m.status === "active" || m.status === "approved"
-        ).length;
+        const {
+            totalApplications: totalMembersCount,
+            paidMembersCount,
+            unpaidMembers,
+            pendingCount: pendingMembers,
+            approvedCount: activeMembers,
+            suspendedCount: suspendedMembers
+        } = metricsData;
 
-        // Suspended members literally (mutually exclusive from active)
-        const suspendedMembers = allMembers.filter((m: any) => {
-            const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" ||
-                             m.status === "active" || m.status === "approved";
-            if (isActive) return false;
-            return m.membershipStatus === "suspended" || m.status === "suspended";
-        }).length;
-
-        // Pending members literally (mutually exclusive from active and suspended)
-        const pendingMembers = allMembers.filter((m: any) => {
-            const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" ||
-                             m.status === "active" || m.status === "approved";
-            const isSuspended = m.membershipStatus === "suspended" || m.status === "suspended";
-            if (isActive || isSuspended) return false;
-            
-            return m.membershipStatus === "pending" || m.status === "pending" || (!m.membershipStatus && !m.status);
-        }).length;
-        
-        // Strict data integrity: Dashboard stats MUST reflect actual application documents.
-        // We do NOT artificially inject orphaned payments into these totals.
-        let paidMembersCount = 0;
-        allMembers.forEach((m: any) => {
-            // A member is ONLY counted as paid if their application document says so
-            if (m.paymentStatus === 'completed') {
-                paidMembersCount++;
-            }
-        });
-
-        const totalMembersCount = allMembers.length;
-        const unpaidMembers = Math.max(0, totalMembersCount - paidMembersCount);
 
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         if (adminScope) {
@@ -193,15 +160,18 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             }
         }
 
-        const loansStream = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status").get();
+        let loansQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_LOANS).select("memberId", "amount", "status");
+        if (adminScope) {
+            loansQuery = loansQuery.where("cooperativeId", "==", adminScope);
+        }
+        const loansStream = await loansQuery.get();
+        
         let totalLoans = 0;
         let activeLoans = 0;
         let pendingLoans = 0;
-        const validMemberIds = adminScope ? new Set(allMembers.map((m: any) => m.id)) : null;
 
-        for (const doc of (await loansStream).docs) {
+        for (const doc of loansStream.docs) {
             const l = doc.data();
-            if (validMemberIds && !validMemberIds.has(l.memberId)) continue;
             totalLoans += Number(l.amount) || 0;
             if (l.status === "disbursed" || l.status === "approved") {
                 activeLoans++;
