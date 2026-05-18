@@ -1290,10 +1290,10 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
 
         let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS);
 
+        let hasUnindexedFilter = false;
+
         // Apply filters
-        // *** IMPORTANT: We deliberately avoid orderBy('createdAt') because Firestore
-        // silently excludes any document where that field is null/missing.
-        // All sorting is done in-memory after fetching. ***
+        // If we have search (email/phone), we apply an equality filter.
         if (options.search) {
             const search = options.search.trim();
             // Email exact match
@@ -1303,6 +1303,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             // Phone exact match
             else if (/^[\d+]+$/.test(search) && search.length > 5) {
                 query = query.where("phone", "==", search);
+                hasUnindexedFilter = true; // No composite index for phone + createdAt desc
             }
             // Name searches are handled client-side below
         }
@@ -1319,13 +1320,35 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             // Instead, status filtering is applied IN-MEMORY after the mapping step uses
             // the defensive chain: `data.isVerified ?? data.verified ?? false`
 
-            // Location filters
+            // Location filters (No composite indexes exist for state/lga + createdAt desc)
             if (options.state && options.state !== "all") {
                 query = query.where("address.state", "==", options.state);
+                hasUnindexedFilter = true;
             }
             if (options.lga && options.lga !== "all") {
                 query = query.where("address.lga", "==", options.lga);
+                hasUnindexedFilter = true;
             }
+        }
+
+        // Apply strict Date boundaries in Firestore
+        // This ensures chronological fetching and accurate Date filtering without memory limits
+        if (!hasUnindexedFilter) {
+            if (options.fromDate) {
+                // Ensure start of day boundary
+                const startObj = new Date(options.fromDate);
+                startObj.setUTCHours(0, 0, 0, 0);
+                query = query.where("createdAt", ">=", startObj);
+            }
+            if (options.toDate) {
+                // Ensure end of day boundary
+                const endObj = new Date(options.toDate);
+                endObj.setUTCHours(23, 59, 59, 999);
+                query = query.where("createdAt", "<=", endObj);
+            }
+            
+            // Order chronologically
+            query = query.orderBy("createdAt", "desc");
         }
 
         // ---------------------------------------------------------
@@ -1373,22 +1396,47 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             // IMPORTANT: Reject placeholder values like "User" or "Unknown" that were
             // written by the ghost-account auto-repair before April 2026. Fall through
             // to the email address so the admin table shows something meaningful.
-            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user"]);
+            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
             const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
 
-            const derivedFirstName = !isPlaceholder(data.firstName) ? data.firstName : null;
-            const derivedFullName  = !isPlaceholder(data.fullName)  ? data.fullName  : null;
+            // Extract richest profile from serviceRegistrations if top-level fields are missing
+            let bestFirstName = data.firstName;
+            let bestLastName = data.lastName;
+            let bestFullName = data.fullName;
+            let bestPhone = data.phone;
+            let bestState = data.address?.state || data.state;
+            let bestLga = data.address?.lga || data.lga;
+
+            if (data.serviceRegistrations) {
+                Object.values(data.serviceRegistrations).forEach((reg: any) => {
+                    const profile = reg?.profile || reg;
+                    if (!profile) return;
+                    
+                    if (isPlaceholder(bestFirstName) && profile.firstName && !isPlaceholder(profile.firstName)) bestFirstName = profile.firstName;
+                    if (isPlaceholder(bestLastName) && profile.lastName && !isPlaceholder(profile.lastName)) bestLastName = profile.lastName;
+                    if (isPlaceholder(bestFullName) && profile.fullName && !isPlaceholder(profile.fullName)) bestFullName = profile.fullName;
+                    if (isPlaceholder(bestFullName) && profile.name && !isPlaceholder(profile.name)) bestFullName = profile.name;
+                    
+                    if (isPlaceholder(bestPhone) && profile.phone && !isPlaceholder(profile.phone)) bestPhone = profile.phone;
+                    if (isPlaceholder(bestState) && profile.state && !isPlaceholder(profile.state)) bestState = profile.state;
+                    if (isPlaceholder(bestLga) && profile.lga && !isPlaceholder(profile.lga)) bestLga = profile.lga;
+                });
+            }
+
+            const derivedFirstName = !isPlaceholder(bestFirstName) ? bestFirstName : null;
+            const derivedFullName  = !isPlaceholder(bestFullName)  ? bestFullName  : null;
             const derivedName = derivedFirstName
-                ? [derivedFirstName, data.otherName, data.lastName].filter(Boolean).join(" ").trim()
-                : (derivedFullName || data.displayName || data.email || "Unknown");
+                ? [derivedFirstName, data.otherName, bestLastName].filter(Boolean).join(" ").trim()
+                : (derivedFullName || data.displayName || (bestPhone && bestPhone !== "N/A" ? bestPhone : data.email) || "Unknown");
+
             return {
                 id: doc.id,
                 name: derivedName,
-                firstName: data.firstName,
-                lastName: data.lastName,
+                firstName: bestFirstName,
+                lastName: bestLastName,
                 otherName: data.otherName,
                 email: data.email,
-                phone: data.phone,
+                phone: isPlaceholder(bestPhone) ? "N/A" : bestPhone,
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
                 isVerified: data.isVerified ?? data.verified ?? false,
@@ -1396,8 +1444,8 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 verifiedAt: data.verifiedAt?.toDate ? data.verifiedAt.toDate().toISOString() : (data.verifiedAt ? new Date(data.verifiedAt).toISOString() : undefined),
                 // Location
                 address: data.address,
-                state: data.address?.state || data.state || "",
-                lga: data.address?.lga || data.lga || "",
+                state: bestState || "",
+                lga: bestLga || "",
                 // KYC fields — prefer nested kyc.* (written by live QoreID actions),
                 // fall back to legacy top-level fields for existing records
                 bvn: data.kyc?.bvn || data.bvn,
@@ -1452,8 +1500,47 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             return { ...u, activeModules: active, moduleCount: active.length };
         })
 
+        // ── Email deduplication ───────────────────────────────────────────────
+        // Ghost accounts auto-created by session-guard may share an email with
+        // the user's REAL profile document (different Firestore doc ID).
+        // Keep the "richest" document per email: prefer the one with the most
+        // fields, breaking ties by earliest createdAt (the original account).
+        const emailMap = new Map<string, typeof usersWithModules[0]>();
+        const richness = (u: typeof usersWithModules[0]) => {
+            // Score = number of meaningful non-placeholder fields present
+            let score = 0;
+            if (u.phone)    score += 10;
+            if (u.firstName && u.firstName.toLowerCase() !== "user") score += 5;
+            if (u.lastName)  score += 5;
+            if (Object.keys(u.serviceRegistrations || {}).length > 0) score += 20;
+            if (u.bvn)       score += 10;
+            if (u.nin)       score += 10;
+            return score;
+        };
+        for (const u of usersWithModules) {
+            if (!u.email) continue;
+            const key = u.email.toLowerCase().trim();
+            const existing = emailMap.get(key);
+            if (!existing) {
+                emailMap.set(key, u);
+            } else {
+                const newScore = richness(u);
+                const oldScore = richness(existing);
+                if (newScore > oldScore) {
+                    emailMap.set(key, u);
+                } else if (newScore === oldScore) {
+                    // Same richness — keep the older account (earlier createdAt)
+                    const newTime = u.createdAt ? new Date(u.createdAt).getTime() : Infinity;
+                    const oldTime = existing.createdAt ? new Date(existing.createdAt).getTime() : Infinity;
+                    if (newTime < oldTime) emailMap.set(key, u);
+                }
+            }
+        }
+        const deduplicatedUsers = Array.from(emailMap.values());
+
         // Client-side search + date range filtering
-        let filteredUsers = usersWithModules;
+        let filteredUsers = deduplicatedUsers;
+
         if (options.search) {
             const s = options.search.toLowerCase().trim();
             filteredUsers = filteredUsers.filter(user => {

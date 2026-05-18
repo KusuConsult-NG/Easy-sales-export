@@ -68,6 +68,10 @@ export default function AdminUsersPage() {
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [isEnrollingAcademy, setIsEnrollingAcademy] = useState(false);
     const [academyPlan, setAcademyPlan] = useState<"foundation" | "standard" | "elite">("foundation");
+    
+    // UI state for date filters so they don't apply immediately on first click
+    const [tempFromDate, setTempFromDate] = useState("");
+    const [tempToDate, setTempToDate] = useState("");
 
     // Use standardized hook
     const {
@@ -102,6 +106,8 @@ export default function AdminUsersPage() {
         updateFilter("status", "all");
         updateFilter("sortOrder", "desc");
         updateFilter("modules", "all");
+        setTempFromDate("");
+        setTempToDate("");
     };
 
     async function handleToggleVerification(userId: string) {
@@ -563,8 +569,8 @@ export default function AdminUsersPage() {
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Joined from</label>
                                     <input
                                         type="date"
-                                        value={filters.fromDate || ""}
-                                        onChange={(e) => updateFilter("fromDate", e.target.value)}
+                                        value={tempFromDate}
+                                        onChange={(e) => setTempFromDate(e.target.value)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
                                     />
                                 </div>
@@ -574,10 +580,23 @@ export default function AdminUsersPage() {
                                     <label className="block text-xs font-semibold text-slate-500 mb-1">Joined to</label>
                                     <input
                                         type="date"
-                                        value={filters.toDate || ""}
-                                        onChange={(e) => updateFilter("toDate", e.target.value)}
+                                        value={tempToDate}
+                                        onChange={(e) => setTempToDate(e.target.value)}
                                         className="w-full px-2 py-1.5 rounded-lg border border-slate-300 bg-white text-sm"
                                     />
+                                </div>
+
+                                {/* Apply button for dates */}
+                                <div className="col-span-2 sm:col-span-4 flex justify-end mt-2">
+                                    <button
+                                        onClick={() => {
+                                            updateFilter("fromDate", tempFromDate);
+                                            updateFilter("toDate", tempToDate);
+                                        }}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition"
+                                    >
+                                        Apply Date Filter
+                                    </button>
                                 </div>
                             </div>
                         )}
