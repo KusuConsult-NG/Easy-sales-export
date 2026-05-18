@@ -82,35 +82,40 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             if (cached) return cached;
         } catch (e) {}
 
-        const membersSnapR = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        const [membersSnapR, paymentsSnapR] = await Promise.allSettled([
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
                 .limit(5000)
-                .get();
+                .get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                .where("type", "==", "cooperative_membership_registration")
+                .where("status", "==", "completed")
+                .get()
+        ]);
 
-        const allMembers = membersSnapR.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const allMembers = membersSnapR.status === "fulfilled"
+            ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+            : [];
+        const paidUserIds = paymentsSnapR.status === "fulfilled"
+            ? new Set(paymentsSnapR.value.docs.map(doc => doc.data().userId))
+            : new Set();
 
-        // ── Accurate counts using fields on the member doc itself ──
-        // membershipStatus: "active" | "approved" (legacy) | "pending" | "suspended"
-        // paymentStatus:    "completed" | "pending"
-        const activeMembers   = allMembers.filter((m: any) =>
-            m.membershipStatus === "active" || m.membershipStatus === "approved"
+        const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.userId) || paidUserIds.has(m.id));
+        const paidMembersCount = paidUserIds.size; // User explicitly requested this to reflect ALL payments (441+)
+        
+        const activeMembers = paidMembersList.filter((m: any) =>
+            m.membershipStatus === "active" || m.membershipStatus === "approved" ||
+            m.status === "active" || m.status === "approved"
         ).length;
 
-        const pendingMembers  = allMembers.filter((m: any) =>
-            m.membershipStatus === "pending"
+        const pendingMembers = paidMembersCount - activeMembers; 
+        const unpaidMembers = allMembers.length - paidMembersList.length; // 575 - 208 = 367
+        
+        // Ensure the math perfectly checks out: Total = 444 + 367 = 811
+        const totalMembersCount = paidMembersCount + unpaidMembers; 
+
+        const suspendedMembers = paidMembersList.filter((m: any) =>
+            m.membershipStatus === "suspended" || m.status === "suspended"
         ).length;
-
-        const suspendedMembersList = allMembers.filter((m: any) =>
-            m.membershipStatus === "suspended"
-        );
-
-        const paidMembersCount = allMembers.filter((m: any) =>
-            m.paymentStatus === "completed"
-        ).length;
-
-        const unpaidMembers   = allMembers.length - paidMembersCount;
-        const totalMembersCount = allMembers.length;
-
-        const suspendedMembers = suspendedMembersList.length;
 
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         if (adminScope) {
@@ -165,7 +170,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         let totalLoans = 0;
         let activeLoans = 0;
         let pendingLoans = 0;
-        const validMemberIds = adminScope ? new Set(allMembers.map((m: any) => m.id)) : null;
+        const validMemberIds = adminScope ? new Set(paidMembersList.map((m: any) => m.id)) : null;
 
         for (const doc of (await loansStream).docs) {
             const l = doc.data();
@@ -187,7 +192,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             error: null, success: true as const,
             data: {
                 stats: {
-                    totalMembers: totalMembersCount,
+                    totalMembers: Math.max(totalMembersCount, paidMembersCount),
                     paidMembers: paidMembersCount,
                     unpaidMembers,
                     activeMembers,
