@@ -135,16 +135,15 @@ export async function getPostLoginRedirect(email: string) { try {
 
             if (hasAdminRole) { // Determine specific admin landing page
                 let adminRedirect = '/admin';
-                // If they are a module admin but NOT a full system admin,
-                // send them directly to their module management area.
-                if (!userRoles.includes('admin') && !userRoles.includes('super_admin')) {
-                    if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
-                    else if (userRoles.includes('wave_admin')) adminRedirect = '/admin/wave';
-                    else if (userRoles.includes('marketplace_admin')) adminRedirect = '/admin/marketplace';
-                    else if (userRoles.includes('cooperative_admin')) adminRedirect = '/admin/cooperatives';
-                    else if (userRoles.includes('export_admin')) adminRedirect = '/admin/export';
-                    else if (userRoles.includes('farm_nation_admin')) adminRedirect = '/admin/farm-nation';
-                }
+                
+                // Module admin roles take absolute priority because they are silo-isolated
+                // and explicitly blocked from the global /admin dashboard.
+                if (userRoles.includes('academy_admin')) adminRedirect = '/admin/academy';
+                else if (userRoles.includes('wave_admin')) adminRedirect = '/admin/wave';
+                else if (userRoles.includes('marketplace_admin')) adminRedirect = '/admin/marketplace';
+                else if (userRoles.includes('cooperative_admin')) adminRedirect = '/admin/cooperatives';
+                else if (userRoles.includes('export_admin')) adminRedirect = '/admin/export';
+                else if (userRoles.includes('farm_nation_admin')) adminRedirect = '/admin/farm-nation';
 
                 logger.info(`[getPostLoginRedirect] User ${email} has admin privileges, redirecting to ${adminRedirect}`);
                 return { error: null, success: true as const, data: { redirectUrl: adminRedirect } };

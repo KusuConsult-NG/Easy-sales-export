@@ -24,7 +24,12 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
     const searchParams = useSearchParams();
 
     // Auth redirect handling
-    const callbackUrl = searchParams.get("callbackUrl") || defaultCallbackUrl;
+    // SECURITY: Only accept relative paths as callbackUrl.
+    // A stale cookie from the production domain (https://easysalesexport.com) can
+    // bleed into localhost sessions and cause NextAuth to redirect externally,
+    // which the browser rejects and shows as "Invalid email or password".
+    const rawCallback = searchParams.get("callbackUrl") || defaultCallbackUrl;
+    const callbackUrl = rawCallback.startsWith("/") ? rawCallback : defaultCallbackUrl;
     const errorParam = searchParams.get("error");
 
     const { showToast } = useToast();
@@ -54,6 +59,9 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 email: formData.email,
                 password: formData.password,
                 redirect: false,
+                // Explicit relative callbackUrl prevents NextAuth from reading the
+                // stale `authjs.callback-url` cookie which may point to the production domain.
+                callbackUrl: callbackUrl.startsWith("/") ? callbackUrl : "/",
             });
 
             if (result?.error) {

@@ -197,7 +197,6 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         "cooperative_member",
         "wave_participant",
         "academy_participant",
-        "general_user",
     ];
 
     for (const role of modulePriorityOrder) {
@@ -207,10 +206,12 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
     }
 
     // ADMIN FALLBACK — Only reached when user has no module-specific role.
+    // NOTE: Module admins are silo-isolated and blocked from the global /admin dashboard.
+    // Therefore, they must take precedence over 'admin' and 'super_admin' to be correctly routed.
     const adminPriorityOrder: UserRole[] = [
-        "super_admin", "admin",
         "cooperative_admin", "academy_admin", "wave_admin",
         "marketplace_admin", "farm_nation_admin", "export_admin",
+        "super_admin", "admin",
         "field_officer",
     ];
 
@@ -218,6 +219,11 @@ export function getPrimaryApp(userRoles: UserRole[]): string {
         if (userRoles.includes(role)) {
             return rolePriorityMap[role];
         }
+    }
+
+    // GENERAL USER FALLBACK — Check after other active roles to avoid hijacking admins
+    if (userRoles.includes("general_user")) {
+        return "/";
     }
 
     // FINAL FALLBACK: Scan accessible apps if roles are somehow unrecognised
