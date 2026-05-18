@@ -1,5 +1,6 @@
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
+import { UserMetricsService } from "@/services/userMetrics.service";
 
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -591,43 +592,17 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             if (cached) return cached;
         } catch (e) {}
 
-        const [coursesSnap, studentsSnap, enrollmentsSnap, registrationSnap] = await Promise.all([
-            db.collection(COLLECTIONS.ACADEMY_COURSES).count().get(),
-            db.collection(COLLECTIONS.USERS).where("serviceRegistrations.academy.paymentStatus", "==", "completed").count().get(),
-            db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).count().get(),
-            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("paymentStatus", "==", "completed").get(),
-        ]);
+        const metrics = await UserMetricsService.getAcademyMetrics();
 
-        const totalCourses = coursesSnap.data().count;
-        const totalStudents = studentsSnap.data().count;
-        const totalEnrollments = enrollmentsSnap.data().count;
-
-        const registrationStats: Record<string, { count: number, revenue: number }> = {
-            foundation: { count: 0, revenue: 0 },
-            standard: { count: 0, revenue: 0 },
-            elite: { count: 0, revenue: 0 },
-            advanced: { count: 0, revenue: 0 }
-        };
-
-        registrationSnap.docs.forEach(doc => {
-            const data = doc.data();
-            const plan = (data.plan || "foundation").toLowerCase();
-            const amount = Number(data.paymentAmount) || 0;
-            if (registrationStats[plan]) {
-                registrationStats[plan].count++;
-                registrationStats[plan].revenue += amount;
-            } else {
-                registrationStats[plan] = { count: 1, revenue: amount };
-            }
-        });
-
-        const activeEnrollmentsSnap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
-            .where("status", "==", "active").count().get();
-        const activeEnrollments = activeEnrollmentsSnap.data().count;
-
-        const completedCoursesSnap = await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS)
-            .where("status", "==", "completed").count().get();
-        const completedCourses = completedCoursesSnap.data().count;
+        const {
+            totalCourses,
+            totalStudents,
+            totalEnrollments,
+            activeEnrollments,
+            completedCourses,
+            totalRegistrationRevenue,
+            registrationStats
+        } = metrics;
 
         const courseRevenueSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
             .where("type", "==", "academy_course_purchase")
@@ -656,7 +631,7 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             }
         });
 
-        const totalRegistrationRevenue = Object.values(registrationStats).reduce((acc, curr) => acc + curr.revenue, 0);
+
         const totalRevenue = totalCourseRevenue + totalRegistrationRevenue;
 
         const revenueGrowth = previousMonthRevenue > 0

@@ -58,4 +58,59 @@ export class UserMetricsService {
             suspendedCount: totalApplications - (approvedCount + pendingCount)
         };
     }
+
+    /**
+     * Gets the definitive Academy statistics directly from source collections.
+     */
+    static async getAcademyMetrics() {
+        const db = getAdminDb();
+        const [coursesSnap, enrollmentsSnap, appsSnap] = await Promise.all([
+            db.collection("academy_courses").count().get(),
+            db.collection("academy_enrollments").get(),
+            db.collection("academy_applications").get()
+        ]);
+
+        const totalCourses = coursesSnap.data().count;
+        const enrollments = enrollmentsSnap.docs.map(d => d.data());
+        const applications = appsSnap.docs.map(d => d.data());
+
+        const totalEnrollments = enrollments.length;
+        const activeEnrollments = enrollments.filter(e => e.status === 'active').length;
+        const completedCourses = enrollments.filter(e => e.status === 'completed').length;
+
+        // Paid applications are strictly those with a 'completed' payment status
+        let totalStudents = 0;
+        let totalRegistrationRevenue = 0;
+        const registrationStats: Record<string, { count: number, revenue: number }> = {
+            foundation: { count: 0, revenue: 0 },
+            standard: { count: 0, revenue: 0 },
+            elite: { count: 0, revenue: 0 },
+            advanced: { count: 0, revenue: 0 }
+        };
+
+        applications.forEach(app => {
+            if (app.paymentStatus === 'completed') {
+                totalStudents++;
+                const plan = (app.plan || "foundation").toLowerCase();
+                const amount = Number(app.paymentAmount) || 0;
+                totalRegistrationRevenue += amount;
+                if (registrationStats[plan]) {
+                    registrationStats[plan].count++;
+                    registrationStats[plan].revenue += amount;
+                } else {
+                    registrationStats[plan] = { count: 1, revenue: amount };
+                }
+            }
+        });
+
+        return {
+            totalCourses,
+            totalStudents,
+            totalEnrollments,
+            activeEnrollments,
+            completedCourses,
+            totalRegistrationRevenue,
+            registrationStats
+        };
+    }
 }
