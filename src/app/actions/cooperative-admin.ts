@@ -95,31 +95,53 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         const allMembers = membersSnapR.status === "fulfilled"
             ? membersSnapR.value.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
             : [];
-        const paidUserIds = paymentsSnapR.status === "fulfilled"
-            ? new Set(paymentsSnapR.value.docs.map(doc => doc.data().userId))
-            : new Set();
+            
+        // For Paid Members, we count anybody who has a completed payment
+        // OR is manually approved/active (since manual approval implies payment)
+        const paidUserIds = new Set<string>();
+        if (paymentsSnapR.status === "fulfilled") {
+            paymentsSnapR.value.docs.forEach(doc => {
+                const data = doc.data();
+                if (data.userId) paidUserIds.add(data.userId);
+            });
+        }
 
-        const paidMembersList = allMembers.filter((m: any) => paidUserIds.has(m.userId) || paidUserIds.has(m.id));
-        const paidMembersCount = paidUserIds.size; // User explicitly requested this to reflect ALL payments (441+)
-        
-        // CRITICAL FIX: We must count active/approved members across ALL members (not just paidMembersList)
-        // because many members were manually approved by admins without a corresponding processedPayment record.
+        // Count active/approved members literally
         const activeMembers = allMembers.filter((m: any) =>
             m.membershipStatus === "active" || m.membershipStatus === "approved" ||
             m.status === "active" || m.status === "approved"
         ).length;
 
-        // Pending members is derived from the difference, as requested by the user's business logic
-        const pendingMembers = Math.max(0, paidMembersCount - activeMembers); 
-        
-        const unpaidMembers = allMembers.length - paidMembersList.length; // Remaining members in DB who haven't paid
-        
-        // Ensure the math perfectly checks out: Total = 441 + 374 = 815
-        const totalMembersCount = paidMembersCount + unpaidMembers; 
+        // Pending members literally
+        const pendingMembers = allMembers.filter((m: any) =>
+            m.membershipStatus === "pending" || m.status === "pending" ||
+            (!m.membershipStatus && !m.status)
+        ).length;
 
+        // Total applications
+        const totalMembersCount = allMembers.length; 
+
+        // Suspended members literally
         const suspendedMembers = allMembers.filter((m: any) =>
             m.membershipStatus === "suspended" || m.status === "suspended"
         ).length;
+
+        // Add any active/approved members to the paid set
+        allMembers.forEach((m: any) => {
+            const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" ||
+                m.status === "active" || m.status === "approved";
+            if (isActive) {
+                paidUserIds.add(m.userId || m.id);
+            }
+        });
+
+        const paidMembersCount = paidUserIds.size;
+        
+        const paidMembersList = allMembers.filter((m: any) => 
+            paidUserIds.has(m.userId) || paidUserIds.has(m.id)
+        );
+
+        const unpaidMembers = Math.max(0, totalMembersCount - paidMembersCount);
 
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
         if (adminScope) {

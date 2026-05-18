@@ -289,6 +289,11 @@ export function canAccessAdminRoute(
     userRoles: string[] | undefined,
     route: string
 ): boolean {
+    // Super admins have universal access to all admin routes
+    if (isSuperAdmin(userRoles)) {
+        return true;
+    }
+
     // Super admin routes (only super_admin)
     const superAdminOnlyRoutes = [
         "/admin/users/delete",
@@ -353,7 +358,10 @@ export function canAccessAdminRoute(
         if (isFarmAdmin && route.startsWith("/admin/farm-nation")) return true;
         if (isAcadAdmin && route.startsWith("/admin/academy")) return true;
         
-        return false; // Strictly block from Dashboard, Analytics, Audit Logs, and Content Approval
+        // Allow access to base dashboard so they don't think the system is broken
+        if (route === "/admin" || route === "/admin/dashboard") return true;
+        
+        return false; // Strictly block from Analytics, Audit Logs, and Content Approval
     }
 
     // Default: require admin or super_admin for all other /admin routes
