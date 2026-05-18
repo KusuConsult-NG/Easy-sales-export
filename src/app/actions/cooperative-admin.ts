@@ -128,10 +128,11 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             const isSuspended = m.membershipStatus === "suspended" || m.status === "suspended";
             if (isActive || isSuspended) return false;
             
-            return m.membershipStatus === "pending" || m.status === "pending" ||
+            return m.membershipStatus === "pending" || m.status === "pending" || (!m.membershipStatus && !m.status);
+        }).length;
+        
         // Strict data integrity: Dashboard stats MUST reflect actual application documents.
         // We do NOT artificially inject orphaned payments into these totals.
-        
         let paidMembersCount = 0;
         allMembers.forEach((m: any) => {
             // A member is ONLY counted as paid if their application document says so
@@ -196,7 +197,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         let totalLoans = 0;
         let activeLoans = 0;
         let pendingLoans = 0;
-        const validMemberIds = adminScope ? new Set(paidMembersList.map((m: any) => m.id)) : null;
+        const validMemberIds = adminScope ? new Set(allMembers.map((m: any) => m.id)) : null;
 
         for (const doc of (await loansStream).docs) {
             const l = doc.data();
