@@ -15,25 +15,37 @@ export class UserMetricsService {
      */
     static async getCooperativeMemberMetrics(adminScope?: string) {
         const db = getAdminDb();
-        let query: FirebaseFirestore.Query = db.collection("cooperative_members");
         
-        if (adminScope) {
-            query = query.where("cooperativeId", "==", adminScope);
-        }
+        const [membersSnap, paymentsSnap] = await Promise.all([
+            db.collection("cooperative_members").get(),
+            db.collection("processedPayments")
+              .where("type", "==", "cooperative_membership_registration")
+              .where("status", "==", "completed")
+              .get()
+        ]);
 
-        const snap = await query.get();
-        const allMembers = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const allMembers: any[] = membersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const filteredMembers = adminScope 
+            ? allMembers.filter(m => m.cooperativeId === adminScope)
+            : allMembers;
 
-        const totalApplications = allMembers.length;
+        const totalApplications = filteredMembers.length;
+        
+        // PAYSTACK IS THE ONLY SOURCE OF TRUTH FOR PAYMENTS
+        const validPaidUserIds = new Set<string>();
+        paymentsSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.userId) {
+                validPaidUserIds.add(data.userId);
+            }
+        });
+
         let paidMembersCount = 0;
         let pendingCount = 0;
         let approvedCount = 0;
 
-        allMembers.forEach((m: any) => {
-            // STRICT RULE: Payment Status must be explicitly 'completed'
-            if (m.paymentStatus === 'completed') {
-                paidMembersCount++;
-            }
+        filteredMembers.forEach((m: any) => {
+            const uid = m.userId || m.id;
             
             // STRICT RULE: Membership status
             const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" || m.status === "active" || m.status === "approved";
@@ -45,9 +57,21 @@ export class UserMetricsService {
             } else if (isPending && !isSuspended) {
                 pendingCount++;
             }
+            
+            // If scoped, count paid members ONLY from the filtered members list
+            // If unscoped, we will count ALL distinct Paystack payments later to include orphaned payments
+            if (adminScope && validPaidUserIds.has(uid)) {
+                paidMembersCount++;
+            }
         });
 
-        const unpaidMembers = Math.max(0, totalApplications - paidMembersCount);
+        // If unscoped, the paid members count is strictly the number of unique users with a Paystack completed payment.
+        // This naturally includes orphaned payments (paid but no form).
+        if (!adminScope) {
+            paidMembersCount = validPaidUserIds.size;
+        }
+
+        const unpaidMembers = Math.max(0, totalApplications - (adminScope ? paidMembersCount : Array.from(validPaidUserIds).filter(uid => filteredMembers.some((m: any) => (m.userId || m.id) === uid)).length));
 
         return {
             totalApplications,
