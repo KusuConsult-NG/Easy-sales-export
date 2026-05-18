@@ -1,53 +1,22 @@
-import { db } from "../src/lib/firebase-admin";
+import { config } from "dotenv";
+config({ path: ".env.local" });
+import * as admin from "firebase-admin";
 
-async function investigatePayments() {
-    const memSnap = await db.collection("cooperative_members").get();
-    const memEmails = new Map();
-    const memPhones = new Map();
-    const memUserIds = new Set();
-    
-    memSnap.docs.forEach(doc => {
-        const d = doc.data();
-        const uid = d.userId || doc.id;
-        memUserIds.add(uid);
-        if (d.email) memEmails.set(d.email.toLowerCase().trim(), uid);
-        if (d.phone) memPhones.set(d.phone.trim(), uid);
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        })
     });
-
-    const paySnap = await db.collection("processedPayments")
-        .where("type", "==", "cooperative_membership_registration")
-        .where("status", "==", "completed")
-        .get();
-        
-    let exactUserIdMatch = 0;
-    let emailMatch = 0;
-    let noMatch = 0;
-    
-    paySnap.docs.forEach(doc => {
-        const p = doc.data();
-        if (memUserIds.has(p.userId)) {
-            exactUserIdMatch++;
-        } else {
-            let matchedByEmail = false;
-            if (p.customerEmail && memEmails.has(p.customerEmail.toLowerCase().trim())) {
-                matchedByEmail = true;
-            } else if (p.email && memEmails.has(p.email.toLowerCase().trim())) {
-                matchedByEmail = true;
-            }
-            
-            if (matchedByEmail) {
-                emailMatch++;
-            } else {
-                noMatch++;
-                if (noMatch < 3) console.log("Example orphaned payment:", p);
-            }
-        }
-    });
-    
-    console.log(`Total payments: ${paySnap.docs.length}`);
-    console.log(`Exact userId match: ${exactUserIdMatch}`);
-    console.log(`Email match but NO userId match: ${emailMatch}`);
-    console.log(`Total truly orphaned: ${noMatch}`);
 }
+const db = admin.firestore();
 
-investigatePayments();
+async function main() {
+    const snap = await db.collection("processedPayments").limit(10).get();
+    snap.docs.forEach(doc => {
+        console.log(doc.id, doc.data());
+    });
+}
+main().catch(console.error);

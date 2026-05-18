@@ -1,4 +1,6 @@
-import { db } from "../src/lib/firebase-admin";
+import { config } from "dotenv";
+config({ path: ".env.local" });
+import { db, auth } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
 
 async function globalStateSync() {

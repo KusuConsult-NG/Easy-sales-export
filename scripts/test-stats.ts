@@ -1,17 +1,10 @@
-import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
-import { db } from '../src/lib/firebase-admin';
+import { config } from "dotenv";
+config({ path: ".env.local" });
+import { getCooperativeStatsAction } from "../src/app/actions/cooperative-admin";
 
-async function test() {
-    const snap = await db.collection('USERS').get();
-    let count = 0;
-    snap.docs.forEach(doc => {
-        const d = doc.data();
-        if (d.roles && d.roles.includes('cooperative_member')) {
-            count++;
-        }
-    });
-    console.log(`Users with cooperative_member role: ${count}`);
+async function main() {
+    const res = await getCooperativeStatsAction();
+    console.log(JSON.stringify(res, null, 2));
 }
 
-test().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+main().catch(console.error);
