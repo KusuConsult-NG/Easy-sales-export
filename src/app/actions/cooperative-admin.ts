@@ -84,7 +84,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
 
         const [membersSnapR, paymentsSnapR] = await Promise.allSettled([
             db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .select("userId", "membershipStatus", "status")
+                .select("userId", "membershipStatus", "status", "paymentStatus")
                 .get(),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "cooperative_membership_registration")
