@@ -235,20 +235,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // 2. Node-specific logic
             const { user, trigger } = params;
 
-            // Session Refresh / Sync Protocol
-            if (trigger === "update" && token.id) {
+            // Session Refresh / Sync Protocol - ALWAYS synchronize live roles from database/cache
+            if (token.id) {
                  try {
-                     const { getAdminDb } = await import("@/lib/firebase-admin");
-                     const { COLLECTIONS } = await import("@/lib/types/firestore");
-                     const adminDb = getAdminDb();
-                     const userDoc = await adminDb.collection(COLLECTIONS.USERS).doc(token.id as string).get();
-                     if (userDoc.exists) {
-                         const userData = userDoc.data() as any;
-                         token.roles = userData.roles || [];
-                         token.verified = userData.isVerified ?? userData.verified ?? true;
-                         token.onboardingCompleted = userData.onboardingCompleted;
-                         token.sellerVerificationStatus = userData.sellerVerificationStatus;
-                         token.serviceRegistrations = userData.serviceRegistrations || {};
+                     const { getUserProfile } = await import("@/lib/user-cache");
+                     const cachedProfile = await getUserProfile(token.id as string);
+                     if (cachedProfile) {
+                         token.roles = cachedProfile.roles || [];
+                         token.verified = cachedProfile.displayName ? (cachedProfile as any).verified ?? true : true; // default to true if legacy profile structure
+                         token.onboardingCompleted = (cachedProfile as any).onboardingCompleted;
+                         token.sellerVerificationStatus = (cachedProfile as any).sellerVerificationStatus;
+                         token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
                      }
                  } catch (e) {
                      console.error("[NextAuth JWT] Failed to sync session from database", e);

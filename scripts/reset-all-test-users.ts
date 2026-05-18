@@ -151,6 +151,19 @@ async function processAccount(account: TestAccount) {
             });
         }
 
+        // Invalidate Redis Cache
+        try {
+            const { redis, CacheKeys } = await import("../src/lib/redis");
+            await Promise.all([
+                redis.del(CacheKeys.userProfile(uid)),
+                redis.del(CacheKeys.userPermissions(uid)),
+                redis.del(CacheKeys.userSession(uid)),
+                redis.del(CacheKeys.userStats(uid)),
+            ]);
+        } catch (cacheErr: any) {
+            console.warn(`[Cache Invalidation Warning] Failed to invalidate cache for ${email}: ${cacheErr.message}`);
+        }
+
         results.push({ email, uid, status });
     } catch (e: any) {
         results.push({ email, uid: "—", status: "error", note: e.message });
