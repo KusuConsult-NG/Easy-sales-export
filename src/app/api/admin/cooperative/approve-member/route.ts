@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 /**
  * API Route: Approve Cooperative Membership Application
@@ -38,7 +39,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Update membership status (Admin SDK)
+        // Update membership status (Admin SDK) — use "active" as the canonical
+        // approved state, consistent with updateMemberStatusAction and all filters.
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
         const memberDoc = await memberRef.get();
 
@@ -49,12 +51,39 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        await memberRef.update({
-            membershipStatus: "approved",
-            approvedBy: session.user.id,
-            approvedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
+        const memberData = memberDoc.data();
+        const userId = memberData?.userId || memberId;
+
+        // Atomic update: member doc + user doc in a single transaction
+        await db.runTransaction(async (txn) => {
+            txn.update(memberRef, {
+                membershipStatus: "active",   // canonical approved state
+                approvedBy: session.user.id,
+                approvedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
+
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            txn.update(userRef, {
+                isVerified: true,
+                roles: FieldValue.arrayUnion("cooperative_member"),
+                "serviceRegistrations.cooperatives.status": "active",
+                "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1),
+            });
         });
+
+        // Bust Redis caches so the admin dashboard refreshes immediately
+        try {
+            await Promise.allSettled([
+                invalidateCooperativeCache(userId),
+                invalidateAdminGlobalStats(),
+            ]);
+        } catch (cacheErr) {
+            logger.error("[approve-member] Cache bust failed (non-blocking):", cacheErr);
+        }
 
         // Log audit entry
         try {
@@ -66,7 +95,6 @@ export async function POST(request: NextRequest) {
         } catch { /* non-blocking */ }
 
         // Send approval email notification
-        const memberData = memberDoc.data();
         const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member';
         try {
             const { sendMembershipApprovalEmail } = await import('@/lib/email-notifications');

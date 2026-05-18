@@ -290,11 +290,14 @@ async function _getAllMembersAction(options?: {
 
         const allMembersRaw = serializeDocs(snapshot.docs);
 
-        // Filter: Only show members who have a record of registration or active status
-        // Note: We avoid scanning the entire PROCESSED_PAYMENTS collection for performance.
-        const membersRaw = allMembersRaw.filter((m: any) => 
-            m.membershipStatus === "active" || 
-            m.paymentStatus === "completed" || 
+        // Filter: Show members who are active/approved OR have completed payment.
+        // "approved" is the legacy status written by the approve-member API route before
+        // the May 2026 fix that standardised it to "active". Both must be accepted to
+        // avoid hiding the 166 members the admin already approved.
+        const membersRaw = allMembersRaw.filter((m: any) =>
+            m.membershipStatus === "active"   ||
+            m.membershipStatus === "approved" ||
+            m.paymentStatus    === "completed" ||
             m.registrationStatus === "completed"
         );
 
