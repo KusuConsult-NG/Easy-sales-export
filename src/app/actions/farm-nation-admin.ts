@@ -170,7 +170,8 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             return { success: false, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const applicationsSortDirection = options.sortOrder || "desc";
 
         // 1. Query the dedicated applications collection (Authoritative Record)
@@ -193,16 +194,20 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             q = q.where("submittedAt", "<=", toTs);
         }
 
-        if (options.lastDocId) {
+        if (options.lastDocId && !useMemoryPagination) {
             const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 q = q.startAfter(lastDoc);
             }
         }
 
-        q = q.limit(fetchLimit);
+        q = q.limit(fetchLimit + 1);
         const snapshot = await q.get();
-        const applications = serializeDocs(snapshot.docs);
+        let applications = serializeDocs(snapshot.docs);
+        const hasMoreRaw = applications.length > fetchLimit;
+        if (!useMemoryPagination) {
+            applications = applications.slice(0, fetchLimit);
+        }
 
         // 2. Hydrate User Data (Standard Hydration Pattern)
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
@@ -290,6 +295,24 @@ async function _getStandardFarmNationRegistrantsAction(options: {
             });
         }
 
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (options.dateFrom) {
+            const from = new Date(options.dateFrom);
+            from.setHours(0, 0, 0, 0);
+            finalApplications = finalApplications.filter((app: any) => {
+                const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
+                return d >= from;
+            });
+        }
+        if (options.dateTo) {
+            const to = new Date(options.dateTo);
+            to.setHours(23, 59, 59, 999);
+            finalApplications = finalApplications.filter((app: any) => {
+                const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
+                return d <= to;
+            });
+        }
+
         const limit = options.limit || 50;
         let page = 0;
         if ((options as any).page !== undefined) {
@@ -299,14 +322,14 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         }
 
         const offset = page * limit;
-        const paged = options.search ? finalApplications.slice(offset, offset + limit) : finalApplications;
-        const hasMore = options.search 
+        const paged = useMemoryPagination ? finalApplications.slice(offset, offset + limit) : finalApplications;
+        const hasMore = useMemoryPagination 
             ? (offset + limit < finalApplications.length) 
-            : (snapshot.docs.length === fetchLimit);
+            : hasMoreRaw;
             
-        const nextCursor = options.search 
+        const nextCursor = useMemoryPagination 
             ? (hasMore ? String(page + 1) : null)
-            : (hasMore ? snapshot.docs[snapshot.docs.length - 1].id : null);
+            : (hasMore ? applications[applications.length - 1].id : null);
 
         await createAdminAuditLog({
             action: "data_access",

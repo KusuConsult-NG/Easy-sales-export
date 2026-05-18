@@ -2178,7 +2178,9 @@ async function _getStandardExportApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
+
         let q: any = db.collection(COLLECTIONS.EXPORT_APPLICATIONS);
         if (options.status && options.status !== "all") {
             if (options.status === "pending") {
@@ -2209,7 +2211,9 @@ async function _getStandardExportApplicationsAction(options: {
         const snapshot = await q.get();
         let applications = serializeDocs(snapshot.docs);
         const hasMore = applications.length > fetchLimit;
-        applications = applications.slice(0, fetchLimit);
+        if (!useMemoryPagination) {
+            applications = applications.slice(0, fetchLimit);
+        }
         const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
         const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
@@ -2296,6 +2300,24 @@ async function _getStandardExportApplicationsAction(options: {
             });
         }
 
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (options.dateFrom) {
+            const from = new Date(options.dateFrom);
+            from.setHours(0, 0, 0, 0);
+            finalForms = finalForms.filter((f: any) => {
+                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
+                return d >= from;
+            });
+        }
+        if (options.dateTo) {
+            const to = new Date(options.dateTo);
+            to.setHours(23, 59, 59, 999);
+            finalForms = finalForms.filter((f: any) => {
+                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
+                return d <= to;
+            });
+        }
+
         const limit = options.limit || 50;
         let page = 0;
         const pageOption = (options as any).page;
@@ -2306,12 +2328,12 @@ async function _getStandardExportApplicationsAction(options: {
         }
 
         const offset = page * limit;
-        const paged = options.search ? finalForms.slice(offset, offset + limit) : finalForms;
-        const _hasMore = options.search 
+        const paged = useMemoryPagination ? finalForms.slice(offset, offset + limit) : finalForms;
+        const _hasMore = useMemoryPagination 
             ? (offset + limit < finalForms.length)
             : hasMore;
 
-        const _nextCursor = options.search 
+        const _nextCursor = useMemoryPagination 
             ? (_hasMore ? String(page + 1) : undefined)
             : nextCursor;
 
@@ -2459,9 +2481,14 @@ async function _rejectExportApplicationAction(
 // Academy Application Management (Admin)
 // ============================================
 
-async function _getAcademyApplicationsAction(
-    statusFilter?: "pending" | "under_review" | "approved" | "rejected"
-): Promise<ActionResponse<any[]>> {
+async function _getAcademyApplicationsAction(options: {
+    limit?: number;
+    search?: string;
+    statusFilter?: "pending" | "under_review" | "approved" | "rejected" | "all";
+    lastDocId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+} = {}): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -2474,22 +2501,42 @@ async function _getAcademyApplicationsAction(
             }
         }
 
-        let snapshot;
-        if (statusFilter) {
-            const filteredQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("status", "==", statusFilter)
-                .limit(500);
-            snapshot = await filteredQuery.get();
-        } else {
-            const allQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .limit(500);
-            snapshot = await allQuery.get();
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
+
+        let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS);
+
+        if (options.statusFilter && options.statusFilter !== "all") {
+            q = q.where("status", "==", options.statusFilter);
         }
 
-        const rawApplications = serializeDocs(snapshot.docs);
+        if (options.dateFrom) {
+            q = q.where("createdAt", ">=", dateRangeStart(options.dateFrom));
+        }
+        if (options.dateTo) {
+            q = q.where("createdAt", "<=", dateRangeEnd(options.dateTo));
+        }
+
+        q = q.orderBy("createdAt", "desc").limit(fetchLimit + 1);
+
+        if (options.lastDocId && !useMemoryPagination) {
+            const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
+
+        const snapshot = await q.get();
+        let rawApplications = serializeDocs(snapshot.docs);
+        
+        const hasMore = rawApplications.length > fetchLimit;
+        if (!useMemoryPagination) {
+            rawApplications = rawApplications.slice(0, fetchLimit);
+        }
+        const nextCursor = rawApplications.length > 0 ? rawApplications[rawApplications.length - 1].id as string : undefined;
 
         // --- HYDRATION START ---
-        const userIds = [...new Set(rawApplications.map(app => app.userId).filter(Boolean))];
+        const userIds = [...new Set(rawApplications.map((app: any) => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
         const userPromises = [];
         for (let i = 0; i < userIds.length; i += 30) {
@@ -2499,10 +2546,10 @@ async function _getAcademyApplicationsAction(
             }
         }
         const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
+        userSnapsArray.forEach(snap => snap.docs.forEach((d: any) => userMap.set(d.id, serializeValue(d.data()))));
         // --- HYDRATION END ---
 
-        const applications = rawApplications.map((app: any) => {
+        let applications = rawApplications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
             const submittedRaw = app.submittedAt;
             const reviewedRaw = app.reviewedAt;
@@ -2546,10 +2593,60 @@ async function _getAcademyApplicationsAction(
             new Date(b.submittedAt as string).getTime() - new Date(a.submittedAt as string).getTime()
         );
 
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (options.dateFrom) {
+            const from = new Date(options.dateFrom);
+            from.setHours(0, 0, 0, 0);
+            applications = applications.filter((app: any) => new Date(app.createdAt) >= from);
+        }
+        if (options.dateTo) {
+            const to = new Date(options.dateTo);
+            to.setHours(23, 59, 59, 999);
+            applications = applications.filter((app: any) => new Date(app.createdAt) <= to);
+        }
+
+        if (options.search) {
+            const s = options.search.toLowerCase().trim();
+            applications = applications.filter((app: any) => {
+                const searchString = [
+                    app.user?.name,
+                    app.user?.email,
+                    app.user?.phone,
+                    app.personalInfo?.fullName
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchString.includes(s);
+            });
+        }
+
+        const limit = options.limit || 50;
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (options.lastDocId && /^\d+$/.test(options.lastDocId)) {
+            page = Number(options.lastDocId);
+        }
+
+        const offset = page * limit;
+        const paged = useMemoryPagination ? applications.slice(offset, offset + limit) : applications;
+        const _hasMore = useMemoryPagination 
+            ? (offset + limit < applications.length)
+            : hasMore;
+
+        const _nextCursor = useMemoryPagination 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : nextCursor;
+
         return {
             error: null,
             success: true as const,
-            data: applications,
+            data: paged,
+            lastDocId: _nextCursor,
+            hasMore: _hasMore,
+            meta: {
+                totalFetched: applications.length,
+                hasMore: _hasMore
+            }
         };
     } catch (error: any) {
         logger.error("Get Academy applications error:", error);
@@ -3366,17 +3463,22 @@ async function _getStandardSellerVerificationsAction(
             q = q.where("createdAt", "<=", toTs);
         }
 
-        if (cursorSnap && cursorSnap.exists && !search) {
+        const useMemoryPagination = !!search || !!dateFrom || !!dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : limitCount;
+
+        if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
             q = q.startAfter(cursorSnap);
         }
         
-        const fetchLimit = search ? 5000 : limitCount;
-        q = q.limit(fetchLimit);
+        q = q.limit(fetchLimit + 1);
 
         const snapshot = await q.get();
         let applications = serializeDocs(snapshot.docs);
-        const nextCursorId = snapshot.docs.length === limitCount ? snapshot.docs[snapshot.docs.length - 1].id : undefined;
-
+        const hasMoreRaw = applications.length > fetchLimit;
+        if (!useMemoryPagination) {
+            applications = applications.slice(0, fetchLimit);
+        }
+        const nextCursorId = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
@@ -3454,14 +3556,13 @@ async function _getStandardSellerVerificationsAction(
             finalForms = finalForms.filter((app: any) => new Date(app.data?.createdAt?.toDate ? app.data.createdAt.toDate().toISOString() : app.data?.createdAt || 0) <= to);
         }
 
-        // Apply pagination after search filter if search is present
         let nextCursorIdToReturn = nextCursorId;
-        if (search) {
-            const page = cursorId ? parseInt(cursorId, 10) : 0;
+        if (useMemoryPagination) {
+            const page = (cursorId && /^\d+$/.test(cursorId)) ? parseInt(cursorId, 10) : 0;
             const startIndex = page * limitCount;
-            const hasMoreSearch = startIndex + limitCount < finalForms.length;
+            const hasMoreMemory = startIndex + limitCount < finalForms.length;
             finalForms = finalForms.slice(startIndex, startIndex + limitCount);
-            nextCursorIdToReturn = hasMoreSearch ? String(page + 1) : undefined;
+            nextCursorIdToReturn = hasMoreMemory ? String(page + 1) : undefined;
         }
 
         return { 

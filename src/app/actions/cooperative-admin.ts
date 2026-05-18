@@ -1174,11 +1174,12 @@ export async function getStandardCooperativeMembersAction(
         }
 
         let cursorSnap = null;
-        if (cursorId) {
+        if (cursorId && !/^\d+$/.test(cursorId)) {
             cursorSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(cursorId).get();
         }
 
-        const fetchLimit = search ? 5000 : limitCount;
+        const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
         const adminScope = await getAdminScope(session.user.id, session.user.roles);
         // Build query with all where() clauses BEFORE orderBy() to satisfy
@@ -1218,14 +1219,18 @@ export async function getStandardCooperativeMembersAction(
         // orderBy must come after all where() clauses
         q = q.orderBy("createdAt", "desc");
 
-        if (cursorSnap && cursorSnap.exists) {
+        if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
             q = q.startAfter(cursorSnap);
         }
-        q = q.limit(fetchLimit);
+        q = q.limit(fetchLimit + 1);
 
         const snapshot = await q.get();
-        const applications = serializeDocs(snapshot.docs);
-        const nextCursorId = computeNextCursor(snapshot.docs, fetchLimit);
+        let applications = serializeDocs(snapshot.docs);
+        const hasMoreRaw = applications.length > fetchLimit;
+        if (!useMemoryPagination) {
+            applications = applications.slice(0, fetchLimit);
+        }
+        const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
@@ -1319,7 +1324,43 @@ export async function getStandardCooperativeMembersAction(
             });
         }
 
-        return paginatedOk(standardForms, nextCursorId);
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (options.dateFrom) {
+            const from = new Date(options.dateFrom);
+            from.setHours(0, 0, 0, 0);
+            standardForms = standardForms.filter((f: any) => {
+                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
+                return d >= from;
+            });
+        }
+        if (options.dateTo) {
+            const to = new Date(options.dateTo);
+            to.setHours(23, 59, 59, 999);
+            standardForms = standardForms.filter((f: any) => {
+                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
+                return d <= to;
+            });
+        }
+
+        let page = 0;
+        const pageOption = (options as any).page;
+        if (pageOption !== undefined) {
+            page = Number(pageOption);
+        } else if (cursorId && /^\d+$/.test(cursorId)) {
+            page = Number(cursorId);
+        }
+
+        const offset = page * limitCount;
+        const paged = useMemoryPagination ? standardForms.slice(offset, offset + limitCount) : standardForms;
+        const _hasMore = useMemoryPagination 
+            ? (offset + limitCount < standardForms.length)
+            : hasMoreRaw;
+
+        const _nextCursor = useMemoryPagination 
+            ? (_hasMore ? String(page + 1) : undefined)
+            : (_hasMore ? nextCursor : undefined);
+
+        return paginatedOk(paged, _nextCursor);
     } catch (error) {
         logger.error(`getStandardCooperativeMembersAction error:`, error);
         return paginatedErr("Failed to load cooperative members");

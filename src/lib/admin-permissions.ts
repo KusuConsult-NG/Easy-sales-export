@@ -136,35 +136,51 @@ const PERMISSION_MATRIX: Record<AdminRole, AdminPermission[]> = {
     ],
 
     wave_admin: [
-        "users:read", "users:update", "users:suspend",
+        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
+        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
+        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
+        "audit:read", "audit:export", "security:view_logs",
         "wave:approve_applications",
         "wave:manage_training"
     ],
     cooperative_admin: [
-        "users:read", "users:update", "users:suspend",
-        "finance:read",
+        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
+        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
+        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
+        "audit:read", "audit:export", "security:view_logs",
         "cooperatives:approve_loans",
         "cooperatives:approve_members",
         "cooperatives:manage_products"
     ],
     marketplace_admin: [
-        "users:read", "users:update", "users:suspend",
-        "finance:read",
+        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
+        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
+        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
+        "audit:read", "audit:export", "security:view_logs",
         "marketplace:approve_sellers",
         "marketplace:suspend_sellers",
         "marketplace:moderate_reviews"
     ],
     export_admin: [
-        "users:read", "users:update", "users:suspend",
+        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
+        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
+        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
+        "audit:read", "audit:export", "security:view_logs",
         "export:approve_applications"
     ],
     farm_nation_admin: [
-        "users:read", "users:update", "users:suspend",
+        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
+        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
+        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
+        "audit:read", "audit:export", "security:view_logs",
         "farm_nation:verify_applications",
         "land:verify_listings"
     ],
     academy_admin: [
-        "users:read", "users:update", "users:suspend",
+        "users:read", "users:create", "users:update", "users:delete", "users:suspend", "users:assign_roles", "users:impersonate",
+        "content:read", "content:approve", "content:reject", "content:delete", "announcements:manage",
+        "finance:read", "finance:process_withdrawals", "finance:refund", "finance:resolve_disputes",
+        "audit:read", "audit:export", "security:view_logs",
         "academy:approve_applications",
         "academy:manage_courses",
         "academy:manage_quizzes",
@@ -319,7 +335,9 @@ export function canAccessAdminRoute(
 
     const isModuleAdmin = isWaveAdmin || isCoopAdmin || isMktAdmin || isExportAdmin || isFarmAdmin || isAcadAdmin;
 
-    if (isModuleAdmin && !isSuperAdmin(userRoles) && !userRoles?.includes("admin")) {
+    // Strict Silo Isolation: If a user has a module admin role, they are locked to that silo,
+    // EVEN IF they are also granted super_admin or admin rights.
+    if (isModuleAdmin) {
         // Module admins have access to their own silos, user management, support, and settings
         // NOTE: They are explicitly BLOCKED from the base /admin and /admin/dashboard to remove them from sidebar
         if (route.startsWith("/admin/users")) return true;

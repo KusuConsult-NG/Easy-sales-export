@@ -662,7 +662,8 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
-        const fetchLimit = options.search ? 5000 : (options.limit || 50);
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
         let countQ: Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
@@ -683,13 +684,13 @@ async function _getStandardWaveApplicationsAction(options: {
             q = q.where("createdAt", "<=", toTs);
         }
 
-        if (options.lastDocId) {
+        if (options.lastDocId && !useMemoryPagination) {
             const lastDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 q = q.startAfter(lastDoc);
             }
         }
-        q = q.limit(fetchLimit);
+        q = q.limit(fetchLimit + 1);
 
         const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
         let totalCount = 0;
@@ -701,7 +702,12 @@ async function _getStandardWaveApplicationsAction(options: {
         } catch (e) { }
 
         const snapshot = await q.get();
-        const applications = serializeDocs(snapshot.docs);
+        let applications = serializeDocs(snapshot.docs);
+        const hasMoreRaw = applications.length > fetchLimit;
+        if (!useMemoryPagination) {
+            applications = applications.slice(0, fetchLimit);
+        }
+        const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
         if (totalCount === 0) {
             const countSnap = await countQ.count().get();
             totalCount = countSnap.data().count;
@@ -768,6 +774,24 @@ async function _getStandardWaveApplicationsAction(options: {
             });
         }
 
+        // ALWAYS apply date filters in memory as a definitive backstop.
+        if (options.dateFrom) {
+            const from = new Date(options.dateFrom);
+            from.setHours(0, 0, 0, 0);
+            finalForms = finalForms.filter((f: any) => {
+                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
+                return d >= from;
+            });
+        }
+        if (options.dateTo) {
+            const to = new Date(options.dateTo);
+            to.setHours(23, 59, 59, 999);
+            finalForms = finalForms.filter((f: any) => {
+                const d = f.data?.createdAt?.seconds ? new Date(f.data.createdAt.seconds * 1000) : new Date(f.data?.createdAt);
+                return d <= to;
+            });
+        }
+
         const limit = options.limit || 50;
         let page = 0;
         if ((options as any).page !== undefined) {
@@ -777,19 +801,19 @@ async function _getStandardWaveApplicationsAction(options: {
         }
 
         const offset = page * limit;
-        const paged = options.search ? finalForms.slice(offset, offset + limit) : finalForms;
-        const _hasMore = options.search 
+        const paged = useMemoryPagination ? finalForms.slice(offset, offset + limit) : finalForms;
+        const _hasMore = useMemoryPagination 
             ? (offset + limit < finalForms.length) 
-            : (snapshot.docs.length === fetchLimit);
+            : hasMoreRaw;
             
-        const nextCursor = options.search 
+        const _nextCursor = useMemoryPagination 
             ? (_hasMore ? String(page + 1) : null)
-            : (_hasMore ? snapshot.docs[snapshot.docs.length - 1].id : undefined);
+            : (_hasMore ? nextCursor : undefined);
 
         return { 
             error: null, success: true as const, 
             data: paged,
-            lastDocId: nextCursor,
+            lastDocId: _nextCursor,
             hasMore: _hasMore,
             meta: {
                 totalFetched: applications.length,
