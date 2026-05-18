@@ -593,9 +593,9 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
 
         const [coursesSnap, studentsSnap, enrollmentsSnap, registrationSnap] = await Promise.all([
             db.collection(COLLECTIONS.ACADEMY_COURSES).count().get(),
-            db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "academy_student").count().get(),
+            db.collection(COLLECTIONS.USERS).where("serviceRegistrations.academy.paymentStatus", "==", "completed").count().get(),
             db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).count().get(),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("type", "==", "academy_registration").get(),
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).where("paymentStatus", "==", "completed").get(),
         ]);
 
         const totalCourses = coursesSnap.data().count;
@@ -606,15 +606,18 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             foundation: { count: 0, revenue: 0 },
             standard: { count: 0, revenue: 0 },
             elite: { count: 0, revenue: 0 },
+            advanced: { count: 0, revenue: 0 }
         };
 
         registrationSnap.docs.forEach(doc => {
             const data = doc.data();
             const plan = (data.plan || "foundation").toLowerCase();
-            const amount = Number(data.amount) || 0;
+            const amount = Number(data.paymentAmount) || 0;
             if (registrationStats[plan]) {
                 registrationStats[plan].count++;
                 registrationStats[plan].revenue += amount;
+            } else {
+                registrationStats[plan] = { count: 1, revenue: amount };
             }
         });
 

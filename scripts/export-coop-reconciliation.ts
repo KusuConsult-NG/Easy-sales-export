@@ -66,14 +66,26 @@ async function generateCSV() {
         
         const profile = userProfiles.get(uid) || {};
         
+        let derivedFirst = d.firstName || profile.firstName;
+        let derivedLast = d.lastName || profile.lastName;
+        
+        if (!derivedFirst && !derivedLast) {
+            const fullName = d.fullName || profile.fullName || profile.name || profile.displayName || "";
+            if (fullName) {
+                const parts = fullName.split(" ");
+                derivedFirst = parts[0];
+                derivedLast = parts.slice(1).join(" ");
+            }
+        }
+        
         records.push({
             "User ID": uid,
-            "First Name": d.firstName || profile.firstName || "-",
-            "Last Name": d.lastName || profile.lastName || "-",
-            "Email": d.email || profile.email || "-",
-            "Phone Number": d.phone || profile.phone || "-",
+            "First Name": derivedFirst || "-",
+            "Last Name": derivedLast || "-",
+            "Email": d.email || profile.email || profile.userEmail || "-",
+            "Phone Number": d.phone || profile.phone || profile.phoneNumber || "-",
             "Has Submitted Application": "Yes",
-            "Has Completed Payment": paidUserIds.has(uid) ? "Yes" : "No",
+            "Has Completed Payment": (d.paymentStatus === "completed" || paidUserIds.has(uid)) ? "Yes" : "No",
             "Application Status": d.membershipStatus || d.status || "pending",
             "Payment Reference": d.paymentReference || "-"
         });
@@ -87,12 +99,24 @@ async function generateCSV() {
         if (uid && !memUserIds.has(uid)) {
             const profile = userProfiles.get(uid) || {};
             
+            let derivedFirst = profile.firstName;
+            let derivedLast = profile.lastName;
+            
+            if (!derivedFirst && !derivedLast) {
+                const fullName = profile.fullName || profile.name || profile.displayName || "";
+                if (fullName) {
+                    const parts = fullName.split(" ");
+                    derivedFirst = parts[0];
+                    derivedLast = parts.slice(1).join(" ");
+                }
+            }
+            
             records.push({
                 "User ID": uid,
-                "First Name": profile.firstName || "-",
-                "Last Name": profile.lastName || "-",
-                "Email": profile.email || d.customerEmail || d.email || "-",
-                "Phone Number": profile.phone || d.phone || "-",
+                "First Name": derivedFirst || "-",
+                "Last Name": derivedLast || "-",
+                "Email": profile.email || profile.userEmail || d.customerEmail || d.email || "-",
+                "Phone Number": profile.phone || profile.phoneNumber || d.phone || "-",
                 "Has Submitted Application": "No (Orphaned Payment)",
                 "Has Completed Payment": "Yes",
                 "Application Status": "No Form Submitted",

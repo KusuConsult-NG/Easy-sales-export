@@ -129,27 +129,18 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             if (isActive || isSuspended) return false;
             
             return m.membershipStatus === "pending" || m.status === "pending" ||
-                   (!m.membershipStatus && !m.status);
-        }).length;
-
-        // Total applications
-        const totalMembersCount = allMembers.length; 
-
-        // Add any active/approved members to the paid set
+        // Strict data integrity: Dashboard stats MUST reflect actual application documents.
+        // We do NOT artificially inject orphaned payments into these totals.
+        
+        let paidMembersCount = 0;
         allMembers.forEach((m: any) => {
-            const isActive = m.membershipStatus === "active" || m.membershipStatus === "approved" ||
-                m.status === "active" || m.status === "approved";
-            if (isActive) {
-                paidUserIds.add(m.userId || m.id);
+            // A member is ONLY counted as paid if their application document says so
+            if (m.paymentStatus === 'completed') {
+                paidMembersCount++;
             }
         });
 
-        const paidMembersCount = paidUserIds.size;
-        
-        const paidMembersList = allMembers.filter((m: any) => 
-            paidUserIds.has(m.userId) || paidUserIds.has(m.id)
-        );
-
+        const totalMembersCount = allMembers.length;
         const unpaidMembers = Math.max(0, totalMembersCount - paidMembersCount);
 
         let txnQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
@@ -1285,11 +1276,11 @@ export async function getStandardCooperativeMembersAction(
 
         let standardForms = applications.map((app: any) => {
             const uData = (userMap.get(app.userId as string) || {}) as any;
-            const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : null;
+            const localName = app.firstName ? `${app.firstName} ${app.lastName || ''}`.trim() : (app.fullName || null);
             // Fix: check firstName FIRST to avoid "undefined undefined" for legacy users
             const userName = uData.firstName
                 ? `${uData.firstName} ${uData.lastName || ''}`.trim()
-                : (uData.name || uData.fullName || localName || "Unknown User");
+                : (uData.fullName || uData.name || uData.displayName || localName || "");
 
             // Merge USERS data into app.data as fallback for fields that were never filled via onboarding.
             // Legacy members who only paid (never submitted the form) will have blank phone/gender/dob etc.
@@ -1307,7 +1298,7 @@ export async function getStandardCooperativeMembersAction(
                 // Name fields
                 firstName:           app.firstName           || uData.firstName          || null,
                 lastName:            app.lastName            || uData.lastName           || null,
-                email:               app.email               || uData.email              || null,
+                email:               app.email               || uData.email              || uData.userEmail  || null,
                 // nextOfKin: remap stored field names to what the admin modal reads
                 // Firestore stores: { fullName, phone, residentialAddress }
                 // Admin modal reads: { name, phone, address }
@@ -1320,10 +1311,10 @@ export async function getStandardCooperativeMembersAction(
 
             // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {
-                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
             };
 
             return {
@@ -1331,12 +1322,12 @@ export async function getStandardCooperativeMembersAction(
                 user: {
                     id: app.userId,
                     name: userName,
-                    email: mergedData.email || "Unknown",
-                    phone: mergedData.phone || "Unknown",
-                    dob: mergedData.dateOfBirth || "Unknown",
-                    address: mergedData.residentialAddress || "Unknown",
-                    state: mergedData.stateOfOrigin || "Unknown",
-                    lga: mergedData.lga || "Unknown",
+                    email: mergedData.email || "",
+                    phone: mergedData.phone || "",
+                    dob: mergedData.dateOfBirth || "",
+                    address: mergedData.residentialAddress || "",
+                    state: mergedData.stateOfOrigin || "",
+                    lga: mergedData.lga || "",
                     bankDetails
                 },
                 status: app.membershipStatus || "pending",

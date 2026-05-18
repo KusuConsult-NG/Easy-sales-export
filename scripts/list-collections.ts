@@ -1,21 +1,9 @@
-import * as dotenv from 'dotenv';
-import * as path from 'path';
+import { db } from "../src/lib/firebase-admin";
 
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
-
-import { db } from '../src/lib/firebase-admin';
-
-async function main() {
-    try {
-        const collections = await db.listCollections();
-        console.log('Collections:');
-        collections.forEach(col => console.log(col.id));
-        process.exit(0);
-    } catch (err) {
-        console.error('Error:', err);
-        process.exit(1);
-    }
+async function exploreCollections() {
+    const collections = await db.listCollections();
+    console.log("All collections in Firebase:");
+    collections.forEach(c => console.log(c.id));
 }
 
-main();
+exploreCollections().catch(console.error);
