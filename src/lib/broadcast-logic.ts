@@ -422,6 +422,18 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
 
         for (const userId of allUserIds) {
             const d = memberDocs.get(userId) || {};
+            
+            if (filters?.startDate || filters?.endDate) {
+                const createdRaw = d.createdAt || d.appliedAt || d.timestamp;
+                if (createdRaw) {
+                    const created = createdRaw.toDate ? createdRaw.toDate() : new Date(createdRaw);
+                    if (filters.startDate && created < new Date(filters.startDate)) continue;
+                    if (filters.endDate && created > new Date(filters.endDate)) continue;
+                } else {
+                    continue; // Skip if we have date filters but the document has no date
+                }
+            }
+
             let status = d[statusField] || d.membershipStatus || d.status || "pending";
             if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
 
@@ -460,6 +472,17 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             const d = doc.data();
             const userId = d[userIdField] || doc.id; // Fallback to doc id if userId is missing
             if (!userId) continue;
+
+            if (filters?.startDate || filters?.endDate) {
+                const createdRaw = d.createdAt || d.appliedAt || d.timestamp;
+                if (createdRaw) {
+                    const created = createdRaw.toDate ? createdRaw.toDate() : new Date(createdRaw);
+                    if (filters.startDate && created < new Date(filters.startDate)) continue;
+                    if (filters.endDate && created > new Date(filters.endDate)) continue;
+                } else {
+                    continue; // Skip if we have date filters but the document has no date
+                }
+            }
 
             let status = d[statusField] || d.membershipStatus || d.status || "pending";
             if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
