@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { DollarSign, CheckCircle, XCircle, Loader2, AlertCircle, Clock, User } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getStandardWaveWithdrawalsAction, processWaveWithdrawalAction } from "@/app/actions/wave-admin";
+import { getStandardWaveWithdrawalsAction, processWaveWithdrawalAction } from "@/app/actions/wave";
 import { formatDateTime } from "@/lib/utils";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 

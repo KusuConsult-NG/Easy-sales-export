@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getStandardWaveApplicationsAction } from "@/app/actions/wave-admin";
+import { getStandardWaveApplicationsAction } from "@/app/actions/wave";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";

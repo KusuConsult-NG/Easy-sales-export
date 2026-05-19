@@ -3783,7 +3783,7 @@ export const updateUserGenderAction = withFlexibleSafeAction("updateUserGenderAc
 import { 
     approveWaveApplicationAction as _approveWaveApplicationAction, 
     rejectWaveApplicationAction as _rejectWaveApplicationAction 
-} from "./wave-admin";
+} from "./wave/_admin";
 
 export const approveWaveApplicationAction = _approveWaveApplicationAction;
 export const rejectWaveApplicationAction = _rejectWaveApplicationAction;

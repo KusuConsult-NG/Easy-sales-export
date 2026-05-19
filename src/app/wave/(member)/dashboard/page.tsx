@@ -15,7 +15,7 @@ import {
     ArrowRight,
     Sparkles,
 } from "lucide-react";
-import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave-member";
+import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave";
 import { getWaveResourcesAction, getWaveTrainingEventsAction } from "@/app/actions/wave";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { useSession } from "next-auth/react";

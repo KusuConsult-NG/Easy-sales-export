@@ -13,7 +13,7 @@ import {
     Video,
     User,
 } from "lucide-react";
-import { checkWaveMembershipAction, getUserTrainingRegistrationsAction } from "@/app/actions/wave-member";
+import { checkWaveMembershipAction, getUserTrainingRegistrationsAction } from "@/app/actions/wave";
 import { getWaveTrainingEventsAction, registerForTrainingAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 import BackButton from "@/components/ui/BackButton";

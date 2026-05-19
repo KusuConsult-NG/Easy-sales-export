@@ -17,7 +17,7 @@ import {
     BookOpen,
     CheckCircle,
 } from "lucide-react";
-import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave-member";
+import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave";
 import { toSafeDate } from "@/lib/utils";
 
 export default function WaveProfilePage() {

@@ -21,7 +21,7 @@ import {
     createTrainingEventAction,
     updateTrainingEventAction,
     getEventParticipantsAction,
-} from "@/app/actions/wave-admin";
+} from "@/app/actions/wave";
 import { getWaveTrainingEventsAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
