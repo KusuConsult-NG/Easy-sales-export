@@ -453,29 +453,57 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
 
             moduleStats.total++;
             
-            if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS && !paidUserIds!.has(userId)) {
-                moduleStats.unpaid++;
+            if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
+                const isPaid = paidUserIds!.has(userId);
+                const isActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "active" || d.status === "approved";
+                const isSuspended = d.membershipStatus === "suspended" || d.status === "suspended";
+                const isPending = d.membershipStatus === "pending" || d.status === "pending" || (!d.membershipStatus && !d.status);
+
+                if (isActive) {
+                    moduleStats.approved++;
+                } else if (isSuspended) {
+                    moduleStats.suspended++;
+                } else if (isPending) {
+                    moduleStats.pending++;
+                } else if (status === "rejected") {
+                    moduleStats.rejected++;
+                }
+
+                if (!isPaid) {
+                    moduleStats.unpaid++;
+                }
+
+                if (statusFilter === "unpaid") {
+                    if (isPaid) continue;
+                } else if (statusFilter === "all" || !statusFilter) {
+                    // Include everyone
+                } else {
+                    if (statusFilter === "not_approved") {
+                        if (isActive) continue;
+                    } else if (statusFilter === "approved") {
+                        if (!isActive) continue;
+                    } else if (statusFilter && status !== statusFilter) {
+                        continue;
+                    }
+                }
             } else {
                 if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
                 else if (status === "pending") moduleStats.pending++;
                 else if (status === "rejected") moduleStats.rejected++;
                 else if (status === "suspended") moduleStats.suspended++;
-            }
 
-            if (statusFilter === "unpaid") {
-                if (!unpaidUserIds.has(userId)) continue;
-            } else if (statusFilter === "all" || !statusFilter) {
-                // Include everyone
-            } else {
-                // For 'approved', 'pending' etc., we only want PAID members
-                if (!paidUserIds!.has(userId)) continue;
-                
-                if (statusFilter === "not_approved") {
-                    if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
-                } else if (statusFilter === "approved") {
-                    if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
-                } else if (statusFilter && status !== statusFilter) {
-                    continue;
+                if (statusFilter === "unpaid") {
+                    if (!unpaidUserIds.has(userId)) continue;
+                } else if (statusFilter === "all" || !statusFilter) {
+                    // Include everyone
+                } else {
+                    if (statusFilter === "not_approved") {
+                        if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
+                    } else if (statusFilter === "approved") {
+                        if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
+                    } else if (statusFilter && status !== statusFilter) {
+                        continue;
+                    }
                 }
             }
 
