@@ -4,6 +4,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { ACADEMY_CONFIG } from "@/lib/constants";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -334,9 +335,9 @@ export async function processAcademyRegistration(reference: string, amount: numb
     const normalisedPlan = (plan || "foundation").toLowerCase();
 
     // Validate Amount
-    let expectedAmount = 25000; // foundation
-    if (normalisedPlan === "standard" || normalisedPlan === "advanced") expectedAmount = 50000;
-    if (normalisedPlan === "elite") expectedAmount = 100000;
+    let expectedAmount = ACADEMY_CONFIG.plans.foundation.fee; // foundation
+    if (normalisedPlan === "standard" || normalisedPlan === "advanced") expectedAmount = ACADEMY_CONFIG.plans.standard.fee;
+    if (normalisedPlan === "elite") expectedAmount = ACADEMY_CONFIG.plans.elite.fee;
 
     // Canonicalize plan name
     const planToStore = (normalisedPlan === "advanced") ? "standard" : normalisedPlan;

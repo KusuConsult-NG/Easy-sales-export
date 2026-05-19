@@ -384,9 +384,9 @@ export default function AcademyApplicationPage() {
     };
 
         const PLANS = [
-        { id: "foundation", name: "Foundation Plan", price: 25000 },
-        { id: "standard", name: "Standard Plan", price: 50000 },
-        { id: "elite", name: "Elite Plan", price: 100000 },
+        { id: "foundation", name: "Foundation Plan", price: 45000, originalPrice: 50000 },
+        { id: "standard", name: "Standard Plan", price: 90000, originalPrice: 100000 },
+        { id: "elite", name: "Elite Plan", price: 270000, originalPrice: 300000 },
     ] as const;
 
     return (
@@ -549,9 +549,14 @@ export default function AcademyApplicationPage() {
                                                 {plan.name}
                                             </span>
                                         </div>
-                                        <span className="text-xl font-bold text-slate-900">
-                                            ₦{plan.price.toLocaleString()}
-                                        </span>
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-sm text-slate-400 line-through">
+                                                ₦{plan.originalPrice.toLocaleString()}
+                                            </span>
+                                            <span className="text-xl font-bold text-slate-900">
+                                                ₦{plan.price.toLocaleString()}
+                                            </span>
+                                        </div>
                                     </button>
                                 ))}
                             </div>

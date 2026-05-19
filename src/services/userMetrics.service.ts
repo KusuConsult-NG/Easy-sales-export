@@ -75,7 +75,7 @@ export class UserMetricsService {
             });
         }
 
-        const paidMembersCount = docBasedPaidCount + orphanedPaymentsCount;
+        const paidMembersCount = docBasedPaidCount; // Do not add orphanedPaymentsCount to avoid inflating total beyond totalApplications
         const unpaidMembers = Math.max(0, totalApplications - docBasedPaidCount);
 
         return {
@@ -84,6 +84,7 @@ export class UserMetricsService {
             unpaidMembers,
             pendingCount,
             approvedCount,
+            orphanedPaymentsCount,
             suspendedCount: totalApplications - (approvedCount + pendingCount)
         };
     }

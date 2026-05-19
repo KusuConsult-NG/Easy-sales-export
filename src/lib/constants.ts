@@ -60,7 +60,8 @@ export const ACADEMY_CONFIG = {
         foundation: {
             id: "foundation",
             name: "Foundation Program",
-            fee: 25000,
+            fee: 45000,
+            originalFee: 50000,
             description: "Essential knowledge for starting your agro-export journey correctly.",
             features: ["Export fundamentals", "Agro-business structure", "Basic market access strategy"],
             highlight: false,
@@ -68,7 +69,8 @@ export const ACADEMY_CONFIG = {
         standard: {
             id: "standard",
             name: "Standard Program",
-            fee: 50000,
+            fee: 90000,
+            originalFee: 100000,
             description: "Deep dive into strategies, compliance, and scaling your operations.",
             features: ["Advanced export strategies", "Comprehensive compliance training", "Cooperative opportunity positioning"],
             highlight: true,
@@ -76,7 +78,8 @@ export const ACADEMY_CONFIG = {
         elite: {
             id: "elite",
             name: "Elite Program",
-            fee: 100000,
+            fee: 270000,
+            originalFee: 300000,
             description: "The complete playbook for high-level execution and dominance.",
             features: ["Full ecosystem mastery", "Direct market linkages", "Priority positioning strategy"],
             highlight: false,

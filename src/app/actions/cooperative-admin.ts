@@ -98,7 +98,8 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             unpaidMembers: 0,
             pendingCount: 0,
             approvedCount: 0,
-            suspendedCount: 0
+            suspendedCount: 0,
+            orphanedPaymentsCount: 0
         };
 
         const {
@@ -107,7 +108,8 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             unpaidMembers,
             pendingCount: pendingMembers,
             approvedCount: activeMembers,
-            suspendedCount: suspendedMembers
+            suspendedCount: suspendedMembers,
+            orphanedPaymentsCount
         } = metricsData;
 
 
@@ -195,6 +197,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
                     activeMembers,
                     pendingMembers,
                     suspendedMembers,
+                    orphanedPaymentsCount,
                     totalContributions,
                     monthlyContributions,
                     totalLoans,

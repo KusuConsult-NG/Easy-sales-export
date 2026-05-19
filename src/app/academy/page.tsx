@@ -15,6 +15,7 @@ export default function AcademyLandingPage() {
     const programTiers = Object.values(ACADEMY_CONFIG.plans).map(plan => ({
         title: plan.name,
         price: `${CURRENCY_CONFIG.symbol}${plan.fee.toLocaleString()}`,
+        originalPrice: plan.originalFee ? `${CURRENCY_CONFIG.symbol}${plan.originalFee.toLocaleString()}` : undefined,
         description: plan.description,
         features: [...plan.features],
         highlight: plan.highlight,
@@ -145,7 +146,12 @@ export default function AcademyLandingPage() {
                                     <h3 className="text-2xl font-bold text-slate-900 mb-4">
                                         {tier.title}
                                     </h3>
-                                    <div className="flex items-baseline mb-6">
+                                    <div className="flex items-baseline gap-3 mb-6">
+                                        {tier.originalPrice && (
+                                            <span className="text-2xl font-bold text-slate-400 line-through">
+                                                {tier.originalPrice}
+                                            </span>
+                                        )}
                                         <span className="text-4xl font-bold text-blue-600">{tier.price}</span>
                                     </div>
                                     <p className="text-slate-600 mb-8 pb-8 border-b border-slate-100">
