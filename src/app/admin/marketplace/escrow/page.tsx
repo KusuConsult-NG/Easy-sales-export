@@ -19,7 +19,7 @@ import {
     getAllEscrowTransactionsAdmin,
     releaseEscrowFunds,
     refundEscrowToBuyer,
-} from "@/app/actions/escrow-actions";
+} from "@/app/actions/marketplace";
 import type { EscrowTransaction as BaseEscrowTransaction, EscrowStatus } from "@/types/escrow";
 
 type EscrowTransaction = BaseEscrowTransaction & {

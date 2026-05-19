@@ -9,7 +9,7 @@ import {
     updateEscrowStatus,
     createEscrowDispute,
     releaseEscrowFunds
-} from "@/app/actions/escrow-actions";
+} from "@/app/actions/marketplace";
 import { type EscrowTransaction, type EscrowStatus } from "@/types/escrow";
 import { formatCurrency, formatDate } from "@/lib/utils";
 

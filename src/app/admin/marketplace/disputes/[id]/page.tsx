@@ -19,7 +19,7 @@ import {
     updateDisputeStatusAction,
 } from "@/app/actions/disputes";
 import { getOrderByIdAction } from "@/app/actions/orders";
-import { getEscrowTransactionByIdAction, escalateDisputeAction } from "@/app/actions/escrow";
+import { getEscrowTransactionByIdAction, escalateDisputeAction } from "@/app/actions/marketplace";
 import {
     addEscalationNoteAction,
     getEscalationNotesAction,

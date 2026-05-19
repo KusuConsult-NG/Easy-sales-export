@@ -14,7 +14,7 @@ import {
     Star, Copy, Check
 } from "lucide-react";
 import { getOrderByIdAction } from "@/app/actions/orders";
-import { confirmOrderReceiptAction } from "@/app/actions/marketplace-buyer";
+import { confirmOrderReceiptAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";

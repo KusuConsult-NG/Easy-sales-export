@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { X, Send, Loader2, Package, Calendar, MessageSquare } from "lucide-react";
-import { submitQuoteRequestAction } from "@/app/actions/marketplace-quotes";
+import { submitQuoteRequestAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
 interface QuoteRequestModalProps {

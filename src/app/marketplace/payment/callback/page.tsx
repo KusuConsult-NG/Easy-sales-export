@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { verifyOrderPaymentAction } from "@/app/actions/marketplace-payment";
+import { verifyOrderPaymentAction } from "@/app/actions/marketplace";
 import { CheckCircle, XCircle, Loader2, Home, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 

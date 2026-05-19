@@ -82,28 +82,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
 }
 export const getProductsAction = withSafeAction("getProductsAction", _getProductsAction);
 
-/**
- * Get single product by ID
- */
-async function _getProductByIdAction(productId: string): Promise<ActionResponse<{ product: Product }>> { 
-    try {
-        const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
-        const productDoc = await productRef.get();
 
-        if (!productDoc.exists) { 
-            return { success: false as const, error: "Product not found", data: null };
-        }
-
-        const data = productDoc.data();
-        const product = serializeValue({ id: productDoc.id, ...data }) as Product;
-
-        return { error: null, success: true as const, data: { product } };
-    } catch (error) { 
-        logger.error("Get product error:", { productId, error: error instanceof Error ? error.message : String(error) });
-        return { success: false as const, error: "Failed to fetch product", data: null };
-    }
-}
-export const getProductByIdAction = withSafeAction("getProductByIdAction", _getProductByIdAction);
 
 /**
  * Get featured products (most orders)
@@ -147,29 +126,7 @@ export const getProductsByCategoryAction = withSafeAction("getProductsByCategory
 // ORDER MANAGEMENT
 // ============================================================================
 
-/**
- * Get buyer's orders
- */
-async function _getBuyerOrdersAction(): Promise<ActionResponse<{ orders: Order[] }>> { 
-    let sessionResult;
-    try {
-        sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
-        const { session } = sessionResult;
 
-        const snapshot = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
-            .where("buyerId", "==", session.user.id)
-            .orderBy("createdAt", "desc")
-            .get();
-
-        const orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Order[];
-        return { error: null, success: true as const, data: { orders: serializeValue(orders) } };
-    } catch (error) { 
-        logger.error("Get buyer orders error:", { userId: sessionResult?.session?.user?.id, error: error instanceof Error ? error.message : String(error) });
-        return { success: false as const, error: "Failed to fetch orders", data: null };
-    }
-}
-export const getBuyerOrdersAction = withSafeAction("getBuyerOrdersAction", _getBuyerOrdersAction);
 
 /**
  * Confirm order receipt (releases escrow)

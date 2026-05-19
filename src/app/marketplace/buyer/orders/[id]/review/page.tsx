@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Star, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { submitProductReviewAction, submitSellerReviewAction } from "@/app/actions/marketplace-reviews";
+import { submitProductReviewAction, submitSellerReviewAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
 function StarRating({ rating, onChange }: { rating: number; onChange: (r: number) => void }) {

@@ -7,7 +7,7 @@ import Image from "next/image";
 import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X, Store } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
-import { initializeOrderPaymentAction, calculateDeliveryAction } from "@/app/actions/marketplace-payment";
+import { initializeOrderPaymentAction, calculateDeliveryAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import PhoneInput, { isValidNigerianPhone } from "@/components/ui/PhoneInput";
 import type { Product, CartItem } from "@/lib/types/marketplace";

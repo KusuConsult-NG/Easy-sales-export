@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { getProductsAction } from "@/app/actions/marketplace-buyer";
+import { getProductsAction } from "@/app/actions/marketplace";
 import type { Product, ProductCategory } from "@/lib/types/marketplace";
 
 // ─── Constants ────────────────────────────────────────────────────────────────

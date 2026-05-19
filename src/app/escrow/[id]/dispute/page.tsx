@@ -4,7 +4,7 @@ import { useState, useEffect, use } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, ArrowLeft, FileText, Send } from "lucide-react";
-import { createDisputeAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/escrow";
+import { createDisputeAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
 interface DisputePageProps {

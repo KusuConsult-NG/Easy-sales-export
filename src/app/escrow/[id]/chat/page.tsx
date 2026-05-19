@@ -5,8 +5,8 @@ import { logger } from '@/lib/logger';
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Send, Loader2, MessageCircle, ArrowLeft, Shield } from "lucide-react";
-import { sendEscrowMessageAction, getEscrowMessagesAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/escrow";
-import type { Message } from "@/app/actions/escrow";
+import { sendEscrowMessageAction, getEscrowMessagesAction, getEscrowTransactionByIdAction, type EscrowTransaction } from "@/app/actions/marketplace";
+import type { Message } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 
 interface EscrowChatPageProps {

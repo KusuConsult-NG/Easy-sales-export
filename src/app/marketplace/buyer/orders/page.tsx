@@ -9,8 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Package, Clock, CheckCircle, XCircle, Search, Eye, AlertCircle, Loader2, ShieldCheck, Truck } from "lucide-react";
 import Link from "next/link";
-import { getBuyerOrdersAction } from "@/app/actions/marketplace";
-import { confirmOrderReceiptAction } from "@/app/actions/marketplace-buyer";
+import { getBuyerOrdersAction, confirmOrderReceiptAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";

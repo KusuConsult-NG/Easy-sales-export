@@ -11,3 +11,19 @@
 
 export { COLLECTIONS } from "./collections";
 export * from "./constants";
+
+export type ActionResponse<T = unknown, M = any> = {
+    success: true;
+    error: null;
+    data: T;
+    lastDocId?: string | null;
+    hasMore?: boolean;
+    meta?: M;
+} | {
+    success: false;
+    error: string;
+    data: null;
+    lastDocId?: string | null;
+    hasMore?: boolean;
+    meta?: M;
+};

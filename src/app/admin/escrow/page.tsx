@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { type EscrowTransaction, type EscrowStatus } from "@/types/escrow";
-import { getAllEscrowTransactionsAdmin, releaseEscrowFunds, refundEscrowToBuyer } from "@/app/actions/escrow-actions";
+import { getAllEscrowTransactionsAdmin, releaseEscrowFunds, refundEscrowToBuyer } from "@/app/actions/marketplace";
 import { EscrowDetailsModal } from "./components/EscrowDetailsModal";
 import { formatCurrency } from "@/lib/utils";
 import { ShieldCheck, Search, Database, Clock, Lock, Truck, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
