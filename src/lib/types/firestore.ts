@@ -1,13 +1,24 @@
 /**
  * Firestore Database Collections Structure
- * 
- * This file documents the complete Firestore database schema
- * for the Easy Sales Export platform.
- * 
+ *
+ * This file is the SINGLE IMPORT POINT for all platform types.
+ * Domain types are progressively being extracted into dedicated files:
+ *
+ *   wave.ts        → WAVE program types
+ *   academy.ts     → Academy LMS types
+ *   export.ts      → Export Window & Investment types
+ *   farm-nation.ts → Farm Nation / Land types
+ *   shared.ts      → Cross-module / platform shared types
+ *   cooperative.ts → Cooperative types (existing)
+ *   marketplace.ts → Marketplace types (existing)
+ *   roles.ts       → RBAC role types (existing)
+ *
  * NDPR / SECURITY COMPLIANCE NOTE:
  * All PII (Personally Identifiable Information) including banking details,
  * names, and addresses stored within these collections are automatically
  * Encrypted At Rest using AES-256 by the Firebase/Google Cloud infrastructure.
+ *
+ * Phase 0 Migration: May 2026 — Domain Type Isolation
  */
 
 // Export PRD-required interfaces
@@ -17,6 +28,49 @@ export * from "./prd-interfaces";
 import type { UserRole, LegacyRole } from "./roles";
 export type { UserRole, LegacyRole };
 export { ROLE_LABELS, LEGACY_ROLE_MAP } from "./roles";
+
+// ─── Domain Type Re-exports ────────────────────────────────────────────────
+// These are progressively extracted domain types. The inline definitions below
+// will be removed in Phase 1 once consumers migrate to domain-specific imports.
+export type {
+    WaveApplication,
+    WaveCertificate,
+    WaveShipment,
+    WaveResource,
+    WaveWithdrawal,
+    WaveEarning,
+    BriefingSubmission,
+} from "./wave";
+
+export type {
+    Course,
+    Enrollment,
+    Certificate,
+} from "./academy";
+
+export type {
+    ExportWindow,
+    ExportOnboardingApplication,
+    ExportInvestment,
+    ExportSlot,
+} from "./export";
+
+export type {
+    LandListing,
+} from "./farm-nation";
+
+export type {
+    Notification,
+    Payment,
+    UnifiedTransaction,
+    PlatformSettings,
+    PasswordResetToken,
+    Announcement,
+    AuditLog,
+} from "./shared";
+// ──────────────────────────────────────────────────────────────────────────
+
+
 
 export interface User {
     uid: string;
@@ -153,100 +207,6 @@ export interface User {
     _version?: number;
 }
 
-export interface ExportWindow {
-    id: string;
-    title?: string; // e.g. "Q1 2026 Yam Export"
-    orderId: string; // @deprecated - leaving for compatibility
-    commodity: "yam" | "sesame" | "hibiscus" | "other";
-    quantity: string;
-    amount: number; // Minimum investment
-    roi: string; // e.g. "15-20%"
-    duration: string; // e.g. "6 months"
-    totalSpots?: number;
-    spotsFilled?: number;
-    fundedAmount?: number; // Total amount raised
-    image?: string;
-    status: "pending" | "open" | "active" | "completed" | "closed" | "in_transit" | "delivered";
-
-    // Deep Data Fields
-    description?: string;
-    specifications?: string[]; // List of product specs
-    benefits?: string[]; // List of investment benefits
-    documents?: {
-        name: string;
-        url?: string;
-        required: boolean;
-    }[];
-    timeline?: {
-        phase: string;
-        date: string;
-        description: string;
-        status: "pending" | "active" | "completed";
-    }[];
-
-    userId?: string; // Creator/Admin
-    startDate?: Date;
-    endDate?: Date;
-    deliveryDate?: Date; // Legacy support
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface ExportOnboardingApplication {
-    applicationId: string;
-    userId: string;
-    userEmail?: string | null;
-    profile: any;
-    kyc: any;
-    bank: any;
-    terms: any;
-    status: "pending_review" | "approved" | "rejected";
-    submittedAt: Date;
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface Notification {
-    id: string;
-    userId: string;
-    type: "escrow" | "order" | "academy" | "wave" | "cooperative" | "export"
-    | "payment" | "loan" | "system" | "event" | "payout"
-    | "info" | "warning" | "success" | "farm_nation" | "marketplace" | "general"
-    | "transaction"; // NEW: transaction lifecycle notifications (order placed/shipped/delivered/cancelled)
-    title: string;
-    message: string;
-    link?: string;
-    linkText?: string; // CTA button label e.g. "View Loans"
-    read: boolean;
-    createdAt: Date;
-}
-
-export interface Course {
-    id: string;
-    title: string;
-    description: string;
-    instructor: string;
-    duration: string;
-    level: "beginner" | "intermediate" | "advanced";
-    tier?: "free" | "foundation" | "standard" | "elite";
-    price: number;
-    thumbnail?: string;
-    enrolledCount: number;
-    rating: number;
-    createdAt: Date;
-    updatedAt: Date;
-}
-
-export interface Enrollment {
-    id: string;
-    userId: string;
-    courseId: string;
-    progress: number;
-    completed: boolean;
-    enrolledAt: Date;
-    completedAt?: Date;
-}
-
 export interface Cooperative {
     id: string;
     name: string;
@@ -357,51 +317,6 @@ export interface LoanApplication {
     rejectionReason?: string;
 }
 
-export interface Payment {
-    id: string;
-    userId: string;
-    amount: number;
-    type: string;
-    status: "pending" | "completed" | "failed";
-    reference: string;
-    createdAt: Date;
-}
-
-export interface Certificate {
-    id: string;
-    userId: string;
-    courseId: string;
-    certificateNumber: string;
-    issueDate: Date;
-    createdAt: Date;
-}
-
-export interface LandListing {
-    id: string;
-    title: string;
-    description: string;
-    location: string;
-    size: string;
-    price: number;
-    userId: string;
-    verified: boolean;
-    createdAt: Date;
-}
-
-export interface UnifiedTransaction {
-    id: string;          // Maps to document ID
-    userId: string;      // Mandatory
-    type: string;        // Specific payload type e.g. "contribution", "registration", "wallet_funding", "escrow_payment"
-    module: "wave" | "cooperative" | "marketplace" | "farm_nation" | "export" | "academy" | "general" | "wallet";
-    amount: number;
-    currency: string;
-    status: "pending" | "completed" | "failed" | "refunded";
-    date: Date;          // Core aggregation timestamp
-    reference?: string;  // Payment gateway reference
-    description?: string;
-    metadata?: Record<string, unknown>; // Any legacy properties (cooperativeId, escrowId)
-}
-
 // Import detailed types from marketplace module
 import type {
     EscrowTransaction,
@@ -411,109 +326,6 @@ export type { EscrowTransaction, Dispute };
 
 // Note: Notification, WaveApplication etc. are still defined here as they might not have a dedicated module type file yet.
 
-
-export interface WaveApplication {
-    id: string;
-    userId: string;
-    userEmail?: string;   // Canonical field — populated from session at submission
-    // Section A: Personal Identification
-    surname: string;
-    firstName: string;
-    otherNames?: string;
-    dateOfBirth: string;
-    age: number;
-    phone: string;
-    alternativePhone?: string;
-    /** @deprecated Use userEmail instead. Present on older docs — read both for compatibility */
-    email?: string;
-    residentialAddress: string;
-    stateOfOrigin: string;
-    lgaOfOrigin: string;
-    stateOfResidence: string;
-    lgaOfResidence: string;
-    maritalStatus: "single" | "married" | "widowed" | "divorced" | "";
-    nextOfKinName: string;
-    nextOfKinPhone: string;
-    nextOfKinRelationship: string;
-    // Section B: Civic Status (nin + votersCardNumber mandatory)
-    nin: string;
-    votersCardNumber: string;  // Mandatory — Permanent Voter's Card Number
-    pollingUnit?: string;
-    ward?: string;
-    yearOfVoterRegistration?: string;
-    votedInLastElection?: boolean;
-    // Section C: Socio-Economic
-    highestEducation: string;
-    currentOccupation: string;
-    averageMonthlyIncome: string;
-    involvedInAgriculture: boolean;
-    agricultureTypes?: string[];
-    // Section D: Agricultural Interest
-    valueChainAreas: string[];
-    preferredCommodities: string[];
-    preferredCommodityOther?: string;
-    hasAccessToFarmland: boolean;
-    farmlandHectares?: number;
-    needsFarmlandAccess?: boolean;
-    // Section E: Financial (bankName + accountNumber + bvn mandatory)
-    hasBankAccount?: boolean;
-    bankName: string;       // Mandatory
-    accountNumber: string;  // Mandatory
-    bvn: string;            // Mandatory — Bank Verification Number
-    isMemberOfCooperative: boolean;
-    cooperativeName?: string;
-    willingToJoinCooperative: boolean;
-    // Section F: Training
-    supportNeeded: string[];
-    willingToUndergoTraining: boolean;
-    willingToComplyWithStandards: boolean;
-    willingToParticipateInME: boolean;
-    // Section G: Declaration
-    declarationAccepted: boolean;
-    consentGiven: boolean;
-    // Admin fields
-    status: "draft" | "pending" | "submitted" | "under_review" | "approved" | "rejected";
-    applicationDate?: Date;
-    submittedAt?: Date;
-    createdAt?: Date;      // Set at document creation
-    updatedAt?: Date;
-    reviewedAt?: Date;
-    reviewedBy?: string;
-    reviewNotes?: string;  // Internal admin notes
-    rejectionReason?: string;
-}
-
-export interface WaveCertificate {
-    id: string;
-    memberId: string;
-    memberName: string;
-    certificateType: "training" | "achievement" | "completion";
-    programName: string;
-    issuedDate: Date;
-    certificateNumber: string;
-    verificationUrl: string;
-    createdAt?: Date;
-}
-
-export interface WaveShipment {
-    id: string;
-    memberId: string;
-    orderId: string;
-    productName: string;
-    destination: string;
-    carrier: string;
-    trackingNumber: string;
-    status: "pending" | "in_transit" | "delivered" | "cancelled";
-    estimatedDelivery: Date;
-    actualDelivery?: Date;
-    updates: {
-        timestamp: Date;
-        location: string;
-        status: string;
-        note?: string;
-    }[];
-    createdAt: Date;
-}
 
 export interface CooperativeOnboardingApplication {
     id: string;
@@ -585,37 +397,6 @@ export interface MarketplaceOrder {
     _version?: number;
 }
 
-export interface BriefingSubmission {
-    id: string;
-    fullName: string;
-    phone: string;
-    email?: string;
-    state: string;
-    role: string;
-    programType: string;
-    status: "pending_sync" | "synced" | "rejected";
-    syncedAt?: Date;
-    submittedAt: Date;
-    source: "online" | "offline";
-}
-
-
-export interface WaveResource {
-    id: string;
-    title: string;
-    description?: string;
-    category: string;
-    fileUrl: string;
-    fileType?: string;
-    fileSize?: number;
-    isActive: boolean;
-    uploadedBy?: string;
-    uploadedAt?: Date;
-    downloadCount?: number;
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
 export interface VendorSettings {
     id?: string;
     userId: string;
@@ -651,128 +432,9 @@ export interface VendorSettings {
     updatedAt?: Date;
 }
 
-export interface ExportInvestment {
-    id: string;
-    userId: string;
-    windowId: string;
-    amount: number;
-    status: "pending" | "active" | "completed" | "cancelled";
-    roi?: string;
-    roiAmount?: number;
-    investedAt?: Date;
-    completedAt?: Date;
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
-export interface ExportSlot {
-    id: string;
-    userId: string;
-    exportId: string; // Reference to export_windows document
-    windowTitle?: string; // Denormalized for display — e.g. "Q1 Yam Export"
-    commodity?: string;
-    amount: number; // Amount invested by the user
-    expectedReturn: number; // Projected profit at window end
-    roi?: string; // e.g. "15%"
-    status: "pending" | "active" | "completed" | "cancelled";
-    paymentReference?: string; // Paystack reference (optional until payment confirmed)
-    purchaseDate?: Date;
-    startDate?: Date;
-    endDate?: Date;
-    daysRemaining?: number;
-    createdAt: Date;
-    updatedAt?: Date;
-}
-
-export interface WaveWithdrawal {
-    id: string;
-    withdrawalId: string; // Canonical ID, e.g. WD-1234-ABC
-    userId: string;
-    userEmail?: string;
-    amount: number; // Amount requested in ₦, minimum 5,000
-    status: "pending" | "approved" | "approved_pending_payout" | "rejected" | "completed";
-    requestedAt: Date;
-    processedAt?: Date;
-    processedBy?: string; // Admin userId who approved/rejected
-    adminNotes?: string;
-    // Payout tracking (set when Paystack transfer is attempted)
-    paystackTransferCode?: string;
-    pendingManualPayout?: boolean;
-    payoutError?: string;
-    createdAt: Date;
-    updatedAt?: Date;
-    _version?: number;
-}
-
-export interface PlatformSettings {
-    platformName: string;
-    supportEmail: string;
-    contactPhone: string;
-    defaultCurrency: "NGN" | "USD" | "GBP";
-    maintenanceMode: boolean;
-    updatedBy?: string; // Admin userId who last saved
-    updatedAt?: Date;
-}
-
-export interface PasswordResetToken {
-    id: string;
-    email: string;
-    token: string;
-    expiry: number; // Unix ms timestamp
-    used: boolean;
-    usedAt?: Date;
-    createdAt: Date;
-}
-
-export interface Announcement {
-    id: string;
-    title: string;
-    message: string;
-    type: "info" | "warning" | "success";
-    createdAt: Date;
-}
-
-export interface AuditLog {
-    id: string;
-    userId: string;
-    action: string;
-    entityId?: string;    // ID of the entity being acted on
-    entityType?: string;  // e.g. "application", "user", "withdrawal"
-    // Aliases used by createAdminAuditLog (audit-log-admin.ts)
-    targetId?: string;
-    targetType?: string;
-    details?: string;
-    metadata?: Record<string, any>;
-    adminId?: string;
-    // Extra fields written by admin audit logger
-    severity?: "info" | "warning" | "critical";
-    userEmail?: string;
-    userRole?: string;
-    ipAddress?: string;
-    userAgent?: string;
-    timestamp: Date;
-    createdAt?: Date;
-}
-
 // ============================================
 // Wave Earnings
 // ============================================
-
-export interface WaveEarning {
-    id: string;
-    userId: string;
-    memberId?: string;  // WAVE member ID
-    amount: number;
-    type: "training_bonus" | "referral" | "sales_commission" | "other";
-    description?: string;
-    status: "pending" | "approved" | "paid" | "rejected";
-    approvedBy?: string;
-    approvedAt?: Date;
-    paidAt?: Date;
-    paystackTransferCode?: string;
-    createdAt: Date;
-    updatedAt?: Date;
-}
 
 // ============================================
 // Loan Payments (individual repayment records per installment)
