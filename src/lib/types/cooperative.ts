@@ -1,5 +1,23 @@
 import { z } from "zod";
-import { strictNameSchema, strictEmailSchema, strictPhoneSchema } from "../schemas";
+
+// ─── Inline schema primitives ─────────────────────────────────────────────
+// Defined inline to avoid relative path issues when this file is consumed
+// from packages/types/src/ via symlink.
+const strictNameSchema = z.string()
+    .min(1, "This field is required")
+    .max(100, "Too long")
+    .regex(/^[a-zA-Z\s'\-]+$/, "Only letters, spaces, hyphens and apostrophes allowed");
+
+const strictEmailSchema = z.string()
+    .email("Invalid email address")
+    .toLowerCase()
+    .trim();
+
+const strictPhoneSchema = z.string()
+    .min(10, "Phone number must be at least 10 digits")
+    .max(15, "Phone number is too long")
+    .regex(/^[\+\d\s\-\(\)]+$/, "Invalid phone number format");
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Cooperative Types and Schemas
