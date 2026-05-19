@@ -295,7 +295,8 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
         }
 
         const userData = userDoc.data()!;
-        if (!userData.serviceRegistrations?.cooperative?.status || userData.serviceRegistrations.cooperative.status !== "approved") { 
+        const coopStatus = userData.serviceRegistrations?.cooperatives?.status || userData.serviceRegistrations?.cooperative?.status;
+        if (!coopStatus || (coopStatus !== "approved" && coopStatus !== "active")) { 
             return { success: false as const, error: "Cooperative membership required to list properties. Please complete your cooperative registration.", data: null, meta: null };
         }
 
@@ -436,7 +437,8 @@ async function _initiatePropertyPurchaseAction(
         }
 
         const userData = userDoc.data()!;
-        if (!userData.serviceRegistrations?.cooperative?.status || userData.serviceRegistrations.cooperative.status !== "approved") { 
+        const coopStatus = userData.serviceRegistrations?.cooperatives?.status || userData.serviceRegistrations?.cooperative?.status;
+        if (!coopStatus || (coopStatus !== "approved" && coopStatus !== "active")) { 
             return { success: false as const, error: "Cooperative membership required. Please complete your cooperative registration.", data: null, meta: null };
         }
 

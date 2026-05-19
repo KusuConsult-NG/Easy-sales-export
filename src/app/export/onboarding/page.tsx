@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -187,32 +188,64 @@ export default function ExportOnboardingPage() {
     };
 
     async function handleSubmit(finalData: any) {
-        // ── Pre-submission guard ────────────────────────────────────────────────
-        // The server action has no Zod validation — it stores whatever it receives.
-        // An empty submission creates a blank Firestore record. Catch it here.
-        const profile = finalData.profile || {};
-        const kyc = finalData.kyc || {};
-        const bank = finalData.bank || {};
-        const terms = finalData.terms || {};
+        // ── Pre-submission Zod Guard ───────────────────────────────────────────
+        const exportOnboardingSchema = z.object({
+            profile: z.object({
+                minInvestment: z.number({ message: "Minimum investment amount is required." }),
+                maxInvestment: z.number({ message: "Maximum investment amount is required." }),
+                investmentGoals: z.array(z.string()).min(1, "At least one investment goal must be selected."),
+                riskTolerance: z.enum(["low", "medium", "high"], { message: "Risk tolerance is required." }),
+            }, { message: "Investment profile details are required." }),
+            kyc: z.object({
+                kycData: z.object({
+                    firstName: z.string().trim().min(2, "First name must be at least 2 characters."),
+                    lastName: z.string().trim().min(2, "Last name must be at least 2 characters."),
+                    phoneNumber: z.string().trim().min(5, "Phone number is required."),
+                    address: z.string().trim().min(5, "Address is required."),
+                    city: z.string().trim().min(2, "City is required."),
+                    state: z.string().trim().min(2, "State is required."),
+                    ninVerified: z.boolean().refine(val => val === true, {
+                        message: "Identity (NIN) must be verified."
+                    }),
+                    bvnVerified: z.boolean().refine(val => val === true, {
+                        message: "BVN must be verified."
+                    }),
+                }, { message: "Identity verification details are required." })
+            }, { message: "KYC verification details are required." }),
+            bank: z.object({
+                bankName: z.string().trim().min(1, "Bank name is required."),
+                accountNumber: z.string().trim().length(10, "Account number must be exactly 10 digits."),
+                accountName: z.string().trim().min(1, "Account name is required."),
+                verified: z.boolean().refine(val => val === true, {
+                    message: "Bank account must be verified."
+                }),
+            }, { message: "Bank account details are required." }),
+            terms: z.object({
+                accepted: z.boolean().optional(),
+                agreedToTerms: z.boolean().optional(),
+            }, { message: "Terms & conditions must be reviewed and accepted." }).refine(data => data.accepted === true || data.agreedToTerms === true, {
+                message: "You must accept the terms and conditions.",
+                path: ["accepted"]
+            })
+        });
 
-        if (!profile.investmentAmount && !profile.investmentRange && !profile.firstName) {
-            showToast("Investment profile is incomplete — please review Step 1.", "error");
-            setCurrentStepId("profile");
-            return;
-        }
-        if (!kyc.kycData && !kyc.fullName && !kyc.firstName) {
-            showToast("Identity verification is incomplete — please review Step 2.", "error");
-            setCurrentStepId("kyc");
-            return;
-        }
-        if (!bank.bankName && !bank.accountNumber) {
-            showToast("Bank account details are incomplete — please review Step 3.", "error");
-            setCurrentStepId("bank");
-            return;
-        }
-        if (!terms.accepted && !terms.agreedToTerms) {
-            showToast("You must accept the terms and conditions.", "error");
-            setCurrentStepId("terms");
+        const validation = exportOnboardingSchema.safeParse(finalData);
+        if (!validation.success) {
+            const firstError = validation.error.issues[0];
+            const errorPath = firstError.path;
+            
+            // Map the error path back to step ID
+            if (errorPath[0] === "profile") {
+                setCurrentStepId("profile");
+            } else if (errorPath[0] === "kyc") {
+                setCurrentStepId("kyc");
+            } else if (errorPath[0] === "bank") {
+                setCurrentStepId("bank");
+            } else if (errorPath[0] === "terms") {
+                setCurrentStepId("terms");
+            }
+            
+            showToast(firstError.message, "error");
             return;
         }
         // ────────────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -224,32 +225,60 @@ export default function MarketplaceOnboarding() {
     };
 
     async function handleSubmit() {
-        // ── Pre-submission guard ────────────────────────────────────────────────
-        // Server action has no Zod validation — stores whatever it receives.
-        // Empty submission creates a blank Firestore record breaking admin listings.
-        if (!formData.accountType) {
-            toast.error("Please select an account type.");
-            setCurrentStep(1);
-            return;
+        // ── Pre-submission Zod Guard ───────────────────────────────────────────
+        const locationSchema = z.object({
+            state: z.string().trim().min(1, "State is required."),
+            lga: z.string().trim().min(1, "LGA is required."),
+            address: z.string().trim().min(1, "Address is required."),
+        }, { message: "Location is required." });
+
+        const baseSchema = z.object({
+            accountType: z.enum(["buyer", "seller", "both"], {
+                message: "Please select an account type.",
+            }),
+            businessName: z.string().trim().min(2, "Business name must be at least 2 characters."),
+            businessType: z.enum(["individual", "cooperative", "company"], {
+                message: "Please select a business type.",
+            }),
+            phone: z.string().trim().min(5, "Phone number is required."),
+            location: locationSchema,
+            termsAccepted: z.boolean().refine(val => val === true, {
+                message: "You must accept the terms and conditions.",
+            }),
+        });
+
+        let marketplaceSchema = baseSchema;
+        if (formData.accountType === "seller" || formData.accountType === "both") {
+            marketplaceSchema = baseSchema.extend({
+                bankAccount: z.object({
+                    bankName: z.string().trim().min(1, "Bank name is required."),
+                    accountNumber: z.string().trim().length(10, "Account number must be exactly 10 digits."),
+                    accountName: z.string().trim().min(1, "Account name is required."),
+                }, { message: "Bank account details are required for sellers." }),
+            });
         }
-        if (!formData.businessName?.trim() || formData.businessName.trim().length < 2) {
-            toast.error("Business name is required — please review Step 2.");
-            setCurrentStep(2);
-            return;
-        }
-        if (!formData.phone?.trim()) {
-            toast.error("Phone number is required — please review Step 2.");
-            setCurrentStep(2);
-            return;
-        }
-        if (!formData.termsAccepted) {
-            toast.error("You must accept the terms and conditions.");
-            setCurrentStep(4);
-            return;
-        }
-        if (isSeller && (!formData.bankAccount?.bankName || !formData.bankAccount?.accountNumber)) {
-            toast.error("Bank account details are required for sellers — please review Step 6.");
-            setCurrentStep(6);
+
+        const validation = marketplaceSchema.safeParse(formData);
+        if (!validation.success) {
+            const firstError = validation.error.issues[0];
+            const errorPath = firstError.path;
+            
+            // Map the error path back to step ID
+            if (errorPath[0] === "accountType") {
+                setCurrentStep(1);
+            } else if (errorPath[0] === "businessName" || errorPath[0] === "businessType" || errorPath[0] === "phone" || errorPath[0] === "location") {
+                setCurrentStep(2);
+            } else if (errorPath[0] === "buyerInterests" || errorPath[0] === "orderVolume" || errorPath[0] === "sellerCategories") {
+                setCurrentStep(3);
+            } else if (errorPath[0] === "termsAccepted") {
+                setCurrentStep(4);
+            } else if (errorPath[0] === "documents") {
+                setCurrentStep(5);
+            } else if (errorPath[0] === "bankAccount") {
+                setCurrentStep(6);
+            }
+            
+            toast.error(firstError.message);
             return;
         }
         // ────────────────────────────────────────────────────────────────────────

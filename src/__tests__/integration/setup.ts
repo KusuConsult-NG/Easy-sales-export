@@ -1,8 +1,8 @@
-import { collection, addDoc, deleteDoc, getDocs, doc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 /**
- * Create test user in Firebase Auth + Firestore
+ * Create test user in Firebase Auth + Firestore using Admin SDK to bypass rules
  */
 export async function createTestUser(data: {
     email: string;
@@ -10,23 +10,34 @@ export async function createTestUser(data: {
     role?: string;
 }) {
     try {
-        // Create in Auth
-        const userCredential = await createUserWithEmailAndPassword(
-            global.testAuth,
-            data.email,
-            'password123'
-        );
+        const adminAuth = getAdminAuth();
+        const adminDb = getAdminDb();
 
-        const uid = userCredential.user.uid;
+        // Create in Auth via Admin SDK
+        const userRecord = await adminAuth.createUser({
+            email: data.email,
+            password: 'password123',
+            displayName: data.fullName,
+        });
 
-        // Create in Firestore
-        await setDoc(doc(global.testDb, 'users', uid), {
+        const uid = userRecord.uid;
+
+        // Sync roles array according to the firestore.rules requirements
+        const roles = data.role ? [data.role] : ['user'];
+
+        // Create in Firestore via Admin SDK
+        await adminDb.collection('users').doc(uid).set({
             fullName: data.fullName,
             email: data.email,
-            role: data.role || 'user',
+            roles: roles,
             isVerified: true,
             createdAt: new Date(),
         });
+
+        // Authenticate the client SDK to bind request.auth.uid for subsequent client operations
+        if ((global as any).testAuth) {
+            await signInWithEmailAndPassword((global as any).testAuth, data.email, 'password123');
+        }
 
         return { uid, email: data.email };
     } catch (error) {
@@ -36,9 +47,10 @@ export async function createTestUser(data: {
 }
 
 /**
- * Clean up all test data from Firestore
+ * Clean up all test data from Firestore using Admin SDK (bypassing all rules)
  */
 export async function cleanupTestData() {
+    const adminDb = getAdminDb();
     const collections = [
         'users',
         'loans',
@@ -53,11 +65,14 @@ export async function cleanupTestData() {
 
     for (const collectionName of collections) {
         try {
-            const snapshot = await getDocs(collection(global.testDb, collectionName));
-            const deletePromises = snapshot.docs.map(docSnapshot =>
-                deleteDoc(docSnapshot.ref)
-            );
-            await Promise.all(deletePromises);
+            const snapshot = await adminDb.collection(collectionName).get();
+            if (snapshot.empty) continue;
+            
+            const batch = adminDb.batch();
+            snapshot.docs.forEach(docSnapshot => {
+                batch.delete(docSnapshot.ref);
+            });
+            await batch.commit();
         } catch (error) {
             console.error(`Error cleaning ${collectionName}:`, error);
         }

@@ -5,7 +5,7 @@
 
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
-import { UserMetricsService } from "@/services/userMetrics.service";
+import { userMetricsService } from "@/services";
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -69,11 +69,18 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
-        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        const adminScope = await getAdminScope(session.user.id, roles);
 
         const { getCached, setCache } = await import("@/lib/redis");
         const cacheKey = adminScope ? `admin:coop-stats:${adminScope}` : "admin:coop-stats:global";
@@ -84,7 +91,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
         } catch (e) {}
 
         const [metrics, paymentsSnapR] = await Promise.allSettled([
-            UserMetricsService.getCooperativeMemberMetrics(adminScope || undefined),
+            userMetricsService.getCooperativeMemberMetrics(adminScope || undefined),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("type", "==", "cooperative_membership_registration")
                 .where("status", "==", "completed")
@@ -245,8 +252,15 @@ async function _getAllMembersAction(options?: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
         
-        if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
         // Audit logging
@@ -258,7 +272,7 @@ async function _getAllMembersAction(options?: {
             details: JSON.stringify({ status: options?.status, limit: options?.limit })
         });
 
-        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        const adminScope = await getAdminScope(session.user.id, roles);
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
@@ -267,7 +281,11 @@ async function _getAllMembersAction(options?: {
         }
 
         if (options?.status && options.status !== "all") {
-            q = q.where("membershipStatus", "==", options.status);
+            if (options.status === "approved" || options.status === "active") {
+                q = q.where("membershipStatus", "in", ["approved", "active"]);
+            } else {
+                q = q.where("membershipStatus", "==", options.status);
+            }
         }
 
         const fetchLimit = options?.search ? 5000 : (options?.limit ? options.limit * 10 : 500);
@@ -384,8 +402,15 @@ async function _updateMemberStatusAction(
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
         const emailData = await db.runTransaction(async (transaction) => {
@@ -494,8 +519,15 @@ async function _getAllTransactionsAction(options?: {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
         // Audit logging
@@ -507,7 +539,7 @@ async function _getAllTransactionsAction(options?: {
             details: JSON.stringify({ type: options?.type, status: options?.status })
         });
 
-        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        const adminScope = await getAdminScope(session.user.id, roles);
 
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
 
@@ -653,12 +685,18 @@ export async function getContributionReportsAction(options?: {
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        // Check admin role directly from session (Performance Optimization)
-        if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
-        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        const adminScope = await getAdminScope(session.user.id, roles);
 
         const { getCached, setCache } = await import("@/lib/redis");
         const cacheKey = adminScope ? `admin:coop-reports:${adminScope}` : "admin:coop-reports:global";
@@ -784,12 +822,18 @@ export async function getRecentActivityAction(): Promise<ActionResponse<any>> {
             return { success: false as const, error: "Not authenticated", data: null };
         }
 
-        // Check admin role directly from session (Performance Optimization)
-        if (!isAdmin(session.user.roles)) {
-            return { success: false as const, error: "Unauthorized", data: null };
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
-        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        const adminScope = await getAdminScope(session.user.id, roles);
 
         // Build query: where() MUST precede orderBy()
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS);
@@ -837,15 +881,26 @@ export async function approveWithdrawalAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        // Check admin role directly from session (Performance Optimization)
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        
+        if (!session?.user?.id) {
             return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
         const adminId = session.user.id;
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
 
-        const adminScope = await getAdminScope(adminId, session.user.roles);
+        const adminScope = await getAdminScope(adminId, roles);
 
         // Execute transaction and return notification data
         const notificationData = await db.runTransaction(async (transaction) => {
@@ -957,14 +1012,25 @@ export async function rejectWithdrawalAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user?.id || !isAdmin(session.user.roles)) {
+        if (!session?.user?.id) {
             return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: "Unauthorized", data: null };
+            }
         }
 
         const adminId = session.user.id;
         const withdrawalRef = db.collection(COLLECTIONS.COOPERATIVE_WITHDRAWALS).doc(withdrawalId);
 
-        const adminScope = await getAdminScope(adminId, session.user.roles);
+        const adminScope = await getAdminScope(adminId, roles);
 
         // Execute transaction and return notification data
         const notificationData = await db.runTransaction(async (transaction) => {
@@ -1081,8 +1147,20 @@ export async function requestCooperativeRevisionAction(
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!isAdmin(session?.user?.roles)) {
+        
+        if (!session?.user?.id) {
             return { success: false as const, error: 'Admin access required', data: null };
+        }
+
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return { success: false as const, error: 'Admin access required', data: null };
+            }
         }
 
         const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
@@ -1155,7 +1233,7 @@ export async function requestCooperativeRevisionAction(
 
 export async function getStandardCooperativeMembersAction(
     options: {
-        status?: "pending" | "approved" | "suspended" | "under_review" | "all";
+        status?: "pending" | "approved" | "active" | "suspended" | "under_review" | "all";
         paymentStatus?: "pending" | "completed" | "failed" | "unpaid" | "all";
         cursorId?: string;
         limit?: number;
@@ -1172,7 +1250,8 @@ export async function getStandardCooperativeMembersAction(
         if (!session?.user?.id) return paginatedErr('Not authenticated');
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        if (!isAdmin(userDoc.data()?.roles)) {
+        const liveRoles = userDoc.data()?.roles;
+        if (!isAdmin(liveRoles)) {
             return paginatedErr('Unauthorized');
         }
 
@@ -1184,7 +1263,7 @@ export async function getStandardCooperativeMembersAction(
         const useMemoryPagination = !!search || !!options.dateFrom || !!options.dateTo;
         const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
-        const adminScope = await getAdminScope(session.user.id, session.user.roles);
+        const adminScope = await getAdminScope(session.user.id, liveRoles);
         // Build query with all where() clauses BEFORE orderBy() to satisfy
         // Firestore composite index requirements (FAILED_PRECONDITION otherwise)
         let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
@@ -1194,7 +1273,11 @@ export async function getStandardCooperativeMembersAction(
         }
 
         if (statusFilter && statusFilter !== "all") {
-            q = q.where("membershipStatus", "==", statusFilter);
+            if (statusFilter === "approved" || statusFilter === "active") {
+                q = q.where("membershipStatus", "in", ["approved", "active"]);
+            } else {
+                q = q.where("membershipStatus", "==", statusFilter);
+            }
         }
 
         // Server-side paymentStatus filter — prevents client-side filter on paginated data

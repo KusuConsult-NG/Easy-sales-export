@@ -1,6 +1,6 @@
 "use server";
 import { dateRangeStart, dateRangeEnd } from "@/lib/date-utils";
-import { UserMetricsService } from "@/services/userMetrics.service";
+import { userMetricsService } from "@/services";
 
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -592,7 +592,7 @@ async function _getAcademyStatsAction(): Promise<ActionResponse<any>> {
             if (cached) return cached;
         } catch (e) {}
 
-        const metrics = await UserMetricsService.getAcademyMetrics();
+        const metrics = await userMetricsService.getAcademyMetrics();
 
         const {
             totalCourses,

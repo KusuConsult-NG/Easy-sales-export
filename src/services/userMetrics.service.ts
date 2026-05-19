@@ -1,4 +1,5 @@
 import { getAdminDb } from "@/lib/firebase-admin";
+import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
 
 /**
  * User Metrics Service
@@ -8,7 +9,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
  * ALL DASHBOARDS MUST CONSUME THIS SERVICE FOR USER METRICS.
  */
 
-export class UserMetricsService {
+export class UserMetricsService implements UserMetricsServiceContract {
     /**
      * Gets the definitive count of cooperative members by strictly querying Firebase.
      * @param adminScope Optional cooperative ID to scope the query.
@@ -142,5 +143,13 @@ export class UserMetricsService {
             totalRegistrationRevenue,
             registrationStats
         };
+    }
+
+    async getCooperativeMemberMetrics(adminScope?: string): Promise<CooperativeMemberMetrics> {
+        return UserMetricsService.getCooperativeMemberMetrics(adminScope);
+    }
+
+    async getAcademyMetrics(): Promise<AcademyMetrics> {
+        return UserMetricsService.getAcademyMetrics();
     }
 }

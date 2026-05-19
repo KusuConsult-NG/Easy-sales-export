@@ -6,6 +6,7 @@ import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from 'firebase-admin/firestore';
 import { serializeDocs } from '@/lib/firestore-serialize';
+import { communicationsService } from '@/services';
 
 import { ActionResponse } from '@/lib/safe-action';
 
@@ -14,65 +15,10 @@ import { ActionResponse } from '@/lib/safe-action';
  */
 async function getRecipientEmails(segment: string): Promise<string[]> {
     logger.info(`[AdminComms] getRecipientEmails called with segment: '${segment}'`);
-    try { const query = db.collection(COLLECTIONS.USERS);
-        let snapshot;
-
-        const emails: string[] = [];
-
-        if (segment === 'cooperative') {
-            const stream = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
-                .where('paymentStatus', '==', 'completed')
-                .select('email')
-                .get();
-            let count = 0;
-            for (const doc of (await stream).docs) {
-                const data = doc.data();
-                if (data.email) emails.push(data.email);
-                count++;
-            }
-            logger.info(`[AdminComms] cooperative segment: ${count} docs found`);
-        } else { let stream: any;
-            switch (segment) {
-                case 'active':
-                    stream = query.where('status', '==', 'active').select('email').get();
-                    break;
-                case 'verified':
-                    stream = query.where('verified', '==', true).select('email').get();
-                    break;
-                case 'sellers':
-                    stream = query.where('roles', 'array-contains', 'seller').select('email').get();
-                    break;
-                case 'wave': {
-                    const waveStream = db.collection(COLLECTIONS.WAVE_APPLICATIONS).select('email', 'userEmail').get();
-                    let waveCount = 0;
-                    for (const doc of (await waveStream).docs) {
-                        const data = doc.data();
-                        const email = data.email || data.userEmail;
-                        if (email) emails.push(email);
-                        waveCount++;
-                    }
-                    logger.info(`[AdminComms] wave segment: ${waveCount} docs found`);
-                    return [...new Set(emails)];
-                }
-                case 'all':
-                default:
-                    stream = query.select('email').get();
-                    break;
-            }
-
-            let mainCount = 0;
-            for (const doc of (await stream).docs) { const data = doc.data();
-                if (data.email) {
-                    emails.push(data.email);
-                }
-                mainCount++;
-            }
-            logger.info(`[AdminComms] segment '${segment}': ${mainCount} docs processed`);
-        }
-
-        logger.info(`[AdminComms] Returning ${emails.length} emails (deduped: ${[...new Set(emails)].length})`);
-        return [...new Set(emails)];
-    } catch (error) { logger.error('[AdminComms] ERROR in getRecipientEmails:', error);
+    try {
+        return await communicationsService.getTargetedUsers(segment);
+    } catch (error) {
+        logger.error('[AdminComms] ERROR in getRecipientEmails:', error);
         return [];
     }
 }

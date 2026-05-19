@@ -1,0 +1,13 @@
+{
+  "stats": {
+    "totalSellersChecked": 772,
+    "missingBankInRoot": 20,
+    "missingBankInSeller": 673,
+    "missingDocsInSeller": 758,
+    "desyncedPhone": 41,
+    "desyncedState": 33,
+    "orphanedSellerVerifications": 14,
+    "usersWithMarketplaceButNoVerificationDoc": 26
+  },
+  "timestamp": "2026-05-19T20:51:31.041Z"
+}

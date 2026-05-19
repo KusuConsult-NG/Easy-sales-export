@@ -1,4 +1,5 @@
 import { getAdminDb } from "@/lib/firebase-admin";
+import type { FinanceServiceContract, RevenueMetrics } from "@easy-sales/services";
 
 /**
  * Finance Service
@@ -7,7 +8,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
  * IMMUTABLE LEDGER ARCHITECTURE: Balances must be derived from ledger totals only.
  */
 
-export class FinanceService {
+export class FinanceService implements FinanceServiceContract {
     /**
      * Derives a user's balance purely from immutable ledger entries.
      */
@@ -56,5 +57,36 @@ export class FinanceService {
             verifiedRevenue: totalRevenue,
             transactionCount: snap.size
         };
+    }
+
+    async deriveUserBalance(userId: string): Promise<number> {
+        return FinanceService.deriveUserBalance(userId);
+    }
+
+    async getVerifiedRevenueMetrics(module?: string): Promise<RevenueMetrics> {
+        return FinanceService.getVerifiedRevenueMetrics(module);
+    }
+
+    /**
+     * Derives a user's marketplace wallet balance purely from immutable completed ledger entries.
+     */
+    static async deriveMarketplaceWalletBalance(userId: string): Promise<number> {
+        const db = getAdminDb();
+        const snap = await db.collection("wallet_transactions")
+            .where("userId", "==", userId)
+            .where("status", "==", "completed")
+            .get();
+
+        let balance = 0;
+        snap.docs.forEach(doc => {
+            const data = doc.data();
+            balance += (data.amount || 0);
+        });
+
+        return balance;
+    }
+
+    async deriveMarketplaceWalletBalance(userId: string): Promise<number> {
+        return FinanceService.deriveMarketplaceWalletBalance(userId);
     }
 }

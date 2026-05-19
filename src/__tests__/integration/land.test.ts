@@ -8,6 +8,7 @@ import {
     cleanupTestData,
     TEST_LAND_LISTING,
 } from './setup';
+import { getAdminDb } from '@/lib/firebase-admin';
 
 describe('Land Listing Integration Tests', () => {
     beforeEach(async () => {
@@ -31,6 +32,8 @@ describe('Land Listing Integration Tests', () => {
             const listingData = {
                 ...TEST_LAND_LISTING,
                 ownerId: user.uid,
+                userId: user.uid,
+                status: 'pending',
                 verificationStatus: 'pending',
                 createdAt: new Date(),
             };
@@ -68,14 +71,18 @@ describe('Land Listing Integration Tests', () => {
             const listingRef = await addDoc(collection(global.testDb, 'land_listings'), {
                 ...TEST_LAND_LISTING,
                 ownerId: user.uid,
+                userId: user.uid,
+                status: 'pending',
                 verificationStatus: 'pending',
                 createdAt: new Date(),
             });
 
             // 2. Admin verifies listing (in real app, this would check admin role)
-            // For this test, we'll just update the status
-            await updateDoc(listingRef, {
+            // For this test, we'll just update the status using Admin SDK to bypass client security rules
+            const adminDb = getAdminDb();
+            await adminDb.collection('land_listings').doc(listingRef.id).update({
                 verificationStatus: 'verified',
+                status: 'verified',
                 verifiedAt: new Date(),
                 verifiedBy: 'admin-uid',
             });
@@ -116,28 +123,36 @@ describe('Land Listing Integration Tests', () => {
                 role: 'user',
             });
 
-            // 2. Create 1 verified listing
-            await addDoc(collection(global.testDb, 'land_listings'), {
+            const adminDb = getAdminDb();
+
+            // 2. Create 1 verified listing via Admin SDK to bypass rule restrictions
+            await adminDb.collection('land_listings').add({
                 ...TEST_LAND_LISTING,
                 title: 'Verified Land',
                 ownerId: user1.uid,
+                userId: user1.uid,
+                status: 'verified',
                 verificationStatus: 'verified',
                 createdAt: new Date(),
             });
 
-            // 3. Create 2 pending listings
-            await addDoc(collection(global.testDb, 'land_listings'), {
+            // 3. Create 2 pending listings via Admin SDK
+            await adminDb.collection('land_listings').add({
                 ...TEST_LAND_LISTING,
                 title: 'Pending Land 1',
                 ownerId: user2.uid,
+                userId: user2.uid,
+                status: 'pending',
                 verificationStatus: 'pending',
                 createdAt: new Date(),
             });
 
-            await addDoc(collection(global.testDb, 'land_listings'), {
+            await adminDb.collection('land_listings').add({
                 ...TEST_LAND_LISTING,
                 title: 'Pending Land 2',
                 ownerId: user3.uid,
+                userId: user3.uid,
+                status: 'pending',
                 verificationStatus: 'pending',
                 createdAt: new Date(),
             });

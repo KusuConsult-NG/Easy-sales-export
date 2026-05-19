@@ -37,11 +37,11 @@ async function globalStateSync() {
         if (!data.userId) return;
         const up = getUpdates(data.userId);
         if (!up.serviceRegistrations) up.serviceRegistrations = {};
-        if (!up.serviceRegistrations.cooperative) up.serviceRegistrations.cooperative = {};
+        if (!up.serviceRegistrations.cooperatives) up.serviceRegistrations.cooperatives = {};
         
-        up.serviceRegistrations.cooperative.paymentStatus = data.paymentStatus || "pending";
-        up.serviceRegistrations.cooperative.status = data.membershipStatus || "pending";
-        up.serviceRegistrations.cooperative.updatedAt = new Date();
+        up.serviceRegistrations.cooperatives.paymentStatus = data.paymentStatus || "pending";
+        up.serviceRegistrations.cooperatives.status = data.membershipStatus || "pending";
+        up.serviceRegistrations.cooperatives.updatedAt = new Date();
 
         if (data.paymentStatus === "completed" || data.membershipStatus === "active") {
             addRole(data.userId, "cooperative_member");

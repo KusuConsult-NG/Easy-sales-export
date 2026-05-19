@@ -21,12 +21,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Check if user is admin
-        if (!isAdmin(session.user.roles)) {
-            return NextResponse.json(
-                { success: false, message: "Admin access required" },
-                { status: 403 }
-            );
+        // Check if user is admin (with live Firestore roles fallback query)
+        let roles = session.user.roles;
+        if (!isAdmin(roles)) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (isAdmin(liveRoles)) {
+                roles = liveRoles;
+            } else {
+                return NextResponse.json(
+                    { success: false, message: "Admin access required" },
+                    { status: 403 }
+                );
+            }
         }
 
         const { memberId, reason } = await request.json();

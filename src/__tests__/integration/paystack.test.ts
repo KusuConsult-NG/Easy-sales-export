@@ -6,8 +6,79 @@
  * Run with: npm run test -- paystack.test.ts
  */
 
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+
+// Use global jest to ensure hoisting works correctly with SWC
+jest.mock('@/lib/session-guard', () => ({
+    requireSession: jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: { user: { id: 'test-user', email: 'test@example.com' } }
+    })
+}));
+
+jest.mock('../../lib/session-guard', () => ({
+    requireSession: jest.fn().mockResolvedValue({
+        success: true,
+        error: null,
+        data: { user: { id: 'test-user', email: 'test@example.com' } }
+    })
+}));
+
 import { getBankList, verifyBankAccount } from '@/app/actions/paystack';
+
+// Mock global fetch for Paystack API calls
+const originalFetch = global.fetch;
+beforeAll(() => {
+    process.env.PAYSTACK_SECRET_KEY = 'mock_secret_key';
+    
+    global.fetch = jest.fn().mockImplementation((url: string, options?: any) => {
+        if (url.includes('api.paystack.co/bank?country=nigeria')) {
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({
+                    status: true,
+                    message: 'Banks retrieved',
+                    data: [
+                        { id: 1, name: 'Access Bank', code: '044', slug: 'access-bank' },
+                        { id: 2, name: 'Guaranty Trust Bank', code: '058', slug: 'gtbank' }
+                    ]
+                })
+            } as any);
+        }
+        if (url.includes('api.paystack.co/bank/resolve')) {
+            if (url.includes('bank_code=INVALID_CODE') || url.includes('account_number=0123456789')) {
+                return Promise.resolve({
+                    ok: false,
+                    status: 400,
+                    json: () => Promise.resolve({
+                        status: false,
+                        message: 'Could not resolve account name'
+                    })
+                } as any);
+            }
+            return Promise.resolve({
+                ok: true,
+                status: 200,
+                json: () => Promise.resolve({
+                    status: true,
+                    message: 'Account resolved',
+                    data: {
+                        account_number: '0123456789',
+                        account_name: 'JOHN DOE',
+                        bank_id: 1
+                    }
+                })
+            } as any);
+        }
+        return originalFetch ? originalFetch(url, options) : Promise.reject(new Error('Fetch not mocked'));
+    }) as any;
+});
+
+afterAll(() => {
+    global.fetch = originalFetch;
+});
 
 describe('Paystack Integration', () => {
     describe('getBankList', () => {

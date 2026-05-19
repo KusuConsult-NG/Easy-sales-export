@@ -3023,10 +3023,21 @@ async function _editApplicationAction(params: {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required" };
         const { session } = sessionResult;
-        if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
-            if (!session?.user?.roles?.includes("super_admin") && !session?.user?.roles?.includes("admin")) {
+        if (!session?.user) {
+            return { error: "Unauthorized: admin or users:update role required", success: false as const };
+        }
+
+        let roles = session.user.roles;
+        const isAuthorizedSession = hasAdminPermission(roles, "users:update") || roles?.includes("super_admin") || roles?.includes("admin");
+        
+        if (!isAuthorizedSession) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            const isAuthorizedLive = hasAdminPermission(liveRoles, "users:update") || liveRoles?.includes("super_admin") || liveRoles?.includes("admin");
+            if (!isAuthorizedLive) {
                 return { error: "Unauthorized: admin or users:update role required", success: false as const };
             }
+            roles = liveRoles;
         }
 
         const { collection: collectionName, docId, fields, editNote } = params;
@@ -3847,9 +3858,16 @@ async function _onboardLegacyMemberAction(
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        // Permission check
-        if (!hasAdminPermission(session.user.roles, "users:create")) {
-            return { error: "Unauthorized: Permission users:create required", success: false as const };
+        // Permission check with live roles fallback
+        let roles = session.user.roles;
+        if (!hasAdminPermission(roles, "users:create")) {
+            const liveUserDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const liveRoles = liveUserDoc.data()?.roles;
+            if (hasAdminPermission(liveRoles, "users:create")) {
+                roles = liveRoles;
+            } else {
+                return { error: "Unauthorized: Permission users:create required", success: false as const };
+            }
         }
 
         // Validate input

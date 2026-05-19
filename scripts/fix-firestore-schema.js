@@ -32,6 +32,19 @@ const admin = require("firebase-admin");
 function initAdmin() {
   if (admin.apps.length > 0) return;
 
+  const path = require("path");
+  const fs = require("fs");
+
+  // Load .env.local using dotenv if possible
+  try {
+    const envPath = path.resolve(process.cwd(), ".env.local");
+    if (fs.existsSync(envPath)) {
+      require("dotenv").config({ path: envPath });
+    }
+  } catch (e) {
+    warn("Failed to load dotenv configuration: " + e.message);
+  }
+
   const jsonEnv = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (jsonEnv) {
     const serviceAccount = JSON.parse(jsonEnv);
@@ -50,9 +63,19 @@ function initAdmin() {
     return;
   }
 
-  // Try .env.local
-  const path     = require("path");
-  const fs       = require("fs");
+  // Support individual FIREBASE_ env variables as standard in Easy Sales Export
+  if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }),
+    });
+    return;
+  }
+
+  // Try .env.local manual parser if dotenv failed
   const envLocal = path.resolve(__dirname, "../.env.local");
   if (fs.existsSync(envLocal)) {
     const lines = fs.readFileSync(envLocal, "utf8").split("\n");
@@ -69,7 +92,7 @@ function initAdmin() {
 
   throw new Error(
     "Firebase Admin not initialised. " +
-    "Set FIREBASE_SERVICE_ACCOUNT or GOOGLE_APPLICATION_CREDENTIALS."
+    "Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT."
   );
 }
 
@@ -104,16 +127,29 @@ async function processCollection({ db, name, batchSize = 400, transform }) {
     const snap = await query.get();
     if (snap.empty) break;
 
+    const batch = db.batch();
+    let batchHasUpdates = false;
+
     for (const doc of snap.docs) {
       total++;
       const patch = await transform(doc);
       if (patch && Object.keys(patch).length > 0) {
-        await safeUpdate(doc.ref, patch);
+        if (DRY_RUN) {
+          log(`    [DRY] Would update ${doc.ref.path}: ${JSON.stringify(Object.keys(patch))}`);
+        } else {
+          batch.update(doc.ref, patch);
+          batchHasUpdates = true;
+        }
         updated++;
       }
     }
 
+    if (!DRY_RUN && batchHasUpdates) {
+      await batch.commit();
+    }
+
     lastDoc = snap.docs[snap.docs.length - 1];
+    log(`    - Progress: ${total} documents scanned...`);
     if (snap.docs.length < batchSize) break;
   }
 

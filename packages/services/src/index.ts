@@ -15,3 +15,4 @@
 
 // Service type contracts
 export type * from "./types";
+export * from "./contracts";

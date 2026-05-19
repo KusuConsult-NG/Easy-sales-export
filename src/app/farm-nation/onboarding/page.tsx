@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -185,20 +186,51 @@ export default function FarmNationOnboardingPage() {
     };
 
     async function handleSubmit(finalData: any) {
-        // ── Pre-submission guard ────────────────────────────────────────────────
-        const profile = finalData.profile || {};
-        if (!finalData.role) {
-            showToast("Please select an account type before submitting.", "error");
-            setCurrentStepId("role");
+        // ── Pre-submission Zod Guard ───────────────────────────────────────────
+        const farmNationOnboardingSchema = z.object({
+            role: z.enum(["buyer", "seller", "both"], {
+                message: "Please select an account type before submitting.",
+            }),
+            profile: z.object({
+                firstName: z.string().trim().min(2, "First name must be at least 2 characters."),
+                lastName: z.string().trim().min(2, "Last name must be at least 2 characters."),
+                phone: z.string().trim().min(5, "Phone number is required."),
+                location: z.object({
+                    state: z.string().trim().min(1, "State is required."),
+                    lga: z.string().trim().min(1, "LGA is required."),
+                }, { message: "Location details are required." }),
+            }, { message: "Profile details are required." }),
+            interests: z.object({
+                buyerInterests: z.array(z.string()).optional(),
+                sellerCategories: z.array(z.string()).optional(),
+            }).optional(),
+            terms: z.object({
+                accepted: z.boolean().refine(val => val === true, {
+                    message: "You must accept the terms and conditions.",
+                }),
+            }, { message: "You must accept the terms and conditions." }),
+        });
+
+        const validation = farmNationOnboardingSchema.safeParse(finalData);
+        if (!validation.success) {
+            const firstError = validation.error.issues[0];
+            const errorPath = firstError.path;
+            
+            // Map the error path back to step ID
+            if (errorPath[0] === "role") {
+                setCurrentStepId("role");
+            } else if (errorPath[0] === "profile") {
+                setCurrentStepId("profile");
+            } else if (errorPath[0] === "interests") {
+                setCurrentStepId("interests");
+            } else if (errorPath[0] === "terms") {
+                setCurrentStepId("terms");
+            }
+            
+            showToast(firstError.message, "error");
             return;
         }
-        if (!profile.firstName?.trim() || profile.firstName.trim().length < 2 ||
-            !profile.lastName?.trim() || profile.lastName.trim().length < 2) {
-            showToast("Profile name is incomplete — please check your first and last name.", "error");
-            setCurrentStepId("profile");
-            return;
-        }
-        // ────────────────────────────────────────────────────────────────
+        // ────────────────────────────────────────────────────────────────────────
         try {
             if (isRevisionMode || isEditMode) {
                 const result = await resubmitFarmNationApplicationAction(finalData);
