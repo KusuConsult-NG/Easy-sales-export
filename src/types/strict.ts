@@ -13,34 +13,8 @@ export enum AuditActionType {
     SYSTEM_ERROR = 'system_error'
 }
 
-export interface LandListing {
-    id: string;
-    title: string;
-    description: string;
-    price: number;
-    size: number; // in acres
-    location: {
-        address: string;
-        city: string;
-        state: string;
-        lat: number;
-        lng: number;
-        geopoint?: GeoPoint;
-    };
-    soilQuality: SoilQuality;
-    waterAccess: boolean;
-    electricityAccess: boolean;
-    roadAccess: boolean;
-    ownerId: string;
-    status: 'pending_verification' | 'verified' | 'rejected' | 'deleted';
-    createdAt: Date;
-    updatedAt: Date;
-    verifiedAt: Date | null;
-    verifiedBy: string | null;
-    rejectionReason: string | null;
-    images: string[];
-    documents?: string[];
-}
+export { SoilQuality } from "@/lib/types/farm-nation";
+export type { LandListing } from "@/lib/types/farm-nation";
 
 export interface CourseProgress {
     id: string;
@@ -52,20 +26,6 @@ export interface CourseProgress {
     completedAt: Date | null;
     updatedAt: Date;
 }
-
-export enum SoilQuality {
-    FERTILE = 'fertile',
-    SANDY = 'sandy',
-    LOAMY = 'loamy',
-    CLAY = 'clay',
-    MIXED = 'mixed',
-    UNKNOWN = 'unknown',
-    EXCELLENT = 'excellent', // Added based on usage in verify/page.tsx
-    GOOD = 'good',
-    FAIR = 'fair',
-    POOR = 'poor'
-}
-
 export enum LoanStatus {
     PENDING = 'pending',
     REVIEWING = 'reviewing',

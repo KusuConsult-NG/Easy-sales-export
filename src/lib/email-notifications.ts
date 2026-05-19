@@ -506,7 +506,7 @@ export async function sendExportWindowCompleteEmail(
                 <p>Your funds are ready for withdrawal. Log in to your dashboard to request a withdrawal.</p>
 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/export/(app)/transactions"
+                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/export/transactions"
                        style="background: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
                         View My Returns
                     </a>

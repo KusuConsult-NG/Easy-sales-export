@@ -83,14 +83,14 @@ function PaymentCallbackContent() {
                         {status === "success" && (
                             <>
                                 <Link
-                                    href="/export/(app)/portfolio"
+                                    href="/export/portfolio"
                                     className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors"
                                 >
                                     <TrendingUp className="w-5 h-5" />
                                     View Portfolio
                                 </Link>
                                 <Link
-                                    href="/export/(app)/dashboard"
+                                    href="/export/dashboard"
                                     className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
                                 >
                                     Go to Dashboard
