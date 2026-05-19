@@ -4375,6 +4375,69 @@ async function _onboardLegacyMemberAction(
 export const onboardLegacyMemberAction = withFlexibleSafeAction("onboardLegacyMemberAction", _onboardLegacyMemberAction);
 
 /**
+ * Approve Marketplace User (Buyer)
+ */
+async function _approveMarketplaceUserAction(userId: string): Promise<ActionResponse<null>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
+        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+
+        await db.collection(COLLECTIONS.USERS).doc(userId).update({
+            status: "active",
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        await createAdminAuditLog({
+            action: "approve_marketplace_user",
+            userId: sessionResult.session.user.id,
+            targetId: userId,
+            targetType: "user",
+            metadata: { role: "buyer" },
+        });
+
+        revalidatePath("/admin/marketplace/buyers");
+        return { success: true as const, error: null, data: null };
+    } catch (error: any) {
+        logger.error("Approve marketplace user error:", error);
+        return { success: false as const, error: error.message || "Failed to approve user", data: null };
+    }
+}
+export const approveMarketplaceUserAction = withFlexibleSafeAction("approveMarketplaceUserAction", _approveMarketplaceUserAction);
+
+/**
+ * Reject Marketplace User (Buyer)
+ */
+async function _rejectMarketplaceUserAction(options: { userId: string; reason: string }): Promise<ActionResponse<null>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
+        if (!isAdmin(sessionResult.session.user.roles)) return { success: false as const, error: "Unauthorized", data: null };
+
+        await db.collection(COLLECTIONS.USERS).doc(options.userId).update({
+            status: "rejected",
+            rejectionReason: options.reason,
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        await createAdminAuditLog({
+            action: "reject_marketplace_user",
+            userId: sessionResult.session.user.id,
+            targetId: options.userId,
+            targetType: "user",
+            metadata: { role: "buyer", reason: options.reason },
+        });
+
+        revalidatePath("/admin/marketplace/buyers");
+        return { success: true as const, error: null, data: null };
+    } catch (error: any) {
+        logger.error("Reject marketplace user error:", error);
+        return { success: false as const, error: error.message || "Failed to reject user", data: null };
+    }
+}
+export const rejectMarketplaceUserAction = withFlexibleSafeAction("rejectMarketplaceUserAction", _rejectMarketplaceUserAction);
+
+/**
  * Perform a system-wide diagnostic audit.
  */
 async function _runSystemDiagnosticAction(): Promise<ActionResponse<any>> {

@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { logger } from "@/lib/logger";
-import { Users, Search, Eye, ShoppingCart, Download, Filter, Loader2 } from "lucide-react";
+import { Users, Search, Eye, ShoppingCart, Download, Filter, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getMarketplaceUsersAction } from "@/app/actions/admin";
+import { getMarketplaceUsersAction, approveMarketplaceUserAction, rejectMarketplaceUserAction } from "@/app/actions/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { formatLocalDate } from "@/lib/date-utils";
 
@@ -60,6 +60,68 @@ export default function MarketplaceBuyersPage() {
 
     const roleFilter = (filters.roleFilter as FilterTab) || "all";
     const [selectedUser, setSelectedUser] = useState<MarketplaceUser | null>(null);
+
+    const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+    const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
+    const [rejectionTargetId, setRejectionTargetId] = useState<string | null>(null);
+    const [rejectionReason, setRejectionReason] = useState("");
+    const [processingId, setProcessingId] = useState<string | null>(null);
+
+    const handleApprove = async (userId: string) => {
+        setProcessingId(userId + "_approve");
+        try {
+            const res = await approveMarketplaceUserAction(userId);
+            if (res.success) {
+                showToast("Buyer approved successfully", "success");
+                await loadUsers();
+            } else {
+                showToast(res.error || "Failed to approve buyer", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setProcessingId(null);
+            setOpenDropdown(null);
+            if (selectedUser?.id === userId) {
+                setSelectedUser(prev => prev ? { ...prev, status: "active" } : null);
+            }
+        }
+    };
+
+    const handleRejectClick = (userId: string) => {
+        setRejectionTargetId(userId);
+        setRejectionReason("");
+        setIsRejectionModalOpen(true);
+        setOpenDropdown(null);
+    };
+
+    const submitRejection = async () => {
+        if (!rejectionTargetId) return;
+        if (!rejectionReason.trim()) {
+            showToast("Please provide a rejection reason", "error");
+            return;
+        }
+
+        setProcessingId(rejectionTargetId + "_reject");
+        try {
+            const res = await rejectMarketplaceUserAction({ userId: rejectionTargetId, reason: rejectionReason });
+            if (res.success) {
+                showToast("Buyer rejected successfully", "success");
+                setIsRejectionModalOpen(false);
+                await loadUsers();
+                if (selectedUser?.id === rejectionTargetId) {
+                    setSelectedUser(prev => prev ? { ...prev, status: "rejected" } : null);
+                }
+            } else {
+                showToast(res.error || "Failed to reject buyer", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setProcessingId(null);
+            setRejectionTargetId(null);
+        }
+    };
 
     // Filter logic is mostly handled at the database level now, but we'll apply it locally on fetched block
     const filtered = users;
@@ -225,12 +287,50 @@ export default function MarketplaceBuyersPage() {
                                             {formatLocalDate(user.createdAt) || "—"}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <button
-                                                onClick={() => setSelectedUser(user)}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold hover:bg-blue-100 transition"
-                                            >
-                                                <Eye className="w-3.5 h-3.5" /> View
-                                            </button>
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => setOpenDropdown(openDropdown === user.id ? null : user.id)}
+                                                    className="inline-flex flex-col items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 transition"
+                                                >
+                                                    <span className="w-1 h-1 bg-slate-600 rounded-full mb-0.5"></span>
+                                                    <span className="w-1 h-1 bg-slate-600 rounded-full mb-0.5"></span>
+                                                    <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
+                                                </button>
+                                                
+                                                {openDropdown === user.id && (
+                                                    <div className="absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1.5">
+                                                        <button
+                                                            onClick={() => {
+                                                                setOpenDropdown(null);
+                                                                setSelectedUser(user);
+                                                            }}
+                                                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                                                        >
+                                                            <Eye className="w-4 h-4 text-slate-400" /> View Details
+                                                        </button>
+                                                        
+                                                        {user.status !== "active" && (
+                                                            <button
+                                                                onClick={() => handleApprove(user.id)}
+                                                                disabled={processingId === user.id + "_approve"}
+                                                                className="w-full text-left px-4 py-2 text-sm text-green-700 hover:bg-green-50 flex items-center gap-2 disabled:opacity-50"
+                                                            >
+                                                                {processingId === user.id + "_approve" ? <Loader2 className="w-4 h-4 animate-spin text-green-500" /> : <CheckCircle className="w-4 h-4 text-green-500" />}
+                                                                Approve Buyer
+                                                            </button>
+                                                        )}
+
+                                                        {user.status !== "rejected" && (
+                                                            <button
+                                                                onClick={() => handleRejectClick(user.id)}
+                                                                className="w-full text-left px-4 py-2 text-sm text-red-700 hover:bg-red-50 flex items-center gap-2"
+                                                            >
+                                                                <XCircle className="w-4 h-4 text-red-500" /> Reject Buyer
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -291,9 +391,57 @@ export default function MarketplaceBuyersPage() {
                                 <div className="col-span-2"><p className="text-xs text-slate-400 mb-0.5">User ID</p><p className="font-mono text-xs text-slate-500 break-all">{selectedUser.id}</p></div>
                             </div>
                         </div>
-                        <div className="p-6 border-t border-slate-200">
-                            <button onClick={() => setSelectedUser(null)} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition">
+                        <div className="p-6 border-t border-slate-200 flex flex-col gap-3">
+                            <div className="flex gap-4">
+                                {selectedUser.status !== "active" && (
+                                    <button onClick={() => handleApprove(selectedUser.id)} disabled={!!processingId}
+                                        className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
+                                        {processingId === selectedUser.id + "_approve" ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                                        Approve
+                                    </button>
+                                )}
+                                {selectedUser.status !== "rejected" && (
+                                    <button onClick={() => handleRejectClick(selectedUser.id)} disabled={!!processingId}
+                                        className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
+                                        {processingId === selectedUser.id + "_reject" ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                                        Reject
+                                    </button>
+                                )}
+                            </div>
+                            <button onClick={() => setSelectedUser(null)} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl transition mt-2">
                                 Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rejection Modal */}
+            {isRejectionModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+                    <div className="bg-white rounded-2xl max-w-md w-full">
+                        <div className="p-6 border-b border-slate-200">
+                            <h2 className="text-xl font-bold text-slate-900">Reject Buyer Application</h2>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Rejection</label>
+                                <textarea
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                    placeholder="e.g. Incomplete profile information..."
+                                    className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-slate-50 min-h-[120px]"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-slate-200 flex gap-4">
+                            <button onClick={() => setIsRejectionModalOpen(false)} disabled={!!processingId}
+                                className="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all">
+                                Cancel
+                            </button>
+                            <button onClick={submitRejection} disabled={!!processingId || !rejectionReason.trim()}
+                                className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                                {processingId === rejectionTargetId + "_reject" ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm Rejection"}
                             </button>
                         </div>
                     </div>

@@ -89,6 +89,8 @@ export type AuditAction =
     | 'seller_reject'
     | 'seller_badge_grant'
     | 'seller_badge_revoke'
+    | 'approve_marketplace_user'
+    | 'reject_marketplace_user'
     // WAVE Actions
     | 'wave_enrollment'
     | 'wave_training_created'

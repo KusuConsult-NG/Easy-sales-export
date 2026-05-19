@@ -137,7 +137,7 @@ export default function CooperativeMembersPage() {
     const isDateFiltered = !!(dateRange.from || dateRange.to);
     const displayStats = isDateFiltered ? null : stats;
     const filteredPending = filteredApplications.filter(a => a.status === "pending" || a.data?.membershipStatus === "pending").length;
-    const filteredApproved = filteredApplications.filter(a => a.status === "approved" || a.data?.membershipStatus === "approved").length;
+    const filteredApproved = filteredApplications.filter(a => a.status === "approved" || a.status === "active" || a.data?.membershipStatus === "approved" || (a.data?.membershipStatus as string) === "active").length;
     const filteredPaid = filteredApplications.filter(a => a.data?.paymentStatus === "completed").length;
     const filteredUnpaid = filteredApplications.filter(a => a.data?.paymentStatus !== "completed").length;
 
@@ -289,6 +289,7 @@ export default function CooperativeMembersPage() {
         const badges = {
             pending: "bg-yellow-100 text-yellow-700",
             approved: "bg-green-100 text-green-700",
+            active: "bg-green-100 text-green-700",
             suspended: "bg-red-100 text-red-700",
         };
         return badges[status as keyof typeof badges] || badges.pending;
@@ -598,7 +599,7 @@ export default function CooperativeMembersPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${app.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${(app.status === 'approved' || app.status === 'active') ? 'bg-green-100 text-green-800' :
                                                         (app.status === 'suspended' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800')
                                                     }`}>
                                                     {app.status}
