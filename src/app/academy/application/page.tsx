@@ -535,27 +535,27 @@ export default function AcademyApplicationPage() {
                                     <button
                                         key={plan.id}
                                         onClick={() => setSelectedPlan(plan.id)}
-                                        className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                                            selectedPlan === plan.id ? "border-blue-600 bg-blue-50" : "border-slate-200 hover:border-blue-200"
-                                        }`}
+                                        className={`w-full text-left p-4 rounded-xl border-2 transition-all flex items-center ${selectedPlan === plan.id
+                                            ? "border-blue-600 bg-blue-50"
+                                            : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
+                                            }`}
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                                                selectedPlan === plan.id ? "border-blue-600" : "border-slate-300"
-                                            }`}>
+                                        <div className="flex items-center gap-3 w-full">
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedPlan === plan.id ? "border-blue-600" : "border-slate-300"
+                                                }`}>
                                                 {selectedPlan === plan.id && <div className="w-2.5 h-2.5 bg-blue-600 rounded-full" />}
                                             </div>
-                                            <span className={`font-semibold ${selectedPlan === plan.id ? "text-blue-900" : "text-slate-700"}`}>
-                                                {plan.name}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-col items-end">
-                                            <span className="text-sm text-slate-400 line-through">
-                                                ₦{plan.originalPrice.toLocaleString()}
-                                            </span>
-                                            <span className="text-xl font-bold text-slate-900">
-                                                ₦{plan.price.toLocaleString()}
-                                            </span>
+                                            <div className="flex items-center flex-wrap gap-2 text-base md:text-lg">
+                                                <span className="font-semibold text-slate-900">
+                                                    {plan.name.replace(' Plan', '')} -
+                                                </span>
+                                                <span className="text-slate-400 line-through">
+                                                    {plan.originalPrice / 1000}k
+                                                </span>
+                                                <span className="font-bold text-slate-900">
+                                                    {plan.price / 1000}k
+                                                </span>
+                                            </div>
                                         </div>
                                     </button>
                                 ))}
