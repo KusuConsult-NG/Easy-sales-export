@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from '@/lib/logger';
-import { verifyEnrollmentPaymentAction } from "@/app/actions/academy-payment";
+import { verifyEnrollmentPaymentAction } from "@/app/actions/academy";
 import { rateLimit, getClientIp, createRateLimitResponse } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
 

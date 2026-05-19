@@ -6,7 +6,7 @@ import { Award, BookOpen, Clock, TrendingUp, Calendar, Download, Loader2 } from 
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { checkAcademyPaymentStatusAction } from "@/app/actions/academy-payment";
+import { checkAcademyPaymentStatusAction } from "@/app/actions/academy";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { formatLocalDate } from "@/lib/date-utils";
 

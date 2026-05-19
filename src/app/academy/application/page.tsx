@@ -9,7 +9,7 @@ import EducationStep from "./steps/EducationStep";
 import InterestsStep from "./steps/InterestsStep";
 import ReviewStep from "./ReviewStep";
 import { checkAcademyStatusAction, submitAcademyApplicationAction, getAcademyApplicationAction, resubmitAcademyApplicationAction } from "@/app/actions/academy";
-import { checkAcademyPaymentStatusAction, initiateAcademyPaymentAction } from "@/app/actions/academy-payment";
+import { checkAcademyPaymentStatusAction, initiateAcademyPaymentAction } from "@/app/actions/academy";
 import { useSession } from "next-auth/react";
 import { useToast } from "@/contexts/ToastContext";
 import { AlertTriangle } from "lucide-react";

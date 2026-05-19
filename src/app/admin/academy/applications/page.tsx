@@ -14,7 +14,7 @@ import {
     markAcademyApplicationUnderReviewAction
 } from "@/app/actions/admin";
 import EnrollStudentModal from "@/components/admin/EnrollStudentModal";
-import { getStandardAcademyApplicationsAction, getAcademyApplicationStatsAction, logAcademyExportAction, updateAcademyApplicationPaymentAction } from "@/app/actions/academy-admin";
+import { getStandardAcademyApplicationsAction, getAcademyApplicationStatsAction, logAcademyExportAction, updateAcademyApplicationPaymentAction } from "@/app/actions/academy";
 import { useAdminData } from "@/hooks/useAdminData";
 import { useEffect } from "react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";

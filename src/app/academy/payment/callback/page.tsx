@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Loader2, CheckCircle, XCircle, PartyPopper, ArrowRight } from "lucide-react";
-import { verifyAcademyPaymentAction } from "@/app/actions/academy-payment";
+import { verifyAcademyPaymentAction } from "@/app/actions/academy";
 import { Suspense } from "react";
 
 function PaymentCallbackContent() {
