@@ -3683,18 +3683,6 @@ async function _getMarketplaceUsersAction(options: {
             };
         }).filter(Boolean) as any[];
 
-        if (options.roleFilter && options.roleFilter !== "all") {
-            users = users.filter((u: any) => {
-                if (options.roleFilter === "seller_only") {
-                    return u.buyerRole === "seller_only" || u.buyerRole === "both";
-                }
-                if (options.roleFilter === "buyer_only") {
-                    return u.buyerRole === "buyer_only";
-                }
-                return u.buyerRole === options.roleFilter;
-            });
-        }
-
         // ALWAYS apply date filters in memory as a definitive backstop.
         if (options.dateFrom) {
             const from = new Date(options.dateFrom);
@@ -3705,6 +3693,25 @@ async function _getMarketplaceUsersAction(options: {
             const to = new Date(options.dateTo);
             to.setHours(23, 59, 59, 999);
             users = users.filter((u: any) => new Date(u.createdAt) <= to);
+        }
+
+        const stats = {
+            total: users.length,
+            buyerOnly: users.filter((u: any) => u.buyerRole === "buyer_only").length,
+            sellerOnly: users.filter((u: any) => u.buyerRole === "seller_only").length,
+            both: users.filter((u: any) => u.buyerRole === "both").length,
+        };
+
+        if (options.roleFilter && options.roleFilter !== "all") {
+            users = users.filter((u: any) => {
+                if (options.roleFilter === "seller_only") {
+                    return u.buyerRole === "seller_only" || u.buyerRole === "both";
+                }
+                if (options.roleFilter === "buyer_only") {
+                    return u.buyerRole === "buyer_only";
+                }
+                return u.buyerRole === options.roleFilter;
+            });
         }
 
         // Apply memory pagination
@@ -3729,6 +3736,7 @@ async function _getMarketplaceUsersAction(options: {
             data: pagedUsers,
             lastDocId: nextCursor,
             hasMore,
+            meta: { stats }
         };
 
     } catch (error: any) {

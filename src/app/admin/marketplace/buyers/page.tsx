@@ -45,7 +45,8 @@ export default function MarketplaceBuyersPage() {
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: loadUsers
+        refresh: loadUsers,
+        meta
     } = useAdminData<MarketplaceUser>({
         fetchAction: async (opts) => getMarketplaceUsersAction({
             ...opts,
@@ -63,7 +64,7 @@ export default function MarketplaceBuyersPage() {
     // Filter logic is mostly handled at the database level now, but we'll apply it locally on fetched block
     const filtered = users;
 
-    const stats = {
+    const stats = meta?.stats || {
         total: users.length,
         buyerOnly: users.filter(u => u.buyerRole === "buyer_only").length,
         sellerOnly: users.filter(u => u.buyerRole === "seller_only").length,
