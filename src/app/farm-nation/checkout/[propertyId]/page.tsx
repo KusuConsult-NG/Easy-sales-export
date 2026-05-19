@@ -8,7 +8,7 @@ import {
     ArrowLeft, ShoppingCart, Lock, AlertCircle, Loader2, CheckCircle,
     MapPin, Maximize, DollarSign, Shield, FileText, User, Mail, Phone
 } from "lucide-react";
-import { getPropertyByIdAction, type Property } from "@/app/actions/farm-nation";
+import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { initializePropertyPaymentAction } from "@/app/actions/farm-nation-payment";
 
@@ -18,7 +18,7 @@ export default function CheckoutPage() {
     const { data: session, status } = useSession();
     const propertyId = params.propertyId as string;
 
-    const [property, setProperty] = useState<Property | null>(null);
+    const [property, setProperty] = useState<LandListing | null>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -35,11 +35,11 @@ export default function CheckoutPage() {
     async function loadProperty() {
         try {
             const result = await getPropertyByIdAction(propertyId);
-            if (result.success && result.data?.property) {
-                if (result.data.property.status !== "available") {
+            if (result.success && result.data) {
+                if (result.data.status !== "verified") {
                     setError("This property is no longer available");
                 } else {
-                    setProperty(result.data.property);
+                    setProperty(result.data);
                 }
             } else {
                 setError(result.error || "Property not found");
@@ -103,7 +103,7 @@ export default function CheckoutPage() {
             // Initialize Paystack payment
             const result = await initializePropertyPaymentAction(
                 propertyId,
-                property.name,
+                property.title,
                 property.price,
                 property.ownerId,
                 {
@@ -335,30 +335,27 @@ export default function CheckoutPage() {
                                 <div className="relative aspect-video rounded-xl overflow-hidden mb-4">
                                     <Image
                                         src={property.images[0]}
-                                        alt={property.name}
+                                        alt={property.title}
                                         fill
                                         className="object-cover"
                                     />
                                 </div>
                             )}
 
-                            <h3 className="font-bold text-slate-900 mb-3">{property.name}</h3>
+                            <h3 className="font-bold text-slate-900 mb-3">{property.title}</h3>
 
                             <div className="space-y-3 mb-6">
                                 <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <MapPin className="w-4 h-4" />
-                                    <span>{property.location}, {property.state}</span>
+                                    <span>{property.location.address || property.location.lga}, {property.location.state}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm text-slate-600">
                                     <Maximize className="w-4 h-4" />
-                                    <span>{property.size} hectares</span>
+                                    <span>{property.size} acres</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm">
-                                    <span className={`px-3 py-1 rounded-lg font-semibold ${property.type === "sale"
-                                        ? "bg-green-100 text-green-700"
-                                        : "bg-blue-100 text-blue-700"
-                                        }`}>
-                                        {property.type === "sale" ? "Purchase" : "Lease"}
+                                    <span className="px-3 py-1 rounded-lg font-semibold bg-green-100 text-green-700">
+                                        Purchase
                                     </span>
                                 </div>
                             </div>
@@ -385,17 +382,6 @@ export default function CheckoutPage() {
                                     </span>
                                 </div>
                             </div>
-
-                            {property.type === "lease" && property.leaseDuration && (
-                                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                                    <p className="text-xs text-blue-800">
-                                        <strong>Lease Duration:</strong> {property.leaseDuration} months
-                                    </p>
-                                    <p className="text-xs text-blue-700 mt-1">
-                                        Annual payment required
-                                    </p>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>

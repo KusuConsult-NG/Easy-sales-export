@@ -77,14 +77,14 @@ async function _getPropertiesAction(filters?: {
     lastDocId?: string; 
 }): Promise<ActionResponse<{ properties: Property[] }>> { 
     try {
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES);
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS);
 
         // Sorting
         query = query.orderBy("createdAt", "desc");
 
         // Pagination Cursor
         if (filters?.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(filters.lastDocId).get();
+            const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
             }
@@ -250,7 +250,7 @@ export const rejectFarmNationSellerAction = withFlexibleSafeAction("rejectFarmNa
  */
 async function _getPropertyByIdAction(propertyId: string): Promise<ActionResponse<{ property: Property }>> { 
     try {
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) {
@@ -344,7 +344,7 @@ async function _listPropertyAction(input: PropertyListingInput): Promise<ActionR
             updatedAt: FieldValue.serverTimestamp() 
         };
 
-        await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).add(property);
+        await db.collection(COLLECTIONS.LAND_LISTINGS).add(property);
 
         return { error: null, success: true as const, meta: null, data: null };
     } catch (error: any) { 
@@ -368,14 +368,14 @@ async function _getMyPropertiesAction(): Promise<ActionResponse<{ properties: Pr
 
         let snapshot;
         try { 
-            snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+            snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
                 .where("ownerId", "==", session.user.id)
                 .orderBy("createdAt", "desc")
                 .get();
         } catch (e: any) { 
             if (e.message?.includes("FAILED_PRECONDITION")) {
                 logger.warn("Missing index for getMyPropertiesAction, falling back to memory sort");
-                snapshot = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
                     .where("ownerId", "==", session.user.id)
                     .get();
                 const properties = serializeDocs<Property>(snapshot.docs);
@@ -415,7 +415,7 @@ async function _initiatePropertyPurchaseAction(
         const { session } = sessionResult;
 
         // Verify property exists and is available
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) { 
@@ -574,9 +574,9 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
 
             // Mark property as available again
             if (reqData?.propertyId) { 
-                const pRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(reqData.propertyId);
+                const pRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(reqData.propertyId);
                 transaction.update(pRef, {
-                    status: "available",
+                    status: "verified",
                     updatedAt: FieldValue.serverTimestamp() 
                 });
             }
@@ -602,7 +602,7 @@ async function _deletePropertyAction(propertyId: string): Promise<ActionResponse
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) { 
@@ -653,7 +653,7 @@ async function _updatePropertyAction(propertyId: string, updates: Partial<Proper
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) { 
@@ -936,7 +936,7 @@ async function _uploadPropertyDocumentsAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) return { success: false as const, error: "Property not found", data: null, meta: null };
@@ -982,7 +982,7 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
             return { success: false as const, error: "Unauthorized", data: null, meta: null };
         }
 
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) return { success: false as const, error: "Property not found", data: null, meta: null };
@@ -1184,7 +1184,7 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
         let listingsSnap, transactionsSnap, userDoc;
         try { 
             [listingsSnap, transactionsSnap, userDoc] = await Promise.all([
-                db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
+                db.collection(COLLECTIONS.LAND_LISTINGS)
                     .where('ownerId', '==', userId)
                     .orderBy('createdAt', 'desc')
                     .get(),
@@ -1200,7 +1200,7 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
                 logger.warn("Missing index for Dashboard Stats, falling back to sequential memory sort");
                 // Fetch sequentially without sort
                 const [lSnap, tSnap, uDoc] = await Promise.all([
-                    db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where('ownerId', '==', userId).get(),
+                    db.collection(COLLECTIONS.LAND_LISTINGS).where('ownerId', '==', userId).get(),
                     db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).where('buyerId', '==', userId).limit(10).get(),
                     db.collection(COLLECTIONS.USERS).doc(userId).get(),
                 ]);
@@ -1216,12 +1216,12 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
             id: d.id,
             size: Number(d.size) || 0,
             price: Number(d.price) || 0,
-            status: d.status || 'available',
-            verified: d.verified || false,
-            name: d.name || 'Unnamed Property',
-            location: d.location || '',
-            state: d.state || '',
-            type: d.type || 'sale',
+            status: d.status || 'draft',
+            verified: d.status === 'verified',
+            name: d.title || 'Unnamed Property',
+            location: d.location?.address || d.location?.lga || '',
+            state: d.location?.state || '',
+            type: d.category || 'sale',
             createdAt: d.createdAt 
         }));
 

@@ -48,10 +48,13 @@ export async function POST(request: NextRequest) {
         }
 
         await listingRef.update({
-            verificationStatus: "rejected",
-            verificationNotes: reason,
-            verifiedBy: session.user.id,
-            verifiedAt: FieldValue.serverTimestamp(),
+            status: "rejected",
+            verificationStatus: {
+                verified: false,
+                rejectionReason: reason,
+                verifiedBy: session.user.id,
+                verifiedAt: FieldValue.serverTimestamp()
+            },
             updatedAt: FieldValue.serverTimestamp(),
         });
 

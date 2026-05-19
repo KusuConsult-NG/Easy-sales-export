@@ -872,7 +872,6 @@ export const COLLECTIONS = {
 
     // Farm Nation
     FARM_NATION_APPLICATIONS: "farm_nation_applications",
-    FARM_NATION_PROPERTIES: "farmNationProperties",
     FARM_NATION_TRANSACTIONS: "farm_nation_transactions",
 
     // NEW: Marketplace Enhancement

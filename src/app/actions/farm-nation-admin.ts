@@ -6,7 +6,7 @@ import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -101,7 +101,7 @@ async function _getFarmNationRegistrantsAction(options: {
                     role: data.roles?.[0] || "general_user",
                     roles: data.roles || [],
                     isVerified: data.isVerified ?? false,
-                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(0),
+                    createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date(0).toISOString(),
                     farmNation: data.farmNation,
                     serviceRegistrations: { farmNation }
                 };
@@ -222,7 +222,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         }
         
         const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeDoc(d.id, d.data()))));
 
         // 3. Normalize and Merge Data for the Admin Table
         let finalApplications = applications.map((app: any) => {
@@ -384,17 +384,18 @@ async function _getFarmNationVerificationStatsAction(): Promise<ActionResponse<{
             // Redis error should not block the action
         }
 
-        const [totalSnap, pendingSnap, verifiedSnap] = await Promise.all([
-            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).count().get(),
-            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where("verified", "==", false).count().get(),
-            db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).where("verified", "==", true).count().get(),
+        const [totalSnap, pendingSnap, verifiedSnap, rejectedSnap] = await Promise.all([
+            db.collection(COLLECTIONS.LAND_LISTINGS).count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
         ]);
 
         const stats = {
             total: totalSnap.data().count,
             pending: pendingSnap.data().count,
             verified: verifiedSnap.data().count,
-            rejected: 0 // Placeholder if rejection is tracked separately
+            rejected: rejectedSnap.data().count
         };
 
         const response: ActionResponse<{ stats: { total: number; pending: number; verified: number; rejected: number; } }> = {
@@ -440,31 +441,34 @@ async function _getAdminLandVerificationsAction(options: {
 
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).orderBy("createdAt", orderDirection);
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS).orderBy("createdAt", orderDirection);
 
         if (options.status && options.status !== "all") {
-            const isVerified = options.status === "verified";
-            queryRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES)
-                .where("verified", "==", isVerified)
+            const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
+            queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
+                .where("status", "==", mappedStatus)
                 .orderBy("createdAt", orderDirection);
         }
 
         if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(options.lastDocId).get();
+            const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 queryRef = queryRef.startAfter(lastDoc);
             }
         }
 
         const snapshot = await queryRef.limit(fetchLimit).get();
-        const rawVerifications = snapshot.docs.map(doc => {
-            const data = doc.data();
+        const rawVerifications = serializeDocs(snapshot.docs).map((doc: any) => {
+            let mappedVerificationStatus = "pending";
+            if (doc.status === "verified") mappedVerificationStatus = "verified";
+            else if (doc.status === "rejected") mappedVerificationStatus = "rejected";
+            else if (doc.status === "pending_verification") mappedVerificationStatus = "pending";
+            
             return {
-                id: doc.id,
-                ...data,
-                verificationStatus: data.verified ? "verified" : "pending",
-                createdAt: data.createdAt?.toDate() || new Date(),
-                verifiedAt: data.verifiedAt?.toDate() || undefined
+                ...doc,
+                verificationStatus: mappedVerificationStatus,
+                createdAt: doc.createdAt || new Date().toISOString(),
+                verifiedAt: doc.verificationStatus?.verifiedAt || doc.verifiedAt || undefined
             };
         }) as any[];
 
@@ -678,7 +682,7 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
                 throw new Error("Transaction is not in a valid state for escrow release");
             }
 
-            const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(txData.propertyId);
+            const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(txData.propertyId);
             const propertyDoc = await tx.get(propertyRef);
             if (!propertyDoc.exists) throw new Error("Property not found");
 

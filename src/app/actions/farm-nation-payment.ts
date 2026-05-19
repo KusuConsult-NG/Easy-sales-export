@@ -42,7 +42,7 @@ async function _initializePropertyPaymentAction(
         }
 
         // Check if property exists and is available
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         const propertyDoc = await propertyRef.get();
 
         if (!propertyDoc.exists) { 
@@ -51,7 +51,7 @@ async function _initializePropertyPaymentAction(
 
         const propertyData = propertyDoc.data()!;
 
-        if (propertyData.status !== "available") { 
+        if (propertyData.status !== "verified") { 
             return { success: false, error: "Property is no longer available", data: null };
         }
 
@@ -85,7 +85,7 @@ async function _initializePropertyPaymentAction(
             propertyId,
             propertyName: propertyTitle,
             propertyPrice: amount,
-            propertyType: propertyData.type,
+            propertyType: propertyData.category || "land",
             buyerId: session.user.id,
             buyerName: buyerInfo.fullName,
             buyerEmail: buyerInfo.email,
@@ -102,7 +102,7 @@ async function _initializePropertyPaymentAction(
         });
         
         await propertyRef.update({ 
-            status: "pending",
+            status: "pending_escrow", // Update status to reflect it's being purchased
             updatedAt: FieldValue.serverTimestamp() 
         });
 
@@ -166,7 +166,7 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             return { success: false, error: "Payment verification failed: User mismatch", data: null };
         }
 
-        const propertyRef = db.collection(COLLECTIONS.FARM_NATION_PROPERTIES).doc(propertyId);
+        const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
         let amountInNaira = 0;
 
         await db.runTransaction(async (tx) => { 
@@ -178,8 +178,8 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
             const freshData = freshPropertyDoc.data()!;
             amountInNaira = paymentData.data.amount / 100;
 
-            if (freshData.status !== "pending") {
-                throw new Error(`Property is not in pending state (status: ${freshData.status}).`);
+            if (freshData.status !== "pending_escrow") {
+                throw new Error(`Property is not in pending escrow state (status: ${freshData.status}).`);
             }
 
             // Transfer ownership later, just lock it in escrow

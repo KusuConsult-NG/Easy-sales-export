@@ -107,9 +107,9 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
                     lat: data.location.geopoint?.latitude || data.location.lat,
                     lng: data.location.geopoint?.longitude || data.location.lng 
                 },
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate() : null 
+                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
             } as unknown as LandListing;
         });
 
@@ -167,9 +167,9 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
                 lat: data.location.geopoint?.latitude || data.location.lat,
                 lng: data.location.geopoint?.longitude || data.location.lng 
             },
-            createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-            updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-            verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate() : null 
+            createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+            updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+            verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
         } as unknown as LandListing;
 
         return { success: true, error: null, data: listing };
@@ -205,9 +205,9 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
                     lat: data.location.geopoint?.latitude || data.location.lat,
                     lng: data.location.geopoint?.longitude || data.location.lng 
                 },
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate() : null 
+                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
             } as unknown as LandListing;
         });
 

@@ -157,6 +157,7 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
     const depsKey = JSON.stringify(dependencies);
 
     useEffect(() => {
+        console.log("useAdminData: useEffect triggered to reset pagination. Dependencies:", { searchKey, filtersKey, depsKey });
         cursorStack.current = [undefined];
         setPageIndex(0);
         fetchData(0, true, searchKey, filters);
@@ -176,6 +177,12 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
         });
     };
 
+    // Maintain a ref to the latest page index to avoid stale closures in refresh
+    const pageIndexRef = useRef(pageIndex);
+    useEffect(() => {
+        pageIndexRef.current = pageIndex;
+    }, [pageIndex]);
+
     const onNextPage = () => {
         if (hasMore) {
             const nextPage = pageIndex + 1;
@@ -192,11 +199,19 @@ export function useAdminData<T>({ fetchAction, limit = 20, dependencies = [] }: 
         }
     };
 
-    const refresh = () => {
-        cursorStack.current = [undefined];
-        setPageIndex(0);
-        fetchData(0, true);
-    };
+    const refresh = useCallback((reset?: boolean | any) => {
+        // Strict boolean check to prevent Event objects from triggering reset
+        const shouldReset = reset === true;
+        console.log("useAdminData: refresh called. shouldReset:", shouldReset, "pageIndex:", pageIndexRef.current);
+        
+        if (shouldReset) {
+            cursorStack.current = [undefined];
+            setPageIndex(0);
+            fetchData(0, true);
+        } else {
+            fetchData(pageIndexRef.current, false);
+        }
+    }, [fetchData]);
 
     return {
         data,
