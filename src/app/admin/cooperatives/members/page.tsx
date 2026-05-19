@@ -9,7 +9,7 @@ import RejectionModal from "@/components/admin/RejectionModal";
 import ImportLegacyModal from "@/components/admin/ImportLegacyModal";
 import { useAdminData } from "@/hooks/useAdminData";
 import { editApplicationAction } from "@/app/actions/admin";
-import { getCooperativeStatsAction, getStandardCooperativeMembersAction } from "@/app/actions/cooperative-admin";
+import { getCooperativeStatsAction, getStandardCooperativeMembersAction } from "@/app/actions/cooperative";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { StandardPendingForm } from "@/lib/types/admin";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";

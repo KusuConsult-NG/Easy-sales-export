@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { getMembershipAction } from "@/app/actions/cooperative";
-import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/loans";
+import { getUserLoanApplicationsAction, getRepaymentScheduleAction } from "@/app/actions/cooperative";
 
 // Helper to convert FieldValue | Timestamp to Date
 function toDate(value: any): Date {

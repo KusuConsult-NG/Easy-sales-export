@@ -11,7 +11,7 @@ import {
     Download,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { getContributionReportsAction } from "@/app/actions/cooperative-admin";
+import { getContributionReportsAction } from "@/app/actions/cooperative";
 import dynamic from "next/dynamic";
 
 const ContributionTrendChart = dynamic(() => import("@/components/admin/ContributionTrendChart"), {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Wallet, AlertCircle, TrendingDown, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
-import { submitWithdrawalRequestAction } from '@/app/actions/withdrawal';
+import { submitWithdrawalRequestAction } from '@/app/actions/cooperative';
 
 export default function WithdrawPage() {
     const router = useRouter();

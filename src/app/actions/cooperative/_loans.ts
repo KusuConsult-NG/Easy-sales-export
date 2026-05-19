@@ -648,7 +648,7 @@ export async function disburseLoanAction(
         });
 
         // Notification
-        const { createNotificationAction } = await import('./notifications');
+        const { createNotificationAction } = await import('../notifications');
         await createNotificationAction({
             userId: appData.userId,
             type: "success",
@@ -925,7 +925,7 @@ export async function submitRepaymentAction(data: {
         });
 
         // Notification
-        const { createNotificationAction } = await import('./notifications');
+        const { createNotificationAction } = await import('../notifications');
         await createNotificationAction({
             userId: data.userId,
             type: "success",

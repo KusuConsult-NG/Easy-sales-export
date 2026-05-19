@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CreditCard, TrendingUp, Shield, Zap } from 'lucide-react';
 import Link from 'next/link';
-import { initializeContributionPaymentAction } from '@/app/actions/cooperative-payment';
+import { initializeContributionPaymentAction } from '@/app/actions/cooperative';
 import { COOPERATIVE_TIERS } from '@/lib/cooperative-tiers';
 import { useToast } from '@/contexts/ToastContext';
 import LoadingButton from '@/components/ui/LoadingButton';

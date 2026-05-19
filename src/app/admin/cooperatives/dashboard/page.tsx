@@ -19,7 +19,7 @@ import {
     getCooperativeStatsAction,
     getContributionReportsAction,
     getRecentActivityAction,
-} from "@/app/actions/cooperative-admin";
+} from "@/app/actions/cooperative";
 import dynamic from "next/dynamic";
 
 const DashboardLineChart = dynamic(() => import("@/components/admin/DashboardLineChart"), {

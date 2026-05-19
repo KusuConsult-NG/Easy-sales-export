@@ -18,7 +18,7 @@ import {
     DollarSign,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { getAllTransactionsAction, getCooperativeStatsAction } from "@/app/actions/cooperative-admin";
+import { getAllTransactionsAction, getCooperativeStatsAction } from "@/app/actions/cooperative";
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 

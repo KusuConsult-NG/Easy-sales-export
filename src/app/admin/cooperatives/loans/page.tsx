@@ -9,7 +9,7 @@ import {
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminLoanApplicationsAction, getAdminLoanStatsAction, getAdminLoanApplicationsExportAction } from "@/app/actions/loans";
+import { getAdminLoanApplicationsAction, getAdminLoanStatsAction, getAdminLoanApplicationsExportAction } from "@/app/actions/cooperative";
 import { Loader2 } from "lucide-react";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import { formatLocalDate } from "@/lib/date-utils";
@@ -158,7 +158,7 @@ export default function AdminLoansPage() {
 
         setIsProcessing(true);
         try {
-            const { disburseLoanAction } = await import("@/app/actions/loans");
+            const { disburseLoanAction } = await import("@/app/actions/cooperative");
             const result = await disburseLoanAction(applicationId);
             if (result.success) {
                 showToast("Loan funds disbursed!", "success");

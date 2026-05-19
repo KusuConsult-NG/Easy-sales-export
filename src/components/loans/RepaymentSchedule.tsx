@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Calendar, DollarSign, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
-import { getRepaymentScheduleAction, type RepaymentInstallment } from "@/app/actions/loans";
+import { getRepaymentScheduleAction, type RepaymentInstallment } from "@/app/actions/cooperative";
 
 interface RepaymentScheduleProps {
     loanId: string;

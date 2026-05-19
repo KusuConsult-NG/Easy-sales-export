@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, XCircle, Loader2, TrendingUp, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
-import { verifyContributionPaymentAction } from '@/app/actions/cooperative-payment';
+import { verifyContributionPaymentAction } from '@/app/actions/cooperative';
 
 // Force dynamic rendering - page uses useSearchParams()
 export const dynamic = 'force-dynamic';

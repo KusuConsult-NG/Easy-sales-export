@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
-import { getDashboardDataAction } from "@/app/actions/cooperative-dashboard";
+import { getDashboardDataAction } from "@/app/actions/cooperative";
 import type { CooperativeMembership, CooperativeTransaction } from "@/lib/types/cooperative";
 import { useRouter } from "next/navigation";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
