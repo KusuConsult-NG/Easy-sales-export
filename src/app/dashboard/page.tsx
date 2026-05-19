@@ -111,7 +111,10 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
         else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review' || registrationStatus === 'paid') {
             status = 'pending';
         }
-        
+
+        // WAVE does not require payment — treat any approved/active registration as fully approved
+        if (mod.id === 'wave' && status === 'payment_required') status = 'approved';
+
         // Override approved based on roles for safety (in case admin bypassed standard flow)
         if (mod.id === 'academy' && roles.includes('academy_participant')) status = 'approved';
         if (mod.id === 'wave' && roles.includes('wave_participant')) status = 'approved';
