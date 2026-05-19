@@ -411,27 +411,14 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             .where("status", "==", "completed")
             .get();
         paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
-
-        // Also add legacy members whose document directly indicates completed payment
-        moduleSnap.docs.forEach(doc => {
-            const data = doc.data();
-            if (data.paymentStatus === "completed" || data.status === "paid" || data.membershipStatus === "active") {
-                paidUserIds!.add(data[userIdField] || doc.id);
-            }
-        });
     }
 
     if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
-        // Cooperative Members are defined by their payment, but we also want to target unpaid members
-        const memberDocs = new Map(moduleSnap.docs.map(doc => [doc.data()[userIdField] || doc.id, doc.data()]));
-        
-        // Target users who have a member document but NO payment
-        const unpaidUserIds = new Set(Array.from(memberDocs.keys()).filter(userId => !paidUserIds!.has(userId)));
-        const allUserIds = Array.from(new Set([...memberDocs.keys(), ...paidUserIds!]));
+        for (const doc of moduleSnap.docs) {
+            const d = doc.data();
+            const userId = d[userIdField] || doc.id;
+            if (!userId) continue;
 
-        for (const userId of allUserIds) {
-            const d = memberDocs.get(userId) || {};
-            
             if (filters?.startDate || filters?.endDate) {
                 const createdRaw = d.createdAt || d.appliedAt || d.timestamp;
                 if (createdRaw) {
@@ -444,70 +431,46 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
                         if (created > dateRangeEnd(filters.endDate.slice(0,10))) continue;
                     }
                 } else {
-                    continue; // Skip if we have date filters but the document has no date
+                    continue;
                 }
             }
-
-            let status = d[statusField] || d.membershipStatus || d.status || "pending";
-            if (status === "under_review" || status === "submitted" || status === "pending_review") status = "pending";
 
             moduleStats.total++;
             
-            if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {
-                const isPaid = paidUserIds!.has(userId);
-                const isActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "active" || d.status === "approved";
-                const isSuspended = d.membershipStatus === "suspended" || d.status === "suspended";
-                const isPending = d.membershipStatus === "pending" || d.status === "pending" || (!d.membershipStatus && !d.status);
+            const isPaid = paidUserIds!.has(userId) || d.paymentStatus === "completed";
+            const isActive = d.membershipStatus === "active" || d.membershipStatus === "approved" || d.status === "active" || d.status === "approved";
+            const isSuspended = d.membershipStatus === "suspended" || d.status === "suspended";
+            const isPending = d.membershipStatus === "pending" || d.status === "pending" || (!d.membershipStatus && !d.status);
 
-                if (isActive) {
-                    moduleStats.approved++;
-                } else if (isSuspended) {
-                    moduleStats.suspended++;
-                } else if (isPending) {
-                    moduleStats.pending++;
-                } else if (status === "rejected") {
-                    moduleStats.rejected++;
-                }
+            if (isActive) {
+                moduleStats.approved++;
+            } else if (isPending && !isSuspended) {
+                moduleStats.pending++;
+            } else if (d.status === "rejected") {
+                moduleStats.rejected++;
+            } else if (isSuspended) {
+                moduleStats.suspended++;
+            }
 
-                if (!isPaid) {
-                    moduleStats.unpaid++;
-                }
+            if (!isPaid) {
+                moduleStats.unpaid++;
+            }
 
-                if (statusFilter === "unpaid") {
-                    if (isPaid) continue;
-                } else if (statusFilter === "all" || !statusFilter) {
-                    // Include everyone
-                } else {
-                    if (statusFilter === "not_approved") {
-                        if (isActive) continue;
-                    } else if (statusFilter === "approved") {
-                        if (!isActive) continue;
-                    } else if (statusFilter && status !== statusFilter) {
-                        continue;
-                    }
-                }
+            if (statusFilter === "unpaid") {
+                if (isPaid) continue;
+            } else if (statusFilter === "all" || !statusFilter) {
+                // Include everyone
             } else {
-                if (status === "approved" || status === "active" || status === "paid" || status === "completed") moduleStats.approved++;
-                else if (status === "pending") moduleStats.pending++;
-                else if (status === "rejected") moduleStats.rejected++;
-                else if (status === "suspended") moduleStats.suspended++;
-
-                if (statusFilter === "unpaid") {
-                    if (!unpaidUserIds.has(userId)) continue;
-                } else if (statusFilter === "all" || !statusFilter) {
-                    // Include everyone
-                } else {
-                    if (statusFilter === "not_approved") {
-                        if (status === "approved" || status === "active" || status === "paid" || status === "completed") continue;
-                    } else if (statusFilter === "approved") {
-                        if (status !== "approved" && status !== "active" && status !== "paid" && status !== "completed") continue;
-                    } else if (statusFilter && status !== statusFilter) {
-                        continue;
-                    }
+                if (statusFilter === "not_approved") {
+                    if (isActive) continue;
+                } else if (statusFilter === "approved") {
+                    if (!isActive) continue;
+                } else if (statusFilter && d.status !== statusFilter && d.membershipStatus !== statusFilter) {
+                    continue;
                 }
             }
 
-            userEntries.push({ userId, status });
+            userEntries.push({ userId, status: isActive ? "approved" : (isPending ? "pending" : "other") });
         }
     } else {
         for (const doc of moduleSnap.docs) {
