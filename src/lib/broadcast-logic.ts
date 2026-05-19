@@ -411,6 +411,14 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
             .where("status", "==", "completed")
             .get();
         paidUserIds = new Set(paymentsSnap.docs.map(doc => doc.data().userId));
+
+        // Also add legacy members whose document directly indicates completed payment
+        moduleSnap.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.paymentStatus === "completed" || data.status === "paid" || data.membershipStatus === "active") {
+                paidUserIds!.add(data[userIdField] || doc.id);
+            }
+        });
     }
 
     if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) {

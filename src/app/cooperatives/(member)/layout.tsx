@@ -50,11 +50,25 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
             if (!memberData) {
                 // Cache miss - fetch from Firestore
                 const db = getAdminDb();
-                const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
-                if (memberSnapshot.exists) {
-                    memberData = memberSnapshot.data();
+                
+                // Query by userId since document ID may be a generated ID
+                const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("userId", "==", userId)
+                    .orderBy("createdAt", "desc")
+                    .limit(1)
+                    .get();
+                    
+                if (!memberQuery.empty) {
+                    memberData = memberQuery.docs[0].data();
                     // Cache for 5 minutes
                     await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
+                } else {
+                    // Fallback to legacy document ID check
+                    const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+                    if (memberSnapshot.exists) {
+                        memberData = memberSnapshot.data();
+                        await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
+                    }
                 }
             }
 
@@ -77,7 +91,11 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 
                 // 1. Delete corrupted record if it exists
                 if (memberData) {
-                    await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).delete();
+                    if (memberData.id) {
+                        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberData.id).delete();
+                    } else {
+                        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).delete();
+                    }
                 }
 
                 // 2. Reset service registration status in USERS collection so checkCooperativeStatusAction sees them as new

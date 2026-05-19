@@ -40,7 +40,7 @@ export class UserMetricsService {
             }
         });
 
-        let paidMembersCount = 0;
+        let docBasedPaidCount = 0;
         let pendingCount = 0;
         let approvedCount = 0;
 
@@ -58,20 +58,25 @@ export class UserMetricsService {
                 pendingCount++;
             }
             
-            // If scoped, count paid members ONLY from the filtered members list
-            // If unscoped, we will count ALL distinct Paystack payments later to include orphaned payments
-            if (adminScope && validPaidUserIds.has(uid)) {
-                paidMembersCount++;
+            // A member is paid if they have a Paystack processed payment OR they have a completed payment status on their doc (Legacy members)
+            const isPaid = validPaidUserIds.has(uid) || m.paymentStatus === "completed";
+            if (isPaid) {
+                docBasedPaidCount++;
             }
         });
 
-        // If unscoped, the paid members count is strictly the number of unique users with a Paystack completed payment.
-        // This naturally includes orphaned payments (paid but no form).
+        let orphanedPaymentsCount = 0;
         if (!adminScope) {
-            paidMembersCount = validPaidUserIds.size;
+            Array.from(validPaidUserIds).forEach(uid => {
+                const hasDoc = filteredMembers.some((m: any) => (m.userId || m.id) === uid);
+                if (!hasDoc) {
+                    orphanedPaymentsCount++;
+                }
+            });
         }
 
-        const unpaidMembers = Math.max(0, totalApplications - (adminScope ? paidMembersCount : Array.from(validPaidUserIds).filter(uid => filteredMembers.some((m: any) => (m.userId || m.id) === uid)).length));
+        const paidMembersCount = docBasedPaidCount + orphanedPaymentsCount;
+        const unpaidMembers = Math.max(0, totalApplications - docBasedPaidCount);
 
         return {
             totalApplications,

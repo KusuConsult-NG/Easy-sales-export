@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 
@@ -31,25 +31,48 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
         if (moduleType === "export") collectionName = COLLECTIONS.EXPORT_APPLICATIONS;
         if (moduleType === "farm-nation") collectionName = COLLECTIONS.FARM_NATION_APPLICATIONS;
 
-        // Note: For some modules, the document ID is the userId, for others it might be separate.
-        // Most modules in this Hub use userId as the primary key for membership/application records.
-        const docRef = doc(db, collectionName, userId);
+        let unsubDoc: () => void = () => {};
 
-        const unsub = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const docData = docSnap.data();
+        // Primary: query by the `userId` field (modern approach for generated doc IDs)
+        const q = query(collection(db, collectionName), where("userId", "==", userId));
+        
+        const unsubQuery = onSnapshot(q, (querySnap) => {
+            if (!querySnap.empty) {
+                // Sort by createdAt desc if multiple, otherwise just take the first
+                const docsData = querySnap.docs.map(d => d.data());
+                docsData.sort((a, b) => {
+                    const timeA = a.updatedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+                    const timeB = b.updatedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+                    return timeB - timeA;
+                });
+                
+                const docData = docsData[0];
                 setData(docData);
-                // Handle different status field names across modules
                 setStatus(docData.status || docData.membershipStatus || "pending");
             } else {
-                setStatus("not_found");
+                // Fallback: check if the document ID is the userId (legacy approach)
+                unsubDoc = onSnapshot(doc(db, collectionName, userId), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const docData = docSnap.data();
+                        setData(docData);
+                        setStatus(docData.status || docData.membershipStatus || "pending");
+                    } else {
+                        setStatus("not_found");
+                    }
+                }, (error) => {
+                    console.error(`[useMembershipStatus] Doc listener error for ${moduleType}:`, error);
+                    setStatus("error");
+                });
             }
         }, (error) => {
-            console.error(`[useMembershipStatus] Listener error for ${moduleType}:`, error);
+            console.error(`[useMembershipStatus] Query listener error for ${moduleType}:`, error);
             setStatus("error");
         });
 
-        return () => unsub();
+        return () => {
+            unsubQuery();
+            unsubDoc();
+        };
     }, [userId, moduleType]);
 
     return { status, data, isLoading: status === "loading" };
