@@ -17,6 +17,7 @@ import {
     Mail,
     Loader2,
     RefreshCw,
+    Landmark,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { db } from "@/lib/firebase";
@@ -79,6 +80,31 @@ export default function AdminFinancePage() {
     const [isSyncing, setIsSyncing] = useState(false);
     const [syncResult, setSyncResult] = useState<string | null>(null);
     const [lastSynced, setLastSynced] = useState<string | null>(null);
+
+    // ── Live Paystack account balance ────────────────────────────────────────
+    const [paystackBalance, setPaystackBalance] = useState<number | null>(null);
+    const [balanceLoading, setBalanceLoading] = useState(true);
+    const [balanceError, setBalanceError] = useState<string | null>(null);
+
+    async function fetchPaystackBalance() {
+        setBalanceLoading(true);
+        setBalanceError(null);
+        try {
+            const res = await fetch("/api/admin/finance/paystack-balance");
+            const data = await res.json();
+            if (data.success) {
+                setPaystackBalance(data.ngnBalance);
+            } else {
+                setBalanceError(data.error || "Failed to fetch balance");
+            }
+        } catch {
+            setBalanceError("Network error");
+        } finally {
+            setBalanceLoading(false);
+        }
+    }
+
+    useEffect(() => { fetchPaystackBalance(); }, []);
 
     // Reset pagination + selection when switching tabs
     useEffect(() => {
@@ -234,7 +260,7 @@ export default function AdminFinancePage() {
                 </div>
 
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
                     <div className="bg-linear-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
                         <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
@@ -278,6 +304,45 @@ export default function AdminFinancePage() {
                         <p className="text-3xl font-bold text-red-600">{totalFailedCount ?? errorTx.length}</p>
                         <p className="text-xs text-slate-500 mt-1">Card / network errors</p>
                     </div>
+                </div>
+
+                {/* ── Live Paystack Account Balance ─────────────────────────── */}
+                <div className="bg-linear-to-br from-indigo-600 to-blue-700 rounded-2xl p-6 shadow-xl text-white mb-8">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                                <Landmark className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold opacity-80 uppercase tracking-widest mb-1">Live Paystack Balance</p>
+                                {balanceLoading ? (
+                                    <div className="flex items-center gap-2">
+                                        <Loader2 className="w-5 h-5 animate-spin opacity-70" />
+                                        <span className="text-lg opacity-70">Fetching…</span>
+                                    </div>
+                                ) : balanceError ? (
+                                    <p className="text-lg font-bold text-red-300">{balanceError}</p>
+                                ) : (
+                                    <p className="text-4xl font-extrabold tracking-tight">{formatCurrency(paystackBalance ?? 0)}</p>
+                                )}
+                                <p className="text-xs opacity-60 mt-1">Cash available in your Paystack merchant account (NGN)</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={fetchPaystackBalance}
+                            disabled={balanceLoading}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 disabled:opacity-50 rounded-xl text-sm font-semibold transition"
+                            title="Refresh Paystack balance"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${balanceLoading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </button>
+                    </div>
+                    {!balanceLoading && !balanceError && paystackBalance !== null && (
+                        <p className="text-xs opacity-50 mt-4">
+                            Note: This balance reflects funds settled in Paystack — not all transactions may have cleared yet.
+                        </p>
+                    )}
                 </div>
 
                 {/* Tabs + Table */}
