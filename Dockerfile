@@ -9,6 +9,19 @@ WORKDIR /app
 # Copy lockfile and package manifest
 COPY package.json package-lock.json ./
 
+# Copy workspace package manifests for resolution
+COPY packages/academy/package.json ./packages/academy/
+COPY packages/auth/package.json ./packages/auth/
+COPY packages/config/package.json ./packages/config/
+COPY packages/cooperative/package.json ./packages/cooperative/
+COPY packages/export/package.json ./packages/export/
+COPY packages/farm-nation/package.json ./packages/farm-nation/
+COPY packages/marketplace/package.json ./packages/marketplace/
+COPY packages/services/package.json ./packages/services/
+COPY packages/types/package.json ./packages/types/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/wave/package.json ./packages/wave/
+
 # Install ALL dependencies (including devDeps needed for build)
 # --legacy-peer-deps matches Vercel's build behaviour for the nodemailer<->next-auth peer dep mismatch
 RUN npm install --legacy-peer-deps
