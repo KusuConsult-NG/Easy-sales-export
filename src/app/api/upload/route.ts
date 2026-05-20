@@ -12,7 +12,7 @@ import { withRateLimit } from "@/lib/rate-limit";
  * Using Cloudinary instead — configured via CLOUDINARY_* env vars.
  *
  * Form Data:
- * - file: File (Required) - Max 5MB, Images or PDF
+ * - file: File (Required) - Max 50MB: images (JPG/PNG/WebP), PDFs, videos (MP4/MOV/WebM)
  * - folder: string (Optional) - Default 'uploads'
  * - documentType: string (Optional) - Default 'document'
  */
@@ -42,19 +42,32 @@ async function uploadHandler(request: NextRequest) {
         }
 
         // Validate file type
-        const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg", "image/webp"];
+        const allowedTypes = [
+            "application/pdf",
+            "image/jpeg",
+            "image/png",
+            "image/jpg",
+            "image/webp",
+            "image/gif",
+            // Video — used for marketplace product demos
+            "video/mp4",
+            "video/quicktime",
+            "video/webm",
+        ];
         if (!allowedTypes.includes(file.type)) {
             return NextResponse.json(
-                { success: false, error: "Invalid file type. Please upload a JPG, PNG, WebP, or PDF file." },
+                { success: false, error: "Invalid file type. Allowed: JPG, PNG, WebP, PDF, MP4, MOV, WebM." },
                 { status: 400 }
             );
         }
 
-        // Validate file size (5MB)
-        const maxSize = 5 * 1024 * 1024;
+        // Validate file size
+        // MasterUploader defaults to 50MB for Academy/admin content; other flows use 5MB.
+        // The API accepts up to 50MB so components can control limits client-side.
+        const maxSize = 50 * 1024 * 1024; // 50 MB
         if (file.size > maxSize) {
             return NextResponse.json(
-                { success: false, error: "File is too large. Maximum allowed size is 5MB." },
+                { success: false, error: "File is too large. Maximum allowed size is 50MB." },
                 { status: 400 }
             );
         }
@@ -103,7 +116,13 @@ async function uploadHandler(request: NextRequest) {
         cloudinaryForm.append("public_id", publicId);
         cloudinaryForm.append("signature", signature);
 
-        const resourceType = file.type === "application/pdf" ? "raw" : "image";
+        // Determine Cloudinary resource type
+        // "raw" for PDFs/documents, "video" for video files, "image" for everything else
+        const resourceType = file.type === "application/pdf"
+            ? "raw"
+            : file.type.startsWith("video/")
+            ? "video"
+            : "image";
         
         const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
         

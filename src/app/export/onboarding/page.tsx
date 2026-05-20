@@ -383,7 +383,8 @@ export default function ExportOnboardingPage() {
                         onBack={handleBack}
                         onChange={handleStepChange}
                         initialData={formData.terms}
-                        isSubmitting={isSubmitting}
+                        // Disable submit while any file upload is still in flight
+                        isSubmitting={isSubmitting || isUploadingClient}
                     />
                 );
             default:
