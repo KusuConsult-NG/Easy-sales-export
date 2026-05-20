@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { unstable_cache } from "next/cache";
 import { isAdmin } from "@/lib/admin-permissions";
@@ -479,7 +479,9 @@ async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandLi
                     const docSnap = await docRef.get();
 
                     if (docSnap.exists) {
-                        return { id: docSnap.id, ...docSnap.data() } as LandListing;
+                        // ✅ FIX: serializeValue converts Firestore Timestamps to ISO strings
+                        // so the result is safe to pass across the server→client boundary.
+                        return { id: docSnap.id, ...serializeValue(docSnap.data()) } as LandListing;
                     } else { 
                         return null;
                     }
@@ -579,7 +581,8 @@ async function _getLandInquiryByIdAction(inquiryId: string): Promise<ActionRespo
         const docSnap = await docRef.get();
 
         if (docSnap.exists) {
-            return { success: true, error: null, data: { id: docSnap.id, ...docSnap.data() } };
+            // ✅ FIX: serializeValue converts Timestamp fields to ISO strings for safe client transfer.
+            return { success: true, error: null, data: { id: docSnap.id, ...serializeValue(docSnap.data()) } };
         } else { 
             return { success: false, error: "Inquiry not found", data: null };
         }
