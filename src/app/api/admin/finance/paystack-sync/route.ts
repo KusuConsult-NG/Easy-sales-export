@@ -223,6 +223,16 @@ async function paystackSyncHandler(_req: NextRequest) {
 
         logger.info(`[PaystackSync] Done. synced=${synced} skipped=${skipped} errors=${errors}`);
 
+        try {
+            const { deleteCache, deleteCachePattern } = await import("@/lib/redis");
+            await deleteCache("admin:finance-overview:global");
+            await deleteCache("admin:dashboard-stats:global");
+            await deleteCachePattern("admin:dashboard-stats:*");
+            logger.info("[PaystackSync] Invalidated finance and dashboard analytics Redis caches.");
+        } catch (cacheErr: any) {
+            logger.error("[PaystackSync] Cache invalidation error:", cacheErr);
+        }
+
         return NextResponse.json({
             success: true,
             total: allTxs.length,

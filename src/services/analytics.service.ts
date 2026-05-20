@@ -83,29 +83,75 @@ export class AnalyticsService implements AnalyticsServiceContract {
     }
 
     // Centralized Helper: Get Platform Metrics without session checks
-    private async getPlatformMetrics(db: FirebaseFirestore.Firestore) {
-        const [revenueSnap, allUsersSnap] = await Promise.allSettled([
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                .where("status", "==", "completed")
-                .aggregate({
-                    totalRevenue: AggregateField.sum("amount"),
-                    totalTransactions: AggregateField.count()
-                })
-                .get(),
-            db.collection(COLLECTIONS.USERS).count().get()
-        ]);
+    private async getPlatformMetrics(db: FirebaseFirestore.Firestore, options?: { dateFrom?: Date; dateTo?: Date }) {
+        const allUsersSnap = await db.collection(COLLECTIONS.USERS).count().get();
+        const totalUsers = allUsersSnap.data().count ?? 0;
 
         let totalRevenue = 0;
         let totalTransactions = 0;
-        
-        if (revenueSnap.status === 'fulfilled') {
-            const data = revenueSnap.value.data();
-            totalRevenue = Number(data.totalRevenue) || 0;
-            totalTransactions = Number(data.totalTransactions) || 0;
+
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        let paystackSuccess = false;
+
+        if (secretKey) {
+            try {
+                let page = 1;
+                while (true) {
+                    let url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success`;
+                    if (options?.dateFrom) {
+                        url += `&from=${encodeURIComponent(options.dateFrom.toISOString())}`;
+                    }
+                    if (options?.dateTo) {
+                        url += `&to=${encodeURIComponent(options.dateTo.toISOString())}`;
+                    }
+                    const res = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${secretKey}`,
+                            "Content-Type": "application/json",
+                        },
+                        cache: "no-store",
+                    });
+                    if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
+                    const json = await res.json();
+                    const data = json.data ?? [];
+                    for (const tx of data) {
+                        totalRevenue += (tx.amount / 100);
+                        totalTransactions++;
+                    }
+                    const totalPages = json.meta?.pageCount ?? 1;
+                    if (page >= totalPages || data.length === 0) break;
+                    page++;
+                }
+                paystackSuccess = true;
+            } catch (e: any) {
+                logger.error(`[PlatformMetrics] Live Paystack revenue fetch failed, falling back to Firestore: ${e.message}`);
+            }
         }
 
-        const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
-        
+        if (!paystackSuccess) {
+            try {
+                let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                    .where("status", "==", "completed");
+                if (options?.dateFrom) {
+                    query = query.where("processedAt", ">=", options.dateFrom);
+                }
+                if (options?.dateTo) {
+                    query = query.where("processedAt", "<=", options.dateTo);
+                }
+                const revenueSnap = await query
+                    .aggregate({
+                        totalRevenue: AggregateField.sum("amount"),
+                        totalTransactions: AggregateField.count()
+                    })
+                    .get();
+                const data = revenueSnap.data();
+                totalRevenue = Number(data.totalRevenue) || 0;
+                totalTransactions = Number(data.totalTransactions) || 0;
+            } catch (e: any) {
+                logger.error(`[PlatformMetrics] Firestore fallback aggregate query failed: ${e.message}`);
+            }
+        }
+
         return {
             totalRevenue,
             totalTransactions,
@@ -210,28 +256,19 @@ export class AnalyticsService implements AnalyticsServiceContract {
         let pendingApprovals: number;
 
         if (isDateFiltered) {
-            const [newUsersSnap, paymentsSnap, pendingRes] = await Promise.allSettled([
+            const [newUsersSnap, metricsResult, pendingRes] = await Promise.allSettled([
                 db.collection(COLLECTIONS.USERS)
                     .where("createdAt", ">=", filterFrom)
                     .where("createdAt", "<=", filterTo)
                     .count()
                     .get(),
-                db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                    .where("status", "==", "completed")
-                    .where("processedAt", ">=", filterFrom)
-                    .where("processedAt", "<=", filterTo)
-                    .aggregate({
-                        totalRevenue: AggregateField.sum("amount"),
-                        totalTransactions: AggregateField.count()
-                    })
-                    .get(),
+                this.getPlatformMetrics(db, { dateFrom: filterFrom, dateTo: filterTo }),
                 this.getGlobalPendingApprovals(db),
             ]);
             totalUsers = newUsersSnap.status === "fulfilled" ? (newUsersSnap.value.data().count ?? 0) : 0;
-            if (paymentsSnap.status === "fulfilled") {
-                const data = paymentsSnap.value.data();
-                totalRevenue = Number(data.totalRevenue) || 0;
-                totalTransactions = Number(data.totalTransactions) || 0;
+            if (metricsResult.status === "fulfilled") {
+                totalRevenue = metricsResult.value.totalRevenue;
+                totalTransactions = metricsResult.value.totalTransactions;
             } else {
                 totalRevenue = 0;
                 totalTransactions = 0;
@@ -254,24 +291,76 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const pendingLoans = pendingLoansCount.status === "fulfilled" ? pendingLoansCount.value : 0;
 
         // Revenue by month
-        const revenuePromises = months.map(async ({ label, start, end }) => {
-            try {
-                const snap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                    .where("status", "==", "completed")
-                    .where("processedAt", ">=", start)
-                    .where("processedAt", "<=", end)
-                    .aggregate({
-                        total: AggregateField.sum("amount")
-                    })
-                    .get();
-                const total = Number(snap.data().total) || 0;
-                return { month: label, revenue: total };
-            } catch (e) {
-                return { month: label, revenue: 0 };
-            }
-        });
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        let paystackSuccess = false;
+        let revenueByMonth: Array<{ month: string; revenue: number }> = [];
 
-        const revenueByMonth = await Promise.all(revenuePromises);
+        if (secretKey) {
+            try {
+                // Initialize monthly buckets with 0
+                const buckets = months.map(m => ({ label: m.label, start: m.start, end: m.end, revenue: 0 }));
+                
+                let page = 1;
+                const fromStr = months[0].start.toISOString();
+                const toStr = months[months.length - 1].end.toISOString();
+                
+                while (true) {
+                    const url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success&from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}`;
+                    const res = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${secretKey}`,
+                            "Content-Type": "application/json",
+                        },
+                        cache: "no-store",
+                    });
+                    if (!res.ok) throw new Error(`Paystack API returned status ${res.status}`);
+                    const json = await res.json();
+                    const data = json.data ?? [];
+                    for (const tx of data) {
+                        const paidAtStr = tx.paid_at || tx.paidAt || tx.created_at || tx.createdAt;
+                        if (!paidAtStr) continue;
+                        const txDate = new Date(paidAtStr);
+                        
+                        for (const bucket of buckets) {
+                            if (txDate >= bucket.start && txDate <= bucket.end) {
+                                bucket.revenue += (tx.amount / 100);
+                                break;
+                            }
+                        }
+                    }
+                    const totalPages = json.meta?.pageCount ?? 1;
+                    if (page >= totalPages || data.length === 0) break;
+                    page++;
+                }
+                
+                revenueByMonth = buckets.map(b => ({ month: b.label, revenue: b.revenue }));
+                paystackSuccess = true;
+            } catch (e: any) {
+                logger.error(`[DashboardStats] Live Paystack monthly revenue fetch failed, falling back to Firestore: ${e.message}`);
+            }
+        }
+
+        if (!paystackSuccess) {
+            const revenuePromises = months.map(async ({ label, start, end }) => {
+                try {
+                    const snap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                        .where("status", "==", "completed")
+                        .where("processedAt", ">=", start)
+                        .where("processedAt", "<=", end)
+                        .aggregate({
+                            total: AggregateField.sum("amount")
+                        })
+                        .get();
+                    const total = Number(snap.data().total) || 0;
+                    return { month: label, revenue: total };
+                } catch (e) {
+                    return { month: label, revenue: 0 };
+                }
+            });
+
+            revenueByMonth = await Promise.all(revenuePromises);
+        }
+
         const monthlyRevenue = revenueByMonth.length > 0 ? revenueByMonth[revenueByMonth.length - 1].revenue : 0;
 
         // User growth by month
@@ -389,26 +478,103 @@ export class AnalyticsService implements AnalyticsServiceContract {
         let totalRevenue = 0;
         let totalEscrowVolume = 0;
         let totalLoansDisbursed = 0;
+        let totalSuccessfulCount = 0;
+        let totalAbandonedCount = 0;
+        let totalFailedCount = 0;
         const recentTransactions: FinancialOverview["recentTransactions"] = [];
 
-        const [allEscrowsR, allTxnsR, countSuccessR, countAbandonedR, countFailedR] = await Promise.allSettled([
+        // 1. Fetch escrow total and loans total from Firestore (they are internal systems)
+        const [allEscrowsR, loanR] = await Promise.allSettled([
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").aggregate({ totalRevenue: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
-            db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
-            db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
-        ]);
-
-        totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
-        totalRevenue = allTxnsR.status === "fulfilled" ? (Number(allTxnsR.value.data().totalRevenue) || 0) : 0;
-        const totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
-        const totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
-        const totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
-
-        const loanR = await Promise.allSettled([
             db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "disbursed").aggregate({ total: AggregateField.sum("amount") }).get(),
         ]);
-        totalLoansDisbursed = loanR[0].status === "fulfilled" ? (loanR[0].value.data().total ?? 0) : 0;
+        
+        totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
+        totalLoansDisbursed = loanR.status === "fulfilled" ? (loanR.value.data().total ?? 0) : 0;
+
+        // 2. Fetch revenue and counts from Paystack API as the source of truth
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        let paystackSuccess = false;
+
+        if (secretKey) {
+            try {
+                // Fetch counts using single quick requests for counts first
+                const [successMetaRes, failedMetaRes, abandonedMetaRes] = await Promise.all([
+                    fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=success`, {
+                        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+                        cache: "no-store",
+                    }),
+                    fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=failed`, {
+                        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+                        cache: "no-store",
+                    }),
+                    fetch(`https://api.paystack.co/transaction?perPage=1&page=1&status=abandoned`, {
+                        headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+                        cache: "no-store",
+                    }),
+                ]);
+
+                if (successMetaRes.ok) {
+                    const json = await successMetaRes.json();
+                    if (json && json.status) {
+                        totalSuccessfulCount = json.meta?.total ?? 0;
+                    }
+                }
+                if (failedMetaRes.ok) {
+                    const json = await failedMetaRes.json();
+                    if (json && json.status) {
+                        totalFailedCount = json.meta?.total ?? 0;
+                    }
+                }
+                if (abandonedMetaRes.ok) {
+                    const json = await abandonedMetaRes.json();
+                    if (json && json.status) {
+                        totalAbandonedCount = json.meta?.total ?? 0;
+                    }
+                }
+
+                // Fetch and sum all successful transaction amounts to calculate exact total revenue
+                let page = 1;
+                while (true) {
+                    const url = `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success`;
+                    const res = await fetch(url, {
+                        headers: {
+                            Authorization: `Bearer ${secretKey}`,
+                            "Content-Type": "application/json",
+                        },
+                        cache: "no-store",
+                    });
+                    if (!res.ok) throw new Error(`Paystack total revenue API error: ${res.status}`);
+                    const json = await res.json();
+                    const data = json.data ?? [];
+                    for (const tx of data) {
+                        totalRevenue += (tx.amount / 100);
+                    }
+                    const totalPages = json.meta?.pageCount ?? 1;
+                    if (page >= totalPages || data.length === 0) break;
+                    page++;
+                }
+
+                paystackSuccess = true;
+            } catch (e: any) {
+                logger.error(`[FinancialOverview] Paystack API fetch failed, using Firestore fallback: ${e.message}`);
+            }
+        }
+
+        // 3. Firestore fallbacks if Paystack API was not reached/failed
+        if (!paystackSuccess) {
+            const [countSuccessR, countAbandonedR, countFailedR, allTxnsR] = await Promise.allSettled([
+                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
+                db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
+                db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
+                db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").aggregate({ totalRevenue: AggregateField.sum("amount") }).get(),
+            ]);
+
+            totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
+            totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
+            totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;
+            totalRevenue = allTxnsR.status === "fulfilled" ? (Number(allTxnsR.value.data().totalRevenue) || 0) : 0;
+        }
 
         try {
             const [txSnap] = await Promise.allSettled([
