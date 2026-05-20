@@ -36,15 +36,21 @@ export default function CooperativePaymentPage() {
                         router.replace("/cooperatives/dashboard");
                         return;
                     }
-                    if (status === "pending") {
-                        showToast("Your application is being reviewed.", "info");
-                        router.replace("/cooperatives/onboarding/pending");
-                        return;
-                    }
-                    
+
+                    // ✔️ Check paymentStatus BEFORE membershipStatus=pending.
+                    // After Paystack payment, the user has paymentStatus="completed" and
+                    // membershipStatus="pending" (needs to fill onboarding form).
+                    // Without this order, the pending check fires first and sends them
+                    // to the admin-review waiting page — not the onboarding form.
                     if (paymentStatus === "completed") {
                         showToast("Payment already completed. Please proceed to onboarding.", "info");
                         router.replace("/cooperatives/onboarding");
+                        return;
+                    }
+                    
+                    if (status === "pending") {
+                        showToast("Your application is being reviewed.", "info");
+                        router.replace("/cooperatives/onboarding/pending");
                         return;
                     }
                 }
@@ -61,6 +67,12 @@ export default function CooperativePaymentPage() {
         try {
             const result = await initiateCooperativePaymentAction("Member");
 
+            if (result.success && result.data?.redirectTo) {
+                // Already paid — redirect to onboarding form
+                showToast("Payment already completed. Redirecting to onboarding...", "info");
+                router.replace(result.data.redirectTo);
+                return;
+            }
             if (result.success && result.data?.paymentUrl) {
                 window.location.href = result.data.paymentUrl;
             } else {

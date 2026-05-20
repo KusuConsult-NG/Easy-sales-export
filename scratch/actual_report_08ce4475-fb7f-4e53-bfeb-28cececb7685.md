@@ -1,0 +1,1 @@
+Now let me check the loan-actions file, vendor orders, settings, and also look for auth guards:

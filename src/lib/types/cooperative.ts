@@ -272,7 +272,7 @@ export type WithdrawalActionState =
 // New action states for Phase 2
 export type MembershipRegistrationState =
     | ActionErrorState
-    | { error: null; success: true; data: { message: string; paymentUrl?: string }; meta?: null };
+    | { error: null; success: true; data: { message: string; paymentUrl?: string | null; redirectTo?: string }; meta?: null };
 
 export type FixedSavingsState = ActionErrorState | ContributionSuccessState;
 export type LoanApplicationState = ActionErrorState | ContributionSuccessState;

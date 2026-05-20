@@ -266,6 +266,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         setIsPaymentLoading(true);
         try {
             const result = await initiateCooperativePaymentAction("Member");
+            if (result.success && result.data?.redirectTo) {
+                // Already paid — refresh the page so paymentStatus prop is re-read
+                showToast("Payment already confirmed. Loading your application...", "info");
+                window.location.reload();
+                return;
+            }
             if (result.success && result.data?.paymentUrl) {
                 window.location.href = result.data.paymentUrl;
             } else {

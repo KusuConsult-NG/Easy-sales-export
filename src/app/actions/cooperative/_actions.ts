@@ -74,7 +74,14 @@ async function _initiateCooperativePaymentAction(
             if (data?.membershipStatus === "active") {
                 return { error: "You are already an active cooperative member.", success: false as const, data: null };
             }
-            if (data?.paymentStatus === "completed") { return { error: "You have already paid. Please proceed to onboarding.", success: false as const, data: null };
+            if (data?.paymentStatus === "completed") {
+                // Payment was completed — guide them to onboarding rather than showing a raw error.
+                return {
+                    error: null,
+                    success: true as const,
+                    meta: null,
+                    data: { message: "Payment already completed", paymentUrl: null, redirectTo: "/cooperatives/onboarding" } as any
+                };
             }
         }
 

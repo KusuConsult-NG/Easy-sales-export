@@ -1,0 +1,1 @@
+I'll systematically audit every file in the marketplace module. Let me start by mapping the full directory structure.

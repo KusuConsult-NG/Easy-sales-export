@@ -157,12 +157,13 @@ export async function POST(request: NextRequest) {
                 loanBalance: FieldValue.increment(0),
             });
 
-            // Mark payment as processed
+            // Mark payment as processed (include status field — required by fallback queries)
             transaction.set(processedRef, {
                 processedAt: FieldValue.serverTimestamp(),
                 userId,
                 amount: paidAmount,
                 type: "cooperative_membership_registration",
+                status: "completed",  // ← required: onboarding page queries .where("status","==","completed")
                 reference,
             });
 
