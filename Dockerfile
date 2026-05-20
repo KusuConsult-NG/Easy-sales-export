@@ -47,6 +47,9 @@ RUN echo "Cache bust: $CACHEBUST"
 # Copy all source files (this layer is invalidated whenever CACHEBUST changes)
 COPY . .
 
+# Refresh workspace symlinks since source files are now copied
+RUN npm install --legacy-peer-deps --prefer-offline --no-audit
+
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
 
