@@ -105,7 +105,6 @@
   ],
   "exclude": [
     "node_modules",
-    "packages",
     "scripts",
     "tests",
     "__tests__",
