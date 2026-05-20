@@ -25,6 +25,72 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@easy-sales/types": [
+        "packages/types/src/index.ts"
+      ],
+      "@easy-sales/types/*": [
+        "packages/types/src/*"
+      ],
+      "@easy-sales/academy": [
+        "packages/academy/src/index.ts"
+      ],
+      "@easy-sales/academy/*": [
+        "packages/academy/src/*"
+      ],
+      "@easy-sales/auth": [
+        "packages/auth/src/index.ts"
+      ],
+      "@easy-sales/auth/*": [
+        "packages/auth/src/*"
+      ],
+      "@easy-sales/config": [
+        "packages/config/src/index.ts"
+      ],
+      "@easy-sales/config/*": [
+        "packages/config/src/*"
+      ],
+      "@easy-sales/cooperative": [
+        "packages/cooperative/src/index.ts"
+      ],
+      "@easy-sales/cooperative/*": [
+        "packages/cooperative/src/*"
+      ],
+      "@easy-sales/export": [
+        "packages/export/src/index.ts"
+      ],
+      "@easy-sales/export/*": [
+        "packages/export/src/*"
+      ],
+      "@easy-sales/farm-nation": [
+        "packages/farm-nation/src/index.ts"
+      ],
+      "@easy-sales/farm-nation/*": [
+        "packages/farm-nation/src/*"
+      ],
+      "@easy-sales/marketplace": [
+        "packages/marketplace/src/index.ts"
+      ],
+      "@easy-sales/marketplace/*": [
+        "packages/marketplace/src/*"
+      ],
+      "@easy-sales/services": [
+        "packages/services/src/index.ts"
+      ],
+      "@easy-sales/services/*": [
+        "packages/services/src/*"
+      ],
+      "@easy-sales/ui": [
+        "packages/ui/src/index.ts"
+      ],
+      "@easy-sales/ui/*": [
+        "packages/ui/src/*"
+      ],
+      "@easy-sales/wave": [
+        "packages/wave/src/index.ts"
+      ],
+      "@easy-sales/wave/*": [
+        "packages/wave/src/*"
       ]
     },
     "baseUrl": "."
