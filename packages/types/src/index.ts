@@ -11,13 +11,13 @@
  */
 
 // Core / Hub types
-export type * from "./shared";
+export * from "./shared";
 
 // Domain types
-export type * from "./wave";
-export type * from "./academy";
-export type * from "./export";
-export type * from "./farm-nation";
-export type * from "./cooperative";
-export type * from "./marketplace";
-export type * from "./roles";
+export * from "./wave";
+export * from "./academy";
+export * from "./export";
+export * from "./farm-nation";
+export * from "./cooperative";
+export * from "./marketplace";
+export * from "./roles";
