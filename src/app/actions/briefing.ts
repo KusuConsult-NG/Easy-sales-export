@@ -62,11 +62,13 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
         // 🔒 DEMOGRAPHIC GATE: Strict Gender Alignment check
         let userProfile: any = null;
         let isUserAdmin = false;
+        let sessionUserId: string | null = null;
         try {
             const { requireSession } = await import("@/lib/session-guard");
             const sessionResult = await requireSession();
             if (sessionResult.session) {
-                const userDoc = await db.collection(COLLECTIONS.USERS).doc(sessionResult.session.user.id).get();
+                sessionUserId = sessionResult.session.user.id;
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(sessionUserId).get();
                 if (userDoc.exists) {
                     userProfile = userDoc.data();
                 }
@@ -107,6 +109,20 @@ export async function registerForBriefingAction(data: BriefingRegistrationData):
                     error: "The WAVE program and briefing are exclusively for female participants and women entrepreneurs.",
                     data: null
                 };
+            }
+        }
+
+        // Proactive demographic sync: if the user is logged in, has a valid female gender, and profile gender is currently unset,
+        // sync the gender back to the USERS collection to lock in their gender and prevent subsequent blocks in WAVE onboarding.
+        if (sessionUserId && genderToValidate && genderToValidate.toLowerCase().trim() === "female" && !userProfile?.gender) {
+            try {
+                await db.collection(COLLECTIONS.USERS).doc(sessionUserId).update({
+                    gender: "Female",
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+                logger.info(`[WAVE Briefing] Automatically populated gender 'Female' for user ${sessionUserId}`);
+            } catch (err) {
+                logger.error(`[WAVE Briefing] Failed to populate gender for user ${sessionUserId}:`, err);
             }
         }
 

@@ -218,7 +218,8 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
 
         // 🔒 SECURITY: Strict Gender Enforcement for standard users
         // Admins (including module-specific admins) are always eligible to view resources.
-        if (userData?.gender?.toLowerCase() !== "female" && !isUserAdmin) {
+        const existingGender = userData?.gender;
+        if (existingGender !== undefined && existingGender !== null && existingGender.toLowerCase() !== "female" && !isUserAdmin) {
             return {
                 error: null,
                 success: true as const,
@@ -297,7 +298,8 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         }
 
         const userData = userDoc.data();
-        if (userData?.gender?.toLowerCase() !== "female") {
+        const applicantGender = userData?.gender;
+        if (applicantGender !== undefined && applicantGender !== null && applicantGender.toLowerCase() !== "female") {
             return { success: false as const, error: "Only female applicants are eligible to enroll in the WAVE program.", data: null };
         }
 
