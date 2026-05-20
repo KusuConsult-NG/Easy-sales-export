@@ -168,7 +168,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         email: userData.email,
                         name: userData.fullName,
                         image: null,
-                        roles: userData.roles || [],
+                        roles: (userData.roles || []) as UserRole[],
                         verified: userData.verified ?? true,
                         serviceRegistrations: userData.serviceRegistrations || {},
                     };

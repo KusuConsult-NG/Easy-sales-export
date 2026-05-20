@@ -115,7 +115,7 @@ export async function getPostLoginRedirect(email: string) { try {
             // ── ADMIN OVERRIDE ──────────────────────────────────────────────
             // If the user has ANY admin role (system or module-specific),
             // always ensure they land on the Admin Dashboard by default.
-            const hasAdminRole = userRoles.some(role => { const r = role.toLowerCase();
+            const hasAdminRole = userRoles.some((role: string) => { const r = role.toLowerCase();
                 return (
                     r === 'admin' || 
                     r === 'super_admin' || 
@@ -180,7 +180,7 @@ export async function getPostLoginRedirect(email: string) { try {
                 }
 
                 // Fallback for unknown modules: use role-based primary app
-                const primaryApp = getPrimaryApp(userRoles);
+                const primaryApp = getPrimaryApp(userRoles as import("@/lib/types/roles").UserRole[]);
                 logger.info(`[getPostLoginRedirect] User ${email} has approved modules, role-based redirect to: ${primaryApp}`);
                 return { error: null, success: true as const, data: { redirectUrl: primaryApp } };
             }

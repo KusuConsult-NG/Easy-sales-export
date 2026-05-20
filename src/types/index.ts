@@ -31,7 +31,7 @@ export interface User {
     profileImage?: string;
 
     // Roles (multi-role array — platform standard)
-    roles: string[];
+    roles: import("@/lib/types/roles").UserRole[] | string[];
     /** @deprecated Use `roles` array instead */
     role?: string;
 
@@ -91,6 +91,8 @@ export interface User {
         lga?: string;
         country?: string;
     };
+
+    otherName?: string;
 
     // Location (flattened form)
     location?: string;

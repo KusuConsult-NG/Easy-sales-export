@@ -27,10 +27,10 @@
         "./src/*"
       ],
       "@easy-sales/types": [
-        "packages/types/src/index.ts"
+        "src/types/index.ts"
       ],
       "@easy-sales/types/*": [
-        "packages/types/src/*"
+        "src/types/index.ts"
       ],
       "@easy-sales/academy": [
         "packages/academy/src/index.ts"
@@ -111,6 +111,7 @@
     "e2e",
     "test-*.ts",
     "functions",
-    "scratch"
+    "scratch",
+    "packages"
   ]
 }
