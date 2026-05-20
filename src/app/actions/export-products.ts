@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 export async function submitExportProductAction(productData: any) { try {
         const sessionResult = await requireSession();
@@ -45,11 +46,10 @@ export async function getUserExportProductsAction() { try {
             .get();
 
         const products = snapshot.docs.map(doc => { const data = doc.data();
-            return {
+            return serializeValue({
                 id: doc.id,
                 ...data,
-                createdAt: data.createdAt?.toDate() || new Date(),
-                updatedAt: data.updatedAt?.toDate() || new Date() };
+            });
         });
 
         return { error: null, success: true as const, data: products

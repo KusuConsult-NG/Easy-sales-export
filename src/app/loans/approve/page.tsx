@@ -21,11 +21,6 @@ export default function LoanApprovalPage() {
     const [selectedLoan, setSelectedLoan] = useState<LoanApplication | null>(null);
     const [processing, setProcessing] = useState(false);
 
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/immutability
-        loadLoans();
-    }, []);
-
     async function loadLoans() {
         setLoading(true);
         const result = await getPendingLoanApplications();
@@ -34,6 +29,11 @@ export default function LoanApprovalPage() {
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        loadLoans();
+     
+    }, []);
 
     async function handleApproval(loanId: string, approved: boolean, notes?: string, rejectionReason?: string) {
         setProcessing(true);

@@ -5,6 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from "@/lib/logger";
 import { BriefingRegistrationData, BriefingStatus } from "./briefing";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 export interface BriefingRegistration extends BriefingRegistrationData { id: string;
     createdAt: string; // ISO string — safe for server→client boundary
@@ -169,8 +170,8 @@ export async function getBriefingRegistrationsAction(
 
         let data: BriefingRegistration[] = docs.map((doc: any) => { const d = doc.data();
             return {
+                ...serializeValue(d),
                 id: doc.id,
-                ...d,
                 createdAt: d.createdAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
                 updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
                 status: d.status || "registered",

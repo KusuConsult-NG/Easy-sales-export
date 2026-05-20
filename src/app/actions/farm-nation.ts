@@ -8,7 +8,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { z } from "zod";
 
@@ -408,12 +408,18 @@ async function _initiatePropertyPurchaseAction(
         email: string;
         phone: string;
         purpose: string;
+        zoningComplianceDeclarationAccepted?: boolean;
     }
 ): Promise<ActionResponse<null>> { 
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
+
+        // Strict validation of zoning compliance declaration
+        if (!buyerInfo.zoningComplianceDeclarationAccepted) {
+            return { success: false as const, error: "Zoning compliance declaration must be accepted to proceed with property purchase", data: null, meta: null };
+        }
 
         // Verify property exists and is available
         const propertyRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(propertyId);
@@ -467,6 +473,7 @@ async function _initiatePropertyPurchaseAction(
                 status: "pending_payment",
                 escrowAmount: propData.price,
                 escrowStatus: "pending",
+                zoningComplianceDeclarationAccepted: true,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() 
             });
@@ -1044,8 +1051,8 @@ async function _getFarmNationApplicationAction(): Promise<ActionResponse<any>> {
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        const farmNation = userData?.farmNation;
-        const registration = userData?.serviceRegistrations?.farmNation;
+        const farmNation = serializeValue(userData?.farmNation);
+        const registration = serializeValue(userData?.serviceRegistrations?.farmNation);
 
         if (!farmNation && !registration) { 
             return { success: false as const, data: null, error: 'No application found', meta: null };

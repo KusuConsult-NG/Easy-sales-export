@@ -203,7 +203,9 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                         </div>
                     ) : imgSrc ? (
                         <div className="relative w-20 h-24 rounded-lg border-2 border-white/40 shadow-lg overflow-hidden bg-white/10 flex items-center justify-center">
-                            {/* base64 imgSrc from server proxy — avoids CORS on mobile browsers */}
+                            {/* base64 imgSrc from server proxy — avoids CORS on mobile browsers.
+                                next/image cannot render raw base64 data URIs, so native <img> is required. */}
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src={imgSrc}
                                 alt="Passport"

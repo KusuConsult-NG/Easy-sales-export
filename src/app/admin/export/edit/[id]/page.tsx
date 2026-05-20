@@ -24,11 +24,6 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
     const [specs, setSpecs] = useState<string[]>([]);
     const [benefits, setBenefits] = useState<string[]>([]);
 
-    useEffect(() => {
-        loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     async function loadData() {
         setLoading(true);
         const result = await getExportRequestByIdAction(id);
@@ -45,6 +40,11 @@ export default function EditExportWindowPage({ params }: { params: Promise<{ id:
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     async function handleSave() {
         setSaving(true);

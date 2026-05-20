@@ -49,20 +49,33 @@ export class AnalyticsService implements AnalyticsServiceContract {
     static async getPlatformHealthMetrics(): Promise<PlatformHealthMetrics> {
         const db = getAdminDb();
         
-        // Get total active users across the platform
-        const usersSnap = await db.collection(COLLECTIONS.USERS).get();
-        const activeUsers = usersSnap.docs.filter(d => d.data().status !== 'suspended').length;
+        try {
+            const [totalUsersSnap, suspendedUsersSnap, lockedEscrowsSnap] = await Promise.all([
+                db.collection(COLLECTIONS.USERS).count().get(),
+                db.collection(COLLECTIONS.USERS).where("status", "==", "suspended").count().get(),
+                db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "locked").count().get()
+            ]);
 
-        // Escrow health
-        const escrowSnap = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "locked").get();
-        const activeEscrows = escrowSnap.size;
+            const totalUsers = totalUsersSnap.data().count ?? 0;
+            const suspendedUsers = suspendedUsersSnap.data().count ?? 0;
+            const activeUsers = totalUsers - suspendedUsers;
+            const activeEscrows = lockedEscrowsSnap.data().count ?? 0;
 
-        return {
-            totalUsers: usersSnap.size,
-            activeUsers,
-            activeEscrows,
-            lastCalculatedAt: new Date().toISOString()
-        };
+            return {
+                totalUsers,
+                activeUsers,
+                activeEscrows,
+                lastCalculatedAt: new Date().toISOString()
+            };
+        } catch (error) {
+            logger.error("Failed to fetch platform health metrics:", error);
+            return {
+                totalUsers: 0,
+                activeUsers: 0,
+                activeEscrows: 0,
+                lastCalculatedAt: new Date().toISOString()
+            };
+        }
     }
 
     async getPlatformHealthMetrics(): Promise<PlatformHealthMetrics> {
@@ -74,7 +87,10 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const [revenueSnap, allUsersSnap] = await Promise.allSettled([
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                 .where("status", "==", "completed")
-                .select("amount")
+                .aggregate({
+                    totalRevenue: AggregateField.sum("amount"),
+                    totalTransactions: AggregateField.count()
+                })
                 .get(),
             db.collection(COLLECTIONS.USERS).count().get()
         ]);
@@ -83,10 +99,9 @@ export class AnalyticsService implements AnalyticsServiceContract {
         let totalTransactions = 0;
         
         if (revenueSnap.status === 'fulfilled') {
-            revenueSnap.value.docs.forEach(d => {
-                totalRevenue += (Number(d.data().amount) || 0);
-            });
-            totalTransactions = revenueSnap.value.docs.length;
+            const data = revenueSnap.value.data();
+            totalRevenue = Number(data.totalRevenue) || 0;
+            totalTransactions = Number(data.totalTransactions) || 0;
         }
 
         const totalUsers = (allUsersSnap.status === 'fulfilled' ? allUsersSnap.value.data().count || 0 : 0);
@@ -171,13 +186,17 @@ export class AnalyticsService implements AnalyticsServiceContract {
         const filterFrom = options?.dateFrom ? dateRangeStart(options.dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const filterTo   = options?.dateTo   ? dateRangeEnd(options.dateTo) : now;
 
+        // Active users always uses a fixed 30-day window — this is a health
+        // indicator, not a date-filtered KPI. It must NOT use filterFrom.
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
         const [
             activeUsersSnap,
             pendingEscrowsCount,
             activeLandCount,
             pendingLoansCount,
         ] = await Promise.allSettled([
-            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", filterFrom).count().get(),
+            db.collection(COLLECTIONS.USERS).where("lastLoginAt", ">=", thirtyDaysAgo).count().get(),
             safeCount(db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("status", "==", "pending")),
             safeCount(db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "active")),
             safeCount(db.collection(COLLECTIONS.LOAN_APPLICATIONS).where("status", "==", "pending")),
@@ -201,15 +220,22 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     .where("status", "==", "completed")
                     .where("processedAt", ">=", filterFrom)
                     .where("processedAt", "<=", filterTo)
-                    .select("amount")
+                    .aggregate({
+                        totalRevenue: AggregateField.sum("amount"),
+                        totalTransactions: AggregateField.count()
+                    })
                     .get(),
                 this.getGlobalPendingApprovals(db),
             ]);
             totalUsers = newUsersSnap.status === "fulfilled" ? (newUsersSnap.value.data().count ?? 0) : 0;
-            totalRevenue = paymentsSnap.status === "fulfilled"
-                ? paymentsSnap.value.docs.reduce((sum: number, d: any) => sum + (Number(d.data().amount) || 0), 0)
-                : 0;
-            totalTransactions = paymentsSnap.status === "fulfilled" ? paymentsSnap.value.size : 0;
+            if (paymentsSnap.status === "fulfilled") {
+                const data = paymentsSnap.value.data();
+                totalRevenue = Number(data.totalRevenue) || 0;
+                totalTransactions = Number(data.totalTransactions) || 0;
+            } else {
+                totalRevenue = 0;
+                totalTransactions = 0;
+            }
             pendingApprovals = pendingRes.status === "fulfilled" ? pendingRes.value.totalPending : 0;
         } else {
             const [metricsResult, pendingResult] = await Promise.all([
@@ -234,10 +260,11 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     .where("status", "==", "completed")
                     .where("processedAt", ">=", start)
                     .where("processedAt", "<=", end)
-                    .select("amount")
+                    .aggregate({
+                        total: AggregateField.sum("amount")
+                    })
                     .get();
-                let total = 0;
-                snap.docs.forEach((doc: any) => total += (Number(doc.data().amount) || 0));
+                const total = Number(snap.data().total) || 0;
                 return { month: label, revenue: total };
             } catch (e) {
                 return { month: label, revenue: 0 };
@@ -278,15 +305,17 @@ export class AnalyticsService implements AnalyticsServiceContract {
             { module: "Export Onboarding", count: canonicalStats.exportOnboarding },
         ].filter((m) => m.count > 0);
 
-        // Recent transactions
+        // Recent transactions — filters must come before orderBy to avoid
+        // Firestore composite index requirements on inequality fields.
         const recentTransactions: AnalyticsData["recentTransactions"] = [];
         try {
-            let txQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).orderBy("processedAt", "desc");
+            let txQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
             if (isDateFiltered) {
                 txQuery = txQuery
                     .where("processedAt", ">=", filterFrom)
                     .where("processedAt", "<=", filterTo);
             }
+            txQuery = txQuery.orderBy("processedAt", "desc");
             const [txSnap] = await Promise.allSettled([txQuery.limit(15).get()]);
 
             const allDocs: any[] = [];
@@ -364,16 +393,14 @@ export class AnalyticsService implements AnalyticsServiceContract {
 
         const [allEscrowsR, allTxnsR, countSuccessR, countAbandonedR, countFailedR] = await Promise.allSettled([
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).aggregate({ total: AggregateField.sum("amount") }).get(),
-            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").limit(10000).get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").aggregate({ totalRevenue: AggregateField.sum("amount") }).get(),
             db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed").count().get(),
             db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "abandoned").count().get(),
             db.collection(COLLECTIONS.FAILED_PAYMENTS).where("status", "==", "failed").count().get(),
         ]);
 
         totalEscrowVolume = allEscrowsR.status === "fulfilled" ? (allEscrowsR.value.data().total ?? 0) : 0;
-        if (allTxnsR.status === "fulfilled") {
-            allTxnsR.value.docs.forEach(d => { totalRevenue += (Number(d.data().amount) || 0); });
-        }
+        totalRevenue = allTxnsR.status === "fulfilled" ? (Number(allTxnsR.value.data().totalRevenue) || 0) : 0;
         const totalSuccessfulCount = countSuccessR.status === "fulfilled" ? (countSuccessR.value.data().count ?? 0) : 0;
         const totalAbandonedCount = countAbandonedR.status === "fulfilled" ? (countAbandonedR.value.data().count ?? 0) : 0;
         const totalFailedCount = countFailedR.status === "fulfilled" ? (countFailedR.value.data().count ?? 0) : 0;

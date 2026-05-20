@@ -21,47 +21,69 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const formData = await request.formData();
-        const file = formData.get("file") as File;
+        const contentType = request.headers.get("content-type") || "";
+        let fileUrl = "";
+        let fileName = "";
+        let fileType = "";
+        let storagePath = "";
 
-        if (!file) {
-            return NextResponse.json(
-                { success: false, error: "No file provided" },
-                { status: 400 }
-            );
+        if (contentType.includes("application/json")) {
+            const body = await request.json();
+            fileUrl = body.fileUrl;
+            fileName = body.fileName;
+            fileType = body.fileType;
+
+            if (!fileUrl || !fileName || !fileType) {
+                return NextResponse.json(
+                    { success: false, error: "Missing required JSON fields (fileUrl, fileName, fileType)" },
+                    { status: 400 }
+                );
+            }
+        } else {
+            const formData = await request.formData();
+            const file = formData.get("file") as File;
+
+            if (!file) {
+                return NextResponse.json(
+                    { success: false, error: "No file provided" },
+                    { status: 400 }
+                );
+            }
+
+            // Validate file type
+            const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
+            if (!allowedTypes.includes(file.type)) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid file type" },
+                    { status: 400 }
+                );
+            }
+
+            // Upload to Firebase Storage (Admin SDK)
+            fileName = file.name;
+            fileType = file.type;
+            const uniqueFileName = `${Date.now()}_${file.name}`;
+            storagePath = `certificates/${session.user.id}/${uniqueFileName}`;
+            const bucket = adminStorage.bucket();
+            const fileRef = bucket.file(storagePath);
+
+            const buffer = Buffer.from(await file.arrayBuffer());
+            await fileRef.save(buffer, {
+                metadata: { contentType: file.type },
+            });
+
+            // Make file public or generate signed URL
+            await fileRef.makePublic();
+            fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
         }
-
-        // Validate file type
-        const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
-        if (!allowedTypes.includes(file.type)) {
-            return NextResponse.json(
-                { success: false, error: "Invalid file type" },
-                { status: 400 }
-            );
-        }
-
-        // Upload to Firebase Storage (Admin SDK)
-        const fileName = `${Date.now()}_${file.name}`;
-        const storagePath = `certificates/${session.user.id}/${fileName}`;
-        const bucket = adminStorage.bucket();
-        const fileRef = bucket.file(storagePath);
-
-        const buffer = Buffer.from(await file.arrayBuffer());
-        await fileRef.save(buffer, {
-            metadata: { contentType: file.type },
-        });
-
-        // Make file public or generate signed URL
-        await fileRef.makePublic();
-        const fileUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
 
         // Save metadata to Firestore (Admin SDK)
         await db.collection(COLLECTIONS.USER_CERTIFICATES).add({
             userId: session.user.id,
-            fileName: file.name,
+            fileName,
             fileUrl,
             storagePath,
-            fileType: file.type,
+            fileType,
             uploadedBy: session.user.id,
             uploadedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),

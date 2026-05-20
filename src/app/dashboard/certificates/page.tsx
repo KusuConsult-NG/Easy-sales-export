@@ -6,6 +6,7 @@ import { Upload, Download, Trash2, FileText, Loader2, Plus, Award, GraduationCap
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
+import { useStorage } from "@/hooks/use-storage";
 
 interface Certificate {
     id: string;
@@ -31,11 +32,13 @@ type Tab = "academy" | "uploaded";
 export default function CertificatesPage() {
     const { data: session } = useSession();
     const { showToast } = useToast();
+    const { uploadFile, uploadState } = useStorage();
     const [activeTab, setActiveTab] = useState<Tab>("academy");
     const [certificates, setCertificates] = useState<Certificate[]>([]);
     const [academyCerts, setAcademyCerts] = useState<AcademyCertificate[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadingFileName, setUploadingFileName] = useState<string | null>(null);
 
     useEffect(() => {
         fetchAll();
@@ -85,10 +88,23 @@ export default function CertificatesPage() {
         }
 
         setIsUploading(true);
+        setUploadingFileName(file.name);
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-            const response = await fetch("/api/certificates/upload", { method: "POST", body: formData });
+            // Client-side Cloudinary pre-upload
+            const fileUrl = await uploadFile(file, `certificates/${session?.user?.id || "anonymous"}/${Date.now()}_${file.name}`);
+
+            const response = await fetch("/api/certificates/upload", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    fileUrl,
+                    fileName: file.name,
+                    fileType: file.type,
+                }),
+            });
+
             const data = await response.json();
             if (data.success) {
                 showToast("Certificate uploaded successfully", "success");
@@ -96,10 +112,12 @@ export default function CertificatesPage() {
             } else {
                 showToast(data.error || "Upload failed", "error");
             }
-        } catch {
+        } catch (error) {
+            logger.error("Upload error:", error);
             showToast("Upload failed", "error");
         } finally {
             setIsUploading(false);
+            setUploadingFileName(null);
         }
     };
 
@@ -272,10 +290,25 @@ export default function CertificatesPage() {
                                     className="hidden"
                                 />
                                 {isUploading ? (
-                                    <>
-                                        <Loader2 className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-                                        <p className="text-slate-600">Uploading...</p>
-                                    </>
+                                    <div className="w-full flex flex-col items-center max-w-xs space-y-4">
+                                        <div className="relative flex items-center justify-center">
+                                            <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+                                            <span className="absolute text-[10px] font-bold text-blue-600 mt-[1px]">
+                                                {Math.round(uploadingFileName ? (uploadState[uploadingFileName]?.progress ?? 0) : 0)}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full space-y-1.5 text-center">
+                                            <p className="text-slate-700 font-semibold text-sm truncate max-w-[240px] mx-auto">
+                                                Uploading {uploadingFileName}
+                                            </p>
+                                            <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-blue-600 transition-all duration-300"
+                                                    style={{ width: `${uploadingFileName ? (uploadState[uploadingFileName]?.progress ?? 0) : 0}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <>
                                         <Plus className="w-12 h-12 text-slate-400 mb-4" />

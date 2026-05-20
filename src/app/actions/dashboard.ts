@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
  * Server Actions for Dashboard Data
@@ -25,15 +26,15 @@ export type RecentActivity = { id: string;
     type: "export" | "cooperative" | "academy" | "wave";
     title: string;
     description: string;
-    timestamp: Date;
+    timestamp: string; // ISO 8601 string — Date cannot cross Server→Client boundary
     status?: string; }[];
 
 export type EscrowStatus = { totalLocked: number;
     pendingRelease: number;
-    nextReleaseDate: Date | null;
+    nextReleaseDate: string | null; // ISO 8601 string — Date cannot cross Server→Client boundary
     upcomingReleases: {
         amount: number;
-        releaseDate: Date;
+        releaseDate: string; // ISO 8601 string
         orderId: string;
     }[];
 };
@@ -182,12 +183,13 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> { 
 
         exportsSnapshot.forEach(doc => {
             const data = doc.data();
+            const ts = data.createdAt?.toDate?.() || new Date();
             activities.push({
                 id: doc.id,
                 type: "export",
                 title: `Export Order ${data.orderId}`,
                 description: `${data.commodity} - ${data.quantity}`,
-                timestamp: data.createdAt?.toDate() || new Date(),
+                timestamp: ts.toISOString(),
                 status: data.status });
         });
 
@@ -200,19 +202,19 @@ export async function getRecentActivityAction(): Promise<ActivityActionState> { 
             .get();
 
         notificationsSnapshot.forEach(doc => { const data = doc.data();
+            const ts = data.createdAt?.toDate?.() || new Date();
             activities.push({
                 id: doc.id,
                 type: data.type || "export",
                 title: data.title,
                 description: data.message,
-                timestamp: data.createdAt?.toDate() || new Date() });
+                timestamp: ts.toISOString() });
         });
 
-        // Sort all activities by timestamp
-        activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        // Sort all activities by timestamp (ISO strings sort correctly lexicographically)
+        activities.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
-        return { error: null, success: true as const, data: activities.slice(0, 5), // Return top 5
- };
+        return { error: null, success: true as const, data: serializeValue(activities.slice(0, 5)) };
     } catch (error: any) { logger.error("Recent activity error:", error);
         return { error: "Failed to fetch recent activity", success: false as const, data: null };
     }
@@ -239,13 +241,13 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
         let totalLocked = 0;
         let pendingRelease = 0;
         const upcomingReleases: EscrowStatus["upcomingReleases"] = [];
-        let nextReleaseDate: Date | null = null;
+        let nextReleaseDateMs: number | null = null;
 
         const now = new Date();
 
         exportsSnapshot.forEach(docSnapshot => { const data = docSnapshot.data();
             const amount = data.amount || 0;
-            const escrowReleaseDate = data.escrowReleaseDate?.toDate();
+            const escrowReleaseDate: Date | undefined = data.escrowReleaseDate?.toDate?.();
 
             totalLocked += amount;
 
@@ -256,27 +258,28 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
                 } else { // Future release
                     upcomingReleases.push({
                         amount,
-                        releaseDate: escrowReleaseDate,
+                        releaseDate: escrowReleaseDate.toISOString(),
                         orderId: data.orderId });
 
                     // Track next release date
-                    if (!nextReleaseDate || escrowReleaseDate < nextReleaseDate) { nextReleaseDate = escrowReleaseDate;
+                    if (!nextReleaseDateMs || escrowReleaseDate.getTime() < nextReleaseDateMs) {
+                        nextReleaseDateMs = escrowReleaseDate.getTime();
                     }
                 }
             }
         });
 
-        // Sort upcoming releases by date
-        upcomingReleases.sort((a, b) => a.releaseDate.getTime() - b.releaseDate.getTime());
+        // Sort upcoming releases by date (ISO strings sort correctly lexicographically)
+        upcomingReleases.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
 
-                const escrow: EscrowStatus = {
+        const escrow: EscrowStatus = {
             totalLocked,
             pendingRelease,
-            nextReleaseDate,
+            nextReleaseDate: nextReleaseDateMs ? new Date(nextReleaseDateMs).toISOString() : null,
             upcomingReleases
         };
 
-        return { error: null, success: true as const, data: escrow };
+        return { error: null, success: true as const, data: serializeValue(escrow) };
 
     } catch (error: any) { logger.error("Escrow status error:", error);
         return { error: "Failed to fetch escrow status", success: false as const, data: null };

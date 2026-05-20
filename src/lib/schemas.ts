@@ -59,7 +59,7 @@ export const registerSchema = z
         fullName: strictNameSchema,
         email: strictEmailSchema,
         phone: strictPhoneSchema,
-        gender: z.enum(["male", "female"]).optional(),
+        gender: z.enum(["Male", "Female"]).optional(),
         password: z
             .string()
             .min(8, "Password must be at least 8 characters")
@@ -90,7 +90,7 @@ export const waveLegacyApplicationSchema = z.object({
     fullName: strictNameSchema,
     email: strictEmailSchema,
     phone: strictNigerianPhoneSchema,
-    gender: z.literal("female"),
+    gender: z.literal("Female"),
     businessName: z.string().min(3, "Business name is required"),
     businessType: z.enum(["farming", "trading", "processing", "other"], {
         message: "Please select a business type",
@@ -267,7 +267,7 @@ export const LegacyOnboardingSchema = z.object({
     fullName: strictNameSchema,
     email: strictEmailSchema,
     phone: strictPhoneSchema,
-    gender: z.enum(["male", "female"]).optional(),
+    gender: z.enum(["Male", "Female"]).optional(),
     dateOfBirth: z.string().optional(),
     occupation: z.string().optional(),
     roles: z.array(UserRoleSchema).min(1, "At least one role is required"),

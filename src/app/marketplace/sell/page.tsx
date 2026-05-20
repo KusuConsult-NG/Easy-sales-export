@@ -22,6 +22,24 @@ export default function SellerDashboardPage() {
     const [filterStatus, setFilterStatus] = useState<"all" | "active" | "suspended" | "sold_out">("all");
     const { showToast } = useToast();
 
+    const loadSellerData = async () => {
+        setLoading(true);
+        const [productsRes, verificationRes] = await Promise.all([
+            getSellerProductsAction(),
+            getSellerVerificationAction()
+        ]);
+
+        if (productsRes.success) {
+            setProducts(productsRes.data?.products || []);
+        }
+
+        if (verificationRes.success) {
+            setVerification(verificationRes.data?.verification);
+        }
+
+        setLoading(false);
+    };
+
     async function handleDeleteProduct(productId: string, productTitle: string) {
         if (!confirm(`Delete "${productTitle}"? This action cannot be undone.`)) {
             return;
@@ -48,24 +66,6 @@ export default function SellerDashboardPage() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [status]);
-
-    async function loadSellerData() {
-        setLoading(true);
-        const [productsRes, verificationRes] = await Promise.all([
-            getSellerProductsAction(),
-            getSellerVerificationAction()
-        ]);
-
-        if (productsRes.success) {
-            setProducts(productsRes.data?.products || []);
-        }
-
-        if (verificationRes.success) {
-            setVerification(verificationRes.data?.verification);
-        }
-
-        setLoading(false);
-    };
 
     const filteredProducts = products.filter(p => {
         if (filterStatus === "all") return true;

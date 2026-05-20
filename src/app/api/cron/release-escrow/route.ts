@@ -176,11 +176,47 @@ async function processEscrowTransactions(now: Timestamp) {
                 throw new Error(`Escrow ${escrowId} status changed to '${freshData?.status}', skipping auto-release`);
             }
 
+            // 1. Update Escrow Status
             tx.update(doc.ref, {
                 status: "released",
                 releasedBy: "cron",
                 releasedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            // 2. Credit Seller's Wallet
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(sellerId);
+            const walletSnap = await tx.get(walletRef);
+            
+            if (!walletSnap.exists) {
+                tx.set(walletRef, {
+                    userId: sellerId,
+                    balance: amount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                tx.update(walletRef, {
+                    balance: FieldValue.increment(amount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // 3. Record in Global Ledger
+            const txId = `ESCROW-RELEASE-${escrowId.substring(0, 8)}`;
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            tx.set(txRef, {
+                id: txId,
+                userId: sellerId,
+                type: "escrow_payout",
+                module: "escrow",
+                amount: amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: escrowId,
+                description: `Escrow Payout for "${productName}"`
             });
         });
 

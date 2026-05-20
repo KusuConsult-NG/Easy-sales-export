@@ -40,7 +40,7 @@ class Logger {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    content: `🚨 **[${process.env.NODE_ENV?.toUpperCase() || 'PRODUCTION'}] CRITICAL SYSTEM ERROR**\n**Time:** ${new Date().toISOString()}\n**Environment:** ${process.env.VERCEL_ENV || 'local'}\n**Message:** ${message}\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``
+                    content: `🚨 **[${process.env.NODE_ENV?.toUpperCase() || 'PRODUCTION'}] CRITICAL SYSTEM ERROR**\n**Time:** ${new Date().toISOString()}\n**Environment:** ${process.env.RAILWAY_ENVIRONMENT || process.env.VERCEL_ENV || (process.env.NODE_ENV === 'production' ? 'production' : 'local')}\n**Message:** ${message}\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``
                 })
             });
         } catch (e) {

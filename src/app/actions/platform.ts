@@ -72,7 +72,7 @@ export async function submitWaveApplicationAction(
         const validatedData = waveApplicationSchema.parse(applicationData);
 
         // Double-check gender enforcement at server level
-        if (validatedData.gender !== "female") { return { error: "WAVE Program is exclusively for female entrepreneurs", success: false as const };
+        if (validatedData.gender.toLowerCase() !== "female") { return { error: "WAVE Program is exclusively for female entrepreneurs", success: false as const };
         }
 
         // Generate application ID

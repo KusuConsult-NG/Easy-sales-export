@@ -237,9 +237,40 @@ async function _submitSellerVerificationAction(
 
             // Update user record
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            
+            const address = verificationData.address;
+            const bankAccount = verificationData.bankAccount;
+            const cac = verificationData.cac;
+
             transaction.update(userRef, {
                 sellerVerificationStatus: "pending",
                 sellerVerificationId: verificationId,
+                
+                // Concurrently replicate onboarding details directly to the parent user
+                ...(verificationData.nin ? { nin: verificationData.nin, ninVerified: true } : {}),
+                ...(verificationData.bvn ? { bvn: verificationData.bvn, bvnVerified: true } : {}),
+                ...(cac ? { cacNumber: cac, cacVerified: true } : {}),
+                ...(bankAccount?.accountNumber ? {
+                    bankDetails: {
+                        accountNumber: bankAccount.accountNumber,
+                        bankName: bankAccount.bankName || "",
+                        accountName: bankAccount.accountName || "",
+                        bankCode: bankAccount.bankCode || ""
+                    }
+                } : {}),
+                ...(address?.street ? {
+                    address: {
+                        street: address.street,
+                        city: address.city || "",
+                        state: address.state || "",
+                        lga: address.lga || "",
+                        country: address.country || "Nigeria"
+                    },
+                    residentialAddress: address.street,
+                    stateOfOrigin: address.state,
+                    lga: address.lga
+                } : {}),
+
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) 
             });
@@ -572,53 +603,88 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             logger.warn("Failed to parse certifications JSON, using defaults", { userId }); 
         }
 
+        const retailPrice = parseFloat(formData.get("retailPrice") as string || "0");
+        const bulkPrice = formData.get("bulkPrice") ? parseFloat(formData.get("bulkPrice") as string) : undefined;
+        const exportPrice = formData.get("exportPrice") ? parseFloat(formData.get("exportPrice") as string) : undefined;
+        const bulkAvailable = formData.get("bulkAvailable") === "true";
+        const exportReady = formData.get("exportReady") === "true";
+        const bulkMinQuantity = formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined;
+        const exportMinQuantity = formData.get("exportMinQuantity") ? parseInt(formData.get("exportMinQuantity") as string) : undefined;
+
+        const pricingTiers: any[] = [];
+        pricingTiers.push({ type: "retail", price: retailPrice, minQuantity: 1 });
+
+        if (bulkPrice && bulkAvailable) { 
+            pricingTiers.push({
+                type: "bulk",
+                price: bulkPrice,
+                minQuantity: bulkMinQuantity || 50
+            });
+        }
+
+        if (exportPrice && exportReady) { 
+            pricingTiers.push({
+                type: "export",
+                price: exportPrice,
+                minQuantity: exportMinQuantity || 100
+            });
+        }
+
+        const productId = `product_${userId}_${Date.now()}`;
         const rawData = { 
-            title: formData.get("title"),
-            description: formData.get("description"),
-            category: formData.get("category"),
-            retailPrice: parseFloat(formData.get("retailPrice") as string),
-            bulkPrice: formData.get("bulkPrice") ? parseFloat(formData.get("bulkPrice") as string) : undefined,
-            exportPrice: formData.get("exportPrice") ? parseFloat(formData.get("exportPrice") as string) : undefined,
-            availableQuantity: parseInt(formData.get("availableQuantity") as string),
-            minimumOrderQuantity: parseInt(formData.get("minimumOrderQuantity") as string),
-            bulkMinQuantity: formData.get("bulkMinQuantity") ? parseInt(formData.get("bulkMinQuantity") as string) : undefined,
-            exportMinQuantity: formData.get("exportMinQuantity") ? parseInt(formData.get("exportMinQuantity") as string) : undefined,
-            unit: formData.get("unit"),
-            state: formData.get("state"),
-            lga: formData.get("lga"),
-            deliveryMethod: formData.get("deliveryMethod"),
+            id: productId,
+            sellerId: userId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            title: formData.get("title") || undefined,
+            description: formData.get("description") || undefined,
+            category: formData.get("category") || undefined,
+            pricingTiers,
+            availableQuantity: parseInt(formData.get("availableQuantity") as string || "0"),
+            minimumOrderQuantity: parseInt(formData.get("minimumOrderQuantity") as string || "1"),
+            unit: formData.get("unit") || undefined,
+            location: {
+                state: formData.get("state") as string || "Lagos",
+                lga: formData.get("lga") as string || "Unknown",
+            },
+            deliveryMethod: formData.get("deliveryMethod") || undefined,
             estimatedDeliveryDays: formData.get("estimatedDeliveryDays") ? parseInt(formData.get("estimatedDeliveryDays") as string) : undefined,
             certifications,
-            bulkAvailable: formData.get("bulkAvailable") === "true",
-            exportReady: formData.get("exportReady") === "true",
+            bulkAvailable,
+            exportReady,
             videoUrl: formData.get("videoUrl") || "" 
         };
 
         // Validate with Zod
         const validation = ProductSchema.safeParse(rawData);
         if (!validation.success) { 
-            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null };
+            logger.error("Product validation failed:", validation.error.format());
+            return { success: false as const, error: validation.error.issues[0]?.path.join(".") + ": " + validation.error.issues[0]?.message || "Validation failed", data: null };
         }
 
-        const validatedData = { ...rawData, ...validation.data };
-        const productId = `product_${userId}_${Date.now()}`;
+        const validatedData = validation.data;
 
-        // 1. Handle Image Uploads
+        // 1. Handle Image Uploads (supports pre-uploaded URLs or server-side fallback)
         const uploadFile = async (file: File) => {
             const extension = file.name.split(".").pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${extension}`;
             const destination = `products/${userId}/${productId}/${fileName}`;
             const { uploadFileToStorage } = await import("@/lib/storage-admin");
-            return await uploadFileToStorage(file, destination, false);
+            // isPublic=true so buyers can view images in the marketplace
+            return await uploadFileToStorage(file, destination, true);
         };
 
         const imageUrls: string[] = [];
         for (const key of Array.from(formData.keys())) { 
-            if (key.startsWith("productImages_")) {
-                const file = formData.get(key) as File;
-                if (file.size > 0) {
-                    const url = await uploadFile(file);
-                    imageUrls.push(url);
+            if (key.startsWith("productImages_") || key.startsWith("image")) {
+                const val = formData.get(key);
+                if (val) {
+                    if (typeof val === "string" && val.startsWith("http")) {
+                        imageUrls.push(val);
+                    } else if (val instanceof File && val.size > 0) {
+                        const url = await uploadFile(val);
+                        imageUrls.push(url);
+                    }
                 }
             }
         }
@@ -639,25 +705,6 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
         // Create product
         const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(productId);
 
-        const pricingTiers: any[] = [];
-        pricingTiers.push({ type: "retail", price: validatedData.retailPrice, minQuantity: 1 });
-
-        if (validatedData.bulkPrice && validatedData.bulkAvailable) { 
-            pricingTiers.push({
-                type: "bulk",
-                price: validatedData.bulkPrice,
-                minQuantity: validatedData.bulkMinQuantity || 50
-            });
-        }
-
-        if (validatedData.exportPrice && validatedData.exportReady) { 
-            pricingTiers.push({
-                type: "export",
-                price: validatedData.exportPrice,
-                minQuantity: validatedData.exportMinQuantity || 100
-            });
-        }
-
         const productData: any = { 
             id: productId,
             sellerId: userId,
@@ -666,13 +713,13 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             category: validatedData.category,
             images: imageUrls,
             videoUrl: (validatedData.videoUrl as string) || undefined,
-            pricingTiers,
+            pricingTiers: validatedData.pricingTiers,
             availableQuantity: validatedData.availableQuantity,
             minimumOrderQuantity: validatedData.minimumOrderQuantity,
             unit: validatedData.unit,
             location: {
-                state: validatedData.state,
-                lga: validatedData.lga 
+                state: validatedData.location.state,
+                lga: validatedData.location.lga 
             },
             deliveryMethod: validatedData.deliveryMethod,
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
@@ -745,8 +792,12 @@ async function _getMarketplaceProductsAction(params: {
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let products = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
-            const parsed = ProductSchema.parse({ id: doc.id, ...data });
-            return serializeValue(parsed);
+            try {
+                const parsed = ProductSchema.parse({ id: doc.id, ...data });
+                return serializeValue(parsed);
+            } catch {
+                return serializeValue({ id: doc.id, ...data });
+            }
         });
 
         if (search) { 
@@ -917,8 +968,13 @@ async function _getSellerProductsAction(options: {
         
         let products = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
-            const parsed = ProductSchema.parse({ id: doc.id, ...data });
-            return serializeValue(parsed);
+            try {
+                const parsed = ProductSchema.parse({ id: doc.id, ...data });
+                return serializeValue(parsed);
+            } catch {
+                // Graceful fallback: return raw serialized data rather than crashing/losing the product
+                return serializeValue({ id: doc.id, ...data });
+            }
         });
 
         if (search) { 

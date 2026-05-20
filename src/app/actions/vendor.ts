@@ -4,10 +4,11 @@ import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { FieldValue } from "firebase-admin/firestore";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { withOptimisticLock } from "@/lib/data-integrity";
+import { serializeDoc } from "@/lib/firestore-serialize";
 
 /**
  * VENDOR ACTIONS
@@ -74,13 +75,8 @@ async function _getVendorOrdersAction(filters?: { status?: VendorOrder["status"]
         }
 
         const snapshot = await query.get();
-        const orders = snapshot.docs.map(doc => { const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date() };
-        }) as VendorOrder[];
+        const orders = snapshot.docs.map(doc => serializeDoc<VendorOrder>(doc.id, doc.data()));
+
 
         return { success: true as const, error: null, data: { orders } };
     } catch (error: any) { logger.error("Get vendor orders error:", {
@@ -161,13 +157,8 @@ async function _getVendorProductsAction(filters?: { status?: VendorProduct["stat
         }
 
         const snapshot = await query.get();
-        const products = snapshot.docs.map(doc => { const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date() };
-        }) as VendorProduct[];
+        const products = snapshot.docs.map(doc => serializeDoc<VendorProduct>(doc.id, doc.data()));
+
 
         return { success: true as const, error: null, data: { products } };
     } catch (error: any) { logger.error("Get vendor products error:", {

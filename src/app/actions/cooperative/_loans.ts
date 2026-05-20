@@ -112,17 +112,30 @@ export async function submitLoanApplicationAction(formData: {
             return { success: false as const, error: eligibility.reason || "Not eligible", data: null };
         }
 
-        // Calculate repayment
+        // Calculate repayment in kobo to eliminate floating-point drift
         const interestRate = getTierInterestRate(formData.tier);
-        const schedule = calculateRepaymentSchedule(
-            formData.amount,
-            interestRate,
-            formData.durationMonths
-        );
+        const amountKobo = Math.round(formData.amount * 100);
+        const r = interestRate / 100;
+        const n = formData.durationMonths;
+        const monthlyPaymentKobo = Math.round((amountKobo * (r * Math.pow(1 + r, n))) / (Math.pow(1 + r, n) - 1));
 
-        const totalInterest = schedule.reduce((sum, inst) => sum + inst.interestAmount, 0);
-        const totalRepayment = formData.amount + totalInterest;
-        const monthlyPayment = totalRepayment / formData.durationMonths;
+        let remainingPrincipalKobo = amountKobo;
+        let totalInterestKobo = 0;
+
+        for (let i = 1; i <= n; i++) {
+            const interestAmountKobo = Math.round(remainingPrincipalKobo * r);
+            let principalAmountKobo = monthlyPaymentKobo - interestAmountKobo;
+
+            if (i === n) {
+                principalAmountKobo = remainingPrincipalKobo;
+            }
+
+            totalInterestKobo += interestAmountKobo;
+            remainingPrincipalKobo -= principalAmountKobo;
+        }
+
+        const totalRepayment = (amountKobo + totalInterestKobo) / 100;
+        const monthlyPayment = Math.round((amountKobo + totalInterestKobo) / n) / 100;
 
         // Create application
         const application: Omit<LoanApplication, "id"> = {
@@ -673,7 +686,7 @@ export interface RepaymentInstallment {
     loanId: string;
     userId: string;
     installmentNumber: number;
-    dueDate: Date;
+    dueDate: Date | string;
     principalAmount: number;
     interestAmount: number;
     totalAmount: number;
@@ -719,31 +732,45 @@ async function _getRepaymentScheduleAction(
             return { error: null, success: true as const, data: { schedule } };
         }
 
-        // Generate schedule if not exists
-        const schedule = calculateRepaymentSchedule(
-            loanData.amount,
-            loanData.interestRate,
-            loanData.durationMonths
-        );
+        // Generate schedule in kobo to eliminate floating-point drift
+        const amountKobo = Math.round(loanData.amount * 100);
+        const interestRate = loanData.interestRate;
+        const r = interestRate / 100;
+        const n = loanData.durationMonths;
+        const monthlyPaymentKobo = Math.round((amountKobo * (r * Math.pow(1 + r, n))) / (Math.pow(1 + r, n) - 1));
 
         const startDate = (loanData.disbursedAt && 'toDate' in loanData.disbursedAt)
             ? loanData.disbursedAt.toDate()
             : new Date();
         const installments: RepaymentInstallment[] = [];
+        let remainingPrincipalKobo = amountKobo;
 
-        for (let i = 0; i < schedule.length; i++) {
-            const inst = schedule[i];
+        for (let i = 1; i <= n; i++) {
+            const interestAmountKobo = Math.round(remainingPrincipalKobo * r);
+            let principalAmountKobo = monthlyPaymentKobo - interestAmountKobo;
+
+            if (i === n) {
+                principalAmountKobo = remainingPrincipalKobo;
+            }
+
+            const totalAmountKobo = principalAmountKobo + interestAmountKobo;
+            remainingPrincipalKobo -= principalAmountKobo;
+
+            const principalAmount = principalAmountKobo / 100;
+            const interestAmount = interestAmountKobo / 100;
+            const totalAmount = totalAmountKobo / 100;
+
             const dueDate = new Date(startDate);
-            dueDate.setMonth(dueDate.getMonth() + i + 1);
+            dueDate.setMonth(dueDate.getMonth() + i);
 
             const installmentRef = await db.collection(COLLECTIONS.LOAN_REPAYMENTS).add({
                 loanId,
                 userId: loanData.userId,
-                installmentNumber: i + 1,
+                installmentNumber: i,
                 dueDate: Timestamp.fromDate(dueDate),
-                principalAmount: inst.principalAmount,
-                interestAmount: inst.interestAmount,
-                totalAmount: inst.totalAmount,
+                principalAmount,
+                interestAmount,
+                totalAmount,
                 paidAmount: 0,
                 status: "pending",
             });
@@ -752,11 +779,11 @@ async function _getRepaymentScheduleAction(
                 id: installmentRef.id,
                 loanId,
                 userId: loanData.userId,
-                installmentNumber: i + 1,
-                dueDate,
-                principalAmount: inst.principalAmount,
-                interestAmount: inst.interestAmount,
-                totalAmount: inst.totalAmount,
+                installmentNumber: i,
+                dueDate: dueDate.toISOString() as any,
+                principalAmount,
+                interestAmount,
+                totalAmount,
                 paidAmount: 0,
                 status: "pending",
             });

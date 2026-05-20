@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { courseProgressSchema,
     courseEnrollmentSchema } from "@/lib/validations/course";
 import { AuditActionType, type CourseProgress } from "@/types/strict";
@@ -81,15 +81,17 @@ export async function enrollInCourse(
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() });
 
-        // Initialize progress record
-        await db.collection(COLLECTIONS.COURSE_PROGRESS).add({ userId: session.user.id,
+        // Initialize progress record with composite ID to eliminate duplicates and queries
+        const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${session.user.id}_${validated.courseId}`);
+        await progressRef.set({ userId: session.user.id,
             courseId: validated.courseId,
             progressPercent: 0,
+            completionPercentage: 0, // Enforce dual-compatibility for route check
             lastWatchedSecond: 0,
             completed: false,
             completedAt: null,
             createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
+            updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 
         // Audit log
         await createAdminAuditLog({ userId: session.user.id,
@@ -114,20 +116,24 @@ export async function getCourseProgress(courseId: string) { const sessionResult 
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
-    try { const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
-            .where('userId', '==', session.user.id)
-            .where('courseId', '==', courseId)
+    try { // Retrieve course progress directly using the composite document ID
+        const progressDoc = await db.collection(COLLECTIONS.COURSE_PROGRESS)
+            .doc(`${session.user.id}_${courseId}`)
             .get();
 
-        if (snapshot.empty) {
+        if (!progressDoc.exists) {
             return { error: null, success: true as const, data: null };
         }
 
-        const progressData = snapshot.docs[0].data();
+        const progressData = progressDoc.data()!;
+        const progressPercent = progressData.progressPercent !== undefined 
+            ? progressData.progressPercent 
+            : (progressData.completionPercentage ?? 0);
 
         return { error: null, success: true as const, data: { progress: {
-                id: snapshot.docs[0].id, userId: progressData.userId, courseId: progressData.courseId, progressPercent: progressData.progressPercent, lastWatchedSecond: progressData.lastWatchedSecond, completed: progressData.completed, completedAt: progressData.completedAt?.toDate?.()?.toISOString() || null, updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString() } } };
-    } catch (error) { return { success: false as const, error: "Failed to fetch course progress", progress: null};
+                id: progressDoc.id, userId: progressData.userId, courseId: progressData.courseId, progressPercent, lastWatchedSecond: progressData.lastWatchedSecond || 0, completed: progressData.completed || false, completedAt: progressData.completedAt?.toDate?.()?.toISOString() || null, updatedAt: progressData.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString() } } };
+    } catch (error) { logger.error("Failed to fetch course progress:", error);
+        return { success: false as const, error: "Failed to fetch course progress", progress: null};
     }
 }
 
@@ -145,10 +151,11 @@ export async function getLessonProgress(lessonId: string) { const sessionResult 
         if (!doc.exists) { return { error: null, success: true as const, data: null };
         }
 
-        return { error: null, success: true as const, data: { progress: doc.data() as {
-                progressPercent: number;
-                lastWatchedSecond: number;
-                completed: boolean; } } };
+        const rawData = doc.data();
+        return { error: null, success: true as const, data: { progress: serializeValue({
+                progressPercent: rawData?.progressPercent ?? 0,
+                lastWatchedSecond: rawData?.lastWatchedSecond ?? 0,
+                completed: rawData?.completed ?? false }) } };
     } catch (error) { logger.error("Failed to fetch lesson progress:", error);
         return { success: false as const, error: "Failed to fetch lesson progress", progress: null};
     }
@@ -180,20 +187,20 @@ export async function completeCourse(courseId: string) { const sessionResult = a
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
-    try { const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
-            .where('userId', '==', session.user.id)
-            .where('courseId', '==', courseId)
-            .get();
-
-        if (snapshot.empty) {
-            return { success: false as const, error: "No progress record found"};
-        }
-
-        const progressDoc = snapshot.docs[0];
-        await progressDoc.ref.update({ completed: true,
-            completedAt: FieldValue.serverTimestamp(),
-            progressPercent: 100,
-            updatedAt: FieldValue.serverTimestamp() });
+    try { const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${session.user.id}_${courseId}`);
+        
+        // Use a transaction to update progress atomically and avoid write race conditions
+        await db.runTransaction(async (transaction) => {
+            const progressDoc = await transaction.get(progressRef);
+            if (!progressDoc.exists) {
+                throw new Error("No progress record found");
+            }
+            transaction.update(progressRef, { completed: true,
+                completedAt: FieldValue.serverTimestamp(),
+                progressPercent: 100,
+                completionPercentage: 100, // Enforce dual-compatibility for route check
+                updatedAt: FieldValue.serverTimestamp() });
+        });
 
         // Audit log
         await createAdminAuditLog({ userId: session.user.id,
@@ -204,7 +211,8 @@ export async function completeCourse(courseId: string) { const sessionResult = a
                 manualCompletion: true } });
 
         return { error: null, success: true as const, data: null };
-    } catch (error) { return { success: false as const, error: "Failed to complete course"};
+    } catch (error) { logger.error("Failed to complete course:", error);
+        return { success: false as const, error: "Failed to complete course"};
     }
 }
 
@@ -216,18 +224,15 @@ export async function generateCourseCertificate(courseId: string, courseTitle: s
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
 
-    try { // Verify course is completed
-        const snapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)
-            .where('userId', '==', session.user.id)
-            .where('courseId', '==', courseId)
-            .where('completed', '==', true)
-            .get();
+    try { // Verify course is completed using composite ID
+        const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${session.user.id}_${courseId}`);
+        const progressDoc = await progressRef.get();
 
-        if (snapshot.empty) {
+        if (!progressDoc.exists || !progressDoc.data()?.completed) {
             return { success: false as const, error: "Course not completed yet"};
         }
 
-        const progressData = snapshot.docs[0].data();
+        const progressData = progressDoc.data()!;
 
         // Check if certificate already exists
         const certSnapshot = await db.collection(COLLECTIONS.COURSE_CERTIFICATES)

@@ -2936,7 +2936,7 @@ async function _getPlatformSettingsAction(): Promise<ActionResponse<any>> {
                 }
             };
         }
-        return { success: true, error: null, data: doc.data() as any };
+        return { success: true, error: null, data: serializeValue(doc.data()) as any };
     } catch (error: any) {
         logger.error("Get platform settings error:", error);
         return {

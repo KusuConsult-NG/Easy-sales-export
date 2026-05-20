@@ -4,18 +4,21 @@
  * Definitive one-shot provisioning for all 6 module admin accounts.
  * For each account this script:
  *  1. Looks up (or creates) the Firebase Auth user
- *  2. Resets the password so we know exactly what it is
+ *  2. Resets the password to the exact new details provided by the user
  *  3. Sets Firebase custom claims: { admin: true, roles: [...] }
  *  4. Upserts the Firestore /users/{uid} document with the same roles
  *  5. Deletes every Redis cache key for that user so the next login
  *     picks up fresh data (no stale session roles)
  *
  * Run:
- *   NODE_OPTIONS='--require dotenv/config' \
- *   DOTENV_CONFIG_PATH=.env.local \
- *   npx ts-node --compiler-options '{"module":"commonjs"}' \
- *   scripts/provision-module-admins.ts
+ *   npx tsx scripts/provision-module-admins.ts
  */
+
+import * as path from "path";
+import * as dotenv from "dotenv";
+
+// Load environment variables from .env.local BEFORE importing firebase-admin
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 import { adminAuth, db } from "../src/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
@@ -24,8 +27,8 @@ interface ModuleAdminConfig {
   email: string;
   password: string;
   displayName: string;
-  /** The ONE module-specific admin role, e.g. "wave_admin" */
-  moduleRole: string;
+  /** The specific admin roles assigned to this module admin */
+  roles: string[];
   /** The admin silo path they should land on after login */
   expectedRedirect: string;
 }
@@ -33,54 +36,51 @@ interface ModuleAdminConfig {
 const MODULE_ADMINS: ModuleAdminConfig[] = [
   {
     email: "easysaleswave@gmail.com",
-    password: "WAVE@2026",
+    password: "WaveAdmin2026",
     displayName: "WAVE Admin",
-    moduleRole: "wave_admin",
+    roles: ["wave_admin", "admin"],
     expectedRedirect: "/admin/wave",
   },
   {
     email: "easysalescooperative@gmail.com",
-    password: "Cooperative@2026.",
+    password: "CoopAdmin2026",
     displayName: "Cooperative Admin",
-    moduleRole: "cooperative_admin",
+    roles: ["cooperative_admin", "admin"],
     expectedRedirect: "/admin/cooperatives",
   },
   {
     email: "easysalesmarketplace@gmail.com",
-    password: "Marketplace@2026",
+    password: "MktAdmin2026",
     displayName: "Marketplace Admin",
-    moduleRole: "marketplace_admin",
+    roles: ["marketplace_admin", "admin"],
     expectedRedirect: "/admin/marketplace",
   },
   {
     email: "easysalesexportwindow@gmail.com",
-    password: "Exportwindow@2026",
+    password: "ExportAdmin2026",
     displayName: "Export Window Admin",
-    moduleRole: "export_admin",
+    roles: ["export_admin", "admin"],
     expectedRedirect: "/admin/export",
   },
   {
     email: "easysalesfarmnation@gmail.com",
-    password: "Farmnation@2026",
+    password: "FarmAdmin2026",
     displayName: "Farm Nation Admin",
-    moduleRole: "farm_nation_admin",
+    // Assign BOTH 'farm_nation_admin' (used in routing/permissions) and 'farmnation_admin' (used in messages.ts)
+    roles: ["farm_nation_admin", "farmnation_admin", "admin"],
     expectedRedirect: "/admin/farm-nation",
   },
   {
     email: "academy.easysalesexport1@gmail.com",
-    password: "@2025Easysales!",
+    password: "AcadAdmin2026",
     displayName: "Academy Admin",
-    moduleRole: "academy_admin",
+    roles: ["academy_admin", "admin"],
     expectedRedirect: "/admin/academy",
   },
 ];
 
 async function provision(cfg: ModuleAdminConfig): Promise<void> {
-  const { email, password, displayName, moduleRole, expectedRedirect } = cfg;
-
-  // Each module admin gets: their specific role + generic "admin" for layout access.
-  // "general_user" is intentionally OMITTED — it would hijack routing to "/" via getPrimaryApp().
-  const roles: string[] = [moduleRole, "admin"];
+  const { email, password, displayName, roles, expectedRedirect } = cfg;
 
   console.log(`\n── ${email} ─────────────────────────────────`);
   console.log(`   roles      : ${roles.join(", ")}`);

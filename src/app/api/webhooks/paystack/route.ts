@@ -7,7 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 
-import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration } from "@/lib/paystack-fulfillment";
+import { processMarketplaceOrder, processExportInvestment, processCooperativeRegistration, processAcademyRegistration } from "@/infrastructure/payments/service";
 
 // Force dynamic since we read headers
 export const dynamic = 'force-dynamic';

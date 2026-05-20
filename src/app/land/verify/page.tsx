@@ -23,11 +23,6 @@ export default function LandVerificationPage() {
     const [processing, setProcessing] = useState(false);
     const [selectedListing, setSelectedListing] = useState<LandListing | null>(null);
 
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/immutability
-        loadListings();
-    }, []);
-
     async function loadListings() {
         setLoading(true);
         const result = await getLandListings({ status: 'pending_verification' });
@@ -36,6 +31,11 @@ export default function LandVerificationPage() {
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        loadListings();
+     
+    }, []);
 
     async function handleVerification(listingId: string, verified: boolean, rejectionReason?: string) {
         setProcessing(true);

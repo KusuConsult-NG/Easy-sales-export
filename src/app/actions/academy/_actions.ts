@@ -577,12 +577,30 @@ async function _completeLessonAction(
                 progress.completedLessons.push(lessonId);
                 progress.lastAccessedAt = FieldValue.serverTimestamp();
 
-                // Calculate overall progress
+                // Calculate overall progress using weighted formula (70% Lessons, 30% Quizzes)
                 const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-                progress.overallProgress = Math.round((progress.completedLessons.length / totalLessons) * 100);
+                const lessonProgressPercent = totalLessons > 0 ? (progress.completedLessons.length / totalLessons) * 100 : 0;
+
+                const modulesWithQuizzes = course.modules.filter(m => m.quiz);
+                const totalQuizzes = modulesWithQuizzes.length;
+                let passedQuizzesCount = 0;
+                modulesWithQuizzes.forEach(m => {
+                    if (progress.completedModules?.includes(m.id)) {
+                        passedQuizzesCount++;
+                    }
+                });
+                const quizProgressPercent = totalQuizzes > 0 ? (passedQuizzesCount / totalQuizzes) * 100 : 0;
+
+                let overallProgress = 0;
+                if (totalQuizzes > 0) {
+                    overallProgress = Math.round((lessonProgressPercent * 0.7) + (quizProgressPercent * 0.3));
+                } else {
+                    overallProgress = Math.round(lessonProgressPercent);
+                }
+                progress.overallProgress = overallProgress;
 
                 // Check if course is complete
-                if (progress.completedLessons.length === totalLessons) {
+                if (overallProgress >= 100) {
                     progress.completedAt = FieldValue.serverTimestamp();
                 }
 
@@ -645,18 +663,47 @@ async function _submitQuizScoreAction(
             progress.quizScores = progress.quizScores || {};
             progress.quizScores[moduleId] = score;
             progress.lastAccessedAt = FieldValue.serverTimestamp();
+            
             // Check if module is complete (quiz passed)
             const academyCourseDoc = await t.get(db.collection(COLLECTIONS.ACADEMY_COURSES).doc(courseId));
             if (academyCourseDoc.exists) {
                 const course = academyCourseDoc.data() as Course;
                 const courseModule = course.modules?.find((m) => m.id === moduleId);
 
+                if (!progress.completedModules) progress.completedModules = [];
+
                 if (courseModule?.quiz && score >= courseModule.quiz.passingScore) {
-                    if (!progress.completedModules) progress.completedModules = [];
                     if (!progress.completedModules.includes(moduleId)) {
                         progress.completedModules.push(moduleId);
                     }
                     userPassed = true;
+                }
+
+                // Calculate overall progress using weighted formula (70% Lessons, 30% Quizzes)
+                const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
+                const lessonProgressPercent = totalLessons > 0 ? (progress.completedLessons.length / totalLessons) * 100 : 0;
+
+                const modulesWithQuizzes = course.modules.filter(m => m.quiz);
+                const totalQuizzes = modulesWithQuizzes.length;
+                let passedQuizzesCount = 0;
+                modulesWithQuizzes.forEach(m => {
+                    if (progress.completedModules?.includes(m.id)) {
+                        passedQuizzesCount++;
+                    }
+                });
+                const quizProgressPercent = totalQuizzes > 0 ? (passedQuizzesCount / totalQuizzes) * 100 : 0;
+
+                let overallProgress = 0;
+                if (totalQuizzes > 0) {
+                    overallProgress = Math.round((lessonProgressPercent * 0.7) + (quizProgressPercent * 0.3));
+                } else {
+                    overallProgress = Math.round(lessonProgressPercent);
+                }
+                progress.overallProgress = overallProgress;
+
+                // Check if course is complete
+                if (overallProgress >= 100) {
+                    progress.completedAt = FieldValue.serverTimestamp();
                 }
             }
             // Increment version

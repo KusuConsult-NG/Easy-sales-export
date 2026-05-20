@@ -1,46 +1,28 @@
 "use server";
 
-import { db } from "@/lib/firebase-admin";
-import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { serializeDocs } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
 import { ActionResponse } from "@/lib/safe-action";
+import * as notificationService from "@/infrastructure/notifications/service";
+import type { Notification } from "@/infrastructure/notifications/service";
+
+export type { Notification };
 
 /**
- * In-App Notification System
+ * Create notification
  */
-
-export interface Notification { id?: string;
+export async function createNotificationAction(data: { 
     userId: string;
     type: "info" | "success" | "warning" | "error" | "loan" | "payment" | "wave" | "withdrawal" | "land" | "escrow" | "dispute";
     title: string;
     message: string;
     link?: string;
-    linkText?: string;
-    read: boolean;
-    createdAt: FieldValue | Timestamp;
-    readAt?: FieldValue | Timestamp; }
-
-/**
- * Create notification
- */
-export async function createNotificationAction(data: { userId: string;
-    type: "info" | "success" | "warning" | "error" | "loan" | "payment" | "wave" | "withdrawal" | "land" | "escrow" | "dispute";
-    title: string;
-    message: string;
-    link?: string;
-    linkText?: string; }): Promise<ActionResponse<any>> { try {
-        const notification: Omit<Notification, "id"> = {
-            ...data,
-            read: false,
-            createdAt: FieldValue.serverTimestamp() };
-
-        const docRef = await db.collection(COLLECTIONS.NOTIFICATIONS).add(notification);
-
-        return { success: true, error: null, data: { notificationId: docRef.id } };
-    } catch (error) { logger.error("Notification creation error:", error);
+    linkText?: string; 
+}): Promise<ActionResponse<any>> { 
+    try {
+        return await notificationService.createNotification(data);
+    } catch (error) { 
+        logger.error("Notification action creation error:", error);
         return { success: false, error: "Failed to create notification", data: null };
     }
 }
@@ -50,24 +32,12 @@ export async function createNotificationAction(data: { userId: string;
  */
 export async function createBulkNotificationsAction(
     userIds: string[],
-    notification: Omit<Notification, "id" | "userId">
-): Promise<ActionResponse<any>> { try {
-        const batch = db.batch();
-        const notificationsRef = db.collection(COLLECTIONS.NOTIFICATIONS);
-
-        userIds.forEach((userId) => {
-            const docRef = notificationsRef.doc();
-            batch.set(docRef, {
-                userId,
-                ...notification,
-                read: false,
-                createdAt: FieldValue.serverTimestamp() });
-        });
-
-        await batch.commit();
-
-        return { success: true, error: null, data: { count: userIds.length } };
-    } catch (error) { logger.error("Bulk notification creation error:", error);
+    notification: Omit<Notification, "id" | "userId" | "read" | "createdAt">
+): Promise<ActionResponse<any>> { 
+    try {
+        return await notificationService.createBulkNotifications(userIds, notification);
+    } catch (error) { 
+        logger.error("Bulk notification action creation error:", error);
         return { success: false, error: "Failed to create notifications", data: null };
     }
 }
@@ -75,14 +45,11 @@ export async function createBulkNotificationsAction(
 /**
  * Get user notifications
  */
-export async function getUserNotificationsAction(userId: string): Promise<Notification[]> { try {
-        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .get();
-
-        return serializeDocs(snapshot.docs) as unknown as Notification[];
-    } catch (error) { logger.error("Failed to fetch notifications:", error);
+export async function getUserNotificationsAction(userId: string): Promise<Notification[]> { 
+    try {
+        return await notificationService.getUserNotifications(userId);
+    } catch (error) { 
+        logger.error("Failed to fetch notifications action:", error);
         return [];
     }
 }
@@ -92,23 +59,17 @@ export async function getUserNotificationsAction(userId: string): Promise<Notifi
  */
 export async function markNotificationAsReadAction(
     notificationId: string
-): Promise<ActionResponse<any>> { try {
+): Promise<ActionResponse<any>> { 
+    try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false, error: "Unauthenticated", data: null };
+        if (!sessionResult.session) {
+            return { success: false, error: "Unauthenticated", data: null };
+        }
         const { session } = sessionResult;
 
-        // Verify ownership — only the notification's owner can mark it read
-        const docRef = db.collection(COLLECTIONS.NOTIFICATIONS).doc(notificationId);
-        const snap = await docRef.get();
-        if (!snap.exists) return { success: false, error: "Notification not found", data: null };
-        if (snap.data()?.userId !== session.user.id) { return { success: false, error: "Forbidden", data: null };
-        }
-
-        await docRef.update({ read: true,
-            readAt: FieldValue.serverTimestamp() });
-
-        return { success: true, error: null, data: null };
-    } catch (error) { logger.error("Mark as read error:", error);
+        return await notificationService.markNotificationAsRead(notificationId, session.user.id);
+    } catch (error) { 
+        logger.error("Mark as read action error:", error);
         return { success: false, error: "Failed to mark as read", data: null };
     }
 }
@@ -116,26 +77,16 @@ export async function markNotificationAsReadAction(
 /**
  * Mark all notifications as read for user
  */
-export async function markAllAsReadAction(userId: string): Promise<ActionResponse<any>> { try {
-        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
-            .where("read", "==", false)
-            .get();
-
-        if (snapshot.empty) {
-            return { success: true, error: null, data: null };
+export async function markAllAsReadAction(userId: string): Promise<ActionResponse<any>> { 
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false, error: "Unauthenticated", data: null };
         }
-
-        const batch = db.batch();
-        snapshot.docs.forEach((doc) => { batch.update(doc.ref, {
-                read: true,
-                readAt: FieldValue.serverTimestamp() });
-        });
-
-        await batch.commit();
-
-        return { success: true, error: null, data: null };
-    } catch (error) { logger.error("Mark all as read error:", error);
+        // Securely delegate to infrastructure layer
+        return await notificationService.markAllAsRead(userId);
+    } catch (error) { 
+        logger.error("Mark all as read action error:", error);
         return { success: false, error: "Failed to mark all as read", data: null };
     }
 }
@@ -143,15 +94,12 @@ export async function markAllAsReadAction(userId: string): Promise<ActionRespons
 /**
  * Get unread count
  */
-export async function getUnreadCountAction(userId: string): Promise<number> { try {
-        const snapshot = await db.collection(COLLECTIONS.NOTIFICATIONS)
-            .where("userId", "==", userId)
-            .where("read", "==", false)
-            .count()
-            .get();
-
-        return snapshot.data().count;
-    } catch (error) { logger.error("Failed to get unread count:", error);
+export async function getUnreadCountAction(userId: string): Promise<number> { 
+    try {
+        return await notificationService.getUnreadCount(userId);
+    } catch (error) { 
+        logger.error("Failed to get unread count action:", error);
         return 0;
     }
 }
+

@@ -29,6 +29,7 @@ export default function WithdrawalModal({
     const [idempotencyKey, setIdempotencyKey] = useState("");
 
     // Generate unique lock key on mount or when modal opens
+     
     useEffect(() => {
         if (isOpen) {
             setTimeout(() => setIdempotencyKey(crypto.randomUUID()), 0);

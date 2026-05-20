@@ -50,6 +50,9 @@ export interface Conversation {
     lastMessage: LastMessage | null;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+    context?: string;
+    orderId?: string;
+    productId?: string;
 }
 
 /**

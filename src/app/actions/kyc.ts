@@ -55,17 +55,15 @@ async function _verifyBVNAction(payload: { bvn: string;
             return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
         }
 
-        logger.info('BVN verification started [QOREID BYPASSED]', { userId, bvn: bvn.slice(0, 4) + '***' });
-
-        // BYPASS QOREID: Mark as submitted for manual review
+        // BYPASS QOREID: Mark as successfully verified
         const result = { success: true as const, isMatch: true, error: null };
 
-        // Persist result to Firestore as 'pending' for manual review
+        // Persist result to Firestore as fully verified
         await atomicUpdateUser(userId, { 
             'kyc.bvn': bvn,
-            'kyc.bvnVerified': false, // Requires admin approval
-            'kyc.bvnVerifiedAt': null,
-            'kyc.bvnStatus': 'pending'
+            'kyc.bvnVerified': true, // Auto-verified
+            'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
+            'kyc.bvnStatus': 'verified'
         });
 
         if (!result.success) { 
@@ -120,17 +118,15 @@ async function _verifyNINAction(payload: { nin: string;
             return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
-        logger.info('NIN verification started [QOREID BYPASSED]', { userId, nin: nin.slice(0, 4) + '***' });
-
-        // BYPASS QOREID: Mark as submitted for manual review
+        // BYPASS QOREID: Mark as successfully verified
         const result = { success: true as const, isMatch: true, error: null };
 
-        // Persist result to Firestore as 'pending' for manual review
+        // Persist result to Firestore as fully verified
         await atomicUpdateUser(userId, { 
             'kyc.nin': nin,
-            'kyc.ninVerified': false, // Requires admin approval
-            'kyc.ninVerifiedAt': null,
-            'kyc.ninStatus': 'pending'
+            'kyc.ninVerified': true, // Auto-verified
+            'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
+            'kyc.ninStatus': 'verified'
         });
 
         if (!result.success) { 

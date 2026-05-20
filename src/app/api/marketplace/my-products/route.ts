@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
  * API Route: Get Seller's Products
@@ -27,12 +28,17 @@ export async function GET(request: NextRequest) {
             .orderBy("createdAt", "desc")
             .get();
 
-        const products = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate?.() || new Date(),
-        }));
+        const products = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...serializeValue(data),
+                // Ensure timestamps are ISO strings (serializeValue handles Firestore Timestamps,
+                // but also guard against already-converted values)
+                createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? new Date().toISOString(),
+                updatedAt: data.updatedAt?.toDate?.()?.toISOString?.() ?? data.updatedAt ?? new Date().toISOString(),
+            };
+        });
 
         return NextResponse.json({
             success: true,

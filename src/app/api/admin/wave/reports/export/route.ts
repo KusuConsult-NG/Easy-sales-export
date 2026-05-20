@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         const applications = applicationsSnapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate() || new Date(),
+            createdAt: doc.data().createdAt?.toDate?.()?.toISOString?.() ?? doc.data().createdAt ?? new Date().toISOString(),
         }));
 
         if (format === "csv") {

@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
             return {
                 id: doc.id,
                 ...data,
-                createdAt: data.createdAt?.toDate() || new Date(),
+                createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? new Date().toISOString(),
                 status: data.status || "pending",
                 amountDisbursed: data.amountDisbursed || 0,
                 age: data.age || 0,

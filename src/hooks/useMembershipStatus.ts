@@ -31,13 +31,18 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
         if (moduleType === "export") collectionName = COLLECTIONS.EXPORT_APPLICATIONS;
         if (moduleType === "farm-nation") collectionName = COLLECTIONS.FARM_NATION_APPLICATIONS;
 
-        let unsubDoc: () => void = () => {};
+        let unsubDoc: (() => void) | null = null;
 
         // Primary: query by the `userId` field (modern approach for generated doc IDs)
         const q = query(collection(db, collectionName), where("userId", "==", userId));
         
         const unsubQuery = onSnapshot(q, (querySnap) => {
             if (!querySnap.empty) {
+                // Clean up fallback listener if it exists
+                if (unsubDoc) {
+                    unsubDoc();
+                    unsubDoc = null;
+                }
                 // Sort by createdAt desc if multiple, otherwise just take the first
                 const docsData = querySnap.docs.map(d => d.data());
                 docsData.sort((a, b) => {
@@ -51,18 +56,21 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
                 setStatus(docData.status || docData.membershipStatus || "pending");
             } else {
                 // Fallback: check if the document ID is the userId (legacy approach)
-                unsubDoc = onSnapshot(doc(db, collectionName, userId), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const docData = docSnap.data();
-                        setData(docData);
-                        setStatus(docData.status || docData.membershipStatus || "pending");
-                    } else {
-                        setStatus("not_found");
-                    }
-                }, (error) => {
-                    console.error(`[useMembershipStatus] Doc listener error for ${moduleType}:`, error);
-                    setStatus("error");
-                });
+                // Only register fallback if not already active
+                if (!unsubDoc) {
+                    unsubDoc = onSnapshot(doc(db, collectionName, userId), (docSnap) => {
+                        if (docSnap.exists()) {
+                            const docData = docSnap.data();
+                            setData(docData);
+                            setStatus(docData.status || docData.membershipStatus || "pending");
+                        } else {
+                            setStatus("not_found");
+                        }
+                    }, (error) => {
+                        console.error(`[useMembershipStatus] Doc listener error for ${moduleType}:`, error);
+                        setStatus("error");
+                    });
+                }
             }
         }, (error) => {
             console.error(`[useMembershipStatus] Query listener error for ${moduleType}:`, error);
@@ -71,7 +79,9 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
 
         return () => {
             unsubQuery();
-            unsubDoc();
+            if (unsubDoc) {
+                unsubDoc();
+            }
         };
     }, [userId, moduleType]);
 

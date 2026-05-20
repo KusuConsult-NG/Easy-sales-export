@@ -8,8 +8,6 @@ import { isAdmin } from '@/lib/admin-permissions';
 
 import { getCleanBroadcastList, type BroadcastAudience, type BroadcastFilters } from '@/lib/broadcast-logic';
 
-export type { BroadcastAudience, BroadcastFilters };
-
 export interface BroadcastLog { id: string;
     subject: string;
     body: string;
@@ -19,7 +17,7 @@ export interface BroadcastLog { id: string;
     totalRecipients: number;
     successCount: number;
     failCount: number;
-    sentAt: Date;
+    sentAt: string; // ISO 8601 string — Date cannot cross Server→Client boundary
     sentBy: string;
     sentByName: string;
     filters?: BroadcastFilters; }
@@ -101,32 +99,76 @@ export async function getBroadcastHistoryAction(): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
-        const snapshot = await db.collection(COLLECTIONS.AUDIT_LOGS)
-            .where("action", "==", "telemetry_broadcast_sent")
-            .orderBy("timestamp", "desc")
-            .limit(20)
-            .get();
-            
-        const logs = snapshot.docs.map(doc => {
+        // Fetch from all three broadcast log collections in parallel (increased limit to show older history)
+        const [emailSnap, smsSnap, inAppSnap] = await Promise.all([
+            db.collection(COLLECTIONS.BROADCAST_LOGS).orderBy("sentAt", "desc").limit(100).get(),
+            db.collection("sms_broadcast_logs").orderBy("sentAt", "desc").limit(100).get(),
+            db.collection("inapp_broadcast_logs").orderBy("sentAt", "desc").limit(100).get()
+        ]);
+
+        const emailLogs: BroadcastLog[] = emailSnap.docs.map(doc => {
             const data = doc.data();
             return {
                 id: doc.id,
-                subject: data.metadata?.subject || "No Subject",
-                body: data.metadata?.body || "",
-                audience: data.metadata?.filters?.audience || "all",
-                status: "done",
-                channel: "email",
-                totalRecipients: data.metadata?.count || 0,
-                successCount: data.metadata?.count || 0,
-                failCount: 0,
-                sentAt: data.timestamp?.toDate() || new Date(),
-                sentBy: data.userId,
-                sentByName: data.metadata?.sentByName || "Admin",
-                filters: data.metadata?.filters
-            } as BroadcastLog;
+                subject: data.subject || "No Subject",
+                body: data.body || "",
+                audience: data.audience || "all",
+                status: data.status || "done",
+                channel: "email" as const,
+                totalRecipients: data.totalRecipients || 0,
+                successCount: data.successCount || 0,
+                failCount: data.failCount || 0,
+                sentAt: (data.sentAt?.toDate?.() || new Date()).toISOString(),
+                sentBy: data.sentBy || "",
+                sentByName: data.sentByName || "Admin",
+                filters: data.filters
+            };
         });
-        
-        return { success: true as const, error: null, data: logs };
+
+        const smsLogs: BroadcastLog[] = smsSnap.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                subject: "SMS Broadcast",
+                body: data.message || "",
+                audience: data.audience || "all",
+                status: data.status || "done",
+                channel: "sms" as const,
+                totalRecipients: data.totalRecipients || 0,
+                successCount: data.sent || 0,
+                failCount: data.failed || 0,
+                sentAt: (data.sentAt?.toDate?.() || new Date()).toISOString(),
+                sentBy: data.sentBy || "",
+                sentByName: "Admin",
+                filters: data.filters
+            };
+        });
+
+        const inAppLogs: BroadcastLog[] = inAppSnap.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                subject: data.title || "In-App Notification",
+                body: data.message || "",
+                audience: data.audience || "all",
+                status: data.status || "done",
+                channel: "in-app" as const,
+                totalRecipients: data.totalRecipients || 0,
+                successCount: data.delivered || 0,
+                failCount: 0,
+                sentAt: (data.sentAt?.toDate?.() || new Date()).toISOString(),
+                sentBy: data.sentBy || "",
+                sentByName: "Admin",
+                filters: data.filters
+            };
+        });
+
+        // Combine, sort descending by date, and limit to top 150 logs
+        const combined = [...emailLogs, ...smsLogs, ...inAppLogs]
+            .sort((a, b) => b.sentAt.localeCompare(a.sentAt)) // ISO strings sort correctly
+            .slice(0, 150);
+
+        return { success: true as const, error: null, data: combined };
     } catch (error: any) { 
         return { success: false as const, error: error.message || "Failed to fetch history", data: null };
     }

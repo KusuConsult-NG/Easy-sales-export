@@ -13,6 +13,9 @@ import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
+import { smsDisputeResolved } from "@/lib/termii";
+import { pushDisputeResolved } from "@/lib/fcm";
+
 
 /**
  * Create a new dispute for an order
@@ -398,6 +401,23 @@ async function _updateDisputeStatusAction(
         if (dispute.status === "resolved" || dispute.status === "closed") { return { success: false as const, error: `Dispute is already '${dispute.status}'` };
         }
 
+        // Query the active escrow transaction prior to transaction block
+        const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("orderId", "==", dispute.orderId)
+            .get();
+
+        if (escrowQuery.empty) {
+            return { success: false as const, error: "Associated escrow transaction not found for this dispute", data: null };
+        }
+
+        // Find the active escrow transaction (funded or disputed or pending)
+        const escrowDocSnap = escrowQuery.docs.find(doc => {
+            const status = doc.data().status;
+            return status === "funded" || status === "disputed" || status === "pending";
+        }) || escrowQuery.docs[0];
+        const escrowId = escrowDocSnap.id;
+        const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
+
         const disputeRef = db.collection(COLLECTIONS.DISPUTES).doc(disputeId);
 
         await db.runTransaction(async (tx) => {
@@ -408,6 +428,11 @@ async function _updateDisputeStatusAction(
             if (freshDispute.status === "resolved" || freshDispute.status === "closed") {
                 throw new Error(`Dispute is already '${freshDispute.status}'`);
             }
+
+            const freshEscrowDoc = await tx.get(escrowRef);
+            if (!freshEscrowDoc.exists) throw new Error("Escrow transaction not found");
+            const freshEscrow = freshEscrowDoc.data();
+            if (!freshEscrow) throw new Error("Escrow transaction data not found");
 
             const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
@@ -435,7 +460,78 @@ async function _updateDisputeStatusAction(
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1) });
             }
+
+            // Update Escrow status atomically
+            const finalEscrowStatus = resolution === "release_seller" ? "released" : "refunded";
+            tx.update(escrowRef, {
+                status: finalEscrowStatus,
+                releasedBy: userId,
+                [resolution === "release_seller" ? "releasedAt" : "refundedAt"]: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1)
+            });
+
+            // Credit the target user's wallet balance atomically
+            const targetId = resolution === "release_seller" ? freshDispute.sellerId : freshDispute.buyerId;
+            if (!targetId) throw new Error("Target beneficiary ID not found on dispute");
+
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(targetId);
+            const walletSnap = await tx.get(walletRef);
+            const escrowAmount = freshEscrow.amount ?? dispute.refundAmount ?? freshDispute.refundAmount ?? 0;
+
+            if (!walletSnap.exists) {
+                tx.set(walletRef, {
+                    userId: targetId,
+                    balance: escrowAmount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                tx.update(walletRef, {
+                    balance: FieldValue.increment(escrowAmount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // Write the global ledger record under DISPUTE-RES-${disputeId.substring(0, 8)}
+            const txId = `DISPUTE-RES-${disputeId.substring(0, 8)}`;
+            const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            tx.set(txRef, {
+                id: txId,
+                userId: targetId,
+                type: resolution === "release_seller" ? "dispute_payout" : "dispute_refund",
+                module: "escrow",
+                amount: escrowAmount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: escrowId,
+                description: `Dispute Resolution (${resolution}) for "${freshEscrow.productName || 'Marketplace Order'}"`
+            });
         });
+
+        // Post-transaction notifications (non-fatal)
+        try {
+            if (dispute.buyerId && dispute.sellerId) {
+                const buyerIdStr = dispute.buyerId;
+                const sellerIdStr = dispute.sellerId;
+                const [buyerDoc, sellerDoc] = await Promise.all([
+                    db.collection(COLLECTIONS.USERS).doc(buyerIdStr).get(),
+                    db.collection(COLLECTIONS.USERS).doc(sellerIdStr).get(),
+                ]);
+                const buyerPhone = buyerDoc.data()?.phone ?? buyerDoc.data()?.phoneNumber;
+                const sellerPhone = sellerDoc.data()?.phone ?? sellerDoc.data()?.phoneNumber;
+                
+                await Promise.allSettled([
+                    buyerPhone ? smsDisputeResolved(buyerPhone, dispute.orderId || disputeId, resolution) : Promise.resolve(),
+                    sellerPhone ? smsDisputeResolved(sellerPhone, dispute.orderId || disputeId, resolution) : Promise.resolve(),
+                    pushDisputeResolved(buyerIdStr, sellerIdStr, dispute.orderId || disputeId)
+                ]);
+            }
+        } catch (notifErr) {
+            logger.error("Failed to send post-transaction notifications:", notifErr);
+        }
 
         // Invalidate Cache
         try { await invalidateAdminGlobalStats();

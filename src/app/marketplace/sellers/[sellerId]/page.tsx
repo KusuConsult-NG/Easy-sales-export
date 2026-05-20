@@ -9,7 +9,8 @@ interface SellerPageProps {
 }
 
 async function fetchSellerData(sellerId: string) {
-    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    const port = process.env.PORT || "3000";
+    const baseUrl = `http://127.0.0.1:${port}`;
     const res = await fetch(`${baseUrl}/api/marketplace/sellers/${sellerId}`, {
         next: { revalidate: 60 },
     });

@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 // This route is for debugging only — completely disabled in production
 export async function GET() {
     // Block entirely in production
-    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT === 'production') {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 

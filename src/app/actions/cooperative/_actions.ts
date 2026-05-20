@@ -26,7 +26,7 @@ import type { CooperativeMembership,
     MakeContributionState,
     GetMembershipState,
     GetTransactionsState } from "@/lib/types/cooperative";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -315,6 +315,11 @@ export async function registerCooperativeMemberAction(
                 "address.state": validatedData.stateOfOrigin,
                 "address.lga": validatedData.lga,
                 "address.street": validatedData.residentialAddress,
+
+                // Sync onboarding specific details for admin users modal
+                bvn: updatedData.bvn || null,
+                bvnVerified: updatedData.bvn ? true : false,
+                nextOfKin: updatedData.nextOfKin || null,
 
                 updatedAt: FieldValue.serverTimestamp() });
         });
@@ -1007,7 +1012,7 @@ export async function getCooperativeApplicationAction(): Promise<
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
-        const data = sortedDocs[0];
+        const data = serializeValue(sortedDocs[0]);
         return { error: null, success: true as const, data: data, meta: null };
     } catch (error) { logger.error('getCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)

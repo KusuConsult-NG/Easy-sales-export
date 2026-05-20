@@ -70,7 +70,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
             userId: 'current',
             message: messageToSend,
             response: '',
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
         };
         setMessages(prev => [...prev, userMessage]);
 
@@ -89,7 +89,7 @@ export function AISidebar({ userRole = 'user' }: AISidebarProps) {
                 userId: 'current',
                 message: messageToSend,
                 response: result.data.response,
-                createdAt: new Date(),
+                createdAt: new Date().toISOString(),
             };
             setMessages(prev => [...prev.slice(0, -1), aiMessage]);
         } else {

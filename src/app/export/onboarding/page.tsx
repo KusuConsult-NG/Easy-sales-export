@@ -11,8 +11,9 @@ import { z } from "zod";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Package, TrendingUp, Shield, CheckCircle, AlertTriangle } from "lucide-react";
+import { Package, TrendingUp, Shield, CheckCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { OnboardingLayout } from "@/components/onboarding/OnboardingLayout";
+import { useStorage } from "@/hooks/use-storage";
 import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { useToast } from "@/contexts/ToastContext";
 import { OnboardingStep } from "@/types/service-registration";
@@ -60,7 +61,11 @@ export default function ExportOnboardingPage() {
     const router = useRouter();
     const { data: session } = useSession();
     const { showToast } = useToast();
+    const { uploadFile, uploadState } = useStorage();
+    const [isUploadingClient, setIsUploadingClient] = useState(false);
+    const [filesUploading, setFilesUploading] = useState<{ file: File; field: string }[]>([]);
     const [currentStepId, setCurrentStepId] = useState("profile");
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
     const [formData, setFormData] = useState<any>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -250,6 +255,7 @@ export default function ExportOnboardingPage() {
         }
         // ────────────────────────────────────────────────────────────────────────
 
+        setIsSubmitting(true);
         try {
             if (isRevisionMode || isEditMode) {
                 // Resubmit — send text fields only (no file re-upload required)
@@ -264,15 +270,61 @@ export default function ExportOnboardingPage() {
                     router.push("/export/onboarding/pending");
                 } else {
                     showToast(`Failed to resubmit: ${result.error}`, "error");
+                    setIsSubmitting(false);
                 }
                 return;
+            }
+
+            let uploadedIdDocument = "";
+            let uploadedProofOfAddress = "";
+            
+            const localFilesToUpload: { file: File; field: 'idDocument' | 'proofOfAddress' }[] = [];
+            
+            if (finalData.kyc?.documents?.idDocument instanceof File) {
+                localFilesToUpload.push({
+                    file: finalData.kyc.documents.idDocument,
+                    field: 'idDocument'
+                });
+            } else if (typeof finalData.kyc?.documents?.idDocument === 'string') {
+                uploadedIdDocument = finalData.kyc.documents.idDocument;
+            }
+
+            if (finalData.kyc?.documents?.proofOfAddress instanceof File) {
+                localFilesToUpload.push({
+                    file: finalData.kyc.documents.proofOfAddress,
+                    field: 'proofOfAddress'
+                });
+            } else if (typeof finalData.kyc?.documents?.proofOfAddress === 'string') {
+                uploadedProofOfAddress = finalData.kyc.documents.proofOfAddress;
+            }
+
+            if (localFilesToUpload.length > 0) {
+                setFilesUploading(localFilesToUpload);
+                setIsUploadingClient(true);
+                try {
+                    await Promise.all(
+                        localFilesToUpload.map(async ({ file, field }) => {
+                            const url = await uploadFile(file, `export-kyc/${session?.user?.id || 'anonymous'}/${field}_${Date.now()}`);
+                            if (field === 'idDocument') uploadedIdDocument = url;
+                            if (field === 'proofOfAddress') uploadedProofOfAddress = url;
+                        })
+                    );
+                } catch (uploadErr) {
+                    setIsUploadingClient(false);
+                    setIsSubmitting(false);
+                    throw uploadErr;
+                } finally {
+                    setIsUploadingClient(false);
+                }
             }
 
             const fd = new FormData();
             if (finalData.profile) fd.append("profile", JSON.stringify(finalData.profile));
             if (finalData.kyc?.kycData) fd.append("kycData", JSON.stringify(finalData.kyc.kycData));
-            if (finalData.kyc?.documents?.idDocument) fd.append("idDocument", finalData.kyc.documents.idDocument);
-            if (finalData.kyc?.documents?.proofOfAddress) fd.append("proofOfAddress", finalData.kyc.documents.proofOfAddress);
+            
+            if (uploadedIdDocument) fd.append("idDocument", uploadedIdDocument);
+            if (uploadedProofOfAddress) fd.append("proofOfAddress", uploadedProofOfAddress);
+            
             if (finalData.bank) fd.append("bank", JSON.stringify(finalData.bank));
             if (finalData.terms) fd.append("terms", JSON.stringify(finalData.terms));
 
@@ -287,10 +339,12 @@ export default function ExportOnboardingPage() {
             } else {
                 logger.error("Onboarding submission failed:", result.error);
                 showToast(`Failed to submit: ${result.error}`, "error");
+                setIsSubmitting(false);
             }
         } catch (error) {
             logger.error("Error submitting onboarding:", error);
             showToast("An error occurred. Please try again.", "error");
+            setIsSubmitting(false);
         }
     };
 
@@ -329,6 +383,7 @@ export default function ExportOnboardingPage() {
                         onBack={handleBack}
                         onChange={handleStepChange}
                         initialData={formData.terms}
+                        isSubmitting={isSubmitting}
                     />
                 );
             default:
@@ -344,6 +399,45 @@ export default function ExportOnboardingPage() {
             totalSteps={steps.length}
             backUrl="/export"
         >
+            {isUploadingClient && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6 text-center">
+                        <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                            <Loader2 className="w-8 h-8 text-orange-600 animate-spin" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-bold text-slate-900">Uploading Verification Documents</h3>
+                            <p className="text-sm text-slate-500">Please wait while we secure and upload your KYC documents to Cloudinary.</p>
+                        </div>
+                        <div className="space-y-4 text-left p-4 bg-slate-50 border border-slate-200 rounded-xl max-h-60 overflow-y-auto">
+                            {filesUploading.map(({ file, field }) => {
+                                const state = uploadState[file.name];
+                                const progress = state?.progress ?? 0;
+                                const error = state?.error ?? null;
+                                return (
+                                    <div key={file.name} className="space-y-1.5">
+                                        <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                            <span className="truncate max-w-[200px] flex items-center gap-1">
+                                                📄 {field === 'idDocument' ? 'ID Document' : 'Proof of Address'}
+                                            </span>
+                                            <span className={error ? "text-red-600" : "text-orange-600"}>
+                                                {error ? "Failed" : progress === 100 ? "Completed" : `${Math.round(progress)}%`}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-300 ${error ? "bg-red-500" : "bg-orange-600"}`}
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
+                                        {error && <p className="text-[10px] text-red-500 font-medium">{error}</p>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Rejection / Revision Banner */}
             {isRevisionMode && (
                 <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-3">

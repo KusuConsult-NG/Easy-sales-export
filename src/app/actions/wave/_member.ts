@@ -165,6 +165,16 @@ export async function trackResourceAccessAction(resourceId: string): Promise<Act
         // Increment resource downloads
         await db.collection(COLLECTIONS.WAVE_RESOURCES).doc(resourceId).update({ downloads: FieldValue.increment(1) });
 
+        // Log details to new "wave_resource_downloads" collection for access auditing
+        await db.collection("wave_resource_downloads").add({
+            userId: session.user.id,
+            resourceId,
+            downloadedAt: FieldValue.serverTimestamp(),
+            email: session.user.email || "",
+            name: session.user.name || "",
+            createdAt: FieldValue.serverTimestamp()
+        });
+
         return { error: null, success: true as const , data: null };
     } catch (error) { logger.error("Failed to track resource access:", error);
         return { success: false as const, error: "Failed to track access", data: null };

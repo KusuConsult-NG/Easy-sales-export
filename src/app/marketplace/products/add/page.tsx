@@ -4,16 +4,19 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     Package, DollarSign, Award, Video,
-    ArrowLeft, Plus, X, Upload
+    ArrowLeft, Plus, X, Upload, Loader2
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
+import { useStorage } from "@/hooks/use-storage";
+import { logger } from "@/lib/logger";
 
 export default function AddProductPage() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { uploadFile, uploadState } = useStorage();
 
     const [formData, setFormData] = useState({
         name: "",
@@ -102,6 +105,18 @@ export default function AddProductPage() {
         setIsSubmitting(true);
 
         try {
+            // Step 1: Parallel Client-side Upload to Cloudinary
+            const uploadedImages: string[] = [];
+            for (const file of media.images) {
+                const url = await uploadFile(file, `products/marketplace/${Date.now()}_${file.name}`);
+                uploadedImages.push(url);
+            }
+
+            let uploadedVideo = "";
+            if (media.video) {
+                uploadedVideo = await uploadFile(media.video, `products/marketplace/${Date.now()}_${media.video.name}`);
+            }
+
             const submitData = new FormData();
 
             // Add form fields
@@ -113,14 +128,14 @@ export default function AddProductPage() {
                 }
             });
 
-            // Add images
-            media.images.forEach((image, index) => {
-                submitData.append(`image${index}`, image);
+            // Add pre-uploaded image URLs
+            uploadedImages.forEach((url, index) => {
+                submitData.append(`image${index}`, url);
             });
 
-            // Add video
-            if (media.video) {
-                submitData.append("video", media.video);
+            // Add pre-uploaded video URL
+            if (uploadedVideo) {
+                submitData.append("video", uploadedVideo);
             }
 
             const response = await fetch("/api/marketplace/create-product", {
@@ -137,6 +152,7 @@ export default function AddProductPage() {
                 showToast(data.message || "Failed to create product", "error");
             }
         } catch (error) {
+            logger.error("An error occurred while creating the product", error);
             showToast("An error occurred while creating the product", "error");
         } finally {
             setIsSubmitting(false);
@@ -144,7 +160,46 @@ export default function AddProductPage() {
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 py-8">
+        <div className="min-h-screen bg-slate-50 py-8 relative">
+            {isSubmitting && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6 text-center">
+                        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                            <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-bold text-slate-900">Uploading Product Assets</h3>
+                            <p className="text-sm text-slate-500">Please wait while we secure and upload your photos and videos.</p>
+                        </div>
+                        <div className="space-y-4 text-left p-4 bg-slate-50 border border-slate-200 rounded-xl max-h-60 overflow-y-auto">
+                            {[...media.images, ...(media.video ? [media.video] : [])].map((file) => {
+                                const state = uploadState[file.name];
+                                const progress = state?.progress ?? 0;
+                                const error = state?.error ?? null;
+                                return (
+                                    <div key={file.name} className="space-y-1.5">
+                                        <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                            <span className="truncate max-w-[200px] flex items-center gap-1">
+                                                {file.type.startsWith("image/") ? "🖼️" : "🎥"} {file.name}
+                                            </span>
+                                            <span className={error ? "text-red-600" : "text-green-600"}>
+                                                {error ? "Failed" : progress === 100 ? "Completed" : `${Math.round(progress)}%`}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-300 ${error ? "bg-red-500" : "bg-green-600"}`}
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
+                                        {error && <p className="text-[10px] text-red-500 font-medium">{error}</p>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="max-w-5xl mx-auto px-4">
                 <Link
                     href="/marketplace/sell"

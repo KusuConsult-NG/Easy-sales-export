@@ -25,11 +25,15 @@ export async function GET(request: NextRequest) {
             .where("userId", "==", session.user.id)
             .get();
 
-        const certificates = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            uploadedAt: doc.data().uploadedAt?.toDate(),
-        }));
+        const certificates = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                uploadedAt: data.uploadedAt?.toDate?.()?.toISOString?.() ?? data.uploadedAt ?? null,
+                createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? null,
+            };
+        });
 
         return NextResponse.json({
             success: true,

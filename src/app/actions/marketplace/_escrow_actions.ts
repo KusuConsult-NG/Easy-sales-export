@@ -35,13 +35,13 @@ async function _getUserEscrowTransactions() { let sessionResult;
         const transactions = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 id: doc.id,
-                ...data,
-                createdAt: (data.createdAt as Timestamp)?.toDate(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate(),
-                paidAt: (data.paidAt as Timestamp)?.toDate(),
-                releasedAt: (data.releasedAt as Timestamp)?.toDate(),
-                refundedAt: (data.refundedAt as Timestamp)?.toDate(),
-                releaseRequestedAt: (data.releaseRequestedAt as Timestamp)?.toDate() };
+                ...serializeValue(data),
+                createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
+                updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
+                paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,
+                releasedAt: data.releasedAt ? (data.releasedAt as Timestamp).toDate().toISOString() : null,
+                refundedAt: data.refundedAt ? (data.refundedAt as Timestamp).toDate().toISOString() : null,
+                releaseRequestedAt: data.releaseRequestedAt ? (data.releaseRequestedAt as Timestamp).toDate().toISOString() : null };
         });
 
         return { success: true as const, error: null, data: { transactions: transactions as any as EscrowTransaction[] } };

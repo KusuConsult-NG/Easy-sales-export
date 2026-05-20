@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download, Layers } from "lucide-react";
+import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download, Layers, Home, CreditCard } from "lucide-react";
 import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
@@ -33,6 +33,9 @@ interface User {
     state?: string;
     lga?: string;
     address?: any;
+    residentialAddress?: string;
+    stateOfOrigin?: string;
+    nextOfKin?: any;
     accountType?: string;
     gender?: string;
     serviceRegistrations?: Record<string, any>;
@@ -737,6 +740,105 @@ export default function AdminUsersPage() {
                                         </div>
                                     </div>
                                 ))}
+                            </div>
+                        </div>
+
+                        {/* Residential Address */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <MapPin className="w-4 h-4 text-slate-500" /> Residential Address
+                            </h4>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-sm text-slate-800 border border-slate-100 shadow-sm">
+                                {selectedUserForModal.address?.street || selectedUserForModal.residentialAddress ? (
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                        <div className="col-span-2">
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Street Address</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.address?.street || selectedUserForModal.residentialAddress}</span>
+                                        </div>
+                                        {selectedUserForModal.address?.lga || selectedUserForModal.lga ? (
+                                            <div>
+                                                <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">LGA</span>
+                                                <span className="font-medium text-slate-700">{selectedUserForModal.address?.lga || selectedUserForModal.lga}</span>
+                                            </div>
+                                        ) : null}
+                                        {selectedUserForModal.address?.state || selectedUserForModal.stateOfOrigin ? (
+                                            <div>
+                                                <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">State</span>
+                                                <span className="font-medium text-slate-700">{selectedUserForModal.address?.state || selectedUserForModal.stateOfOrigin}</span>
+                                            </div>
+                                        ) : null}
+                                        {selectedUserForModal.address?.city && (
+                                            <div>
+                                                <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">City</span>
+                                                <span className="font-medium text-slate-700">{selectedUserForModal.address?.city}</span>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Country</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.address?.country || "Nigeria"}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-slate-400 italic text-xs">Not provided</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Bank Account Details */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <CreditCard className="w-4 h-4 text-slate-500" /> Bank Account Details
+                            </h4>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-sm text-slate-800 border border-slate-100 shadow-sm">
+                                {selectedUserForModal.bankDetails?.accountNumber && selectedUserForModal.bankDetails.accountNumber !== "N/A" ? (
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                        <div>
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Bank Name</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.bankDetails.bankName || "N/A"}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Account Number</span>
+                                            <span className="font-medium text-slate-700 font-mono">{selectedUserForModal.bankDetails.accountNumber}</span>
+                                        </div>
+                                        <div className="col-span-2">
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Account Name</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.bankDetails.accountName || "N/A"}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-slate-400 italic text-xs">Not provided</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Next of Kin Details */}
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <Users className="w-4 h-4 text-slate-500" /> Next of Kin Details
+                            </h4>
+                            <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-sm text-slate-800 border border-slate-100 shadow-sm">
+                                {selectedUserForModal.nextOfKin?.name ? (
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                        <div>
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Full Name</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.nextOfKin.name}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Relationship</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.nextOfKin.relationship || "N/A"}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Phone Number</span>
+                                            <span className="font-medium text-slate-700 font-mono">{selectedUserForModal.nextOfKin.phone || "N/A"}</span>
+                                        </div>
+                                        <div className="col-span-2">
+                                            <span className="text-[11px] font-bold text-slate-400 block uppercase tracking-wider">Address</span>
+                                            <span className="font-medium text-slate-700">{selectedUserForModal.nextOfKin.address || "N/A"}</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-slate-400 italic text-xs">Not provided</p>
+                                )}
                             </div>
                         </div>
 

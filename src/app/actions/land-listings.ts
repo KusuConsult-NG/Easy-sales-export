@@ -38,6 +38,9 @@ export interface LandListing {
     images: string[];
     documents: string[];
     status: "draft" | "pending_verification" | "verified" | "rejected";
+    availableForSale?: boolean;
+    availableForRent?: boolean;
+    escrowAvailable?: boolean;
     verificationStatus?: { 
         verified: boolean;
         verifiedBy?: string;
@@ -232,6 +235,25 @@ async function _rejectLandListingAction(
 }
 export const rejectLandListingAction = withFlexibleSafeAction("rejectLandListingAction", _rejectLandListingAction);
 
+const CROP_SOIL_MATRIX: Record<string, string[]> = {
+    rice: ["clayey", "loamy"],
+    maize: ["loamy", "clayey"],
+    beans: ["loamy", "sandy"],
+    vegetables: ["loamy"],
+    soybeans: ["loamy"],
+    tomatoes: ["loamy"],
+    pepper: ["loamy"],
+    cassava: ["loamy", "sandy"],
+    wheat: ["clayey", "loamy"],
+    sugarcane: ["clayey"],
+    groundnut: ["sandy", "loamy"],
+    yams: ["sandy", "loamy"],
+    coconut: ["sandy"],
+    ginger: ["sandy", "loamy"],
+    potatoes: ["sandy", "loamy"],
+    sesame: ["loamy", "sandy"],
+};
+
 /**
  * Get verified land listings with filters
  */
@@ -244,6 +266,7 @@ async function _searchLandListingsAction(filters: {
     maxPrice?: number;
     soilType?: string;
     waterSource?: string;
+    cropType?: string;
     limit?: number;
     lastDocId?: string; 
 }): Promise<ActionResponse<{ listings: LandListing[]; lastDocId: string | null }>> { 
@@ -257,6 +280,7 @@ async function _searchLandListingsAction(filters: {
         filters.maxPrice?.toString() || "max",
         filters.soilType || "all",
         filters.waterSource || "all",
+        filters.cropType || "all",
         filters.limit?.toString() || "12",
         filters.lastDocId || "start"
     ];
@@ -295,6 +319,25 @@ async function _searchLandListingsAction(filters: {
                 if (filters.maxPrice) { results = results.filter((l) => l.price <= filters.maxPrice!); }
                 if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
                 if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
+
+                // Crop-Soil Suitability Matrix filtering
+                if (filters.cropType) {
+                    const suitableSoils = CROP_SOIL_MATRIX[filters.cropType.toLowerCase()] || [];
+                    if (suitableSoils.length > 0) {
+                        results = results.filter((l) => {
+                            if (!l.soilType) return false;
+                            return suitableSoils.includes(l.soilType.toLowerCase());
+                        });
+                    } else {
+                        results = results.filter((l) => {
+                            const desc = l.description?.toLowerCase() || "";
+                            const title = l.title?.toLowerCase() || "";
+                            const cat = l.category?.toLowerCase() || "";
+                            const searchTerm = filters.cropType!.toLowerCase();
+                            return desc.includes(searchTerm) || title.includes(searchTerm) || cat.includes(searchTerm);
+                        });
+                    }
+                }
 
                 const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
 
@@ -357,6 +400,9 @@ async function _submitLandListingAction(data: {
     imageUrls: string[];
     documentUrls: string[];
     gpsCoordinates?: { latitude: number; longitude: number };
+    availableForSale?: boolean;
+    availableForRent?: boolean;
+    escrowAvailable?: boolean;
 }): Promise<ActionResponse<{ listingId: string }>> { 
     try {
         const listing: Omit<LandListing, "id"> = {
@@ -374,6 +420,9 @@ async function _submitLandListingAction(data: {
             images: data.imageUrls,
             documents: data.documentUrls,
             status: "pending_verification",
+            availableForSale: data.availableForSale ?? true,
+            availableForRent: data.availableForRent ?? false,
+            escrowAvailable: data.escrowAvailable ?? true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 
         };

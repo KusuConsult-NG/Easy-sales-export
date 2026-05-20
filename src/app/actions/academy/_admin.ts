@@ -11,7 +11,7 @@ import { requireSession } from "@/lib/session-guard";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { logAuditAction } from "@/lib/audit";
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
-import { serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { paginatedOk, paginatedErr, nextCursor as computeNextCursor } from "@/lib/admin-action-response";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 
@@ -365,7 +365,7 @@ async function _getPendingAcademyApplicationsAction(): Promise<ActionResponse<an
             }
         }
         const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
         const enrichedApps = applications.map(app => {
             const uData = userMap.get(app.userId as string) || {};
@@ -439,7 +439,7 @@ async function _getAcademyEnrollmentsAction(options?: {
             }
         }
         const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
         enrollments = enrollments.map(e => {
             const uData = userMap.get(e.userId as string) || {};
@@ -844,7 +844,7 @@ async function _getStandardAcademyApplicationsAction(options: {
         }
         
         const userSnapsArray = await Promise.all(userPromises);
-        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, d.data())));
+        userSnapsArray.forEach(snap => snap.docs.forEach(d => userMap.set(d.id, serializeValue(d.data()))));
 
         // 3. Normalize and Merge Data
         const standardForms = applications.map((app: any) => {

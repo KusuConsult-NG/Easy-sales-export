@@ -24,7 +24,7 @@ function isTimestamp(value: unknown): boolean {
     const hasSeconds = typeof v["_seconds"] === "number" || typeof v["seconds"] === "number";
     const hasNanoseconds = typeof v["_nanoseconds"] === "number" || typeof v["nanoseconds"] === "number";
     
-    return hasSeconds && hasNanoseconds && Object.keys(v).length <= 2;
+    return hasSeconds && hasNanoseconds;
 }
 
 /**

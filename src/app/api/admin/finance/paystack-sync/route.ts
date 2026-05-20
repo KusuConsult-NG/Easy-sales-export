@@ -15,7 +15,7 @@ import {
     processAcademyRegistration,
     processFarmNationRegistration,
     processWaveRegistration
-} from "@/lib/paystack-fulfillment";
+} from "@/infrastructure/payments/service";
 
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 

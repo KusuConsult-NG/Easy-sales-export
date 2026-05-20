@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { MapPin, Upload, FileText, CheckCircle, Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { submitLandListingAction } from "@/app/actions/land-listings";
+import { useStorage } from "@/hooks/use-storage";
 
 const NIGERIAN_STATES = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
@@ -32,6 +33,7 @@ interface FormData {
 export default function SubmitLandListingPage() {
     const router = useRouter();
     const { data: session } = useSession();
+    const { uploadFile, uploadState } = useStorage();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -103,6 +105,21 @@ export default function SubmitLandListingPage() {
         setError(null);
 
         try {
+            // 1. Upload Images
+            const imageUploadPromises = imageFiles.map(image => {
+                const path = `land-listings/${session.user.id}/images/${Date.now()}_${image.name}`;
+                return uploadFile(image, path);
+            });
+            const imageUrls = await Promise.all(imageUploadPromises);
+
+            // 2. Upload Documents
+            const documentUploadPromises = documentFiles.map(doc => {
+                const path = `land-listings/${session.user.id}/docs/${Date.now()}_${doc.name}`;
+                return uploadFile(doc, path);
+            });
+            const documentUrls = await Promise.all(documentUploadPromises);
+
+            // 3. Submit
             const result = await submitLandListingAction({
                 ownerId: session.user.id || "",
                 ownerName: session.user.name || "Unknown",
@@ -118,9 +135,8 @@ export default function SubmitLandListingPage() {
                 price: parseFloat(formData.price),
                 soilType: formData.soilType,
                 waterSource: formData.waterSource,
-                // Images and documents submitted as empty URLs for now - admin can add them manually
-                imageUrls: [],
-                documentUrls: [],
+                imageUrls,
+                documentUrls,
             });
 
             if (result.success) {
@@ -129,8 +145,8 @@ export default function SubmitLandListingPage() {
             } else {
                 setError(result.error || "Failed to submit listing");
             }
-        } catch (err) {
-            setError("An unexpected error occurred");
+        } catch (err: any) {
+            setError(err?.message || "An unexpected error occurred during submission");
         } finally {
             setLoading(false);
         }
@@ -211,7 +227,7 @@ export default function SubmitLandListingPage() {
                     )}
 
                     {/* Step 1: Basic Information */}
-                    {step === 1 && (
+                    {!loading && step === 1 && (
                         <div className="space-y-6">
                             <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Basic Information
@@ -297,7 +313,7 @@ export default function SubmitLandListingPage() {
                     )}
 
                     {/* Step 2: Land Details */}
-                    {step === 2 && (
+                    {!loading && step === 2 && (
                         <div className="space-y-6">
                             <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Land Details
@@ -380,7 +396,7 @@ export default function SubmitLandListingPage() {
                     )}
 
                     {/* Step 3: Images */}
-                    {step === 3 && (
+                    {!loading && step === 3 && (
                         <div className="space-y-6">
                             <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Upload Images *
@@ -431,7 +447,7 @@ export default function SubmitLandListingPage() {
                     )}
 
                     {/* Step 4: Documents */}
-                    {step === 4 && (
+                    {!loading && step === 4 && (
                         <div className="space-y-6">
                             <h2 className="text-2xl font-bold text-slate-900 mb-6">
                                 Upload Documents (Optional)
@@ -484,6 +500,45 @@ export default function SubmitLandListingPage() {
                         </div>
                     )}
 
+                    {/* Submitting Loading Assets Progress State */}
+                    {loading && (
+                        <div className="text-center py-12 space-y-6 animate-fadeIn">
+                            <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                                <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
+                            </div>
+                            <div className="space-y-2">
+                                <h3 className="text-2xl font-bold text-slate-900">Uploading Land Assets</h3>
+                                <p className="text-slate-500 max-w-md mx-auto">Please wait while we secure and upload your photos and documents to our server.</p>
+                            </div>
+                            <div className="max-w-md mx-auto space-y-4 text-left p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+                                {[...imageFiles, ...documentFiles].map((file) => {
+                                    const state = uploadState[file.name];
+                                    const progress = state?.progress ?? 0;
+                                    const error = state?.error ?? null;
+                                    return (
+                                        <div key={file.name} className="space-y-1.5">
+                                            <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                                <span className="truncate max-w-[240px] flex items-center gap-1.5">
+                                                    {file.type.startsWith("image/") ? "🖼️" : "📄"} {file.name}
+                                                </span>
+                                                <span className={error ? "text-red-600" : "text-green-600"}>
+                                                    {error ? "Failed" : progress === 100 ? "Completed" : `${Math.round(progress)}%`}
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full transition-all duration-300 ${error ? "bg-red-500" : "bg-green-600"}`}
+                                                    style={{ width: `${progress}%` }}
+                                                />
+                                            </div>
+                                            {error && <p className="text-[10px] text-red-500 font-medium">{error}</p>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Step 5: Success */}
                     {step === 5 && (
                         <div className="text-center py-8">
@@ -504,7 +559,7 @@ export default function SubmitLandListingPage() {
                     )}
 
                     {/* Navigation Buttons */}
-                    {step < 5 && (
+                    {!loading && step < 5 && (
                         <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
                             <button
                                 onClick={handleBack}

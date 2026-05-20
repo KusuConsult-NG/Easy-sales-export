@@ -22,6 +22,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // One-off admin/maintenance scripts — not app code
+    "scripts/**",
   ]),
 ]);
 

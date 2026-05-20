@@ -8,7 +8,7 @@ import { MessageSquare, Search, Plus, Send, Loader2 } from "lucide-react";
 import { getConversationsAction, getMessagesAction, sendMessageAction, startConversationAction, searchUsersAction, markAsReadAction, startSupportConversationAction } from "@/app/actions/messages";
 import type { Conversation, Message, UserSearchResult } from "@/lib/types/messages";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot, where } from "firebase/firestore";
 import { format } from "date-fns";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -44,32 +44,30 @@ export default function MessagesPage() {
         setLoading(true);
         // Let's use the explicit where clause and locally sort.
 
-        // It is safer to re-implement getConversationsAction's query logic here:
-        import("firebase/firestore").then(({ query, collection, where, onSnapshot }) => {
-            const convsQuery = query(
-                collection(db, "conversations"),
-                where("participants", "array-contains", session.user.id)
-            );
+        // Re-implement getConversationsAction's query logic synchronously to avoid memory leaks:
+        const convsQuery = query(
+            collection(db, "conversations"),
+            where("participants", "array-contains", session.user.id)
+        );
 
-            const unsubscribe = onSnapshot(convsQuery, (snapshot) => {
-                const convs = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })) as Conversation[];
-                
-                // Sort locally by updatedAt descending
-                convs.sort((a, b) => {
-                    const tA = a.updatedAt ? (typeof (a.updatedAt as any).toDate === 'function' ? (a.updatedAt as any).toDate().getTime() : new Date(a.updatedAt as any).getTime()) : 0;
-                    const tB = b.updatedAt ? (typeof (b.updatedAt as any).toDate === 'function' ? (b.updatedAt as any).toDate().getTime() : new Date(b.updatedAt as any).getTime()) : 0;
-                    return tB - tA;
-                });
-
-                setConversations(convs);
-                setLoading(false);
+        const unsubscribe = onSnapshot(convsQuery, (snapshot) => {
+            const convs = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Conversation[];
+            
+            // Sort locally by updatedAt descending
+            convs.sort((a, b) => {
+                const tA = a.updatedAt ? (typeof (a.updatedAt as any).toDate === 'function' ? (a.updatedAt as any).toDate().getTime() : new Date(a.updatedAt as any).getTime()) : 0;
+                const tB = b.updatedAt ? (typeof (b.updatedAt as any).toDate === 'function' ? (b.updatedAt as any).toDate().getTime() : new Date(b.updatedAt as any).getTime()) : 0;
+                return tB - tA;
             });
 
-            return () => unsubscribe();
+            setConversations(convs);
+            setLoading(false);
         });
+
+        return () => unsubscribe();
     }, [session]);
 
     // Load messages for selected conversation

@@ -14,7 +14,8 @@ import {
     Loader2, RefreshCw, Eye, ChevronDown, ChevronUp, MessageSquare, Bell,
 } from "lucide-react";
 import { getBroadcastHistoryAction } from "@/app/actions/broadcast";
-import type { BroadcastLog, BroadcastAudience } from "@/app/actions/broadcast";
+import type { BroadcastLog } from "@/app/actions/broadcast";
+import { type BroadcastAudience } from "@/lib/broadcast-logic";
 import { formatDateTime } from "@/lib/utils";
 
 const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
@@ -153,18 +154,28 @@ export default function BroadcastHistoryPage() {
     const [logs, setLogs] = useState<BroadcastLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<"all" | "email" | "sms" | "in-app">("all");
 
     async function load() {
         setLoading(true);
         setError(null);
-        const res = await getBroadcastHistoryAction();
-        setLoading(false);
-        if (!res.success) { setError(res.error || "Failed to load history"); return; }
-        setLogs(res.data);
-    };
+        try {
+            const res = await getBroadcastHistoryAction();
+            if (!res.success) {
+                setError(res.error || "Failed to load history");
+                return;
+            }
+            setLogs(res.data);
+        } catch (err: any) {
+            setError(err.message || "An unexpected error occurred while loading history.");
+        } finally {
+            setLoading(false);
+        }
+    }
 
-     
     useEffect(() => { load(); }, []);
+
+    const filteredLogs = logs.filter(log => activeTab === "all" || log.channel === activeTab);
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -217,46 +228,110 @@ export default function BroadcastHistoryPage() {
                     </div>
                 )}
 
-                {/* Empty */}
-                {!loading && !error && logs.length === 0 && (
-                    <div className="py-20 text-center">
-                        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-                            <Mail className="w-8 h-8 text-slate-400" />
-                        </div>
-                        <h3 className="font-bold text-slate-900 mb-1">No broadcasts yet</h3>
-                        <p className="text-slate-500 text-sm mb-6">Past broadcasts will appear here once you send one.</p>
-                        <Link href="/admin/communications/broadcast"
-                            className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition">
-                            <Mail className="w-4 h-4" /> Send Your First Broadcast
-                        </Link>
-                    </div>
-                )}
+                {/* Main View (Tabs & Content) */}
+                {!loading && !error && (
+                    <>
+                        {/* Channel Filter Tabs */}
+                        {logs.length > 0 && (
+                            <div className="flex border-b border-slate-200 gap-1 sm:gap-2 mb-6">
+                                <button
+                                    onClick={() => setActiveTab("all")}
+                                    className={`px-4 py-2.5 font-bold text-sm border-b-2 transition flex items-center gap-2 ${
+                                        activeTab === "all"
+                                            ? "border-green-600 text-green-600"
+                                            : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                                    }`}
+                                >
+                                    <History className="w-4 h-4" /> All ({logs.length})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("email")}
+                                    className={`px-4 py-2.5 font-bold text-sm border-b-2 transition flex items-center gap-2 ${
+                                        activeTab === "email"
+                                            ? "border-green-600 text-green-600"
+                                            : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                                    }`}
+                                >
+                                    <Mail className="w-4 h-4" /> Emails ({logs.filter(l => l.channel === "email").length})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("sms")}
+                                    className={`px-4 py-2.5 font-bold text-sm border-b-2 transition flex items-center gap-2 ${
+                                        activeTab === "sms"
+                                            ? "border-green-600 text-green-600"
+                                            : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                                    }`}
+                                >
+                                    <MessageSquare className="w-4 h-4" /> Texts ({logs.filter(l => l.channel === "sms").length})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab("in-app")}
+                                    className={`px-4 py-2.5 font-bold text-sm border-b-2 transition flex items-center gap-2 ${
+                                        activeTab === "in-app"
+                                            ? "border-green-600 text-green-600"
+                                            : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                                    }`}
+                                >
+                                    <Bell className="w-4 h-4" /> In-App ({logs.filter(l => l.channel === "in-app").length})
+                                </button>
+                            </div>
+                        )}
 
-                {/* Log list */}
-                {!loading && logs.map((log) => <LogRow key={log.id} log={log} />)}
+                        {/* Empty overall */}
+                        {logs.length === 0 && (
+                            <div className="py-20 text-center">
+                                <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                                    <Mail className="w-8 h-8 text-slate-400" />
+                                </div>
+                                <h3 className="font-bold text-slate-900 mb-1">No broadcasts yet</h3>
+                                <p className="text-slate-500 text-sm mb-6">Past broadcasts will appear here once you send one.</p>
+                                <Link href="/admin/communications/broadcast"
+                                    className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition">
+                                    <Mail className="w-4 h-4" /> Send Your First Broadcast
+                                </Link>
+                            </div>
+                        )}
 
-                {/* Summary footer */}
-                {!loading && logs.length > 0 && (
-                    <div className="bg-white border border-slate-200 rounded-2xl p-5">
-                        <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
-                            <div className="px-4">
-                                <p className="text-2xl font-bold text-slate-900">{logs.length}</p>
-                                <p className="text-sm text-slate-500">Total Broadcasts</p>
+                        {/* Empty filtered tab */}
+                        {logs.length > 0 && filteredLogs.length === 0 && (
+                            <div className="py-20 bg-white border border-slate-200 rounded-2xl text-center">
+                                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                                    {activeTab === "email" ? <Mail className="w-6 h-6 text-slate-400" /> : activeTab === "sms" ? <MessageSquare className="w-6 h-6 text-slate-400" /> : <Bell className="w-6 h-6 text-slate-400" />}
+                                </div>
+                                <h3 className="font-bold text-slate-900 mb-1">No broadcasts found</h3>
+                                <p className="text-slate-500 text-sm">There are no logs found for the selected communication channel.</p>
                             </div>
-                            <div className="px-4">
-                                <p className="text-2xl font-bold text-green-600">
-                                    {logs.reduce((acc, l) => acc + l.successCount, 0).toLocaleString()}
-                                </p>
-                                <p className="text-sm text-slate-500">Messages Delivered</p>
+                        )}
+
+                        {/* Mapped Filtered Logs List */}
+                        {filteredLogs.map((log) => <LogRow key={log.id} log={log} />)}
+
+                        {/* Summary Footer */}
+                        {filteredLogs.length > 0 && (
+                            <div className="bg-white border border-slate-200 rounded-2xl p-5">
+                                <div className="grid grid-cols-3 divide-x divide-slate-200 text-center">
+                                    <div className="px-4">
+                                        <p className="text-2xl font-bold text-slate-900">{filteredLogs.length}</p>
+                                        <p className="text-sm text-slate-500">
+                                            {activeTab === "all" ? "Total Broadcasts" : activeTab === "email" ? "Emails Found" : activeTab === "sms" ? "Texts Found" : "Notifications Found"}
+                                        </p>
+                                    </div>
+                                    <div className="px-4">
+                                        <p className="text-2xl font-bold text-green-600">
+                                            {filteredLogs.reduce((acc, l) => acc + l.successCount, 0).toLocaleString()}
+                                        </p>
+                                        <p className="text-sm text-slate-500">Messages Delivered</p>
+                                    </div>
+                                    <div className="px-4">
+                                        <p className="text-2xl font-bold text-slate-900">
+                                            {filteredLogs.reduce((acc, l) => acc + l.totalRecipients, 0).toLocaleString()}
+                                        </p>
+                                        <p className="text-sm text-slate-500">Total Recipients</p>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="px-4">
-                                <p className="text-2xl font-bold text-slate-900">
-                                    {logs.reduce((acc, l) => acc + l.totalRecipients, 0).toLocaleString()}
-                                </p>
-                                <p className="text-sm text-slate-500">Total Recipients</p>
-                            </div>
-                        </div>
-                    </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>

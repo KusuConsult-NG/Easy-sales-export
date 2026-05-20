@@ -25,7 +25,13 @@ async function _initializePropertyPaymentAction(
     propertyTitle: string,
     amount: number,
     sellerId: string,
-    buyerInfo: { fullName: string; email: string; phone: string; purpose: string; }
+    buyerInfo: { 
+        fullName: string; 
+        email: string; 
+        phone: string; 
+        purpose: string; 
+        zoningComplianceDeclarationAccepted?: boolean;
+    }
 ): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> { 
     try {
         const sessionResult = await requireSession();
@@ -34,6 +40,11 @@ async function _initializePropertyPaymentAction(
 
         if (!session?.user) { 
             return { success: false, error: "Authentication required", data: null };
+        }
+
+        // Strict validation of zoning compliance declaration
+        if (!buyerInfo.zoningComplianceDeclarationAccepted) {
+            return { success: false, error: "Zoning compliance declaration must be accepted to proceed with property purchase", data: null };
         }
 
         // Validate amount
@@ -97,6 +108,7 @@ async function _initializePropertyPaymentAction(
             escrowAmount: amount,
             escrowStatus: "pending",
             paymentReference: reference,
+            zoningComplianceDeclarationAccepted: true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 
         });

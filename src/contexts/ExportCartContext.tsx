@@ -54,6 +54,7 @@ export function ExportCartProvider({ children }: { children: React.ReactNode }) 
     const [isHydrated, setIsHydrated] = useState(false);
 
     // Hydrate from localStorage on mount
+     
     useEffect(() => {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);

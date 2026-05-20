@@ -98,7 +98,8 @@ export function LandMap({
 }: LandMapProps) {
     const [mounted, setMounted] = useState(false);
 
-    // Only render map on client-side
+    // Only render map on client-side — setMounted(true) in a mount effect is idiomatic
+    // for SSR hydration guards; this single call does not cause a re-render cascade.
     useEffect(() => {
          
         setMounted(true);

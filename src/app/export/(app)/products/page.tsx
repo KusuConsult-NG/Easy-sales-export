@@ -80,23 +80,46 @@ export default function MyExportProductsPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {products.map((product) => (
-                        <div key={product.id} className="bg-white rounded-xl border border-slate-200 p-6">
-                            <div className="flex items-start justify-between mb-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="text-4xl">{product.icon || "📦"}</div>
-                                    <div>
-                                        <h3 className="font-bold text-slate-900">{product.name}</h3>
-                                        <p className="text-sm text-slate-500 capitalize">{product.category}</p>
+                        <div key={product.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-300">
+                            {product.images && product.images.length > 0 && (
+                                <div className="relative h-48 w-full bg-slate-50 overflow-hidden border-b border-slate-100 shrink-0">
+                                    <img
+                                        src={product.images[0]}
+                                        alt={product.name}
+                                        className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                                    />
+                                    {product.isActive && (
+                                        <span className="absolute top-3 left-3 text-[10px] font-bold bg-green-500 text-white px-2 py-0.5 rounded-full shadow-sm uppercase tracking-wider">
+                                            Active
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            <div className="p-6 flex-1 flex flex-col justify-between">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        {(!product.images || product.images.length === 0) && (
+                                            <div className="text-3xl bg-slate-50 w-12 h-12 flex items-center justify-center rounded-xl border border-slate-100 shadow-xs shrink-0 select-none">
+                                                {product.icon || "📦"}
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h3 className="font-bold text-slate-900">{product.name}</h3>
+                                            <p className="text-sm text-slate-500 capitalize">{product.category}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <div className="flex items-center gap-1">
+                                            {getStatusIcon(product.status || 'pending')}
+                                            <span className="text-sm font-medium text-slate-700">{getStatusText(product.status || 'pending')}</span>
+                                        </div>
+                                        {product.isActive && (!product.images || product.images.length === 0) && (
+                                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                                                Active
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-1">
-                                    <div className="flex items-center gap-1">
-                                        {getStatusIcon(product.status || 'pending')}
-                                        <span className="text-sm font-medium">{getStatusText(product.status || 'pending')}</span>
-                                    </div>
-                                    {product.isActive && <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Active</span>}
-                                </div>
-                            </div>
                             
                             <div className="space-y-2 mb-4">
                                 <div className="flex justify-between text-sm">
@@ -124,7 +147,8 @@ export default function MyExportProductsPage() {
                                 </div>
                             </div>
                         </div>
-                    ))}
+                    </div>
+                ))}
                 </div>
             )}
         </div>

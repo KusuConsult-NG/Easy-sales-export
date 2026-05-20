@@ -9,7 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
 import { revalidatePath } from "next/cache";
-import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
+import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 
 /**
  * Server Actions for Export Window Management
@@ -425,8 +425,8 @@ export async function submitExportOnboardingAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.export?.status;
 
-        if (existingStatus === 'pending_approval' || existingStatus === 'under_review') { return { success: false as const, error: "Your previous application is still being processed.", meta: null
- };
+        if (existingStatus === 'pending' || existingStatus === 'pending_approval' || existingStatus === 'under_review') { 
+            return { success: false as const, error: "Your previous application is still being processed.", meta: null };
         }
         if (existingStatus === 'approved') { return { success: false as const, data: undefined, error: "You are already registered for Export.", meta: null };
         }
@@ -437,24 +437,32 @@ export async function submitExportOnboardingAction(
         const bank = JSON.parse(formData.get("bank") as string || "{}");
         const terms = JSON.parse(formData.get("terms") as string || "{}");
 
-        const idDocument = formData.get("idDocument") as File | null;
-        const proofOfAddress = formData.get("proofOfAddress") as File | null;
+        const idDocument = formData.get("idDocument");
+        const proofOfAddress = formData.get("proofOfAddress");
 
         // Upload Documents
         const documents: any = {};
 
-        if (idDocument && idDocument.size > 0) {
-            documents.idDocument = await uploadFileToStorage(
-                idDocument,
-                `export-kyc/${userId}/id-document`
-            );
+        if (idDocument) {
+            if (typeof idDocument === "string" && idDocument.startsWith("http")) {
+                documents.idDocument = idDocument;
+            } else if (idDocument instanceof File && idDocument.size > 0) {
+                documents.idDocument = await uploadFileToStorage(
+                    idDocument,
+                    `export-kyc/${userId}/id-document`
+                );
+            }
         }
 
-        if (proofOfAddress && proofOfAddress.size > 0) {
-            documents.proofOfAddress = await uploadFileToStorage(
-                proofOfAddress,
-                `export-kyc/${userId}/proof-of-address`
-            );
+        if (proofOfAddress) {
+            if (typeof proofOfAddress === "string" && proofOfAddress.startsWith("http")) {
+                documents.proofOfAddress = proofOfAddress;
+            } else if (proofOfAddress instanceof File && proofOfAddress.size > 0) {
+                documents.proofOfAddress = await uploadFileToStorage(
+                    proofOfAddress,
+                    `export-kyc/${userId}/proof-of-address`
+                );
+            }
         }
 
         // Generate unique application ID
@@ -992,7 +1000,7 @@ export async function getExportApplicationAction(): Promise<
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
-        const data = sortedDocs[0];
+        const data = serializeValue(sortedDocs[0]);
         return { error: null, success: true as const, data: data };
     } catch (error) { logger.error('getExportApplicationAction error:', error);
         return { success: false as const, error: 'Failed to fetch application'};

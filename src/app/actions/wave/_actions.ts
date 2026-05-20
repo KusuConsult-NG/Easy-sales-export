@@ -218,7 +218,7 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
 
         // 🔒 SECURITY: Strict Gender Enforcement for standard users
         // Admins (including module-specific admins) are always eligible to view resources.
-        if (userData?.gender !== "female" && !isUserAdmin) {
+        if (userData?.gender?.toLowerCase() !== "female" && !isUserAdmin) {
             return {
                 error: null,
                 success: true as const,
@@ -296,7 +296,12 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 .get();
         }
 
-        const existingStatus = userDoc.data()?.serviceRegistrations?.wave?.status;
+        const userData = userDoc.data();
+        if (userData?.gender?.toLowerCase() !== "female") {
+            return { success: false as const, error: "Only female applicants are eligible to enroll in the WAVE program.", data: null };
+        }
+
+        const existingStatus = userData?.serviceRegistrations?.wave?.status;
 
         if (existingStatus === 'pending' || existingStatus === 'under_review') {
             return { success: false as const, error: "Your previous application is still being processed.", data: null };
@@ -359,7 +364,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
                     .filter(Boolean).join(" ").trim(),
                 phone: applicantPhone,
-                gender: "female",
+                gender: "Female",
                 stateOfOrigin: validatedData.stateOfOrigin,
                 residentialState: validatedData.stateOfResidence,
                 lga: validatedData.lgaOfOrigin,

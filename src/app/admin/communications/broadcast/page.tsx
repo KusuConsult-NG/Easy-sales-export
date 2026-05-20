@@ -23,7 +23,7 @@ import {
 import {
     previewBroadcastAction,
 } from "@/app/actions/broadcast";
-import type { BroadcastAudience, BroadcastFilters } from "@/app/actions/broadcast";
+import { type BroadcastAudience, type BroadcastFilters } from "@/lib/broadcast-logic";
 import { diagnoseBroadcastAction } from "@/app/actions/diagnose-broadcast";
 import { useToast } from "@/contexts/ToastContext";
 

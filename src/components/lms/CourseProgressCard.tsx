@@ -15,6 +15,12 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
     const [loading, setLoading] = useState(true);
     const [generatingCert, setGeneratingCert] = useState(false);
 
+    async function handleGenerateCertificate() {
+        setGeneratingCert(true);
+        await generateCourseCertificate(courseId, courseTitle);
+        setGeneratingCert(false);
+    };
+
     useEffect(() => {
         async function fetchProgress() {
             setLoading(true);
@@ -33,12 +39,6 @@ export default function CourseProgressCard({ courseId, courseTitle, totalLessons
         fetchProgress();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [courseId]);
-
-    async function handleGenerateCertificate() {
-        setGeneratingCert(true);
-        await generateCourseCertificate(courseId, courseTitle);
-        setGeneratingCert(false);
-    };
 
     if (loading) {
         return (

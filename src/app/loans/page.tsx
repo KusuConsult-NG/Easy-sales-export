@@ -19,11 +19,6 @@ export default function MyLoansPage() {
     const [loans, setLoans] = useState<LoanApplication[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        // eslint-disable-next-line react-hooks/immutability
-        loadLoans();
-    }, []);
-
     async function loadLoans() {
         setLoading(true);
         const result = await getUserLoanApplications();
@@ -32,6 +27,11 @@ export default function MyLoansPage() {
         }
         setLoading(false);
     }
+
+    useEffect(() => {
+        loadLoans();
+     
+    }, []);
 
     const getStatusColor = (status: LoanStatus) => {
         const colors: Record<string, string> = {

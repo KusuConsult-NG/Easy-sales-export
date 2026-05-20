@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
                 metadata: {
                     membershipId,
                     userId: session.user.id,
-                    membershipTier: tier,
+                    membershipTier: "Member",
                     type: "cooperative_membership_registration",
                 },
             }),
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
                 phone: nextOfKin.phone,
                 residentialAddress: nextOfKin.residentialAddress,
             },
-            membershipTier: tier,
+            membershipTier: "Member",
             registrationFee,
             membershipStatus: "pending",
             paymentReference,

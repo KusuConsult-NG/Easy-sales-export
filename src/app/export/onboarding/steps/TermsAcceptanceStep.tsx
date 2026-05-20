@@ -7,7 +7,7 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, FileText, AlertCircle } from "lucide-react";
+import { Shield, FileText, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 
 interface TermsAcceptanceStepProps {
@@ -15,12 +15,14 @@ interface TermsAcceptanceStepProps {
     onBack: () => void;
     initialData?: any;
     onChange?: (data: any) => void;
+    isSubmitting?: boolean;
 }
 
 export function TermsAcceptanceStep({
     onNext,
     onBack,
     initialData,
+    isSubmitting = false,
 }: TermsAcceptanceStepProps) {
     const [acceptedInvestment, setAcceptedInvestment] = useState(
         initialData?.acceptedInvestment || false
@@ -40,6 +42,7 @@ export function TermsAcceptanceStep({
         acceptedInvestment && acceptedRisk && acceptedEscrow && acceptedPrivacy;
 
     function handleSubmit() {
+        if (isSubmitting) return;
         if (!allAccepted) {
             showToast("Please accept all terms and conditions to continue", "error");
             return;
@@ -94,7 +97,8 @@ export function TermsAcceptanceStep({
                             type="checkbox"
                             checked={acceptedInvestment}
                             onChange={(e) => setAcceptedInvestment(e.target.checked)}
-                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500"
+                            disabled={isSubmitting}
+                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
                         />
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -118,7 +122,8 @@ export function TermsAcceptanceStep({
                             type="checkbox"
                             checked={acceptedRisk}
                             onChange={(e) => setAcceptedRisk(e.target.checked)}
-                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500"
+                            disabled={isSubmitting}
+                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
                         />
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -140,7 +145,8 @@ export function TermsAcceptanceStep({
                             type="checkbox"
                             checked={acceptedEscrow}
                             onChange={(e) => setAcceptedEscrow(e.target.checked)}
-                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500"
+                            disabled={isSubmitting}
+                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
                         />
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -165,7 +171,8 @@ export function TermsAcceptanceStep({
                             type="checkbox"
                             checked={acceptedPrivacy}
                             onChange={(e) => setAcceptedPrivacy(e.target.checked)}
-                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500"
+                            disabled={isSubmitting}
+                            className="w-5 h-5 mt-0.5 text-orange-500 rounded focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
                         />
                         <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -189,16 +196,18 @@ export function TermsAcceptanceStep({
                 <div className="flex justify-between pt-6">
                     <button
                         onClick={onBack}
-                        className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg hover:bg-slate-100 transition-colors font-semibold"
+                        disabled={isSubmitting}
+                        className="px-6 py-3 border-2 border-slate-300 text-slate-900 rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
                     >
                         Back
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={!allAccepted}
-                        className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
+                        disabled={!allAccepted || isSubmitting}
+                        className="px-8 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold flex items-center gap-2"
                     >
-                        Complete Onboarding
+                        {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {isSubmitting ? "Submitting..." : "Complete Onboarding"}
                     </button>
                 </div>
             </div>

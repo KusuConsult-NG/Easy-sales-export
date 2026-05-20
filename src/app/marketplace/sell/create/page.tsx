@@ -20,6 +20,7 @@ import {
 import { createProductAction } from "@/app/actions/marketplace";
 import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
+import { useStorage } from "@/hooks/use-storage";
 
 const initialState = { success: false as const, error: "", data: null };
 
@@ -61,6 +62,10 @@ export default function CreateProductPage() {
     const router = useRouter();
     const { showToast } = useToast();
     const [state, formAction, isPending] = useActionState(createProductAction, initialState);
+    const { uploadFile, uploadState } = useStorage();
+    const [isUploadingClient, setIsUploadingClient] = useState(false);
+
+    const submitting = isPending || isUploadingClient;
 
     const [images, setImages] = useState<string[]>([]);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -92,16 +97,81 @@ export default function CreateProductPage() {
         setSelectedFiles(selectedFiles.filter((_, i) => i !== index));
     };
 
-    function handleSubmit(formData: FormData) {
-        // Append files manually
-        selectedFiles.forEach((file, index) => {
-            formData.append(`productImages_${index}`, file);
-        });
-        formAction(formData);
+    async function handleSubmit(formData: FormData) {
+        setIsUploadingClient(true);
+        try {
+            // Upload to Cloudinary client-side in parallel
+            const uploadedUrls = await Promise.all(
+                selectedFiles.map(async (file) => {
+                    const url = await uploadFile(file, `products/marketplace/${Date.now()}_${file.name}`);
+                    return { name: file.name, url };
+                })
+            );
+
+            // Reconstruct a new FormData object
+            const submitFormData = new FormData();
+            
+            // Append original non-file items
+            for (const [key, value] of formData.entries()) {
+                if (key.startsWith("productImages_")) continue;
+                submitFormData.append(key, value);
+            }
+
+            // Append pre-uploaded URLs under keys starting with 'productImages_'
+            uploadedUrls.forEach(({ url }, index) => {
+                submitFormData.append(`productImages_${index}`, url);
+            });
+
+            formAction(submitFormData);
+        } catch (error) {
+            console.error("Client upload failed:", error);
+            showToast("Failed to upload product images to Cloudinary.", "error");
+        } finally {
+            setIsUploadingClient(false);
+        }
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 py-8">
+        <div className="min-h-screen bg-gray-50 py-8 relative">
+            {isUploadingClient && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6 text-center">
+                        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                            <Loader2 className="w-8 h-8 text-green-600 animate-spin" />
+                        </div>
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-bold text-slate-900">Uploading Product Images</h3>
+                            <p className="text-sm text-slate-500">Please wait while we secure and upload your photos to Cloudinary.</p>
+                        </div>
+                        <div className="space-y-4 text-left p-4 bg-slate-50 border border-slate-200 rounded-xl max-h-60 overflow-y-auto">
+                            {selectedFiles.map((file) => {
+                                const state = uploadState[file.name];
+                                const progress = state?.progress ?? 0;
+                                const error = state?.error ?? null;
+                                return (
+                                    <div key={file.name} className="space-y-1.5">
+                                        <div className="flex justify-between text-xs font-semibold text-slate-700">
+                                            <span className="truncate max-w-[200px] flex items-center gap-1">
+                                                🖼️ {file.name}
+                                            </span>
+                                            <span className={error ? "text-red-600" : "text-green-600"}>
+                                                {error ? "Failed" : progress === 100 ? "Completed" : `${Math.round(progress)}%`}
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-300 ${error ? "bg-red-500" : "bg-green-600"}`}
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
+                                        {error && <p className="text-[10px] text-red-500 font-medium">{error}</p>}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="max-w-4xl mx-auto px-4">
                 {/* Header */}
                 <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
@@ -452,13 +522,13 @@ export default function CreateProductPage() {
                         </button>
                         <button
                             type="submit"
-                            disabled={isPending}
+                            disabled={submitting}
                             className="flex-1 px-6 py-4 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            {isPending ? (
+                            {submitting ? (
                                 <>
                                     <Loader2 className="w-5 h-5 animate-spin" />
-                                    Creating...
+                                    {isUploadingClient ? "Uploading Assets..." : "Creating..."}
                                 </>
                             ) : (
                                 <>
