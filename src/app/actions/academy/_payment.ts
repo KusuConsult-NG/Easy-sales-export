@@ -154,7 +154,9 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             const enrollmentRef = db.collection(COLLECTIONS.ENROLLMENTS).doc(enrollmentId);
             transaction.update(enrollmentRef, {
                 status: "active",
-                paymentStatus: "paid",
+                // ✅ FIX: Use "completed" consistently — all status checks use === "completed".
+                // The old value "paid" caused gate checks in _actions.ts:208 and :346 to always fail.
+                paymentStatus: "completed",
                 paymentVerifiedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() });
 
@@ -171,10 +173,13 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
             }
 
             // Mark payment as processed
-            transaction.set(processedRef, { processedAt: FieldValue.serverTimestamp(),
+            transaction.set(processedRef, {
+                processedAt: FieldValue.serverTimestamp(),
                 userId: session.user.id,
                 amount: amountInNaira,
                 type: "academy_enrollment",
+                // ✅ FIX: status field required so the fallback query in _checkAcademyPaymentStatusAction works.
+                status: "completed",
                 reference });
         });
 

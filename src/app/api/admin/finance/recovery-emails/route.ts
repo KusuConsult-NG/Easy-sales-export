@@ -4,6 +4,7 @@ import { getAdminDb } from "@/lib/firebase-admin";
 import { Resend } from "resend";
 import { logger } from "@/lib/logger";
 import { isAdmin } from "@/lib/admin-permissions";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 export const dynamic = "force-dynamic";
 
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
         for (const reference of references) {
             try {
                 // 1. Fetch failedPayments doc
-                const doc = await db.collection("failedPayments").doc(reference).get();
+                const doc = await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).get();
                 if (!doc.exists) {
                     results.push({ ref: reference, email: null, status: "skipped", reason: "doc not found" });
                     continue;
@@ -171,7 +172,7 @@ export async function POST(req: NextRequest) {
 
                 // 2. Resolve email from users collection if missing
                 if (!email && data.userId) {
-                    const userDoc = await db.collection("users").doc(data.userId).get();
+                    const userDoc = await db.collection(COLLECTIONS.USERS).doc(data.userId).get();
                     if (userDoc.exists) {
                         email = userDoc.data()?.email ?? null;
                     }
@@ -197,7 +198,7 @@ export async function POST(req: NextRequest) {
                 });
 
                 // 4. Mark recovery email sent timestamp
-                await db.collection("failedPayments").doc(reference).update({
+                await db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference).update({
                     recoveryEmailSentAt: new Date().toISOString(),
                     recoveryEmailSentBy: session?.user?.email ?? "admin",
                 });

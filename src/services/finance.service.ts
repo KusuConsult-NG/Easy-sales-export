@@ -1,4 +1,5 @@
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import type { FinanceServiceContract, RevenueMetrics } from "@easy-sales/services";
 
 /**
@@ -38,7 +39,10 @@ export class FinanceService implements FinanceServiceContract {
      */
     static async getVerifiedRevenueMetrics(module?: string) {
         const db = getAdminDb();
-        let query: FirebaseFirestore.Query = db.collection("processedPayments").where("status", "in", ["success", "completed"]);
+        // NOTE: processedPayments only ever writes status="completed".
+        // "success" was a Paystack API status that was historically confused with our internal status.
+        // Using COLLECTIONS constant to prevent hardcoded string drift.
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).where("status", "==", "completed");
         
         if (module) {
             query = query.where("module", "==", module);
@@ -72,7 +76,7 @@ export class FinanceService implements FinanceServiceContract {
      */
     static async deriveMarketplaceWalletBalance(userId: string): Promise<number> {
         const db = getAdminDb();
-        const snap = await db.collection("wallet_transactions")
+        const snap = await db.collection(COLLECTIONS.WALLET_TRANSACTIONS)
             .where("userId", "==", userId)
             .where("status", "==", "completed")
             .get();

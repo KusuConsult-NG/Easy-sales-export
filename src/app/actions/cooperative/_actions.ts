@@ -956,8 +956,8 @@ async function _getDirectoryMembersAction(): Promise<
         }
 
         const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
-        // Only approved members
-        const snapshot = await membershipsRef.where("membershipStatus", "==", "approved").get();
+        // Query both "active" (canonical since May 2026) and "approved" (legacy status) — both are fully approved members.
+        const snapshot = await membershipsRef.where("membershipStatus", "in", ["approved", "active"]).get();
 
         const members = snapshot.docs
             .map((doc: any) => {

@@ -1,4 +1,5 @@
 import { getAdminDb } from "@/lib/firebase-admin";
+import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserMetricsServiceContract, CooperativeMemberMetrics, AcademyMetrics } from "@easy-sales/services";
 
 /**
@@ -18,8 +19,8 @@ export class UserMetricsService implements UserMetricsServiceContract {
         const db = getAdminDb();
         
         const [membersSnap, paymentsSnap] = await Promise.all([
-            db.collection("cooperative_members").get(),
-            db.collection("processedPayments")
+            db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).get(),
+            db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
               .where("type", "==", "cooperative_membership_registration")
               .where("status", "==", "completed")
               .get()
@@ -96,9 +97,9 @@ export class UserMetricsService implements UserMetricsServiceContract {
     static async getAcademyMetrics() {
         const db = getAdminDb();
         const [coursesSnap, enrollmentsSnap, appsSnap] = await Promise.all([
-            db.collection("academy_courses").count().get(),
-            db.collection("academy_enrollments").get(),
-            db.collection("academy_applications").get()
+            db.collection(COLLECTIONS.ACADEMY_COURSES).count().get(),
+            db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS).get(),
+            db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).get()
         ]);
 
         const totalCourses = coursesSnap.data().count;
