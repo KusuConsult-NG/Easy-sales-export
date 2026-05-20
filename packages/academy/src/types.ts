@@ -12,7 +12,7 @@ export type {
     Course,
     Enrollment,
     Certificate,
-} from "@easy-sales/types/academy";
+} from "../../types/src/academy";
 
 // ─── View Models (UI-specific composites) ────────────────────────────────────
 

@@ -10,7 +10,7 @@
 export type {
     CooperativeMembership,
     CooperativeTransaction,
-} from "@easy-sales/types/cooperative";
+} from "../../types/src/cooperative";
 
 // ─── View Models ──────────────────────────────────────────────────────────────
 

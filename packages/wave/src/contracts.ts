@@ -13,7 +13,7 @@
  *   3. Domain boundary is explicit and enforced at the type level
  */
 
-import type { WaveApplication, WaveWithdrawal, WaveResource } from "@easy-sales/types/wave";
+import type { WaveApplication, WaveWithdrawal, WaveResource } from "../../types/src/wave";
 
 // ─── Input Payloads ──────────────────────────────────────────────────────────
 

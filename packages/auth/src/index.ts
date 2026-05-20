@@ -15,5 +15,5 @@ export { hasAdminPermission, isAdmin } from "./permissions";
 export { requireSession } from "./session";
 
 // Role constants & types
-export type { UserRole, LegacyRole } from "@easy-sales/types/roles";
-export { ROLE_LABELS, LEGACY_ROLE_MAP } from "@easy-sales/types/roles";
+export type { UserRole, LegacyRole } from "../../types/src/roles";
+export { ROLE_LABELS, LEGACY_ROLE_MAP } from "../../types/src/roles";

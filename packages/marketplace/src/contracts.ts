@@ -4,7 +4,7 @@
  * @easy-sales/marketplace/contracts
  */
 
-import type { ActionResponse } from "@easy-sales/config";
+import type { ActionResponse } from "../../config/src/index";
 import type {
     SellerVerification,
     Product,

@@ -16,7 +16,7 @@ export type {
     WaveWithdrawal,
     WaveEarning,
     BriefingSubmission,
-} from "@easy-sales/types/wave";
+} from "../../types/src/wave";
 
 // ─── WAVE View Models (UI-specific composite types) ───────────────────────────
 
@@ -57,5 +57,4 @@ export interface WaveTrainingEventSummary {
     status: "upcoming" | "ongoing" | "completed" | "cancelled";
 }
 
-/** Minimal import — avoid circular dependency on WaveApplication */
-type WaveApplication = import("@easy-sales/types/wave").WaveApplication;
+type WaveApplication = import("../../types/src/wave").WaveApplication;
