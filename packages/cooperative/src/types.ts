@@ -3,14 +3,33 @@
  *
  * @easy-sales/cooperative/types
  *
- * Re-exports from @easy-sales/types/cooperative + composite view-model types.
+ * Base persistence types are inlined here to avoid cross-package imports
+ * that fail in the Docker/Railway build environment.
  */
 
-// Re-export base persistence types
-export type {
-    CooperativeMembership,
-    CooperativeTransaction,
-} from "../../types/src/cooperative";
+// ─── Base Persistence Types (inlined from @easy-sales/types/cooperative) ────
+
+export type CooperativeMembership = {
+    id: string; // Document ID (User ID in this case)
+    cooperativeId: string;
+    cooperativeName: string;
+    savingsBalance: number;
+    loanBalance: number;
+    memberSince: Date;
+    monthlyTarget: number;
+    membershipTier: "Member";
+    membershipStatus: "pending" | "approved" | "active" | "rejected" | "suspended";
+    paymentStatus: "pending" | "completed" | "failed";
+};
+
+export type CooperativeTransaction = {
+    id: string;
+    type: "contribution" | "withdrawal" | "loan" | "loan_repayment" | "interest";
+    amount: number;
+    date: Date;
+    status: string;
+    description: string;
+};
 
 // ─── View Models ──────────────────────────────────────────────────────────────
 

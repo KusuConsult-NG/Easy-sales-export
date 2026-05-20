@@ -4,7 +4,10 @@
  * @easy-sales/services/contracts
  */
 
-import type { User } from "../../types/src/shared";
+// User type inlined to avoid cross-package import issues in Docker build environment.
+// This is structurally compatible with @easy-sales/types User.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type User = Record<string, any> & { uid: string; email: string; fullName: string; roles: string[] };
 
 export interface CooperativeMemberMetrics {
     totalApplications: number;

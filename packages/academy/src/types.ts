@@ -3,16 +3,46 @@
  *
  * @easy-sales/academy/types
  *
- * Re-exports base types from @easy-sales/types/academy and adds
- * Academy-specific composite/view-model types.
+ * Base persistence types are inlined here to avoid cross-package imports
+ * that fail in the Docker/Railway build environment.
  */
 
-// Re-export base persistence types
-export type {
-    Course,
-    Enrollment,
-    Certificate,
-} from "../../types/src/academy";
+// ─── Base Persistence Types (inlined from @easy-sales/types/academy) ─────────
+
+export interface Course {
+    id: string;
+    title: string;
+    description: string;
+    instructor: string;
+    duration: string;
+    level: "beginner" | "intermediate" | "advanced";
+    tier?: "free" | "foundation" | "standard" | "elite";
+    price: number;
+    thumbnail?: string;
+    enrolledCount: number;
+    rating: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface Enrollment {
+    id: string;
+    userId: string;
+    courseId: string;
+    progress: number;
+    completed: boolean;
+    enrolledAt: Date;
+    completedAt?: Date;
+}
+
+export interface Certificate {
+    id: string;
+    userId: string;
+    courseId: string;
+    certificateNumber: string;
+    issueDate: Date;
+    createdAt: Date;
+}
 
 // ─── View Models (UI-specific composites) ────────────────────────────────────
 
