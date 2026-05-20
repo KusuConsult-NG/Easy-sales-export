@@ -41,7 +41,7 @@ COPY --from=deps /app/node_modules ./node_modules
 # deploy via a build variable, ensuring COPY . . is never served from a stale layer.
 # To set this in Railway: add a build variable CACHEBUST with value ${new Date().getTime()}
 # or simply use the Railway UI "Redeploy" with "Clear build cache" option.
-ARG CACHEBUST=20260520-v3
+ARG CACHEBUST=20260520-v4
 RUN echo "Cache bust: $CACHEBUST"
 
 # Copy all source files (this layer is invalidated whenever CACHEBUST changes)
@@ -74,6 +74,12 @@ ENV NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SEN
 ENV NEXT_PUBLIC_FIREBASE_APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID
 ENV NEXTAUTH_URL=$NEXTAUTH_URL
 ENV NEXTAUTH_SECRET=$NEXTAUTH_SECRET
+
+# ── TypeScript type-check (standalone tsc — works correctly in Docker).
+# next build uses ignoreBuildErrors:true because Next.js's internal TypeScript
+# worker cannot resolve files within the packages/ workspace in this environment.
+# This standalone check maintains full type safety before the build.
+RUN npx tsc --noEmit
 
 # Build the Next.js app (outputs to .next/standalone due to output: "standalone")
 RUN npm run build

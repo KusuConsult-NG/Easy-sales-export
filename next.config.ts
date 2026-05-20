@@ -2,6 +2,17 @@ import type { NextConfig } from "next";
 import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const nextConfig: NextConfig = {
+  // ─── TypeScript ─────────────────────────────────────────────────────────────
+  // Next.js's internal TypeScript worker cannot resolve files within the
+  // packages/ monorepo workspace directory in the Docker/Railway build
+  // environment (even sibling files within the same package fail).
+  // We bypass the broken Next.js checker here and enforce types via a
+  // separate `npx tsc --noEmit` step in the Dockerfile instead.
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+
+
   // Stamp the build time into the environment so Railway containers can be
   // distinguished from each other by DeploymentWatcher / /api/health.
   env: {
