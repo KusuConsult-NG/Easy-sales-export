@@ -16,10 +16,10 @@ scripts
 *.txt
 *.py
 *.json
-!package.json
+!**/package.json
 !package-lock.json
+!**/tsconfig.json
 !railway.json
-!tsconfig.json
 !firebase.json
 !firestore.indexes.json
 !sentry.client.config.ts

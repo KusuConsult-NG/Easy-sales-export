@@ -5,16 +5,44 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./wave": "./src/wave.ts",
-    "./academy": "./src/academy.ts",
-    "./export": "./src/export.ts",
-    "./farm-nation": "./src/farm-nation.ts",
-    "./cooperative": "./src/cooperative.ts",
-    "./marketplace": "./src/marketplace.ts",
-    "./shared": "./src/shared.ts",
-    "./roles": "./src/roles.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./wave": {
+      "types": "./src/wave.ts",
+      "default": "./src/wave.ts"
+    },
+    "./academy": {
+      "types": "./src/academy.ts",
+      "default": "./src/academy.ts"
+    },
+    "./export": {
+      "types": "./src/export.ts",
+      "default": "./src/export.ts"
+    },
+    "./farm-nation": {
+      "types": "./src/farm-nation.ts",
+      "default": "./src/farm-nation.ts"
+    },
+    "./cooperative": {
+      "types": "./src/cooperative.ts",
+      "default": "./src/cooperative.ts"
+    },
+    "./marketplace": {
+      "types": "./src/marketplace.ts",
+      "default": "./src/marketplace.ts"
+    },
+    "./shared": {
+      "types": "./src/shared.ts",
+      "default": "./src/shared.ts"
+    },
+    "./roles": {
+      "types": "./src/roles.ts",
+      "default": "./src/roles.ts"
+    }
   },
+
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
