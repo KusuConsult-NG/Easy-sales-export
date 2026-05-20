@@ -4,7 +4,7 @@
  * @easy-sales/services/contracts
  */
 
-import type { User } from "@easy-sales/types";
+import type { User } from "@easy-sales/types/shared";
 
 export interface CooperativeMemberMetrics {
     totalApplications: number;

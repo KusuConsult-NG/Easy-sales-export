@@ -72,7 +72,7 @@ export type {
 
 
 
-export type { User } from "@easy-sales/types";
+export type { User } from "@easy-sales/types/shared";
 
 export interface Cooperative {
     id: string;
