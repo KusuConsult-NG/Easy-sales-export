@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import { Home, TrendingUp, Shield, CheckCircle, ArrowLeft, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/contexts/ToastContext";
-import { submitFarmNationOnboardingAction, checkFarmNationStatusAction, getFarmNationApplicationAction, resubmitFarmNationApplicationAction } from "@/app/actions/farm-nation";
+import { submitFarmNationOnboardingAction, checkFarmNationStatusAction, getFarmNationApplicationAction, resubmitFarmNationApplicationAction, checkFarmNationAccessAction } from "@/app/actions/farm-nation";
 
 // Step components (to be created)
 import RoleSelectionStep from "./steps/RoleSelectionStep";
@@ -92,7 +92,12 @@ export default function FarmNationOnboardingPage() {
                             setIsLoading(false);
                         }
                     } else if (status === "approved" || status === "active") {
-                        router.replace("/farm-nation/properties");
+                        const hasAccessResult = await checkFarmNationAccessAction();
+                        if (hasAccessResult.success && hasAccessResult.data) {
+                            router.replace("/farm-nation/properties");
+                        } else {
+                            setIsLoading(false); // Let form load cleanly without bouncing
+                        }
                     } else if (status === "rejected" || status === "revision_required") {
                         const result = await getFarmNationApplicationAction();
                         if (result.success && result.data?.application) {

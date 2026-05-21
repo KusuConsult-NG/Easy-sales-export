@@ -54,6 +54,7 @@ export {
     getWaveApplicationAction,
     requestWaveRevisionAction,
     resubmitWaveApplicationAction,
+    checkWaveAccessAction,
 } from "./_actions";
 
 // ─── Member utility actions ───────────────────────────────────────────────────

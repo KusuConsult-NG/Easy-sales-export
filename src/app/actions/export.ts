@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import { createAdminAuditLog } from "@/lib/audit-log-admin";
@@ -1209,5 +1210,24 @@ export async function resubmitExportApplicationAction(
         return { error: null, success: true as const, data: { message: "Application resubmitted" }, meta: null };
     } catch (error) { logger.error('resubmitExportApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to resubmit application', meta: null };
+    }
+}
+
+/**
+ * Check if the current user has access to the export module.
+ * Direct Firestore service registrations check fallback is run when JWT roles are stale.
+ */
+export async function checkExportAccessAction(): Promise<boolean> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return false;
+        return await checkModuleAccess(
+            sessionResult.session.user.id,
+            sessionResult.session.user.roles || [],
+            "export"
+        );
+    } catch (error) {
+        logger.error("checkExportAccessAction error:", error);
+        return false;
     }
 }

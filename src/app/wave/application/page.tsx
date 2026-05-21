@@ -259,7 +259,11 @@ export default function WaveApplicationPage() {
                 // Otherwise: stay on application page — do NOT auto-redirect.
                 // The user can see their status and choose to navigate to review-pending themselves.
             } else if (waveStatus === "approved") {
-                router.replace("/wave/dashboard");
+                const { checkWaveAccessAction } = await import("@/app/actions/wave");
+                const hasAccessResult = await checkWaveAccessAction();
+                if (hasAccessResult.success && hasAccessResult.data) {
+                    router.replace("/wave/dashboard");
+                }
             } else if (waveStatus === "revision_required") {
                 // Pre-populate form with existing data for editing
                 const result = await getWaveApplicationAction();

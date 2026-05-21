@@ -116,7 +116,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
         function checkStatusFromBackend() {
             checkCooperativeStatusAction().then(async (coopStatus) => {
-            if (coopStatus === "active" || coopStatus === "approved") {
+            if ((coopStatus === "active" || coopStatus === "approved") && paymentStatus === "completed") {
                 router.replace(`${prefix}/dashboard`);
                 return;
             }

@@ -18,7 +18,7 @@ import { StepIndicator } from "@/components/onboarding/StepIndicator";
 import { useToast } from "@/contexts/ToastContext";
 import { OnboardingStep } from "@/types/service-registration";
 
-import { submitExportOnboardingAction, checkExportStatusAction, getExportApplicationAction, resubmitExportApplicationAction } from "@/app/actions/export";
+import { submitExportOnboardingAction, checkExportStatusAction, getExportApplicationAction, resubmitExportApplicationAction, checkExportAccessAction } from "@/app/actions/export";
 
 // Import step components
 import { InvestmentProfileStep } from "./steps/InvestmentProfileStep";
@@ -99,7 +99,12 @@ export default function ExportOnboardingPage() {
                         setIsLoading(false);
                     }
                 } else if (status === "approved" || status === "active") {
-                    router.replace("/export/dashboard");
+                    const hasAccess = await checkExportAccessAction();
+                    if (hasAccess) {
+                        router.replace("/export/dashboard");
+                    } else {
+                        setIsLoading(false);
+                    }
                 } else if (status === "revision_required" || status === "rejected") {
                     const result = await getExportApplicationAction();
                     if (result.success ) {

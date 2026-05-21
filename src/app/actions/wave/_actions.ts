@@ -20,6 +20,7 @@ import { serializeDocs } from "@/lib/firestore-serialize";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
+import { checkModuleAccess } from "@/lib/module-access-check";
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -1478,3 +1479,22 @@ async function _resubmitWaveApplicationAction(
     }
 }
 export const resubmitWaveApplicationAction = withFlexibleSafeAction("resubmitWaveApplicationAction", _resubmitWaveApplicationAction);
+
+async function _checkWaveAccessAction(): Promise<ActionResponse<boolean>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: "Session expired", data: null };
+        }
+        const hasAccess = await checkModuleAccess(
+            sessionResult.session.user.id,
+            sessionResult.session.user.roles || [],
+            "wave"
+        );
+        return { success: true as const, error: null, data: hasAccess };
+    } catch (error) {
+        logger.error("checkWaveAccessAction error:", error);
+        return { success: false as const, error: "Failed to verify access", data: null };
+    }
+}
+export const checkWaveAccessAction = withFlexibleSafeAction("checkWaveAccessAction", _checkWaveAccessAction);

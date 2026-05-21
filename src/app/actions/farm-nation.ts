@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -1282,3 +1283,22 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
     }
 }
 export const getFarmNationDashboardStatsAction = withFlexibleSafeAction("getFarmNationDashboardStatsAction", _getFarmNationDashboardStatsAction);
+
+async function _checkFarmNationAccessAction(): Promise<ActionResponse<boolean>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: "Session expired", data: null };
+        }
+        const hasAccess = await checkModuleAccess(
+            sessionResult.session.user.id,
+            sessionResult.session.user.roles || [],
+            "farm-nation"
+        );
+        return { success: true as const, error: null, data: hasAccess };
+    } catch (error: any) {
+        logger.error("checkFarmNationAccessAction error:", error);
+        return { success: false as const, error: error.message ?? "Failed to verify access", data: null };
+    }
+}
+export const checkFarmNationAccessAction = withFlexibleSafeAction("checkFarmNationAccessAction", _checkFarmNationAccessAction);

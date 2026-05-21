@@ -93,7 +93,7 @@ export default function MarketplaceOnboarding() {
 
         const checkStatus = async () => {
             try {
-                const { checkMarketplaceStatusAction, getSellerVerificationAction } = await import("@/app/actions/marketplace");
+                const { checkMarketplaceStatusAction, getSellerVerificationAction, checkMarketplaceAccessAction } = await import("@/app/actions/marketplace");
                 const result = await checkMarketplaceStatusAction();
                 const marketplaceStatus = (result.success && result.data) ? result.data.status : null;
                 const accountType = (result.success && result.data) ? result.data.accountType : null;
@@ -120,10 +120,13 @@ export default function MarketplaceOnboarding() {
                         // No-op: form stays as-is
                     }
                 } else if (marketplaceStatus === "approved" || marketplaceStatus === "active") {
-                    if (accountType === "seller" || accountType === "both") {
-                        router.replace("/marketplace/seller/dashboard");
-                    } else {
-                        router.replace("/marketplace/buyer/dashboard");
+                    const hasAccessResult = await checkMarketplaceAccessAction();
+                    if (hasAccessResult.success && hasAccessResult.data) {
+                        if (accountType === "seller" || accountType === "both") {
+                            router.replace("/marketplace/seller/dashboard");
+                        } else {
+                            router.replace("/marketplace/buyer/dashboard");
+                        }
                     }
                 } else if (marketplaceStatus === "rejected" || marketplaceStatus === "suspended") {
                     // Prefill form from Firestore for rejected / suspended users

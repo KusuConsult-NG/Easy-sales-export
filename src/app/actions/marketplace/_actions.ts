@@ -8,6 +8,7 @@
 
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
+import { checkModuleAccess } from "@/lib/module-access-check";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp, AggregateField } from "firebase-admin/firestore";
 import { db } from "@/lib/firebase-admin"; // Use Admin DB
@@ -1616,3 +1617,22 @@ async function _updateSellerCategoryAction(
     }
 }
 export const updateSellerCategoryAction = withSafeAction("updateSellerCategoryAction", _updateSellerCategoryAction);
+
+async function _checkMarketplaceAccessAction(): Promise<ActionResponse<boolean>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: "Session expired", data: null };
+        }
+        const hasAccess = await checkModuleAccess(
+            sessionResult.session.user.id,
+            sessionResult.session.user.roles || [],
+            "marketplace"
+        );
+        return { success: true as const, error: null, data: hasAccess };
+    } catch (error) {
+        logger.error("checkMarketplaceAccessAction error:", error);
+        return { success: false as const, error: "Failed to verify access", data: null };
+    }
+}
+export const checkMarketplaceAccessAction = withSafeAction("checkMarketplaceAccessAction", _checkMarketplaceAccessAction);
