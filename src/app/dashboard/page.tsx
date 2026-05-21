@@ -105,15 +105,16 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.paymentStatus : null);
             
         let status: 'unapplied' | 'pending' | 'approved' | 'payment_required' = 'unapplied';
-        if (registrationStatus === 'approved' || registrationStatus === 'active') {
-            status = (paymentStatus === 'completed' || registrationStatus === 'active') ? 'approved' : 'payment_required';
+        if (registrationStatus === 'approved' || registrationStatus === 'active' || registrationStatus === 'verified') {
+            const requiresPayment = mod.id === 'academy' || mod.id === 'cooperatives';
+            status = (!requiresPayment || paymentStatus === 'completed' || registrationStatus === 'active') ? 'approved' : 'payment_required';
         }
         else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review' || registrationStatus === 'paid') {
             status = 'pending';
         }
 
-        // WAVE does not require payment — treat any approved/active registration as fully approved
-        if (mod.id === 'wave' && status === 'payment_required') status = 'approved';
+        // WAVE and Farm Nation do not require payment — treat any approved/active/verified registration as fully approved
+        if ((mod.id === 'wave' || mod.id === 'farmNation') && status === 'payment_required') status = 'approved';
 
         // Override approved based on roles for safety (in case admin bypassed standard flow)
         if (mod.id === 'academy' && roles.includes('academy_participant')) status = 'approved';
