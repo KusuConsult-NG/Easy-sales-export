@@ -94,7 +94,7 @@ function PropertiesContent() {
         }, 500);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters, searchTerm]);
+    }, [filters.propertyType, filters.location, filters.priceRange, searchTerm]);
 
     function handleLoadMore() {
         if (!loadingMore && hasMore) {

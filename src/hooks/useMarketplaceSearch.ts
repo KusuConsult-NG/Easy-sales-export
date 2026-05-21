@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDebounce } from './useDebounce';
+import { searchProductsAction } from '@/app/actions/marketplace/_actions';
 
-// Mock types for now
 interface Product {
     id: string;
     title: string;
@@ -29,32 +29,64 @@ export function useMarketplaceSearch() {
 
     const debouncedQuery = useDebounce(query, 500);
 
-    async function loadProducts(isLoadMore = false) {
+    const loadProducts = useCallback(async (isLoadMore = false) => {
         setLoading(true);
         setError(null);
         try {
-            // Mock API call - in reality calling a server action
-            // const result = await searchProductsAction({ query: debouncedQuery, category, state });
+            const currentLastId = isLoadMore ? (products[products.length - 1]?.id || undefined) : undefined;
+            const result = await searchProductsAction({
+                query: debouncedQuery || undefined,
+                category: category !== "All Categories" ? category : undefined,
+                state: state !== "All Locations" ? state : undefined,
+                limit: 12,
+                lastId: currentLastId
+            });
 
-            // Simulating API delay
-            await new Promise(resolve => setTimeout(resolve, 800));
+            if (result.success && result.data) {
+                const mappedProducts = result.data.products.map(p => ({
+                    id: p.id,
+                    title: p.title,
+                    description: p.description,
+                    price: p.pricingTiers?.[0]?.price ?? 0,
+                    images: p.images || [],
+                    sellerName: p.sellerName || "Verified Seller",
+                    location: { state: p.location?.state || "Nigeria" },
+                    pricingTiers: p.pricingTiers || [],
+                    unit: p.unit,
+                    rating: p.rating,
+                    exportReady: p.exportReady
+                }));
 
-            // Return empty list for now to satisfy build
-            setProducts([]);
-            setHasMore(false);
-
+                if (isLoadMore) {
+                    setProducts(prev => [...prev, ...mappedProducts]);
+                } else {
+                    setProducts(mappedProducts);
+                }
+                setHasMore(result.data.hasMore);
+            } else {
+                setError(result.error || "Failed to fetch products");
+                if (!isLoadMore) {
+                    setProducts([]);
+                }
+            }
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || "An unexpected error occurred");
+            if (!isLoadMore) {
+                setProducts([]);
+            }
         } finally {
             setLoading(false);
         }
-    };
+    }, [debouncedQuery, category, state, products]);
 
     useEffect(() => {
-        loadProducts();
+        loadProducts(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [debouncedQuery, category, state]);
 
-    const loadMore = () => loadProducts(true);
+    const loadMore = useCallback(() => {
+        loadProducts(true);
+    }, [loadProducts]);
 
     return {
         products,
