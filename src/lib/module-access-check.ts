@@ -87,9 +87,21 @@ export async function checkModuleAccess(
                 registration = serviceRegistrations["farm_nation"];
             }
 
+            // Core statuses that always grant access across all modules
             const VALID_STATUSES = ["approved", "active"];
+            // Extended statuses that are module-specific valid access states:
+            //   "verified"  — Farm Nation: admin approved the land listing/application
+            //   "paid"      — Cooperatives: payment confirmed, membership activated
+            const EXTENDED_VALID_STATUSES: Partial<Record<string, string[]>> = {
+                "farmNation": ["verified"],
+                "cooperative": ["paid"],
+                "cooperatives": ["paid"],
+            };
 
-            if (VALID_STATUSES.includes(registration?.status)) {
+            const extendedStatuses = EXTENDED_VALID_STATUSES[regKey] || [];
+            const allValidStatuses = [...VALID_STATUSES, ...extendedStatuses];
+
+            if (allValidStatuses.includes(registration?.status)) {
                 logger.info(
                     `[ModuleAccess] Layer 2 — serviceRegistrations confirmed '${app}' access (uid: ${userId}, status: ${registration.status}).`
                 );

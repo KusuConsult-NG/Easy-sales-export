@@ -39,13 +39,19 @@ export default function WaveDashboardPage() {
     const { status: membershipStatus } = useMembershipStatus(userId, "wave");
 
     useEffect(() => {
+        // Still waiting for session/Firestore — do nothing yet
+        if (membershipStatus === "loading") return;
+
         if (membershipStatus === "not_found") {
             router.push("/wave");
             return;
         }
         if (membershipStatus === "approved" || membershipStatus === "active") {
             loadDashboard();
+            return;
         }
+        // Pending / error / unauthenticated — stop the spinner so UI is visible
+        setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [membershipStatus]);
 

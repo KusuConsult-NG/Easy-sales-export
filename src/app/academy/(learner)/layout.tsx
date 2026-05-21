@@ -32,15 +32,23 @@ async function AcademyLayoutContent({ children }: { children: React.ReactNode })
             redirectPath = "/academy/setup";
         } else {
             // Enforce Payment Integrity Gate
-            const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
-            const payStatus = await checkAcademyPaymentStatusAction();
-            if (payStatus.data === "unpaid") {
-                const { isAdmin } = await import("@/lib/admin-permissions");
-                const isUserAdmin = isAdmin(session.user.roles);
-                if (!isUserAdmin) {
-                    logger.info(`Forcing unpaid active academy user ${session.user.id} to payment flow.`);
-                    redirectPath = "/academy/application";
+            // Only hard-redirect if the payment check definitively confirms unpaid.
+            // If the action fails or returns an unexpected value, allow access so the
+            // dashboard can handle the state itself — avoids a redirect loop.
+            try {
+                const { checkAcademyPaymentStatusAction } = await import("@/app/actions/academy");
+                const payStatus = await checkAcademyPaymentStatusAction();
+                if (payStatus.success && payStatus.data === "unpaid") {
+                    const { isAdmin } = await import("@/lib/admin-permissions");
+                    const isUserAdmin = isAdmin(session.user.roles);
+                    if (!isUserAdmin) {
+                        logger.info(`Forcing unpaid active academy user ${session.user.id} to payment flow.`);
+                        redirectPath = "/academy/application";
+                    }
                 }
+            } catch (payError) {
+                logger.warn(`[AcademyLayout] Payment check failed for ${session.user.id}, allowing dashboard access: ${(payError as Error)?.message}`);
+                // Allow access — the dashboard page will handle the payment state
             }
         }
 
