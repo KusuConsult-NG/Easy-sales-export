@@ -237,11 +237,21 @@ export default function ExportOnboardingPage() {
                 }),
             }, { message: "Bank account details are required." }),
             terms: z.object({
+                acceptedInvestment: z.boolean().optional(),
+                acceptedRisk: z.boolean().optional(),
+                acceptedEscrow: z.boolean().optional(),
+                acceptedPrivacy: z.boolean().optional(),
+                acceptedAt: z.string().optional(),
+                // Legacy fields
                 accepted: z.boolean().optional(),
                 agreedToTerms: z.boolean().optional(),
-            }, { message: "Terms & conditions must be reviewed and accepted." }).refine(data => data.accepted === true || data.agreedToTerms === true, {
+            }, { message: "Terms & conditions must be reviewed and accepted." }).refine(data =>
+                (data.acceptedInvestment === true && data.acceptedRisk === true &&
+                 data.acceptedEscrow === true && data.acceptedPrivacy === true) ||
+                data.accepted === true || data.agreedToTerms === true,
+            {
                 message: "You must accept the terms and conditions.",
-                path: ["accepted"]
+                path: ["acceptedInvestment"]
             })
         });
 
