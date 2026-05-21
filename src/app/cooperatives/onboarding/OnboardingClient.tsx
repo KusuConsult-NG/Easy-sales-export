@@ -124,6 +124,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         function checkStatusFromBackend() {
             checkCooperativeStatusAction().then(async (coopStatus) => {
             if ((coopStatus === "active" || coopStatus === "approved") && paymentStatus === "completed") {
+                setIsCheckingStatus(false);
                 router.replace(`${prefix}/dashboard`);
                 return;
             }
@@ -178,6 +179,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             // admin approval. Redirect to the waiting page immediately — do NOT show the
             // blank form again, which caused users to get stuck in an infinite submit loop.
             if (coopStatus === "pending_review") {
+                setIsCheckingStatus(false);
                 router.replace(`${prefix}/onboarding/pending`);
                 return;
             }

@@ -83,6 +83,7 @@ export default function MarketplaceOnboarding() {
     const [isRevisionMode, setIsRevisionMode] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const userId = session?.user?.id;
     const DRAFT_KEY = userId ? `marketplace_draft_${userId}` : null;
@@ -285,6 +286,7 @@ export default function MarketplaceOnboarding() {
             return;
         }
         // ────────────────────────────────────────────────────────────────────────
+        setIsSubmitting(true);
 
         try {
             if (isRevisionMode || isEditMode) {
@@ -298,10 +300,12 @@ export default function MarketplaceOnboarding() {
                 if (result.success) {
                     if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                     toast.success("Resubmitted successfully!");
+                    setIsSubmitting(false);
                     router.push("/marketplace/onboarding/pending");
                 } else {
                     logger.error("Resubmission failed:", result.error);
                     toast.error(result.error || "Resubmission failed");
+                    setIsSubmitting(false);
                 }
                 return;
             }
@@ -337,6 +341,7 @@ export default function MarketplaceOnboarding() {
                 // Clear draft on success
                 if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                 toast.success("Onboarding completed!");
+                setIsSubmitting(false);
                 if (isSeller) {
                     router.push("/marketplace/onboarding/pending");
                 } else {
@@ -345,11 +350,13 @@ export default function MarketplaceOnboarding() {
             } else {
                 logger.error("Submission failed:", result.error);
                 toast.error(result.error || "Submission failed");
+                setIsSubmitting(false);
             }
 
         } catch (error: any) {
             logger.error("Marketplace registration error:", error);
             toast.error(error.message || "An unexpected error occurred");
+            setIsSubmitting(false);
         }
     };
 
@@ -404,6 +411,7 @@ export default function MarketplaceOnboarding() {
                         onNext={handleNext}
                         onBack={handleBack}
                         isFinalStep={!isSeller}
+                        isSubmitting={isSubmitting}
                     />
                 );
             case 5:
@@ -422,6 +430,7 @@ export default function MarketplaceOnboarding() {
                         onChange={(bankAccount) => updateFormData({ bankAccount })}
                         onNext={handleNext}
                         onBack={handleBack}
+                        isSubmitting={isSubmitting}
                     />
                 );
             default:

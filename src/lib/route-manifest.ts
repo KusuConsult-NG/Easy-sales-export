@@ -10,7 +10,6 @@
 export const PUBLIC_PATHS = [
     "/",
     "/auth",
-    "/api",
     "/about",
     "/contact",
     "/help",

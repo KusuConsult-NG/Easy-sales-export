@@ -9,9 +9,10 @@ interface TermsStepProps {
     onBack: () => void;
     initialData?: any;
     onChange?: (data: any) => void;
+    isSubmitting?: boolean;
 }
 
-export default function TermsStep({ onNext, onBack, onChange, initialData }: TermsStepProps) {
+export default function TermsStep({ onNext, onBack, onChange, initialData, isSubmitting = false }: TermsStepProps) {
     const [formData, setFormData] = useState({
         termsAccepted: initialData?.termsAccepted || false,
         privacyAccepted: initialData?.privacyAccepted || false,
@@ -180,11 +181,20 @@ export default function TermsStep({ onNext, onBack, onChange, initialData }: Ter
                 </button>
                 <button
                     type="submit"
-                    disabled={!allAccepted}
+                    disabled={!allAccepted || isSubmitting}
                     className="px-8 py-3 bg-teal-600 text-white rounded-xl font-bold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                    Complete Onboarding
-                    <CheckCircle className="w-4 h-4" />
+                    {isSubmitting ? (
+                        <>
+                            Completing...
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        </>
+                    ) : (
+                        <>
+                            Complete Onboarding
+                            <CheckCircle className="w-4 h-4" />
+                        </>
+                    )}
                 </button>
             </div>
         </form>

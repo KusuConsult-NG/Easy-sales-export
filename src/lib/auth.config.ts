@@ -1,6 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 import { isPublicPath, isProtectedPath } from "@/lib/route-manifest";
 import type { UserRole } from "@/lib/types/roles";
+import { HUB_MODULES } from "@/config/modules.config";
 
 /**
  * Edge-compatible authentication configuration.
@@ -82,14 +83,19 @@ export const authConfig = {
         async authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: URL } }) {
             const isLoggedIn = !!auth?.user;
             const { pathname } = nextUrl;
+            console.log("AUTHORIZED CALLBACK RUNNING:", { pathname, isLoggedIn });
 
             // Module root redirects (these just redirect to landing pages)
             if (pathname === "/wave" || pathname === "/cooperatives") return true;
+
+            // API routes should not be gated by NextAuth middleware (they handle their own security)
+            if (pathname.startsWith("/api/")) return true;
 
             // Uses route-manifest.ts — single source of truth for all route classification
             if (isPublicPath(pathname)) return true;
 
             if (isProtectedPath(pathname) && !isLoggedIn) {
+                console.log("AUTHORIZED CALLBACK RETURNING FALSE FOR:", pathname);
                 return false; // NextAuth redirects to signIn page
             }
 
@@ -127,7 +133,6 @@ export const authConfig = {
                     
                     // ── SCOPED MEMBERSHIP GUARD ─────────────────────────────────
                     // If accessing via a module-specific domain, ensure membership is active
-                    const { HUB_MODULES } = await import("@/config/modules.config");
                     const currentModule = Object.values(HUB_MODULES).find(m => m.slug === rawSlug || m.slug === moduleId);
                     
                     if (currentModule && !isPaymentFlow) {

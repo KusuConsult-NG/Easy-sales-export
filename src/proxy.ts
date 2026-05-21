@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
 import { NextResponse } from "next/server";
-import { isSharedDomainPath } from "@/lib/route-manifest";
+import { isSharedDomainPath, isProtectedPath } from "@/lib/route-manifest";
 
 /**
  * Hub Middleware - Optimized for Edge Runtime
@@ -44,6 +44,14 @@ const authMiddleware = auth((req: any) => {
         wwwUrl.protocol = "https:";
         wwwUrl.port = "";
         return NextResponse.redirect(wwwUrl, { status: 308 });
+    }
+
+    // ── 1.1. Authentication Protection Gate ────────────────────────────
+    const isLoggedIn = !!req.auth;
+    if (isProtectedPath(pathname) && !isLoggedIn) {
+        const loginUrl = new URL("/auth/login", req.nextUrl.origin);
+        loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
+        return NextResponse.redirect(loginUrl);
     }
 
     const response = NextResponse.next();

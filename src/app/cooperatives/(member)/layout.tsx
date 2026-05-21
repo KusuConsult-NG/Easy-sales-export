@@ -47,8 +47,14 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
 
             let memberData = await getCached<any>(cacheKey);
 
-            if (!memberData) {
-                // Cache miss - fetch from Firestore
+            const isCachedCorrupted = !memberData || 
+                                     !memberData.firstName || 
+                                     memberData.firstName === "undefined" || 
+                                     !memberData.lastName || 
+                                     memberData.lastName === "undefined";
+
+            if (isCachedCorrupted) {
+                // Force direct live Firestore lookup to avoid false-positive corruption purge from stale or missing cache
                 const db = getAdminDb();
                 
                 // Query by userId since document ID may be a generated ID
@@ -68,6 +74,8 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                     if (memberSnapshot.exists) {
                         memberData = memberSnapshot.data();
                         await setCache(cacheKey, memberData, CACHE_TTL.USER_PROFILE);
+                    } else {
+                        memberData = null; // Explicitly set to null if not found
                     }
                 }
             }

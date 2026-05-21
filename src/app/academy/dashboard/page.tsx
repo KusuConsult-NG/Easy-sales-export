@@ -83,6 +83,9 @@ export default function AcademyDashboardPage() {
             } else if (membershipStatus === "not_found") {
                 setIsUnpaid(true);
                 setIsLoading(false);
+            } else {
+                setIsUnpaid(true);
+                setIsLoading(false);
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps

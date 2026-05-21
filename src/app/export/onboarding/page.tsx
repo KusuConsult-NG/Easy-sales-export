@@ -106,10 +106,9 @@ export default function ExportOnboardingPage() {
                     }
                 } else if (status === "approved" || status === "active") {
                     const hasAccess = await checkExportAccessAction();
+                    setIsLoading(false);
                     if (hasAccess) {
                         router.replace("/export/dashboard");
-                    } else {
-                        setIsLoading(false);
                     }
                 } else if (status === "revision_required" || status === "rejected") {
                     const result = await getExportApplicationAction();

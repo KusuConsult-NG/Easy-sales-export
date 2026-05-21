@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withRateLimit } from "@/lib/rate-limit";
+import { FieldValue } from "firebase-admin/firestore";
 
 // Force server-side execution (prevents build-time crypto errors)
 export const runtime = 'nodejs';
@@ -24,6 +25,22 @@ async function setupMFAHandler(request: NextRequest) {
             );
         }
 
+        // Retrieve user to check if MFA is already enabled (A-01)
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        if (!userDoc.exists) {
+            return NextResponse.json(
+                { success: false, error: "User not found" },
+                { status: 404 }
+            );
+        }
+        const userData = userDoc.data();
+        if (userData?.mfaEnabled) {
+            return NextResponse.json(
+                { success: false, error: "MFA is already enabled" },
+                { status: 409 }
+            );
+        }
+
         // Lazy-load crypto-dependent functions
         const {
             generateTOTPSecret,
@@ -37,14 +54,21 @@ async function setupMFAHandler(request: NextRequest) {
         const qrCode = await generateTOTPQRCode(session.user.email || "", secret);
         const recoveryCodes = generateBackupCodes(8);
 
-        const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
+        const secretKey = process.env.MFA_SECRET_KEY;
+        if (!secretKey) {
+            logger.error("FATAL: MFA_SECRET_KEY is not set");
+            return NextResponse.json(
+                { success: false, error: "Service configuration error" },
+                { status: 500 }
+            );
+        }
         const encryptedSecret = encryptData(secret, secretKey);
 
         // Store encrypted secret (Admin SDK)
         await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             totpSecret: encryptedSecret,
             mfaEnabled: false,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         await storeBackupCodes(session.user.id, recoveryCodes);

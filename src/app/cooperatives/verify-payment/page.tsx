@@ -22,12 +22,13 @@ function VerifyPaymentContent() {
     const hasVerified = useRef(false);
 
     const verifyPayment = useCallback(async () => {
-        if (hasVerified.current || !reference) return;
+        const ref = reference;
+        if (hasVerified.current || !ref) return;
         hasVerified.current = true;
 
         try {
             setStatus('loading');
-            const result = await verifyContributionPaymentAction(reference!);
+            const result = await verifyContributionPaymentAction(ref);
 
             if (result.success) {
                 setStatus('success');

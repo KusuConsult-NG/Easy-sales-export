@@ -27,7 +27,7 @@ export function usePushPermissionState() {
         return;
       }
 
-      const nativePerm = Notification.permission as
+      const nativePerm = window.Notification.permission as
         | "default"
         | "granted"
         | "denied";
@@ -56,7 +56,7 @@ export function usePushPermissionState() {
   const request = useCallback(async (): Promise<boolean> => {
     if (!("Notification" in window)) return false;
     try {
-      const perm = await Notification.requestPermission();
+      const perm = await window.Notification.requestPermission();
       setPermissionState(perm as "default" | "granted" | "denied");
       return perm === "granted";
     } catch {

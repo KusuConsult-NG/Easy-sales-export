@@ -8,6 +8,7 @@
 
 import BankAccountVerification from "@/components/shared/BankAccountVerification";
 import { MARKETPLACE_CONFIG } from "@/lib/constants";
+import { Loader2 } from "lucide-react";
 
 interface BankAccountData {
     bankName: string;
@@ -20,9 +21,10 @@ interface BankAccountStepProps {
     onChange: (data: BankAccountData) => void;
     onNext: () => void;
     onBack: () => void;
+    isSubmitting?: boolean;
 }
 
-export default function BankAccountStep({ data, onChange, onNext, onBack }: BankAccountStepProps) {
+export default function BankAccountStep({ data, onChange, onNext, onBack, isSubmitting }: BankAccountStepProps) {
     function handleVerified(accountData: { bankName: string; accountNumber: string; accountName: string }) {
         onChange(accountData);
     };
@@ -129,10 +131,11 @@ export default function BankAccountStep({ data, onChange, onNext, onBack }: Bank
                 </button>
                 <button
                     onClick={handleContinue}
-                    disabled={!data?.accountName}
-                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                    disabled={!data?.accountName || isSubmitting}
+                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
-                    Complete Registration
+                    {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
+                    {isSubmitting ? "Completing..." : "Complete Registration"}
                 </button>
             </div>
         </div>

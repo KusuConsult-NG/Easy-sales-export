@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, BellOff, X } from "lucide-react";
 import { usePushPermissionState } from "@/hooks/usePushPermissionState";
 import { initializeApp, getApps } from "firebase/app";
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+// Dynamic import used inside client methods to prevent SSR crashes on module initialization
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -58,6 +58,7 @@ export function PushNotificationBanner() {
         if (!vapidKey) return;
 
         try {
+            const { getMessaging, getToken, onMessage } = await import("firebase/messaging");
             const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
             const messaging = getMessaging(app);
             const registration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
@@ -75,7 +76,7 @@ export function PushNotificationBanner() {
             // Handle foreground messages
             onMessage(messaging, (payload) => {
                 const { title = "Notification", body = "" } = payload.notification || {};
-                new Notification(title, { body, icon: "/icons/icon-192x192.png" });
+                new window.Notification(title, { body, icon: "/icons/icon-192x192.png" });
             });
 
             setEnabled(true);

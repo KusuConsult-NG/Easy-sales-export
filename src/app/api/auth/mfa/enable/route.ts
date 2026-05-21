@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { withRateLimit } from "@/lib/rate-limit";
+import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,7 +55,14 @@ async function enableMFAHandler(request: NextRequest) {
         const { verifyTOTPToken } = await import("@/lib/mfa");
         const { decryptData } = await import("@/lib/security");
 
-        const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
+        const secretKey = process.env.MFA_SECRET_KEY;
+        if (!secretKey) {
+            logger.error("FATAL: MFA_SECRET_KEY is not set");
+            return NextResponse.json(
+                { success: false, error: "Service configuration error" },
+                { status: 500 }
+            );
+        }
         const secret = decryptData(userData.totpSecret, secretKey);
 
         const isValid = verifyTOTPToken(token, secret);
@@ -69,7 +77,7 @@ async function enableMFAHandler(request: NextRequest) {
         // Enable MFA (Admin SDK)
         await db.collection(COLLECTIONS.USERS).doc(session.user.id).update({
             mfaEnabled: true,
-            updatedAt: new Date(),
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({

@@ -42,9 +42,9 @@ export default function CooperativeDashboardPage() {
     const { status: membershipStatus } = useMembershipStatus(userId, "cooperative");
 
     useEffect(() => {
-        if (membershipStatus === "approved" || membershipStatus === "active") {
+        if (membershipStatus === "approved" || membershipStatus === "active" || membershipStatus === "paid") {
             loadData();
-        } else if (membershipStatus === "not_found") {
+        } else if (membershipStatus !== "loading") {
             setMembership(null);
             setLoading(false);
         }

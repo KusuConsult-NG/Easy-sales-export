@@ -394,8 +394,8 @@ export async function changePasswordAction(
     currentPassword: string,
     newPassword: string
 ): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+    | { success: true; error: null }
+    | { success: false; error: string; data?: null }
 > { try {
         const session = await auth();
         if (!session?.user?.id || !session.user.email) {

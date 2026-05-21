@@ -68,6 +68,7 @@ export default function FarmNationOnboardingPage() {
     const [isRevisionMode, setIsRevisionMode] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Check existing application status on mount
     useEffect(() => {
@@ -98,10 +99,9 @@ export default function FarmNationOnboardingPage() {
                         }
                     } else if (status === "approved" || status === "active") {
                         const hasAccessResult = await checkFarmNationAccessAction();
+                        setIsLoading(false); // Let form load cleanly without bouncing
                         if (hasAccessResult.success && hasAccessResult.data) {
                             router.replace("/farm-nation/properties");
-                        } else {
-                            setIsLoading(false); // Let form load cleanly without bouncing
                         }
                     } else if (status === "rejected" || status === "revision_required") {
                         const result = await getFarmNationApplicationAction();
@@ -242,14 +242,17 @@ export default function FarmNationOnboardingPage() {
             return;
         }
         // ────────────────────────────────────────────────────────────────────────
+        setIsSubmitting(true);
         try {
             if (isRevisionMode || isEditMode) {
                 const result = await resubmitFarmNationApplicationAction(finalData);
                 if (result.success) {
                     showToast(isEditMode ? "Application updated successfully!" : "Application resubmitted for review!", "success");
+                    setIsSubmitting(false);
                     router.push("/farm-nation/onboarding/pending");
                 } else {
                     showToast(result.error || "Failed to submit updates", "error");
+                    setIsSubmitting(false);
                 }
                 return;
             }
@@ -260,6 +263,7 @@ export default function FarmNationOnboardingPage() {
                 const userId = session?.user?.id;
                 if (userId) { try { localStorage.removeItem(`farmnation_draft_${userId}`); } catch { /* non-blocking */ } }
                 showToast("Onboarding completed successfully!", "success");
+                setIsSubmitting(false);
                 if (finalData.role === "seller" || finalData.role === "both") {
                     router.push("/farm-nation/list-land");
                 } else {
@@ -267,10 +271,12 @@ export default function FarmNationOnboardingPage() {
                 }
             } else {
                 showToast(result.error || "Failed to complete onboarding", "error");
+                setIsSubmitting(false);
             }
         } catch (error) {
             logger.error("Error submitting onboarding:", error);
             showToast("An error occurred. Please try again.", "error");
+            setIsSubmitting(false);
         }
     };
 
@@ -310,6 +316,7 @@ export default function FarmNationOnboardingPage() {
                         onBack={handleBack}
                         onChange={handleStepChange}
                         initialData={formData.terms}
+                        isSubmitting={isSubmitting}
                     />
                 );
             default:

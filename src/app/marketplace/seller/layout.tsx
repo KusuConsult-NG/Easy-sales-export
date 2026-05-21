@@ -46,7 +46,8 @@ export default async function SellerLayout({ children }: { children: React.React
 
             let sellerStatus = await getCached<{ status: string; businessName?: string }>(cacheKey);
 
-            if (!sellerStatus) {
+            // If the cached status is not approved, we should verify live Firestore status before redirecting to avoid infinite loops from stale cache.
+            if (!sellerStatus || sellerStatus.status !== "approved") {
                 const { getAdminDb } = await import("@/lib/firebase-admin");
                 const adminDb = getAdminDb();
 
@@ -55,8 +56,10 @@ export default async function SellerLayout({ children }: { children: React.React
                     const userData = userDoc.data();
                     const registration = userData?.serviceRegistrations?.marketplace;
 
+                    let liveStatus: { status: string; businessName?: string } | null = null;
+
                     if (registration?.status) {
-                        sellerStatus = {
+                        liveStatus = {
                             status: registration.status,
                             businessName: userData?.businessName,
                         };
@@ -74,21 +77,24 @@ export default async function SellerLayout({ children }: { children: React.React
                                 return bTime - aTime;
                             });
                             const verData = sortedDocs[0];
-                            sellerStatus = {
+                            liveStatus = {
                                 status: verData?.status || "pending",
                                 businessName: verData?.businessName,
                             };
-                        } else {
-                            redirectPath = "/marketplace/onboarding";
                         }
                     }
 
-                    if (sellerStatus) {
+                    if (liveStatus) {
+                        sellerStatus = liveStatus;
                         await setCache(cacheKey, sellerStatus, CACHE_TTL.USER_PERMISSIONS);
+                    } else if (!sellerStatus) {
+                        redirectPath = "/marketplace/onboarding";
                     }
                 } catch (dbError) {
-                    logger.error("Failed to check seller status:", dbError);
-                    redirectPath = "/marketplace/onboarding";
+                    logger.error("Failed to check live seller status:", dbError);
+                    if (!sellerStatus) {
+                        redirectPath = "/marketplace/onboarding";
+                    }
                 }
             }
 

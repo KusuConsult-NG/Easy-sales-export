@@ -7,7 +7,7 @@
 
 "use client";
 
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Loader2 } from "lucide-react";
 import { MARKETPLACE_CONFIG } from "@/lib/constants";
 
 interface TermsStepProps {
@@ -16,9 +16,10 @@ interface TermsStepProps {
     onNext: () => void;
     onBack: () => void;
     isFinalStep: boolean;
+    isSubmitting?: boolean;
 }
 
-export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalStep }: TermsStepProps) {
+export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalStep, isSubmitting }: TermsStepProps) {
     const terms = [
         {
             title: "Marketplace Terms of Service",
@@ -145,10 +146,11 @@ export default function TermsStep({ accepted, onChange, onNext, onBack, isFinalS
                 </button>
                 <button
                     onClick={onNext}
-                    disabled={!accepted}
-                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                    disabled={!accepted || isSubmitting}
+                    className="px-8 py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                 >
-                    {isFinalStep ? "Complete Registration" : "Continue to Verification"}
+                    {isSubmitting && <Loader2 className="w-5 h-5 animate-spin" />}
+                    {isSubmitting ? "Completing..." : isFinalStep ? "Complete Registration" : "Continue to Verification"}
                 </button>
             </div>
         </div>

@@ -2,17 +2,17 @@ import { requireHubRegistration } from "@/lib/hub-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { redirect } from "next/navigation";
+import { logger } from "@/lib/logger";
 import OnboardingClient from "./OnboardingClient";
 
 /**
- * Cooperative Onboarding Page — THIN AUTH SHELL
+ * Cooperative Onboarding Page — AUTH & MEMBERSHIP PRE-CHECK SHELL
  *
- * Does NOT read Firestore server-side (Firebase Admin SDK init can throw
- * before any try/catch, producing an unrecoverable 500 in production).
- *
- * Auth guard only — the OnboardingClient checks membership status on
- * mount via checkCooperativeStatusAction(), same pattern used by
- * export, farm-nation, marketplace, and wave onboarding pages.
+ * Verifies active NextAuth session via requireHubRegistration().
+ * Safely performs server-side pre-flight checks of membership and processed payment collections
+ * wrapped in a comprehensive try/catch block. If Firestore initialization or network failure
+ * occurs on cold starts, falls back to "unknown" paymentStatus. This prompts the client-side
+ * onboarding logic to re-verify status seamlessly without generating an unrecoverable 500.
  */
 export default async function CooperativeOnboardingPage(
     props: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }> }
@@ -53,6 +53,7 @@ export default async function CooperativeOnboardingPage(
             }
         }
     } catch (e) {
+        logger.error("Failed to query cooperative membership database on onboarding cold-start", e);
         // Safe fallback — "unknown" tells the client to re-check from the
         // authoritative /processed_payments collection rather than assuming
         // the user hasn't paid (which was causing already-paid users to be
@@ -63,3 +64,4 @@ export default async function CooperativeOnboardingPage(
     // Pass token and real paymentStatus to client
     return <OnboardingClient initialTier="Member" paymentStatus={paymentStatus} inviteToken={token} />;
 }
+

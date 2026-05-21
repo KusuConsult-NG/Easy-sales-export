@@ -15,7 +15,7 @@
 
 import { useEffect } from "react";
 import { initializeApp, getApps } from "firebase/app";
-import { getMessaging, getToken, onMessage } from "firebase/messaging";
+// Dynamic import used inside client methods to prevent SSR crashes on module initialization
 
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -35,13 +35,14 @@ export function useFCMRegistration() {
 
         // Only proceed if the user has ALREADY granted permission. 
         // Never auto-prompt — that's the banner's job.
-        if (Notification.permission !== "granted") return;
+        if (window.Notification.permission !== "granted") return;
 
         const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
         if (!vapidKey) return;
 
         async function rehydrate() {
             try {
+                const { getMessaging, getToken, onMessage } = await import("firebase/messaging");
                 const app = getApps().length
                     ? getApps()[0]
                     : initializeApp(firebaseConfig);
@@ -71,7 +72,7 @@ export function useFCMRegistration() {
                 // Handle foreground messages
                 onMessage(messaging, (payload) => {
                     const { title = "Notification", body = "" } = payload.notification || {};
-                    new Notification(title, {
+                    new window.Notification(title, {
                         body,
                         icon: "/icons/icon-192x192.png",
                     });
