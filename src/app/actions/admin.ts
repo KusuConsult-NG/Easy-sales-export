@@ -508,10 +508,10 @@ async function _getPendingWithdrawalsAction(
                         email: data.email || "",
                         phone: data.phone || "",
                         bankDetails: {
-                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                            bankName: data.bankName || data.bankAccount?.bankName || "",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || ""
                         }
                     };
                 });
@@ -523,10 +523,10 @@ async function _getPendingWithdrawalsAction(
             user: userMap[w.userId] || null,
             // Standardize bankDetails at root for UI components
             bankDetails: userMap[w.userId]?.bankDetails || w.bankDetails || {
-                bankName: w.bankName || "N/A",
-                accountNumber: w.bankAccountNumber || w.accountNumber || "N/A",
-                accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || "N/A"),
-                bankCode: w.bankCode || "N/A"
+                bankName: w.bankName || "",
+                accountNumber: w.bankAccountNumber || w.accountNumber || "",
+                accountName: w.bankAccountName || w.accountName || (userMap[w.userId]?.name || ""),
+                bankCode: w.bankCode || ""
             }
         }));
 
@@ -585,10 +585,10 @@ async function _getPendingLandListings(limit = 50): Promise<ActionResponse<any[]
             
             // Standardize bankDetails
             const bankDetails = uData.bankDetails || {
-                bankName: uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+                bankName: uData.bankName || uData.bankAccount?.bankName || "",
+                accountNumber: uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                accountName: uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                bankCode: uData.bankCode || uData.bankAccount?.bankCode || ""
             };
 
             return {
@@ -782,10 +782,10 @@ async function _getPendingLoanApplications(): Promise<ActionResponse<any[]>> {
                         email: data.email || "",
                         phone: data.phone || "",
                         bankDetails: {
-                            bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                            bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                            bankName: data.bankName || data.bankAccount?.bankName || "",
+                            accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "",
+                            accountName: data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                            bankCode: data.bankCode || data.bankAccount?.bankCode || ""
                         }
                     };
                 });
@@ -797,10 +797,10 @@ async function _getPendingLoanApplications(): Promise<ActionResponse<any[]>> {
             user: userMap[app.userId] || null,
             // Fallback for UI components expecting root bankDetails
             bankDetails: userMap[app.userId]?.bankDetails || {
-                bankName: app.bankName || "N/A",
-                accountNumber: app.accountNumber || "N/A",
-                accountName: app.accountName || (userMap[app.userId]?.name || "N/A"),
-                bankCode: app.bankCode || "N/A"
+                bankName: app.bankName || "",
+                accountNumber: app.accountNumber || "",
+                accountName: app.accountName || (userMap[app.userId]?.name || ""),
+                bankCode: app.bankCode || ""
             }
         }));
 
@@ -1419,6 +1419,14 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 bankCode: data.bankCode || data.bankAccount?.bankCode
             };
 
+            // Defensive Next of Kin extraction
+            let bestNextOfKin = data.nextOfKin || {
+                name: data.nextOfKinName || "",
+                phone: data.nextOfKinPhone || "",
+                relationship: data.nextOfKinRelationship || "",
+                address: data.nextOfKinAddress || ""
+            };
+
             if (data.serviceRegistrations) {
                 Object.values(data.serviceRegistrations).forEach((reg: any) => {
                     const profile = reg?.profile || reg;
@@ -1433,6 +1441,21 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                     if (isPlaceholder(bestState) && profile.state && !isPlaceholder(profile.state)) bestState = profile.state;
                     if (isPlaceholder(bestLga) && profile.lga && !isPlaceholder(profile.lga)) bestLga = profile.lga;
                     
+                    // Extract nextOfKin from module profile if missing
+                    const nk = profile.nextOfKin || {};
+                    if (!bestNextOfKin.name && (profile.nextOfKinName || nk.name)) {
+                        bestNextOfKin.name = profile.nextOfKinName || nk.name;
+                    }
+                    if (!bestNextOfKin.phone && (profile.nextOfKinPhone || nk.phone)) {
+                        bestNextOfKin.phone = profile.nextOfKinPhone || nk.phone;
+                    }
+                    if (!bestNextOfKin.relationship && (profile.nextOfKinRelationship || nk.relationship)) {
+                        bestNextOfKin.relationship = profile.nextOfKinRelationship || nk.relationship;
+                    }
+                    if (!bestNextOfKin.address && (profile.nextOfKinAddress || nk.address)) {
+                        bestNextOfKin.address = profile.nextOfKinAddress || nk.address;
+                    }
+
                     // Extract KYC from module verificationProfile if available
                     const vp = profile.verificationProfile || reg.verificationProfile;
                     if (vp) {
@@ -1452,7 +1475,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             const derivedFullName  = !isPlaceholder(bestFullName)  ? bestFullName  : null;
             const derivedName = derivedFirstName
                 ? [derivedFirstName, data.otherName, bestLastName].filter(Boolean).join(" ").trim()
-                : (derivedFullName || data.displayName || (bestPhone && bestPhone !== "N/A" ? bestPhone : data.email) || "Unknown");
+                : (derivedFullName || data.displayName || (bestPhone && bestPhone !== "" ? bestPhone : data.email) || "Unknown");
 
             return {
                 id: doc.id,
@@ -1461,7 +1484,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 lastName: bestLastName,
                 otherName: data.otherName,
                 email: data.email,
-                phone: isPlaceholder(bestPhone) ? "N/A" : bestPhone,
+                phone: isPlaceholder(bestPhone) ? "" : bestPhone,
                 role: data.roles?.[0] || "general_user",
                 roles: data.roles || [],
                 isVerified: data.isVerified ?? data.verified ?? false,
@@ -1485,12 +1508,14 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 cacNumber: data.cacNumber,
                 cacVerified: data.cacVerified,
                 idType: data.kyc?.idType || data.idType,
+                // Next of Kin
+                nextOfKin: bestNextOfKin,
                 // Other
                 bankDetails: {
-                    bankName: bestBankDetails?.bankName || "N/A",
-                    accountNumber: bestBankDetails?.accountNumber || "N/A",
-                    accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? `${bestFirstName} ${bestLastName}` : "N/A"),
-                    bankCode: bestBankDetails?.bankCode || "N/A"
+                    bankName: bestBankDetails?.bankName || "",
+                    accountNumber: bestBankDetails?.accountNumber || "",
+                    accountName: bestBankDetails?.accountName || bestFullName || (bestFirstName && bestLastName ? `${bestFirstName} ${bestLastName}` : ""),
+                    bankCode: bestBankDetails?.bankCode || ""
                 },
                 metadata: data.metadata,
                 accountType: data.marketplaceAccountType || data.serviceRegistrations?.marketplace?.accountType || data.accountType,
@@ -2255,10 +2280,10 @@ async function _getStandardExportApplicationsAction(options: {
             };
             // Canonical bankDetails injection
             const bankDetails = uData.bankDetails || {
-                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
             };
 
             return {
@@ -2556,10 +2581,10 @@ async function _getAcademyApplicationsAction(options: {
 
             // Canonical bankDetails
             const bankDetails = uData.bankDetails || {
-                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "N/A",
-                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "N/A",
-                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : "N/A"),
-                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || "N/A"
+                bankName: app.bankName || uData.bankName || uData.bankAccount?.bankName || "",
+                accountNumber: app.accountNumber || uData.bankAccountNumber || uData.bankAccount?.accountNumber || "",
+                accountName: app.accountName || uData.bankAccountName || uData.bankAccount?.accountName || uData.fullName || (uData.firstName && uData.lastName ? `${uData.firstName} ${uData.lastName}` : ""),
+                bankCode: app.bankCode || uData.bankCode || uData.bankAccount?.bankCode || ""
             };
 
             const userName = uData.name || uData.fullName || app.personalInfo?.fullName || "Unknown Student";
@@ -3686,10 +3711,10 @@ async function _getMarketplaceUsersAction(options: {
                 status: data.status || "active",
                 createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : null),
                 bankDetails: data.bankDetails || {
-                    bankName: data.bankName || data.bankAccount?.bankName || "N/A",
-                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",
-                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "N/A"),
-                    bankCode: data.bankCode || data.bankAccount?.bankCode || "N/A"
+                    bankName: data.bankName || data.bankAccount?.bankName || "",
+                    accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
+                    accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
+                    bankCode: data.bankCode || data.bankAccount?.bankCode || ""
                 }
             };
         }).filter(Boolean) as any[];

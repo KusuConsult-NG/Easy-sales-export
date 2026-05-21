@@ -625,12 +625,11 @@ async function _getAllTransactionsAction(options?: {
                 userId: raw.userId || "",
                 userName: canonical?.name || raw.userId || "Unknown",
                 user: canonical,
-                // Root-level bankDetails for UI consistency
                 bankDetails: canonical?.bankDetails || {
-                    bankName: raw.bankName || "N/A",
-                    accountNumber: raw.accountNumber || "N/A",
-                    accountName: raw.accountName || "N/A",
-                    bankCode: raw.bankCode || "N/A"
+                    bankName: raw.bankName || "",
+                    accountNumber: raw.accountNumber || "",
+                    accountName: raw.accountName || "",
+                    bankCode: raw.bankCode || ""
                 },
                 type: raw.type || "unknown",
                 amount: Number(raw.amount) || 0,

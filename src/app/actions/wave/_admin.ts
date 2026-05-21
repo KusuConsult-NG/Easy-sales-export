@@ -454,7 +454,8 @@ async function _approveWaveApplicationAction(
             // If user exists, update their profile and roles
             if (targetUserId) {
                 const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
-                transaction.update(userRef, {
+                
+                const updates: any = {
                     isVerified: true,
                     verifiedBy: session.user.id,
                     verifiedAt: FieldValue.serverTimestamp(),
@@ -465,7 +466,44 @@ async function _approveWaveApplicationAction(
                     waveStatus: "active",
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1),
-                });
+                };
+
+                // Sync NIN/BVN from application if not already set on user
+                if (appData?.nin) {
+                    updates.nin = appData.nin;
+                    updates["kyc.nin"] = appData.nin;
+                }
+                if (appData?.bvn) {
+                    updates.bvn = appData.bvn;
+                    updates["kyc.bvn"] = appData.bvn;
+                }
+
+                // Sync next of kin details
+                if (appData?.nextOfKinName) {
+                    updates.nextOfKinName = appData.nextOfKinName;
+                    updates.nextOfKinPhone = appData.nextOfKinPhone || "";
+                    updates.nextOfKinRelationship = appData.nextOfKinRelationship || "";
+                    updates.nextOfKin = {
+                        name: appData.nextOfKinName,
+                        phone: appData.nextOfKinPhone || "",
+                        relationship: appData.nextOfKinRelationship || "",
+                        address: ""
+                    };
+                }
+
+                // Sync bank details if available
+                if (appData?.accountNumber) {
+                    updates.bankAccountNumber = appData.accountNumber;
+                    updates.bankAccountName = appData.bankAccountName || [appData.firstName, appData.otherNames, appData.surname].filter(Boolean).join(" ").trim();
+                    updates.bankDetails = {
+                        accountNumber: appData.accountNumber,
+                        bankName: appData.bankName || "",
+                        accountName: appData.bankAccountName || [appData.firstName, appData.otherNames, appData.surname].filter(Boolean).join(" ").trim(),
+                        bankCode: appData.bankCode || ""
+                    };
+                }
+
+                transaction.update(userRef, updates);
 
                 // Create/Update Wave Member Record
                 const memberRef = db.collection(COLLECTIONS.WAVE_MEMBERS).doc(targetUserId);
@@ -739,7 +777,7 @@ async function _getStandardWaveApplicationsAction(options: {
                     name: canonical.name,
                     email: canonical.email,
                     phone: canonical.phone,
-                    dob: canonical.dateOfBirth || "N/A",
+                    dob: canonical.dateOfBirth || "",
                     address: canonical.address.street,
                     state: canonical.address.state,
                     lga: canonical.address.lga,
@@ -921,12 +959,11 @@ async function _getStandardWaveWithdrawalsAction(options: {
         let enrichedWithdrawals = withdrawals.map((w: any) => ({
             ...w,
             user: userMap[w.userId] || null,
-            // Fallback for UI components expecting root bankDetails
             bankDetails: userMap[w.userId]?.bankDetails || {
-                bankName: "N/A",
-                accountNumber: "N/A",
-                accountName: "N/A",
-                bankCode: "N/A"
+                bankName: "",
+                accountNumber: "",
+                accountName: "",
+                bankCode: ""
             }
         }));
 

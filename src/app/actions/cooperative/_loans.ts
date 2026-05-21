@@ -301,20 +301,27 @@ export async function getAdminLoanApplicationsAction(options: {
 
         const applications = applicationsRaw.map(app => {
             const user = userMap.get(app.userId) || {};
-            const bankDetails = user.bankDetails || {
-                bankName: app.bankName || user.bankName || user.bankAccount?.bankName || "N/A",
-                accountNumber: app.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A",
-                accountName: app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A"),
-                bankCode: app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A"
+            
+            const bankName = user.bankDetails?.bankName || app.bankName || user.bankName || user.bankAccount?.bankName || "N/A";
+            const accountNumber = user.bankDetails?.accountNumber || app.accountNumber || user.accountNumber || user.bankAccountNumber || user.bankAccount?.accountNumber || "N/A";
+            const accountName = user.bankDetails?.accountName || app.accountName || user.accountName || user.bankAccountName || user.bankAccount?.accountName || user.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : "N/A");
+            const bankCode = user.bankDetails?.bankCode || app.bankCode || user.bankCode || user.bankAccount?.bankCode || "N/A";
+
+            const bankDetails = {
+                bankName,
+                accountNumber,
+                accountName,
+                bankCode
             };
 
             return {
                 ...app,
                 userName: app.fullName || (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.fullName || "Unknown"),
                 userEmail: app.userEmail || user.email || "",
-                bankName: bankDetails?.bankName || "",
-                accountNumber: bankDetails?.accountNumber || "",
-                accountName: bankDetails?.accountName || ""
+                bankName: bankDetails.bankName,
+                accountNumber: bankDetails.accountNumber,
+                accountName: bankDetails.accountName,
+                bankDetails
             };
         });
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;

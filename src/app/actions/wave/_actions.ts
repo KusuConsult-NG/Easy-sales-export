@@ -371,6 +371,33 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 residentialState: validatedData.stateOfResidence,
                 lga: validatedData.lgaOfOrigin,
                 residentialAddress: validatedData.residentialAddress,
+                // Populate KYC
+                bvn: validatedData.bvn.trim(),
+                nin: applicantNin,
+                "kyc.bvn": validatedData.bvn.trim(),
+                "kyc.nin": applicantNin,
+                // Next of Kin
+                nextOfKinName: validatedData.nextOfKinName,
+                nextOfKinPhone: validatedData.nextOfKinPhone,
+                nextOfKinRelationship: validatedData.nextOfKinRelationship,
+                nextOfKinAddress: "",
+                nextOfKin: {
+                    name: validatedData.nextOfKinName,
+                    phone: validatedData.nextOfKinPhone,
+                    relationship: validatedData.nextOfKinRelationship,
+                    address: ""
+                },
+                // Bank Details
+                bankAccountNumber: validatedData.accountNumber,
+                bankAccountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                    .filter(Boolean).join(" ").trim(),
+                bankDetails: {
+                    accountNumber: validatedData.accountNumber,
+                    bankName: validatedData.bankName,
+                    accountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                        .filter(Boolean).join(" ").trim(),
+                    bankCode: ""
+                },
                 updatedAt: FieldValue.serverTimestamp()
             });
         });

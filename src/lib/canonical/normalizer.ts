@@ -30,15 +30,15 @@ export function normalizeAggressive(
     const lastName = cleanVal(uData.lastName) || cleanVal(wData?.surname) || fullName.split(" ").slice(1).join(" ") || "";
 
     const email = cleanVal(uData.email) || cleanVal(wData?.userEmail) || cleanVal(sData?.email) || "";
-    const phone = cleanVal(uData.phone) || cleanVal(sData?.phone) || cleanVal(wData?.phone) || cleanVal(uData.phoneNumber) || "N/A";
+    const phone = cleanVal(uData.phone) || cleanVal(sData?.phone) || cleanVal(wData?.phone) || cleanVal(uData.phoneNumber) || "";
     const gender = cleanVal(uData.gender) || cleanVal(wData?.gender) || "other";
-    const dob = cleanVal(uData.dateOfBirth) || cleanVal(wData?.dateOfBirth) || cleanVal(cData?.personalInfo?.dateOfBirth) || "N/A";
+    const dob = cleanVal(uData.dateOfBirth) || cleanVal(wData?.dateOfBirth) || cleanVal(cData?.personalInfo?.dateOfBirth) || "";
 
     // 2. Resolve Bank Details (Aggressive fallback)
     const bankDetails = {
-        bankName:      cleanVal(uData.bankDetails?.bankName)      || cleanVal(wData?.bankName)      || cleanVal(cData?.bankDetails?.bankName)      || cleanVal(sData?.bankAccount?.bankName)      || cleanVal(uData.bankName)      || "N/A",
-        accountNumber: cleanVal(uData.bankDetails?.accountNumber) || cleanVal(wData?.accountNumber) || cleanVal(cData?.bankDetails?.accountNumber) || cleanVal(sData?.bankAccount?.accountNumber) || cleanVal(uData.accountNumber) || "N/A",
-        accountName:   cleanVal(uData.bankDetails?.accountName)   || cleanVal(cData?.bankDetails?.accountName)   || cleanVal(sData?.bankAccount?.accountName)   || cleanVal(uData.fullName) || fullName || "N/A",
+        bankName:      cleanVal(uData.bankDetails?.bankName)      || cleanVal(wData?.bankName)      || cleanVal(cData?.bankDetails?.bankName)      || cleanVal(sData?.bankAccount?.bankName)      || cleanVal(uData.bankName)      || "",
+        accountNumber: cleanVal(uData.bankDetails?.accountNumber) || cleanVal(wData?.accountNumber) || cleanVal(cData?.bankDetails?.accountNumber) || cleanVal(sData?.bankAccount?.accountNumber) || cleanVal(uData.accountNumber) || "",
+        accountName:   cleanVal(uData.bankDetails?.accountName)   || cleanVal(cData?.bankDetails?.accountName)   || cleanVal(sData?.bankAccount?.accountName)   || cleanVal(uData.fullName) || fullName || "",
         bankCode:      cleanVal(uData.bankDetails?.bankCode)      || cleanVal(cData?.bankDetails?.bankCode)      || cleanVal(sData?.bankAccount?.bankCode)      || cleanVal(uData.bankCode) || ""
     };
 
@@ -48,10 +48,10 @@ export function normalizeAggressive(
 
     // 4. Resolve Address
     const address = {
-        street: cleanVal(uData.address?.street) || cleanVal(uData.residentialAddress) || cleanVal(wData?.residentialAddress) || cleanVal(cData?.residentialAddress) || cleanVal(sData?.address?.street) || "N/A",
-        city: cleanVal(uData.address?.city) || cleanVal(sData?.address?.city) || "N/A",
-        state: cleanVal(uData.address?.state) || cleanVal(uData.stateOfOrigin) || cleanVal(wData?.stateOfOrigin) || cleanVal(cData?.stateOfOrigin) || cleanVal(sData?.address?.state) || "N/A",
-        lga: cleanVal(uData.address?.lga) || cleanVal(uData.lga) || cleanVal(wData?.lgaOfOrigin) || cleanVal(cData?.lga) || cleanVal(sData?.address?.lga) || "N/A",
+        street: cleanVal(uData.address?.street) || cleanVal(uData.residentialAddress) || cleanVal(wData?.residentialAddress) || cleanVal(cData?.residentialAddress) || cleanVal(sData?.address?.street) || "",
+        city: cleanVal(uData.address?.city) || cleanVal(sData?.address?.city) || "",
+        state: cleanVal(uData.address?.state) || cleanVal(uData.stateOfOrigin) || cleanVal(wData?.stateOfOrigin) || cleanVal(cData?.stateOfOrigin) || cleanVal(sData?.address?.state) || "",
+        lga: cleanVal(uData.address?.lga) || cleanVal(uData.lga) || cleanVal(wData?.lgaOfOrigin) || cleanVal(cData?.lga) || cleanVal(sData?.address?.lga) || "",
         country: "Nigeria"
     };
 
@@ -123,31 +123,31 @@ export function extractCanonicalUser(uData: any, appData: any = null) {
     
     // 1. BANK DETAILS (SSOT Priority)
     const bankDetails = {
-        bankName:      profile?.bankDetails?.bankName      || uData?.bankDetails?.bankName      || uData?.bankName      || appData?.bankName      || appData?.bankAccount?.bankName      || "N/A",
-        accountNumber: profile?.bankDetails?.accountNumber || uData?.bankDetails?.accountNumber || uData?.accountNumber || appData?.accountNumber || appData?.bankAccount?.accountNumber || "N/A",
-        accountName:   profile?.bankDetails?.accountName   || uData?.bankDetails?.accountName   || uData?.accountName   || appData?.accountName   || appData?.bankAccount?.accountName   || uData?.fullName || "N/A",
-        bankCode:      profile?.bankDetails?.bankCode      || uData?.bankDetails?.bankCode      || uData?.bankCode      || appData?.bankCode      || appData?.bankAccount?.bankCode      || "N/A",
+        bankName:      profile?.bankDetails?.bankName      || uData?.bankDetails?.bankName      || uData?.bankName      || appData?.bankName      || appData?.bankAccount?.bankName      || "",
+        accountNumber: profile?.bankDetails?.accountNumber || uData?.bankDetails?.accountNumber || uData?.accountNumber || appData?.accountNumber || appData?.bankAccount?.accountNumber || "",
+        accountName:   profile?.bankDetails?.accountName   || uData?.bankDetails?.accountName   || uData?.accountName   || appData?.accountName   || appData?.bankAccount?.accountName   || uData?.fullName || "",
+        bankCode:      profile?.bankDetails?.bankCode      || uData?.bankDetails?.bankCode      || uData?.bankCode      || appData?.bankCode      || appData?.bankAccount?.bankCode      || "",
     };
 
     // 2. ADDRESS (SSOT Priority)
     const address = {
-        street: profile?.address?.street || uData?.address?.street || uData?.residentialAddress || appData?.residentialAddress || appData?.address?.street || appData?.address || "N/A",
-        state:  profile?.address?.state  || uData?.address?.state  || uData?.stateOfOrigin      || appData?.stateOfOrigin      || appData?.address?.state  || appData?.state   || "N/A",
-        lga:    profile?.address?.lga    || uData?.address?.lga    || uData?.lga                || appData?.lgaOfOrigin        || appData?.lga             || appData?.address?.lga || "N/A",
+        street: profile?.address?.street || uData?.address?.street || uData?.residentialAddress || appData?.residentialAddress || appData?.address?.street || appData?.address || "",
+        state:  profile?.address?.state  || uData?.address?.state  || uData?.stateOfOrigin      || appData?.stateOfOrigin      || appData?.address?.state  || appData?.state   || "",
+        lga:    profile?.address?.lga    || uData?.address?.lga    || uData?.lga                || appData?.lgaOfOrigin        || appData?.lga             || appData?.address?.lga || "",
     };
 
     // 3. IDENTITY
-    const name = uData?.fullName || uData?.name || (uData?.firstName && uData?.lastName ? `${uData.firstName} ${uData.lastName}` : appData?.fullName || appData?.name || "N/A");
+    const name = uData?.fullName || uData?.name || (uData?.firstName && uData?.lastName ? `${uData.firstName} ${uData.lastName}` : appData?.fullName || appData?.name || "");
 
     return {
         name,
-        email: uData?.email || appData?.email || appData?.userEmail || "N/A",
-        phone: uData?.phone || uData?.phoneNumber || appData?.phone || "N/A",
-        dateOfBirth: uData?.dateOfBirth || appData?.dateOfBirth || "N/A",
+        email: uData?.email || appData?.email || appData?.userEmail || "",
+        phone: uData?.phone || uData?.phoneNumber || appData?.phone || "",
+        dateOfBirth: uData?.dateOfBirth || appData?.dateOfBirth || "",
         bankDetails,
         address,
-        nin: profile?.nin || uData?.nin || appData?.nin || "N/A",
-        bvn: profile?.bvn || uData?.bvn || appData?.bvn || "N/A",
+        nin: profile?.nin || uData?.nin || appData?.nin || "",
+        bvn: profile?.bvn || uData?.bvn || appData?.bvn || "",
     };
 }
 
