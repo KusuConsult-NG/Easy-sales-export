@@ -56,3 +56,4 @@ scripts/data/*.csv
 /playwright-report/
 
 
+.env.staging
