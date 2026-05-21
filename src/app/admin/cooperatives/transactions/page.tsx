@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { logger } from '@/lib/logger';
 import Link from "next/link";
 import {
@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/utils";
 import { getAllTransactionsAction, getCooperativeStatsAction } from "@/app/actions/cooperative";
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
+import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 
 type TransactionType = "all" | "contribution" | "withdrawal" | "loan" | "fixed_savings" | "membership_registration";
 type TransactionStatus = "all" | "pending" | "completed" | "failed";
@@ -42,7 +43,7 @@ export default function AdminTransactionsPage() {
     const [loading, setLoading] = useState(true);
     const [typeFilter, setTypeFilter] = useState<TransactionType>("all");
     const [statusFilter, setStatusFilter] = useState<TransactionStatus>("all");
-    const [searchTerm, setSearchTerm] = useState("");
+    const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [globalStats, setGlobalStats] = useState<{
         totalTransactions: number;
@@ -59,19 +60,22 @@ export default function AdminTransactionsPage() {
         onNextPage,
         onPrevPage,
         refresh: loadTransactions,
-        pageIndex
+        pageIndex,
+        search: searchTerm,
+        setSearch: setSearchTerm,
     } = useAdminData<Transaction>({
         fetchAction: async (opts) => {
             try {
-                // Determine limits: if we have search active, fetch larger initial block conceptually,
-                // but useAdminData relies on standard cursor. We'll use chunk of 50.
                 const limit = opts.limit || 50;
 
                 const result = await getAllTransactionsAction({
                     type: typeFilter,
                     status: statusFilter,
                     limit,
-                    lastDocId: opts.lastDocId
+                    lastDocId: opts.lastDocId,
+                    search: opts.search?.trim() || undefined,
+                    dateFrom: dateRange.from || undefined,
+                    dateTo: dateRange.to || undefined,
                 });
 
                 // Opportunistically load stats if on page 0
@@ -99,7 +103,7 @@ export default function AdminTransactionsPage() {
             }
         },
         limit: 50,
-        dependencies: [typeFilter, statusFilter]
+        dependencies: [typeFilter, statusFilter, dateRange]
     });
 
     function getStatusIcon(status: string) {
@@ -174,17 +178,8 @@ export default function AdminTransactionsPage() {
         URL.revokeObjectURL(url);
     }
 
-    // Search across userId, userName, description, reference
-    const filteredTransactions = transactions.filter((t) => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (
-            t.userId?.toLowerCase().includes(term) ||
-            t.userName?.toLowerCase().includes(term) ||
-            t.description?.toLowerCase().includes(term) ||
-            t.reference?.toLowerCase().includes(term)
-        );
-    });
+    // transactions already server-side filtered when searchTerm is set
+    const filteredTransactions = transactions;
 
     // Calculate summary stats (fallback if global stats fail)
     const localTotalAmount = filteredTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -301,7 +296,7 @@ export default function AdminTransactionsPage() {
 
                 {/* Filters */}
                 <div className="bg-white rounded-2xl p-6 shadow-sm mb-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-2">
                                 Transaction Type
@@ -349,6 +344,30 @@ export default function AdminTransactionsPage() {
                                     placeholder="Search by name, ID, or reference..."
                                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                                 />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                Date Range
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <DateRangeFilter
+                                    value={dateRange}
+                                    onChange={setDateRange}
+                                    label="All dates"
+                                    className="flex-1"
+                                />
+                                {(dateRange.from || dateRange.to) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setDateRange({ from: "", to: "" })}
+                                        className="shrink-0 px-3 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 text-xs font-medium transition"
+                                        title="Clear date filter"
+                                    >
+                                        Clear
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </div>

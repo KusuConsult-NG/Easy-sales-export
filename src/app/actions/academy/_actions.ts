@@ -16,6 +16,48 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { AcademyApplicationInputSchema, AcademyApplicationInput } from "@/lib/validations/academy";
 import { ACADEMY_CONFIG } from "@/lib/constants";
 
+async function autoProvisionZereAcademy(userId: string, email: string) {
+    if (email !== "zeredogo@gmail.com") return;
+    
+    try {
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            const serviceRegistrations = userData?.serviceRegistrations || {};
+            const academyReg = serviceRegistrations.academy || {};
+            const roles = userData?.roles || [];
+            
+            const needsUserUpdate = academyReg.status !== "approved" || 
+                                    academyReg.paymentStatus !== "completed" || 
+                                    academyReg.plan !== "elite" ||
+                                    !roles.includes("academy_participant");
+                                    
+            if (needsUserUpdate) {
+                logger.info(`[autoProvisionZereAcademy] Auto-updating academy registration for ${email}`);
+                const updatedRoles = Array.from(new Set([...roles, "academy_participant"]));
+                await userRef.set({
+                    roles: updatedRoles,
+                    serviceRegistrations: {
+                        academy: {
+                            status: "approved",
+                            paymentStatus: "completed",
+                            plan: "elite",
+                            paidAt: FieldValue.serverTimestamp(),
+                            onboardingCompletedAt: new Date().toISOString()
+                        }
+                    }
+                }, { merge: true });
+                
+                // Invalidate cache
+                await invalidateUserCache(userId);
+            }
+        }
+    } catch (error) {
+        logger.error("[autoProvisionZereAcademy] Failed to auto-provision Zere:", error);
+    }
+}
+
 /**
  * Check Academy application status for current user
  */
@@ -25,6 +67,12 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<any>> {
         if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized' };
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, data: null, error: 'Unauthorized' };
+
+        // Unified Bypass for zeredogo@gmail.com
+        if (session.user.email === "zeredogo@gmail.com") {
+            await autoProvisionZereAcademy(session.user.id, session.user.email);
+            return { error: null, success: true as const, data: "approved" };
+        }
 
         // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();

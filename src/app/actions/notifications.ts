@@ -6,7 +6,6 @@ import { ActionResponse } from "@/lib/safe-action";
 import * as notificationService from "@/infrastructure/notifications/service";
 import type { Notification } from "@/infrastructure/notifications/service";
 
-export type { Notification };
 
 /**
  * Create notification

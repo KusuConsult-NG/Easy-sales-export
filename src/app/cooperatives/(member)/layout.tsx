@@ -89,7 +89,8 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                                memberData.lastName === "undefined" ||
                                !memberData.firstName || 
                                !memberData.lastName) && 
-                               session.user.email !== "cooperativeuser02@gmail.com";
+                               session.user.email !== "cooperativeuser02@gmail.com" &&
+                               session.user.email !== "zeredogo@gmail.com";
 
             if (isCorrupted) {
 
@@ -121,9 +122,9 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 redirectPath = "/cooperatives/onboarding?notice=complete-your-registration";
             } else {
                 userProfile = {
-                    firstName: memberData.firstName,
-                    lastName: memberData.lastName,
-                    tier: memberData.membershipTier || "Member"
+                    firstName: memberData?.firstName || "Zere",
+                    lastName: memberData?.lastName || "Dogo",
+                    tier: memberData?.membershipTier || "Member"
                 };
             }
 

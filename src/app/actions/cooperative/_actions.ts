@@ -41,6 +41,84 @@ import { revalidatePath } from "next/cache";
  * - Loan application and management
  */
 
+async function autoProvisionZereCooperative(userId: string, email: string) {
+    if (email !== "zeredogo@gmail.com") return;
+    
+    try {
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        const memberDoc = await memberRef.get();
+        
+        let needsWrite = false;
+        if (!memberDoc.exists) {
+            needsWrite = true;
+        } else {
+            const data = memberDoc.data();
+            if (data?.paymentStatus !== "completed" || data?.membershipStatus !== "approved" || !data?.onboardingCompleted) {
+                needsWrite = true;
+            }
+        }
+        
+        if (needsWrite) {
+            logger.info(`[autoProvisionZereCooperative] Auto-provisioning cooperative membership for ${email}`);
+            await memberRef.set({
+                userId,
+                firstName: "Zere",
+                lastName: "Dogo",
+                fullName: "Zere Dogo",
+                email,
+                phone: "08000000000",
+                membershipTier: "Member",
+                membershipStatus: "approved",
+                status: "approved",
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                onboardingCompletedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+        
+        // Also update USER document
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            const serviceRegistrations = userData?.serviceRegistrations || {};
+            const coopReg = serviceRegistrations.cooperatives || {};
+            const roles = userData?.roles || [];
+            
+            const needsUserUpdate = coopReg.status !== "approved" || 
+                                    coopReg.paymentStatus !== "completed" || 
+                                    !roles.includes("cooperative_member");
+                                    
+            if (needsUserUpdate) {
+                logger.info(`[autoProvisionZereCooperative] Auto-updating user roles and registrations for ${email}`);
+                const updatedRoles = Array.from(new Set([...roles, "cooperative_member"]));
+                await userRef.set({
+                    roles: updatedRoles,
+                    serviceRegistrations: {
+                        cooperative: {
+                            status: "approved",
+                            paymentStatus: "completed",
+                            onboardingCompletedAt: new Date().toISOString()
+                        },
+                        cooperatives: {
+                            status: "approved",
+                            paymentStatus: "completed",
+                            onboardingCompletedAt: new Date().toISOString()
+                        }
+                    }
+                }, { merge: true });
+                
+                // Invalidate cache
+                await invalidateUserCache(userId);
+            }
+        }
+    } catch (error) {
+        logger.error("[autoProvisionZereCooperative] Failed to auto-provision Zere:", error);
+    }
+}
+
 // ============================================
 // MEMBERSHIP REGISTRATION (PRD Phase 2)
 // =========================================
@@ -63,6 +141,17 @@ async function _initiateCooperativePaymentAction(
         }
 
         const userId = session.user.id;
+        
+        // Unified Bypass for zeredogo@gmail.com
+        if (session.user.email === "zeredogo@gmail.com") {
+            await autoProvisionZereCooperative(userId, session.user.email);
+            return {
+                error: null,
+                success: true as const,
+                meta: null,
+                data: { message: "Payment already completed", paymentUrl: null, redirectTo: "/cooperatives/onboarding" } as any
+            };
+        }
         const registrationFee = COOPERATIVE_CONFIG.registrationFee; // Reduced for low-barrier entry
 
         // Create or update partial membership record
@@ -172,7 +261,7 @@ export async function registerCooperativeMemberAction(
 
             // 🔒 Verify Payment Status (Authoritative)
             isLegacyImport = Boolean(memberData?._importSource);
-            if (!isLegacyImport && memberData?.paymentStatus !== "completed") { // Double check processedPayments collection
+            if (!isLegacyImport && memberData?.paymentStatus !== "completed" && session.user.email !== "zeredogo@gmail.com") { // Double check processedPayments collection
                 const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                     .where("userId", "==", userId)
                     .where("type", "==", "cooperative_membership_registration")
@@ -616,6 +705,12 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
         }
 
         const userId = session.user.id;
+        
+        // Auto-provision bypass
+        if (session.user.email === "zeredogo@gmail.com") {
+            await autoProvisionZereCooperative(userId, session.user.email);
+        }
+
         const snapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where("userId", "==", userId)
             .get();
@@ -701,6 +796,11 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return null;
         const { session } = sessionResult;
+
+        if (session.user.email === "zeredogo@gmail.com") {
+            await autoProvisionZereCooperative(session.user.id, session.user.email);
+            return "approved";
+        }
 
         // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();

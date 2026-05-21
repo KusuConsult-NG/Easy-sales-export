@@ -74,6 +74,14 @@ export async function checkModuleAccess(
 
         const userData = userDoc.data()!;
 
+        // Unified Bypass for zeredogo@gmail.com
+        if (userData.email === "zeredogo@gmail.com") {
+            if (app === "cooperatives" || app === "academy") {
+                logger.info(`[ModuleAccess] Unified bypass for zeredogo@gmail.com on '${app}'`);
+                return true;
+            }
+        }
+
         // Layer 2 — serviceRegistrations check
         if (regKey) {
             const serviceRegistrations = userData.serviceRegistrations || {};

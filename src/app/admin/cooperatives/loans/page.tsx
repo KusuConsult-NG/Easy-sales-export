@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { logger } from '@/lib/logger';
 import {
     DollarSign, CheckCircle, XCircle, Clock,
@@ -40,24 +40,26 @@ type FilterType = "all" | "pending" | "approved" | "rejected";
 
 export default function AdminLoansPage() {
     const { showToast } = useToast();
-    const [searchQuery, setSearchQuery] = useState("");
     const [filterStatus, setFilterStatus] = useState<FilterType>("all");
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
-
     const {
+
         data: applications,
         loading: isLoading,
         hasMore,
         onNextPage,
         onPrevPage,
         pageIndex,
-        refresh: loadApplications
+        refresh: loadApplications,
+        search: searchQuery,
+        setSearch: setSearchQuery,
     } = useAdminData<LoanApplication>({
         fetchAction: async (opts) => {
             const result = await getAdminLoanApplicationsAction({
                 statusFilter: filterStatus,
                 limit: opts.limit || 20,
                 lastDocId: opts.lastDocId,
+                search: opts.search?.trim() || undefined,
                 dateFrom: dateRange.from || undefined,
                 dateTo: dateRange.to || undefined,
             });
@@ -86,21 +88,8 @@ export default function AdminLoansPage() {
         }).finally(() => setStatsLoading(false));
     }, []);
 
-    // Apply local search filtering on top of server data
-    const [filteredApplications, setFilteredApplications] = useState<LoanApplication[]>([]);
-    useEffect(() => {
-        let filtered = applications;
-        if (searchQuery) {
-            const q = searchQuery.toLowerCase();
-            filtered = filtered.filter(app =>
-                app.userName?.toLowerCase().includes(q) ||
-                app.userEmail?.toLowerCase().includes(q) ||
-                app.productName?.toLowerCase().includes(q) ||
-                app.purpose?.toLowerCase().includes(q)
-            );
-        }
-        setFilteredApplications(filtered);
-    }, [applications, searchQuery]);
+    // applications already server-side filtered when searchQuery is set
+    const filteredApplications = applications;
 
     async function handleApprove(applicationId: string) {
         if (!confirm("Approve this loan application?")) return;

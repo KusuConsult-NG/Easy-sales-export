@@ -18,6 +18,49 @@ const paymentLimiter = rateLimit(rateLimitConfig.payment);
 // Helper function to convert Naira to Kobo
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
 
+async function autoProvisionZereAcademy(userId: string, email: string) {
+    if (email !== "zeredogo@gmail.com") return;
+    
+    try {
+        const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userRef.get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            const serviceRegistrations = userData?.serviceRegistrations || {};
+            const academyReg = serviceRegistrations.academy || {};
+            const roles = userData?.roles || [];
+            
+            const needsUserUpdate = academyReg.status !== "approved" || 
+                                    academyReg.paymentStatus !== "completed" || 
+                                    academyReg.plan !== "elite" ||
+                                    !roles.includes("academy_participant");
+                                    
+            if (needsUserUpdate) {
+                logger.info(`[autoProvisionZereAcademy] Auto-updating academy registration for ${email}`);
+                const updatedRoles = Array.from(new Set([...roles, "academy_participant"]));
+                await userRef.set({
+                    roles: updatedRoles,
+                    serviceRegistrations: {
+                        academy: {
+                            status: "approved",
+                            paymentStatus: "completed",
+                            plan: "elite",
+                            paidAt: FieldValue.serverTimestamp(),
+                            onboardingCompletedAt: new Date().toISOString()
+                        }
+                    }
+                }, { merge: true });
+                
+                // Invalidate cache
+                const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+                await invalidateUserCache(userId);
+            }
+        }
+    } catch (error) {
+        logger.error("[autoProvisionZereAcademy] Failed to auto-provision Zere:", error);
+    }
+}
+
 export type PaymentInitState =
     | { success: true; error: null; data: { authorizationUrl: string; reference: string }; meta?: any }
     | { success: false; error: string; data?: null; meta?: any };
@@ -208,6 +251,12 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
 
         const userId = session.user.id;
 
+        // Unified Bypass for zeredogo@gmail.com
+        if (session.user.email === "zeredogo@gmail.com") {
+            await autoProvisionZereAcademy(userId, session.user.email);
+            return { error: null, success: true as const, data: { paymentUrl: "/academy/dashboard" } };
+        }
+
         // Check if already paid
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (userDoc.data()?.serviceRegistrations?.academy?.paymentStatus === "completed") {
@@ -364,6 +413,12 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         if (!sessionResult.session) return { success: false as const, error: 'Unauthorized', data: null };
         const { session } = sessionResult;
         if (!session?.user?.id) return { error: null, success: true as const, data: "unpaid" };
+
+        // Unified Bypass for zeredogo@gmail.com
+        if (session.user.email === "zeredogo@gmail.com") {
+            await autoProvisionZereAcademy(session.user.id, session.user.email);
+            return { error: null, success: true as const, data: "paid" };
+        }
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();

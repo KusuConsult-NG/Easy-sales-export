@@ -512,6 +512,9 @@ async function _getAllTransactionsAction(options?: {
     status?: "all" | "pending" | "completed" | "failed";
     limit?: number;
     lastDocId?: string;
+    search?: string;   // Search by user name, userId, description, or reference
+    dateFrom?: string; // YYYY-MM-DD
+    dateTo?: string;   // YYYY-MM-DD
 }): Promise<ActionResponse<{ transactions: any[] }>> {
     let sessionResult;
     try {
@@ -555,12 +558,21 @@ async function _getAllTransactionsAction(options?: {
             q = q.where("status", "==", options.status);
         }
 
+        // Date range filters — must be added BEFORE orderBy() for Firestore compliance.
+        // Firestore requires all where() on a field to precede orderBy() on that field.
+        if (options?.dateFrom) {
+            q = q.where("date", ">=", dateRangeStart(options.dateFrom));
+        }
+        if (options?.dateTo) {
+            q = q.where("date", "<=", dateRangeEnd(options.dateTo));
+        }
+
         q = q.orderBy("date", "desc");
 
-        const fetchLimit = options?.limit || 100;
+        const fetchLimit = (options?.search || options?.dateFrom || options?.dateTo) ? 5000 : (options?.limit || 100);
         let query = q;
 
-        if (options?.lastDocId) {
+        if (options?.lastDocId && !options?.search && !options?.dateFrom && !options?.dateTo) {
             const lastDoc = await db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
@@ -655,9 +667,26 @@ async function _getAllTransactionsAction(options?: {
             }
         }
 
+        // In-memory search filter (applied after user enrichment so userName is available)
+        let finalTransactions = transactions;
+        if (options?.search) {
+            const s = options.search.toLowerCase().trim();
+            finalTransactions = transactions.filter(tx => {
+                const searchable = [
+                    tx.userName,
+                    tx.userId,
+                    tx.description,
+                    tx.reference,
+                    tx.type,
+                    tx.status
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchable.includes(s);
+            });
+        }
+
         const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : null;
 
-        return { error: null, success: true as const, data: { transactions }, meta: { hasMore, lastDocId: nextCursor } };
+        return { error: null, success: true as const, data: { transactions: finalTransactions }, meta: { hasMore, lastDocId: nextCursor } };
     } catch (error) {
         logger.error("Get all transactions error:", {
             userId: sessionResult?.session?.user?.id,

@@ -231,6 +231,7 @@ export async function getAdminLoanApplicationsAction(options: {
     lastDocId?: string;
     dateFrom?: string; // YYYY-MM-DD
     dateTo?: string;   // YYYY-MM-DD
+    search?: string;   // Search by name, email, or product
 } = {}): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
@@ -245,35 +246,47 @@ export async function getAdminLoanApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const fetchLimit = options.limit || 20;
+        const fetchLimit = options.search ? 5000 : (options.limit || 20);
 
-        let query = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .orderBy("appliedAt", "desc");
+        // Build query: ALL where() clauses must come BEFORE orderBy() in Firestore.
+        // Doing it the other way causes FAILED_PRECONDITION (composite index error).
+        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
 
         if (options.statusFilter && options.statusFilter !== "all") {
-            query = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-                .where("status", "==", options.statusFilter)
-                .orderBy("appliedAt", "desc");
+            query = query.where("status", "==", options.statusFilter);
         }
 
-        // Server-side date range filter
+        // Date range filters (must be before orderBy when filtering on the same field)
         if (options.dateFrom) {
-            const fromTs = dateRangeStart(options.dateFrom);
-            query = query.where("appliedAt", ">=", fromTs);
+            query = query.where("appliedAt", ">=", dateRangeStart(options.dateFrom));
         }
         if (options.dateTo) {
-            const toTs = dateRangeEnd(options.dateTo);
-            query = query.where("appliedAt", "<=", toTs);
+            query = query.where("appliedAt", "<=", dateRangeEnd(options.dateTo));
         }
 
-        if (options.lastDocId) {
+        // orderBy comes LAST — after all where() clauses
+        query = query.orderBy("appliedAt", "desc");
+
+        if (options.lastDocId && !options.search) {
             const lastDoc = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(options.lastDocId).get();
             if (lastDoc.exists) {
                 query = query.startAfter(lastDoc);
             }
         }
 
-        const snapshot = await query.limit(fetchLimit + 1).get();
+        let snapshot: FirebaseFirestore.QuerySnapshot;
+        try {
+            snapshot = await query.limit(fetchLimit + 1).get();
+        } catch (qErr: any) {
+            if (qErr.code === 9 || qErr.message?.includes("FAILED_PRECONDITION")) {
+                return {
+                    success: false as const,
+                    error: "A database index is being provisioned for date filtering. This usually takes a few minutes. Please try again shortly.",
+                    data: null
+                };
+            }
+            throw qErr;
+        }
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
@@ -324,13 +337,36 @@ export async function getAdminLoanApplicationsAction(options: {
                 bankDetails
             };
         });
-        const nextCursor = hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
+
+        // In-memory search filter (applied after user enrichment so userName/userEmail are available)
+        let finalApplications = applications;
+        if (options.search) {
+            const s = options.search.toLowerCase().trim();
+            finalApplications = applications.filter(app => {
+                const searchable = [
+                    app.userName,
+                    app.userEmail,
+                    app.productName,
+                    app.purpose,
+                    app.tier
+                ].filter(Boolean).map(String).join(" ").toLowerCase();
+                return searchable.includes(s);
+            });
+        }
+
+        // When search is active, we handle pagination in-memory
+        const pageSize = options.search ? (options.limit || 20) : undefined;
+        const offset = options.search && options.lastDocId ? 0 : 0; // cursor-based not used in search mode
+        const pagedApplications = pageSize ? finalApplications.slice(0, pageSize) : finalApplications;
+        const searchHasMore = pageSize ? finalApplications.length > pageSize : (hasMore && docs.length > 0);
+
+        const nextCursor = !options.search && hasMore && docs.length > 0 ? docs[docs.length - 1].id : undefined;
 
         return { 
             error: null, success: true as const, 
-            data: applications,
+            data: pagedApplications,
             lastDocId: nextCursor,
-            hasMore
+            hasMore: searchHasMore
         };
     } catch (error: any) {
         logger.error("Failed to fetch admin loan applications:", error);
