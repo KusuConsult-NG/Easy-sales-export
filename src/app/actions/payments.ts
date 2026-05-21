@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log-admin";
+import { logAdminFinancialAction, createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { requireSession } from "@/lib/session-guard";
 import { ActionResponse } from "@/lib/safe-action";

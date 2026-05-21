@@ -11,6 +11,23 @@ export interface CachedUserProfile {
     serviceRegistrations?: any;
     createdAt: string;
     updatedAt: string;
+    profileComplete?: boolean;
+    onboardingCompleted?: boolean;
+    requiresPasswordChange?: boolean;
+    isBanned?: boolean;
+    suspended?: boolean;
+    status?: string;
+    sellerVerificationStatus?: string;
+    verified?: boolean;
+    isVerified?: boolean;
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    otherName?: string;
+    phone?: string;
+    location?: string;
+    bio?: string;
+    identityDocument?: any;
 }
 
 /**
@@ -47,6 +64,23 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             serviceRegistrations: userData.serviceRegistrations,
             createdAt: userData.createdAt,
             updatedAt: userData.updatedAt,
+            profileComplete: userData.profileComplete,
+            onboardingCompleted: userData.onboardingCompleted,
+            requiresPasswordChange: userData.requiresPasswordChange,
+            isBanned: userData.isBanned,
+            suspended: userData.suspended,
+            status: userData.status,
+            sellerVerificationStatus: userData.sellerVerificationStatus,
+            verified: userData.verified,
+            isVerified: userData.isVerified,
+            fullName: userData.fullName || resolvedName,
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            otherName: userData.otherName,
+            phone: userData.phone,
+            location: userData.location,
+            bio: userData.bio,
+            identityDocument: userData.identityDocument,
         };
 
         // Cache for next time

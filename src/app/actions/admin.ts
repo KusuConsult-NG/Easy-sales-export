@@ -15,7 +15,7 @@ import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
+import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { normalizeAggressive } from "@/lib/canonical/normalizer";
 import { createNotificationAction } from "@/app/actions/notifications";
@@ -1420,7 +1420,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             };
 
             // Defensive Next of Kin extraction
-            let bestNextOfKin = data.nextOfKin || {
+            const bestNextOfKin = data.nextOfKin || {
                 name: data.nextOfKinName || "",
                 phone: data.nextOfKinPhone || "",
                 relationship: data.nextOfKinRelationship || "",

@@ -13,7 +13,7 @@ export interface Notification {
     type: "escrow" | "order" | "academy" | "wave" | "cooperative" | "export"
         | "payment" | "loan" | "system" | "event" | "payout"
         | "info" | "warning" | "success" | "farm_nation" | "marketplace" | "general"
-        | "transaction";
+        | "transaction" | "error" | "withdrawal" | "land" | "dispute";
     title: string;
     message: string;
     link?: string;

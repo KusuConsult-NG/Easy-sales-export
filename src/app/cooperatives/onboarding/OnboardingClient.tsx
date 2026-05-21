@@ -46,6 +46,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
     const [isLegacyImport, setIsLegacyImport] = useState(false);
     const [validInviteToken, setValidInviteToken] = useState<string | null>(null);
     const [version, setVersion] = useState<number | undefined>(undefined);
+    const [isInitialized, setIsInitialized] = useState(false);
 
     const [tier] = useState<"Member">("Member");
 
@@ -217,37 +218,59 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
     // --- Persist state across Paystack redirect ---
     useEffect(() => {
-        if (status === "loading" || !userId) return;
-        setTimeout(() => {
-            const savedPersonalInfo = localStorage.getItem(keyOf('personal') as string);
-            if (savedPersonalInfo) setPersonalInfo(JSON.parse(savedPersonalInfo));
+        if (status === "loading" || !userId || isInitialized) return;
+        
+        const savedPersonalInfo = localStorage.getItem(keyOf('personal') as string);
+        if (savedPersonalInfo) {
+            try {
+                setPersonalInfo(JSON.parse(savedPersonalInfo));
+            } catch (e) {
+                console.error("Failed to parse saved personal info", e);
+            }
+        }
 
-            const savedNextOfKin = localStorage.getItem(keyOf('nok') as string);
-            if (savedNextOfKin) setNextOfKin(JSON.parse(savedNextOfKin));
+        const savedNextOfKin = localStorage.getItem(keyOf('nok') as string);
+        if (savedNextOfKin) {
+            try {
+                setNextOfKin(JSON.parse(savedNextOfKin));
+            } catch (e) {
+                console.error("Failed to parse saved next of kin", e);
+            }
+        }
 
-            const savedDocuments = localStorage.getItem(keyOf('docs') as string);
-            if (savedDocuments) setDocuments(JSON.parse(savedDocuments));
-        }, 0);
+        const savedDocuments = localStorage.getItem(keyOf('docs') as string);
+        if (savedDocuments) {
+            try {
+                setDocuments(JSON.parse(savedDocuments));
+            } catch (e) {
+                console.error("Failed to parse saved documents", e);
+            }
+        }
+        
+        setIsInitialized(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userId, status]);
+    }, [userId, status, isInitialized]);
 
     useEffect(() => {
+        if (!isInitialized || !userId) return;
         const k = keyOf('personal');
         if (k) localStorage.setItem(k, JSON.stringify(personalInfo));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [personalInfo, userId]);
+    }, [personalInfo, userId, isInitialized]);
 
     useEffect(() => {
+        if (!isInitialized || !userId) return;
         const k = keyOf('nok');
         if (k) localStorage.setItem(k, JSON.stringify(nextOfKin));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [nextOfKin, userId]);
+    }, [nextOfKin, userId, isInitialized]);
 
     useEffect(() => {
+        if (!isInitialized || !userId) return;
         const k = keyOf('docs');
         if (k) localStorage.setItem(k, JSON.stringify(documents));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [documents, userId]);
+    }, [documents, userId, isInitialized]);
     // ─────────────────────────────────────────────────────────────────────────
 
     // isPaid: true if Paystack payment already confirmed OR if this is a legacy import

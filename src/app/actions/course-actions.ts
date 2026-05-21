@@ -9,7 +9,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { courseProgressSchema,
     courseEnrollmentSchema } from "@/lib/validations/course";
 import { AuditActionType, type CourseProgress } from "@/types/strict";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 
@@ -26,22 +26,48 @@ export async function updateLessonProgress(
         const validated = courseProgressSchema.parse(data);
 
         // Use a composite ID for uniqueness: userId_courseId_lessonId
-        // Alternately, query by fields. Let's use a specific collection for granular tracking.
         const progressId = `${session.user.id}_${validated.lessonId}`;
         const lessonProgressRef = db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId);
 
+        // Check existing progress to validate heartbeat watch speed
+        const existingDoc = await lessonProgressRef.get();
+        let finalLastWatchedSecond = validated.lastWatchedSecond;
+        let finalProgressPercent = validated.progressPercent;
+
+        if (existingDoc.exists) {
+            const existing = existingDoc.data();
+            const lastUpdated = existing?.updatedAt ? (existing.updatedAt instanceof Timestamp ? existing.updatedAt.toDate() : new Date(existing.updatedAt)) : null;
+            
+            if (lastUpdated) {
+                const elapsedTimeSeconds = (Date.now() - lastUpdated.getTime()) / 1000;
+                const progressIncreaseSeconds = validated.lastWatchedSecond - (existing?.lastWatchedSecond || 0);
+
+                if (progressIncreaseSeconds > 0) {
+                    const maxSpeedMultiplier = 2.0; // Allowed playback rate up to 2.0x
+                    const graceBufferSeconds = 10;   // Extra buffer to account for minor sync fluctuations or lag
+                    const maxAllowedIncrease = (elapsedTimeSeconds * maxSpeedMultiplier) + graceBufferSeconds;
+
+                    if (progressIncreaseSeconds > maxAllowedIncrease) {
+                        logger.warn(`[LMS Progress Guard] Watch-rate anomaly detected for user ${session.user.id} on lesson ${validated.lessonId}. Increase: ${progressIncreaseSeconds}s, Allowed: ${maxAllowedIncrease}s.`);
+                        // Clamp the increment to prevent cheating
+                        finalLastWatchedSecond = (existing?.lastWatchedSecond || 0) + maxAllowedIncrease;
+                        
+                        if (validated.lastWatchedSecond > 0) {
+                            const ratio = finalLastWatchedSecond / validated.lastWatchedSecond;
+                            finalProgressPercent = Math.min(100, Math.max(0, (existing?.progressPercent || 0) + (validated.progressPercent - (existing?.progressPercent || 0)) * ratio));
+                        }
+                    }
+                }
+            }
+        }
+
         await lessonProgressRef.set({ userId: session.user.id,
             courseId: validated.courseId,
-            lessonId: validated.lessonId, // Now required
-            progressPercent: validated.progressPercent,
-            lastWatchedSecond: validated.lastWatchedSecond,
-            completed: validated.progressPercent >= 95,
+            lessonId: validated.lessonId,
+            progressPercent: finalProgressPercent,
+            lastWatchedSecond: finalLastWatchedSecond,
+            completed: finalProgressPercent >= 95,
             updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-
-        // If completed, we should probably trigger the main "completeLessonAction" logic?
-        // No, let the user click "Mark Complete" but use this data to VERIFY.
-        // Or auto-complete? The "Honor System" fix is about verification.
-        // Let's keep it manual but verified.
 
         return { error: null, success: true as const, data: null };
     } catch (error) { logger.error("Lesson progress error:", error);

@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 
 export const dynamic = 'force-dynamic';

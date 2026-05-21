@@ -7,7 +7,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
 import type { EscrowStatus, EscrowTransaction } from "@/types/escrow";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";

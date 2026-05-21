@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { serializeDocs } from "@/lib/firestore-serialize";
 
 export interface WaveResource { id?: string;

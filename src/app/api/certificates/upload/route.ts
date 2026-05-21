@@ -39,6 +39,33 @@ export async function POST(request: NextRequest) {
                     { status: 400 }
                 );
             }
+
+            // Strictly validate that the URL matches an authorized storage domain
+            try {
+                const parsedUrl = new URL(fileUrl);
+                const allowedHostnames = [
+                    "res.cloudinary.com",
+                    "storage.googleapis.com",
+                    "firebasestorage.googleapis.com",
+                    "storage.cloud.google.com"
+                ];
+                const hostname = parsedUrl.hostname;
+                const isAllowed = allowedHostnames.some(allowed => 
+                    hostname === allowed || hostname.endsWith("." + allowed)
+                );
+                
+                if (!isAllowed) {
+                    return NextResponse.json(
+                        { success: false, error: "Unauthorized file hosting domain" },
+                        { status: 400 }
+                    );
+                }
+            } catch (e) {
+                return NextResponse.json(
+                    { success: false, error: "Invalid URL format for fileUrl" },
+                    { status: 400 }
+                );
+            }
         } else {
             const formData = await request.formData();
             const file = formData.get("file") as File;

@@ -90,6 +90,11 @@ export default function WaveBriefingPage() {
             }
         };
 
+        // Immediate check on mount if the browser is already online
+        if (typeof window !== "undefined" && navigator.onLine) {
+            handleOnline();
+        }
+
         window.addEventListener("online", handleOnline);
         return () => window.removeEventListener("online", handleOnline);
     }, [isSubmitting]);

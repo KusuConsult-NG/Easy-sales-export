@@ -13,7 +13,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
-import { logAuditAction } from "@/lib/admin-audit-log";
+import { logAuditAction } from "@/lib/audit-log";
 import { redis } from "@/lib/redis";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ActionResponse } from "@/lib/safe-action";

@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { withOptimisticLock } from "@/lib/data-integrity";
 import { serializeDoc } from "@/lib/firestore-serialize";

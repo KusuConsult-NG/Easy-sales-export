@@ -85,6 +85,7 @@ export interface LoanApplication {
     updatedAt: Date;
 }
 
+/** @deprecated Use AuditLog from '@/lib/types/shared' instead. This variant uses `createdAt` instead of `timestamp`. */
 export interface AuditLog {
     id: string;
     userId: string;
@@ -92,7 +93,7 @@ export interface AuditLog {
     targetId?: string;
     targetType?: string;
     details?: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     ipAddress?: string;
     userAgent?: string;
     createdAt: Date;

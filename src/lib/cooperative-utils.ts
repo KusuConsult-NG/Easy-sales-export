@@ -8,6 +8,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection } from "firebase/firestore";
+import { COLLECTIONS } from "@/lib/types/firestore";
 
 /**
  * Get user's cooperative balance
@@ -23,7 +24,7 @@ export async function getCooperativeBalance(): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        const memberRef = doc(db, "cooperative_members", session.user.id);
+        const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
         if (!memberDoc.exists()) {
@@ -56,7 +57,7 @@ export async function checkCooperativeCreditEligibility(amount: number): Promise
             return { success: false, error: "Not authenticated" };
         }
 
-        const memberRef = doc(db, "cooperative_members", session.user.id);
+        const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
         if (!memberDoc.exists()) {
@@ -100,7 +101,7 @@ export async function getCooperativeMembershipStatus(): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        const memberRef = doc(db, "cooperative_members", session.user.id);
+        const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
         if (!memberDoc.exists()) {
@@ -142,7 +143,7 @@ export async function getCooperativeQuickStats(): Promise<{
             return { success: false, error: "Not authenticated" };
         }
 
-        const memberRef = doc(db, "cooperative_members", session.user.id);
+        const memberRef = doc(db, COLLECTIONS.COOPERATIVE_MEMBERS, session.user.id);
         const memberDoc = await getDoc(memberRef);
 
         if (!memberDoc.exists()) {
@@ -162,7 +163,7 @@ export async function getCooperativeQuickStats(): Promise<{
             const { getDocs, query, where, orderBy, limit } = await import('firebase/firestore');
 
             const loansQuery = query(
-                collection(db, 'cooperative_loans'),
+                collection(db, COLLECTIONS.COOPERATIVE_LOANS),
                 where('userId', '==', session.user.id),
                 where('status', 'in', ['disbursed', 'approved']),
                 orderBy('nextPaymentDate', 'asc'),

@@ -5,7 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
+import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { unstable_cache } from "next/cache";

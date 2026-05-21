@@ -6,45 +6,31 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Clock, CheckCircle2, ArrowLeft, Home, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, limit, doc } from "firebase/firestore";
+import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function FarmNationPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
-    const unsubRef = useRef<() => void>(undefined as any);
 
-    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+    const { status: applicationStatus } = usePendingApplicationStatus({
+        collectionName: COLLECTIONS.USERS,
+        userId: session?.user?.id,
+        statusField: "farmNation",
+    });
 
     useEffect(() => {
-        if (!session?.user?.id) return;
-
-        // Listen on the user doc for farmNation status changes
-        const docRef = doc(db, "users", session.user.id);
-        const unsub = onSnapshot(docRef, (snap) => {
-            if (!snap.exists()) return;
-            const userData = snap.data();
-            const status = userData?.serviceRegistrations?.farmNation?.status;
-
-            if (status) {
-                setApplicationStatus(status);
-
-                if (status === "approved" || status === "active") {
-                    router.replace("/farm-nation"); // Or dashboard
-                } else if (status === "rejected" || status === "revision_required") {
-                    router.replace("/farm-nation/onboarding");
-                }
-            }
-        }, () => { /* silently ignore listener errors */ });
-
-        unsubRef.current = unsub;
-        return () => { unsubRef.current?.(); };
-    }, [session?.user?.id, router]);
+        if (applicationStatus === "approved" || applicationStatus === "active") {
+            router.replace("/farm-nation"); // Or dashboard
+        } else if (applicationStatus === "rejected" || applicationStatus === "revision_required") {
+            router.replace("/farm-nation/onboarding");
+        }
+    }, [applicationStatus, router]);
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

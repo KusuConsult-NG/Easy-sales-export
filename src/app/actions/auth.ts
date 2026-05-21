@@ -271,6 +271,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
             roles: userRoles,
             isVerified: true,  // canonical field
             verified: true,    // legacy compat field — keep both so old queries still work
+            profileComplete: false,
         };
 
         try { await db.collection(COLLECTIONS.USERS).doc(userRecord.uid).set({

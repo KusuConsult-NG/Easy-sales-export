@@ -7,7 +7,7 @@ import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { uploadFileToStorage } from "@/lib/storage-admin";
 
 /**

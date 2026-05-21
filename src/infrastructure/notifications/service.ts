@@ -11,11 +11,19 @@ import { logger } from "@/lib/logger";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { serializeDocs } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
+import type { Notification as SharedNotification } from "@/lib/types/shared";
 
+/**
+ * Server-side Notification shape.
+ * The `type` field delegates to the authoritative SharedNotification["type"]
+ * union from @/lib/types/shared so all type values remain in sync.
+ * `createdAt` uses FieldValue | Timestamp (write shape) vs the client-side Date
+ * (read shape) defined in SharedNotification — they are intentionally different.
+ */
 export interface Notification {
     id?: string;
     userId: string;
-    type: "info" | "success" | "warning" | "error" | "loan" | "payment" | "wave" | "withdrawal" | "land" | "escrow" | "dispute";
+    type: SharedNotification["type"];
     title: string;
     message: string;
     link?: string;

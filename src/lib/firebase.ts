@@ -15,7 +15,7 @@
 
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 // ── Startup env-var audit (visible in Vercel function logs) ──────────────────
@@ -63,7 +63,13 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize services
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+const isTestEnv = typeof window === 'undefined' && (process.env.NODE_ENV === 'test' || !!process.env.FIRESTORE_EMULATOR_HOST);
+
+export const db = isTestEnv
+    ? initializeFirestore(app, { experimentalForceLongPolling: true })
+    : getFirestore(app);
+
 export const storage = getStorage(app);
 
 export default app;

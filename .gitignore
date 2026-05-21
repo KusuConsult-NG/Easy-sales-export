@@ -48,3 +48,11 @@ service-account*.json
 scripts/data/*.json
 scripts/data/*.csv
 *.csv
+
+# Scratch and test output
+/scratch/
+/test-results/
+/firestore-debug.log
+/playwright-report/
+
+

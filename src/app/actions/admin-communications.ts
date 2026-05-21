@@ -1,4 +1,4 @@
-'use server';
+"use server";
 
 import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";

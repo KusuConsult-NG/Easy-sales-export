@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 
 export interface EscalationNote { id: string;
     text: string;

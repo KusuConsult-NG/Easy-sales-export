@@ -59,38 +59,24 @@ export async function requireHubRegistration() {
             shouldRedirect = true;
         } else {
             // 3. Define "Fully Registered" Status
-            // FAST EXIT: Once a user has saved their profile at least once, the
-            // `profileComplete` flag is written to Firestore. This is the primary
-            // guard check — if it's true, skip all field-level validation.
-            if (userData.profileComplete === true) {
+            // Strictly enforce userData.profileComplete === true. Deny dashboard or module access
+            // to any account that does not meet this check.
+            if (userData?.profileComplete === true) {
                 // User has explicitly completed their profile. 
                 // CRITICAL: Check if they still need to secure their account (legacy members)
                 if (userData.requiresPasswordChange) {
                     redirect("/auth/reset-legacy-password");
                 }
                 return sessionResult;
-            }
+            } else {
+                // Check for legacy members who haven't completed profile yet but have the flag
+                if (userData?.requiresPasswordChange) {
+                    redirect("/auth/reset-legacy-password");
+                }
 
-            // Check for legacy members who haven't completed profile yet but have the flag
-            if (userData.requiresPasswordChange) {
-                redirect("/auth/reset-legacy-password");
+                console.warn(`[HubGuard] Redirecting user ${sessionResult.session.user.id} - Profile is incomplete.`);
+                shouldRedirect = true;
             }
-
-            // Legacy check for users who registered before the profileComplete flag existed.
-            // NOTE: We now prioritize allowing access to the dashboard immediately after login.
-            // We only redirect if the most basic identity data (Email) is missing.
-            // Name is highly recommended but we don't hard-block the dashboard for it anymore.
-            const hasEmail = Boolean(userData?.email);
-            
-            // If they have an email, they have a valid hub identity.
-            // They can fill in the rest of their profile (name, phone, etc.) later.
-            if (hasEmail) {
-                return sessionResult;
-            }
-
-            // If we reach here, it means the user doc exists but is critically corrupted (no email)
-            console.warn(`[HubGuard] Redirecting user ${sessionResult.session.user.id} - Missing critical email field.`);
-            shouldRedirect = true;
         }
     } catch(err) {
         console.error("Hub Guard Exception:", err);

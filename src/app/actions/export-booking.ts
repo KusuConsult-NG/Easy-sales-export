@@ -1,4 +1,4 @@
-'use server';
+"use server";
 
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";

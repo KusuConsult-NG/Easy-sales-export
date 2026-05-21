@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { DEFAULT_TOGGLES, type FeatureToggle } from "@/lib/feature-toggles";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 
 /**
  * Get feature toggle state

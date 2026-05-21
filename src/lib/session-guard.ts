@@ -36,6 +36,8 @@ export async function requireSession(): Promise<
         };
     }
 
+    let shouldRedirectToPasswordReset = false;
+
     try {
         const { getCached, CacheKeys, setCache, CACHE_TTL } = await import("@/lib/redis");
         const cacheKey = CacheKeys.userProfile(session.user.id);
@@ -142,9 +144,38 @@ export async function requireSession(): Promise<
         if (data?.serviceRegistrations) {
             session.user.serviceRegistrations = data.serviceRegistrations;
         }
+
+        // Check for password change requirement (Legacy Reset Bypass)
+        if (data?.requiresPasswordChange) {
+            let isResetPasswordRoute = false;
+            try {
+                const { headers } = await import("next/headers");
+                const headerList = await headers();
+                const referer = headerList.get("referer") || "";
+                const xUrl = headerList.get("x-url") || "";
+                const xInvokePath = headerList.get("x-invoke-path") || "";
+                
+                // Secure path check: only allow bypass if explicitly on the reset-legacy-password page or referer matches it (for server actions executed on that page)
+                isResetPasswordRoute = 
+                    xInvokePath === "/auth/reset-legacy-password" || 
+                    xUrl.includes("/auth/reset-legacy-password") || 
+                    referer.includes("/auth/reset-legacy-password");
+            } catch (e) {
+                console.error("[SessionGuard] Headers check failed:", e);
+            }
+
+            if (!isResetPasswordRoute) {
+                shouldRedirectToPasswordReset = true;
+            }
+        }
     } catch (e) {
         console.error("[SessionGuard] Verification failed:", e);
         // Fail open if database lookup fails for some reason or network error to avoid breaking platform
+    }
+
+    if (shouldRedirectToPasswordReset) {
+        const { redirect } = await import("next/navigation");
+        redirect("/auth/reset-legacy-password");
     }
 
     return { session: session as ValidSession, error: null };

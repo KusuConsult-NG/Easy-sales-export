@@ -12,6 +12,7 @@ const emulatorConfig = {
     setupFilesAfterEnv: ['<rootDir>/jest.emulator.setup.js'],
     testEnvironment: 'node',
     testTimeout: 10000, // 10 seconds for integration tests
+    maxWorkers: 1,
 };
 
 module.exports = createJestConfig(emulatorConfig);

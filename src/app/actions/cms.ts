@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { FieldValue } from "firebase-admin/firestore";
-import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log-admin";
+import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { isAdmin } from "@/lib/admin-permissions";
 
 /** Helper: verify admin session */

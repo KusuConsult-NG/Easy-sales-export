@@ -7,53 +7,32 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Clock, CheckCircle2, ArrowLeft, GraduationCap, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function AcademyPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
-    const unsubRef = useRef<() => void>(undefined as any);
 
-    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+    const { status: applicationStatus } = usePendingApplicationStatus({
+        collectionName: COLLECTIONS.ACADEMY_APPLICATIONS,
+        userId: session?.user?.id,
+        statusField: "status",
+    });
 
     useEffect(() => {
-        if (!session?.user?.id) return;
-
-        const q = query(
-            collection(db, "academy_applications"),
-            where("userId", "==", session.user.id)
-        );
-
-        const unsub = onSnapshot(q, (snap) => {
-            if (snap.empty) return;
-            
-            // Sort to find the latest application in case of resubmissions
-            const sortedDocs = snap.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || 0;
-                return bTime - aTime;
-            });
-            
-            const status = sortedDocs[0].data().status;
-            setApplicationStatus(status);
-
-            if (status === "approved") {
-                router.replace("/academy/dashboard");
-            } else if (status === "revision_required") {
-                // Redirect back to the application form — it will pre-populate
-                router.replace("/academy/application");
-            }
-        }, () => { /* silently ignore listener errors */ });
-
-        unsubRef.current = unsub;
-        return () => { unsubRef.current?.(); };
-    }, [session?.user?.id, router]);
+        if (applicationStatus === "approved") {
+            router.replace("/academy/dashboard");
+        } else if (applicationStatus === "revision_required") {
+            // Redirect back to the application form — it will pre-populate
+            router.replace("/academy/application");
+        }
+    }, [applicationStatus, router]);
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

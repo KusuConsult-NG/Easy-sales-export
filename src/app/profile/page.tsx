@@ -16,7 +16,7 @@ import { useSessionExpiry } from "@/hooks/useSessionExpiry";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export default function ProfilePage() {
-    const { data: session } = useSession();
+    const { data: session, update } = useSession();
 
     const { run: guardRun } = useSessionExpiry();
     const router = useRouter();
@@ -173,6 +173,14 @@ export default function ProfilePage() {
                     if (notice) {
                         window.history.replaceState({}, '', '/profile');
                     }
+
+                    // Rebuild session JWT with the updated user data in cache/Redis
+                    update().catch((updateErr) => {
+                        console.error("Session update failed:", updateErr);
+                    });
+
+                    // Clear client-side route cache to ensure server components read the updated profileComplete state
+                    router.refresh();
 
                     // If the hub guard sent the user here to complete registration,
                     // redirect them to the dashboard now that profileComplete is written.

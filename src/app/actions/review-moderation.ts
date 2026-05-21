@@ -13,7 +13,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission } from "@/lib/admin-permissions";
-import { logAdminAction, createAdminAuditLog } from "@/lib/audit-log-admin";
+import { logAdminAction, createAdminAuditLog } from "@/lib/audit-log";
 import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 
 export interface FlaggedReview { id: string;

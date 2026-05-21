@@ -45,6 +45,7 @@ export interface User {
     verifiedBy?: string;
     verifiedAt?: Date | any;
     onboardingCompleted?: boolean;
+    profileComplete?: boolean;
 
     // Cooperative
     cooperativeId?: string;

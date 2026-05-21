@@ -5,7 +5,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { serializeDocs } from "@/lib/firestore-serialize";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 
 export interface LoanProduct { id?: string;
     name: string;

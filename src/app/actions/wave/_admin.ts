@@ -10,7 +10,7 @@ import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { FieldValue, FieldPath, Query } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { WaveApplicationReviewSchema } from "@/lib/schemas";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { getCached, setCache } from "@/lib/redis";
 import { sendWaveApplicationEmail } from "@/lib/email-notifications";
 import { paystackPayout } from "@/lib/paystack-transfer";

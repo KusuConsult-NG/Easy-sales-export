@@ -5,91 +5,45 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Clock, Mail, Phone, ArrowLeft, FileText, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, limit, Unsubscribe } from "firebase/firestore";
 import { COMPANY_INFO } from "@/lib/constants";
+import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function ReviewPendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
-    const [applicationDate, setApplicationDate] = useState<Date | null>(null);
-    const [expectedReviewDate, setExpectedReviewDate] = useState<Date | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
-    const [rejectionReason, setRejectionReason] = useState<string | null>(null);
-    const unsubscribeRef = useRef<Unsubscribe | null>(null);
+
+    const { status: applicationStatus, createdAt, rejectionReason, isLoading } = usePendingApplicationStatus({
+        collectionName: COLLECTIONS.WAVE_APPLICATIONS,
+        userId: session?.user?.id,
+        statusField: "status",
+    });
+
+    const [defaultAppDate] = useState(() => new Date());
+    const [defaultExpectedDate] = useState(() => new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
+
+    const applicationDate = createdAt || (isLoading ? null : defaultAppDate);
+    const expectedReviewDate = createdAt ? (() => {
+        const expected = new Date(createdAt);
+        expected.setDate(expected.getDate() + 7);
+        return expected;
+    })() : (isLoading ? null : defaultExpectedDate);
 
     useEffect(() => {
-        if (!session?.user?.id) return;
-
-        // Real-time listener on this user's wave application
-        const q = query(
-            collection(db, "wave_applications"),
-            where("userId", "==", session.user.id)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            if (snapshot.empty) {
-                setIsLoading(false);
-                return;
-            }
-
-            // Sort to find the latest application in case of resubmissions
-            const sortedDocs = snapshot.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || 0;
-                return bTime - aTime;
-            });
-
-            const doc = sortedDocs[0];
-            const data = doc.data();
-            const status = data.status || "pending";
-            setApplicationStatus(status);
-
-            // Set dates
-            if (data.createdAt) {
-                const submitted = data.createdAt.toDate();
-                setApplicationDate(submitted);
-                const expected = new Date(submitted);
-                expected.setDate(expected.getDate() + 7);
-                setExpectedReviewDate(expected);
-            } else {
-                setApplicationDate(new Date());
-                setExpectedReviewDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
-            }
-
-            if (data.rejectionReason) {
-                setRejectionReason(data.rejectionReason);
-            }
-
-            setIsLoading(false);
-
-            // Auto-redirect when approved
-            if (status === "approved") {
-                setTimeout(() => {
-                    router.push("/wave/dashboard");
-                }, 3000);
-            }
-
-            // Auto-redirect when revision is requested
-            if (status === "revision_required") {
-                router.replace("/wave/application");
-            }
-        }, () => {
-            // Fallback if listener fails (e.g., permissions)
-            setApplicationDate(new Date());
-            setExpectedReviewDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000));
-            setIsLoading(false);
-        });
-
-        unsubscribeRef.current = unsubscribe;
-        return () => { unsubscribeRef.current?.(); };
-    }, [session?.user?.id, router]);
+        if (applicationStatus === "approved") {
+            const t = setTimeout(() => {
+                router.push("/wave/dashboard");
+            }, 3000);
+            return () => clearTimeout(t);
+        } else if (applicationStatus === "revision_required") {
+            router.replace("/wave/application");
+        }
+    }, [applicationStatus, router]);
 
     const fmt = (d: Date | null) =>
         d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "…";

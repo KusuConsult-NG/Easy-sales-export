@@ -100,9 +100,11 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
 
     return modulesDef.map(mod => {
         const registrationStatus = serviceRegistrations[mod.id]?.status 
-            || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.status : null);
+            || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.status : null)
+            || (mod.id === 'cooperatives' ? serviceRegistrations['cooperative']?.status : null);
         const paymentStatus = serviceRegistrations[mod.id]?.paymentStatus 
-            || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.paymentStatus : null);
+            || (mod.id === 'farmNation' ? serviceRegistrations['farm_nation']?.paymentStatus : null)
+            || (mod.id === 'cooperatives' ? serviceRegistrations['cooperative']?.paymentStatus : null);
             
         let status: 'unapplied' | 'pending' | 'approved' | 'payment_required' = 'unapplied';
         if (registrationStatus === 'approved' || registrationStatus === 'active' || registrationStatus === 'verified') {

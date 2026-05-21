@@ -1017,7 +1017,7 @@ async function _verifyPropertyAction(propertyId: string, verified: boolean): Pro
         });
 
         // 📜 Audit Log
-        const { logAuditAction } = await import("@/lib/audit");
+        const { logAuditAction } = await import("@/lib/audit-log");
         await logAuditAction({
             userId: session.user.id,
             action: verified ? "VERIFY_PROPERTY" : "UNVERIFY_PROPERTY",

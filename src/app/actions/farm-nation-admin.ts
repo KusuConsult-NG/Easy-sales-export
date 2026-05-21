@@ -9,7 +9,7 @@ import { isAdmin } from "@/lib/admin-permissions";
 import { serializeDocs, serializeDoc } from "@/lib/firestore-serialize";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 
 
 /**

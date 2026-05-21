@@ -9,7 +9,7 @@ import { loanApplicationSchema,
     type LoanApplicationData,
     type LoanApprovalData } from "@/lib/validations/loan";
 import { AuditActionType, LoanStatus, type LoanApplication } from "@/types/strict";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";

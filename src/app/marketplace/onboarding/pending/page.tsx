@@ -6,52 +6,32 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { Clock, CheckCircle, Mail, Home, FileText } from "lucide-react";
 import { MARKETPLACE_CONFIG } from "@/lib/constants";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function MarketplacePendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
-    const unsubRef = useRef<() => void>(undefined as any);
 
-    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+    const { status: applicationStatus } = usePendingApplicationStatus({
+        collectionName: COLLECTIONS.SELLER_VERIFICATIONS,
+        userId: session?.user?.id,
+        statusField: "status",
+    });
 
     useEffect(() => {
-        if (!session?.user?.id) return;
-
-        // Listen on the user doc for seller status changes
-        const q = query(
-            collection(db, "seller_verifications"),
-            where("userId", "==", session.user.id)
-        );
-
-        const unsub = onSnapshot(q, (snap) => {
-            if (snap.empty) return;
-            const docs = snap.docs.map(d => d.data());
-            docs.sort((a: any, b: any) => {
-                const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-                const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-                return bTime - aTime;
-            });
-            const status = docs[0].status;
-            setApplicationStatus(status);
-
-            if (status === "approved") {
-                router.replace("/marketplace/dashboard");
-            } else if (status === "rejected" || status === "suspended") {
-                router.replace("/marketplace/onboarding");
-            }
-        }, () => { /* silently ignore listener errors */ });
-
-        unsubRef.current = unsub;
-        return () => { unsubRef.current?.(); };
-    }, [session?.user?.id, router]);
+        if (applicationStatus === "approved") {
+            router.replace("/marketplace/dashboard");
+        } else if (applicationStatus === "rejected" || applicationStatus === "suspended") {
+            router.replace("/marketplace/onboarding");
+        }
+    }, [applicationStatus, router]);
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">

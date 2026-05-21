@@ -23,11 +23,12 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
+import { onSnapshot, doc, collection, query, where } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
+import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
 
 interface NavItem {
     label: string;
@@ -72,7 +73,6 @@ function getModuleLinks(roles: UserRole[], serviceRegs: any): { label: string; h
 export default function DashboardNav() {
     const { data: session } = useSession();
     const pathname = usePathname();
-    const [unreadCount, setUnreadCount] = useState(0);
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -81,6 +81,7 @@ export default function DashboardNav() {
     const userName = session?.user?.name || "User";
     const userEmail = session?.user?.email || "";
 
+    const { unreadCount } = useUnreadNotifications(userId);
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
     // Real-time Service Registrations
@@ -90,20 +91,6 @@ export default function DashboardNav() {
             if (docSnap.exists()) {
                 setServiceRegs(docSnap.data()?.serviceRegistrations || {});
             }
-        });
-        return () => unsub();
-    }, [userId]);
-
-    // Real-time unread notifications count
-    useEffect(() => {
-        if (!userId) return;
-        const q = query(
-            collection(db, COLLECTIONS.NOTIFICATIONS),
-            where("userId", "==", userId),
-            where("read", "==", false)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setUnreadCount(snap.size);
         });
         return () => unsub();
     }, [userId]);

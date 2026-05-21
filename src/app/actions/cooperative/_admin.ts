@@ -13,7 +13,7 @@ import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
-import { logAuditAction } from "@/lib/audit";
+import { logAuditAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { ActionResponse, withFlexibleSafeAction } from "@/lib/safe-action";
 import { paginatedOk, paginatedErr, nextCursor as computeNextCursor, PaginatedAdminResponse } from "@/lib/admin-action-response";
@@ -22,7 +22,7 @@ import {
     sendWithdrawalRejectedEmail
 } from "@/lib/email-notifications";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { Resend } from "resend";
 import { revalidateTag } from "next/cache";
 import { deleteCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";

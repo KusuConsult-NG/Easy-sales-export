@@ -2,7 +2,7 @@
  * Initialize Paystack Payment for Cooperative Contribution
  * Creates a payment session and returns authorization URL
  */
-'use server';
+"use server";
 
 import { auth } from '@/lib/auth';
 import { requireSession } from "@/lib/session-guard";
@@ -78,7 +78,7 @@ export async function verifyContributionPaymentAction(
         const { COLLECTIONS } = await import('@/lib/types/firestore');
         const { doc, getDoc, setDoc, runTransaction, serverTimestamp, FieldValue } = await import('firebase/firestore');
         const { calculateUserTier } = await import('@/lib/cooperative-tiers');
-        const { createAdminAuditLog } = await import('@/lib/audit-log-admin');
+        const { createAdminAuditLog } = await import('@/lib/audit-log');
 
         // 🔒 SECURITY FIX #1: Double-payment protection
         const processedRef = doc(db, 'processedPayments', reference);

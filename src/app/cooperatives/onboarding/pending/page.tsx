@@ -4,56 +4,34 @@
  * Shown after the member submits their completed application.
  * Displays congratulations + under-review notice.
  */
-
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { CheckCircle2, Clock, Mail, ShieldCheck, PartyPopper, FileText } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { db } from "@/lib/firebase";
-import { collection, query, where, onSnapshot, limit } from "firebase/firestore";
+import { usePendingApplicationStatus } from "@/hooks/usePendingApplicationStatus";
+import { COLLECTIONS } from "@/lib/client-collections";
 
 export default function CooperativePendingPage() {
     const { data: session } = useSession();
     const router = useRouter();
-    const unsubRef = useRef<() => void>(undefined as any);
 
-    const [applicationStatus, setApplicationStatus] = useState<string>("pending");
+    const { status: applicationStatus } = usePendingApplicationStatus({
+        collectionName: COLLECTIONS.COOPERATIVE_MEMBERS,
+        userId: session?.user?.id,
+        statusField: "membershipStatus",
+    });
 
     useEffect(() => {
-        if (!session?.user?.id) return;
+        if (applicationStatus === "approved" || applicationStatus === "active") {
+            router.replace("/dashboard/cooperatives");
+        } else if (applicationStatus === "rejected" || applicationStatus === "revision_required") {
+            router.replace("/cooperatives/onboarding");
+        }
+    }, [applicationStatus, router]);
 
-        // Listen on the user doc for cooperative status changes
-        const q = query(
-            collection(db, "cooperative_members"),
-            where("userId", "==", session.user.id)
-        );
-
-        const unsub = onSnapshot(q, (snap) => {
-            if (snap.empty) return;
-            
-            // Sort to find the latest application in case of resubmissions
-            const sortedDocs = snap.docs.sort((a, b) => {
-                const aTime = a.data().createdAt?.toMillis?.() || 0;
-                const bTime = b.data().createdAt?.toMillis?.() || 0;
-                return bTime - aTime;
-            });
-            
-            const status = sortedDocs[0].data().membershipStatus;
-            setApplicationStatus(status);
-
-            if (status === "approved" || status === "active") {
-                router.replace("/dashboard/cooperatives");
-            } else if (status === "rejected" || status === "revision_required") {
-                router.replace("/cooperatives/onboarding");
-            }
-        }, () => { /* silently ignore listener errors */ });
-
-        unsubRef.current = unsub;
-        return () => { unsubRef.current?.(); };
-    }, [session?.user?.id, router]);
 
 
     return (

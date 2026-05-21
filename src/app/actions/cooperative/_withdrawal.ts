@@ -2,7 +2,7 @@
  * Submit Withdrawal Request
  * Creates a withdrawal request that requires admin approval
  */
-'use server';
+"use server";
 
 import { auth } from '@/lib/auth';
 import { requireSession } from "@/lib/session-guard";
@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { db } from '@/lib/firebase-admin';
 import { COLLECTIONS } from '@/lib/types/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
-import { createAdminAuditLog } from '@/lib/audit-log-admin';
+import { createAdminAuditLog } from '@/lib/audit-log';
 import { revalidatePath } from 'next/cache';
 
 interface WithdrawalRequestData { amount: number;

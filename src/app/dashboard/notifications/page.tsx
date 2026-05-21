@@ -149,19 +149,25 @@ export default function NotificationsPage() {
     async function handleMarkAsRead(id: string) {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
         try {
-            await updateDoc(doc(db, COLLECTIONS.NOTIFICATIONS, id), { read: true });
+            const { markNotificationAsReadAction } = await import("@/app/actions/notifications");
+            const result = await markNotificationAsReadAction(id);
+            if (!result.success) {
+                showToast(result.error || "Failed to mark as read", "error");
+            }
         } catch {
             showToast("Failed to mark as read", "error");
         }
     }
 
     async function handleMarkAllAsRead() {
+        if (!userId) return;
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         try {
-            const unreadItems = notifications.filter(n => !n.read);
-            await Promise.all(
-                unreadItems.map(n => updateDoc(doc(db, COLLECTIONS.NOTIFICATIONS, n.id), { read: true }))
-            );
+            const { markAllAsReadAction } = await import("@/app/actions/notifications");
+            const result = await markAllAsReadAction(userId);
+            if (!result.success) {
+                showToast(result.error || "Failed to mark all as read", "error");
+            }
         } catch {
             showToast("Failed to mark all as read", "error");
         }

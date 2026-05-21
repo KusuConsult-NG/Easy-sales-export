@@ -11,7 +11,7 @@ import {
     landSearchSchema 
 } from "@/lib/validations/land";
 import { type LandListing } from "@/types/strict";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { requireSession } from "@/lib/session-guard";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { logger } from "@/lib/logger";

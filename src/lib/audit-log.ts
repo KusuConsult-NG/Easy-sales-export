@@ -343,3 +343,91 @@ export async function logAdminAction(
         details,
     });
 }
+
+/**
+ * Legacy Audit Log Entry Interface (from audit.ts)
+ */
+export interface LegacyAuditLogEntry {
+    userId: string;
+    action: string;
+    details?: string;
+    resourceId?: string;
+    resourceType?: string;
+    targetId?: string;
+    targetType?: string;
+    metadata?: Record<string, any>;
+    ip?: string;
+    ipAddress?: string;
+    userAgent?: string;
+}
+
+/**
+ * Unified/Consolidated logAuditAction helper to support both legacy and admin signatures
+ */
+export async function logAuditAction(
+    actionOrEntry: any,
+    targetId?: string,
+    targetType?: string,
+    metadata?: Record<string, any>,
+    securityContext?: {
+        ipAddress?: string;
+        userAgent?: string;
+        deviceFingerprint?: string;
+    }
+): Promise<void> {
+    try {
+        if (actionOrEntry && typeof actionOrEntry === 'object') {
+            // Legacy signature (from src/lib/audit.ts)
+            const entry = actionOrEntry as LegacyAuditLogEntry;
+            await createAuditLog({
+                userId: entry.userId,
+                action: entry.action as AuditAction,
+                details: entry.details || "",
+                targetId: entry.resourceId || entry.targetId,
+                targetType: entry.resourceType || entry.targetType,
+                metadata: entry.metadata,
+                ipAddress: entry.ip || entry.ipAddress,
+                userAgent: entry.userAgent,
+            });
+        } else {
+            // Admin signature (from src/lib/admin-audit-log.ts)
+            const action = actionOrEntry as AuditAction;
+            const userId = metadata?.adminId || metadata?.userId || 'system';
+
+            await createAuditLog({
+                action,
+                userId,
+                targetId,
+                targetType,
+                metadata: {
+                    ...metadata,
+                    deviceFingerprint: securityContext?.deviceFingerprint,
+                },
+                ipAddress: securityContext?.ipAddress,
+                userAgent: securityContext?.userAgent,
+            });
+        }
+    } catch (error) {
+        logger.error('Failed to create audit log in logAuditAction:', error instanceof Error ? error : undefined);
+    }
+}
+
+/**
+ * Retrieve security context from HTTP request headers
+ */
+export function getSecurityContextFromHeaders(headers?: Headers): {
+    ipAddress?: string;
+    userAgent?: string;
+} {
+    if (!headers) return {};
+
+    return {
+        ipAddress: headers.get('x-forwarded-for')?.split(',')[0] || headers.get('x-real-ip') || undefined,
+        userAgent: headers.get('user-agent') || undefined,
+    };
+}
+
+// Backward compatibility exports for audit-log-admin.ts / admin-audit-log.ts
+export const createAdminAuditLog = createAuditLog;
+export { logFinancialAction as logAdminFinancialAction };
+

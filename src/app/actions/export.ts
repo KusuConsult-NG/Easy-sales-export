@@ -8,7 +8,7 @@ import { requireSession } from "@/lib/session-guard";
 import { checkModuleAccess } from "@/lib/module-access-check";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { z } from "zod";
-import { createAdminAuditLog } from "@/lib/audit-log-admin";
+import { createAdminAuditLog } from "@/lib/audit-log";
 import { revalidatePath } from "next/cache";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 
@@ -961,7 +961,7 @@ export async function extendEscrowAction(
         });
 
         // 📜 Audit Log
-        const { logAuditAction } = await import("@/lib/audit");
+        const { logAuditAction } = await import("@/lib/audit-log");
         await logAuditAction({
             userId: session.user.id,
             action: "EXTEND_ESCROW",

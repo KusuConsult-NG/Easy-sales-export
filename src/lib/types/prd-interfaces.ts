@@ -1,6 +1,17 @@
 /**
- * PRD-Required Type Interfaces
- * Added: 2026-02-06
+ * @deprecated PRD-Required Type Interfaces (Legacy)
+ *
+ * STATUS: Being progressively migrated to domain-specific type files.
+ * - CooperativeMember    → src/lib/types/cooperative.ts (CooperativeMembershipRecord)
+ * - LoanApplication      → src/lib/types/cooperative.ts (LoanApplication)
+ * - FixedSavingsPlan     → src/lib/types/cooperative.ts (FixedSavingsPlan)
+ * - LoanProduct          → src/lib/types/cooperative.ts (LoanProduct)
+ * - AcademyQuiz          → src/lib/types/academy.ts (future)
+ * - SellerVerification   → src/lib/types/marketplace.ts (future)
+ * - LandVerification     → src/lib/types/farm-nation.ts (future)
+ *
+ * DO NOT add new types here. Add to the appropriate domain type file.
+ * Added: 2026-02-06  |  Deprecated: 2026-05
  */
 
 // ============================================
