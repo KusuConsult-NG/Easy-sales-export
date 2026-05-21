@@ -206,10 +206,18 @@ export default function FarmNationOnboardingPage() {
                 firstName: z.string().trim().min(2, "First name must be at least 2 characters."),
                 lastName: z.string().trim().min(2, "Last name must be at least 2 characters."),
                 phone: z.string().trim().min(5, "Phone number is required."),
+                state: z.string().trim().min(1, "State is required."),
+                lga: z.string().trim().min(1, "LGA is required."),
+                address: z.string().trim().min(5, "Address is required."),
+                // optional flat fields
+                otherName: z.string().optional(),
+                businessName: z.string().optional(),
+                fullName: z.string().optional(),
+                // legacy nested location (for revision mode pre-filled data)
                 location: z.object({
-                    state: z.string().trim().min(1, "State is required."),
-                    lga: z.string().trim().min(1, "LGA is required."),
-                }, { message: "Location details are required." }),
+                    state: z.string().optional(),
+                    lga: z.string().optional(),
+                }).optional(),
             }, { message: "Profile details are required." }),
             interests: z.object({
                 buyerInterests: z.array(z.string()).optional(),
