@@ -26,8 +26,8 @@ test.describe('Marketplace Purchase Flow', () => {
     test('Authenticated user can complete purchase with Paystack', async ({ page }) => {
         // Login first
         await page.click('text=Login');
-        await page.fill('input[name="email"]', 'buyer@test.com');
-        await page.fill('input[name="password"]', 'testpassword123');
+        await page.fill('input[name="email"]', process.env.TEST_BUYER_EMAIL || 'e2e.buyer@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!');
         await page.click('button[type="submit"]');
 
         // Wait for dashboard
@@ -61,8 +61,8 @@ test.describe('Marketplace Purchase Flow', () => {
     test('User can initiate bank transfer payment', async ({ page }) => {
         // Login
         await page.click('text=Login');
-        await page.fill('input[name="email"]', 'buyer@test.com');
-        await page.fill('input[name="password"]', 'testpassword123');
+        await page.fill('input[name="email"]', process.env.TEST_BUYER_EMAIL || 'e2e.buyer@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!');
         await page.click('button[type="submit"]');
 
         // Add to cart and checkout
@@ -85,8 +85,8 @@ test.describe('Dispute Flow', () => {
     test('User can file a dispute', async ({ page }) => {
         // Login
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', 'buyer@test.com');
-        await page.fill('input[name="password"]', 'testpassword123');
+        await page.fill('input[name="email"]', process.env.TEST_BUYER_EMAIL || 'e2e.buyer@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!');
         await page.click('button[type="submit"]');
 
         // Go to orders

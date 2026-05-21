@@ -13,8 +13,8 @@ test.describe('System Health Diagnostic Suite', () => {
         // Authenticate as admin
         // Note: In a real CI environment, we would use a test admin account
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@easysalesexport.com');
-        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'password123');
+        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
         
         // Wait for login to complete and redirect to hub

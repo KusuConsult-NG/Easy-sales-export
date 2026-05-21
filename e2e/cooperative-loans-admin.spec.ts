@@ -7,8 +7,8 @@ import { test, expect, Page } from '@playwright/test';
 
 async function loginUser(page: Page) {
     await page.goto('/login');
-    await page.fill('input[type="email"]', 'test@example.com');
-    await page.fill('input[type="password"]', 'password123');
+    await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test');
+    await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
     await page.click('button[type="submit"]');
     await page.waitForURL('/dashboard', { timeout: 10000 });
 }

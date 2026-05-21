@@ -28,7 +28,7 @@ test.describe('Farm Nation Property Listings', () => {
         // Login as seller
         await page.goto('/auth/login');
         await page.fill('input[name="email"]', 'seller@test.com');
-        await page.fill('input[name="password"]', 'testpassword123');
+        await page.fill('input[name="password"]', process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!');
         await page.click('button[type="submit"]');
 
         // Navigate to list property
@@ -67,7 +67,7 @@ test.describe('Academy Course Enrollment', () => {
         // Login
         await page.goto('/auth/login');
         await page.fill('input[name="email"]', 'student@test.com');
-        await page.fill('input[name="password"]', 'testpassword123');
+        await page.fill('input[name="password"]', process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!');
         await page.click('button[type="submit"]');
 
         // Browse courses
@@ -95,7 +95,7 @@ test.describe('Academy Course Enrollment', () => {
         // Login and navigate to course with quiz
         await page.goto('/auth/login');
         await page.fill('input[name="email"]', 'student@test.com');
-        await page.fill('input[name="password"]', 'testpassword123');
+        await page.fill('input[name="password"]', process.env.TEST_BUYER_PASSWORD || 'E2eBuyer@2024!');
         await page.click('button[type="submit"]');
 
         await page.goto('/academy/courses/test-course');

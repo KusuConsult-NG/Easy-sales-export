@@ -1,0 +1,188 @@
+export const dynamic = 'force-dynamic';
+
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
+
+/**
+ * Automated Paystack ↔ Firebase Reconciliation
+ *
+ * Cron job endpoint — triggered daily by Railway Cron at 06:00 WAT.
+ * Also callable manually from the admin dashboard.
+ *
+ * What it checks:
+ *   1. Fetches all successful Paystack transactions (last 30 days)
+ *   2. Compares against processedPayments collection in Firestore
+ *   3. Identifies transactions missing from Firebase (payment collected, record absent)
+ *   4. Writes results to system_health/paystack_reconciliation in Firestore
+ *   5. Returns summary JSON for Railway cron logs
+ *
+ * Authorization: Bearer CRON_SECRET header required in production.
+ */
+export async function GET(request: NextRequest) {
+    // ── Auth gate ────────────────────────────────────────────────────────────────
+    const authHeader = request.headers.get("Authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (process.env.NODE_ENV === "production" || cronSecret) {
+        if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+            return NextResponse.json(
+                { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
+                { status: 401 }
+            );
+        }
+    }
+
+    const startedAt = new Date();
+    const results: {
+        status: "ok" | "warning" | "critical";
+        paystackTotal: number;
+        firebaseTotal: number;
+        missingInFirebase: Array<{
+            reference: string;
+            amount: number;
+            email: string | undefined;
+            date: string;
+            channel: string;
+        }>;
+        discrepancies: number;
+        runAt: string;
+        durationMs: number;
+        error?: string;
+    } = {
+        status: "ok",
+        paystackTotal: 0,
+        firebaseTotal: 0,
+        missingInFirebase: [],
+        discrepancies: 0,
+        runAt: startedAt.toISOString(),
+        durationMs: 0,
+    };
+
+    try {
+        const secretKey = process.env.PAYSTACK_SECRET_KEY;
+        if (!secretKey) {
+            throw new Error("PAYSTACK_SECRET_KEY is not set in environment");
+        }
+
+        // ── 1. Fetch Paystack successful transactions (last 30 days) ────────────
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const fromDate = thirtyDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
+
+        let allPaystackTransactions: Array<{
+            reference: string;
+            amount: number;
+            paid_at: string;
+            channel: string;
+            customer?: { email?: string };
+        }> = [];
+        let page = 1;
+        let hasMore = true;
+
+        while (hasMore) {
+            const response = await fetch(
+                `https://api.paystack.co/transaction?perPage=100&page=${page}&status=success&from=${fromDate}`,
+                {
+                    headers: { Authorization: `Bearer ${secretKey}` },
+                    // 15s timeout per page fetch
+                    signal: AbortSignal.timeout(15000),
+                }
+            );
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Paystack API error (${response.status}): ${errText.slice(0, 200)}`);
+            }
+
+            const data = await response.json();
+            allPaystackTransactions = allPaystackTransactions.concat(data.data || []);
+
+            if (page < (data.meta?.pageCount || 1)) {
+                page++;
+            } else {
+                hasMore = false;
+            }
+        }
+
+        results.paystackTotal = allPaystackTransactions.length;
+
+        // ── 2. Fetch Firebase processedPayments references ───────────────────────
+        const paymentsSnapshot = await db
+            .collection("processedPayments")
+            .where("status", "==", "completed")
+            .get();
+
+        const firebaseRefs = new Set<string>();
+        paymentsSnapshot.docs.forEach(doc => {
+            const ref = doc.data().reference || doc.data().paystackReference || doc.data().ref;
+            if (ref) firebaseRefs.add(ref);
+        });
+
+        results.firebaseTotal = firebaseRefs.size;
+
+        // ── 3. Find transactions in Paystack but not in Firebase ──────────────────
+        for (const tx of allPaystackTransactions) {
+            if (!firebaseRefs.has(tx.reference)) {
+                results.missingInFirebase.push({
+                    reference: tx.reference,
+                    amount: tx.amount / 100, // Paystack amounts are in kobo
+                    email: tx.customer?.email,
+                    date: tx.paid_at,
+                    channel: tx.channel,
+                });
+            }
+        }
+
+        results.discrepancies = results.missingInFirebase.length;
+        results.status =
+            results.discrepancies === 0 ? "ok" :
+            results.discrepancies <= 3  ? "warning" : "critical";
+
+    } catch (err: unknown) {
+        results.status = "critical";
+        results.error = err instanceof Error ? err.message : String(err);
+    }
+
+    // ── 4. Write results to Firestore system_health collection ──────────────────
+    results.durationMs = Date.now() - startedAt.getTime();
+
+    try {
+        await db
+            .collection("system_health")
+            .doc("paystack_reconciliation")
+            .collection("runs")
+            .add({
+                ...results,
+                // Store only the first 20 discrepancies to avoid huge docs
+                missingInFirebase: results.missingInFirebase.slice(0, 20),
+                runAt: Timestamp.fromDate(startedAt),
+            });
+
+        // Update the "latest" snapshot for quick dashboard reads
+        await db
+            .collection("system_health")
+            .doc("paystack_reconciliation")
+            .set({
+                status:        results.status,
+                discrepancies: results.discrepancies,
+                paystackTotal: results.paystackTotal,
+                firebaseTotal: results.firebaseTotal,
+                lastRunAt:     Timestamp.fromDate(startedAt),
+                durationMs:    results.durationMs,
+                ...(results.error ? { lastError: results.error } : {}),
+            }, { merge: true });
+
+    } catch (writeErr) {
+        // Non-fatal — the reconciliation result is still returned in the response
+        console.error("Failed to write reconciliation results to Firestore:", writeErr);
+    }
+
+    // ── 5. Return summary ────────────────────────────────────────────────────────
+    const httpStatus =
+        results.status === "ok"       ? 200 :
+        results.status === "warning"  ? 200 :
+        results.error                 ? 500 : 200;
+
+    return NextResponse.json(results, { status: httpStatus });
+}

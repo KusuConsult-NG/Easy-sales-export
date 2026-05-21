@@ -18,6 +18,72 @@
       "rules": {
         "@typescript-eslint/no-explicit-any": "error"
       }
+    },
+    {
+      "comment": "Module isolation boundaries — cross-module imports require explicit justification",
+      "files": ["src/app/cooperatives/**/*.{ts,tsx}", "src/app/actions/cooperative/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            { "group": ["*/actions/academy*", "*/actions/wave*", "*/actions/farm-nation*"], "message": "CROSS-MODULE IMPORT: Cooperative must not import Academy/WAVE/Farm-Nation actions. Document the cross-module dependency in your commit message." }
+          ]
+        }]
+      }
+    },
+    {
+      "comment": "Academy isolation",
+      "files": ["src/app/academy/**/*.{ts,tsx}", "src/app/actions/academy/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            { "group": ["*/actions/cooperative*", "*/actions/wave*", "*/actions/farm-nation*"], "message": "CROSS-MODULE IMPORT: Academy must not import Cooperative/WAVE/Farm-Nation actions." }
+          ]
+        }]
+      }
+    },
+    {
+      "comment": "WAVE isolation",
+      "files": ["src/app/wave/**/*.{ts,tsx}", "src/app/actions/wave*"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            { "group": ["*/actions/cooperative*", "*/actions/academy*", "*/actions/farm-nation*"], "message": "CROSS-MODULE IMPORT: WAVE must not import Cooperative/Academy/Farm-Nation actions." }
+          ]
+        }]
+      }
+    },
+    {
+      "comment": "Farm-Nation isolation",
+      "files": ["src/app/farm-nation/**/*.{ts,tsx}", "src/app/actions/farm-nation*"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            { "group": ["*/actions/cooperative*", "*/actions/academy*", "*/actions/wave*"], "message": "CROSS-MODULE IMPORT: Farm-Nation must not import Cooperative/Academy/WAVE actions." }
+          ]
+        }]
+      }
+    },
+    {
+      "comment": "Export module isolation",
+      "files": ["src/app/export/**/*.{ts,tsx}", "src/app/actions/export*"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            { "group": ["*/actions/cooperative*", "*/actions/academy*", "*/actions/wave*", "*/actions/farm-nation*"], "message": "CROSS-MODULE IMPORT: Export must not import other module-specific actions." }
+          ]
+        }]
+      }
+    },
+    {
+      "comment": "Marketplace isolation",
+      "files": ["src/app/marketplace/**/*.{ts,tsx}", "src/app/actions/marketplace/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": [
+            { "group": ["*/actions/cooperative*", "*/actions/academy*", "*/actions/wave*", "*/actions/farm-nation*", "*/actions/export*"], "message": "CROSS-MODULE IMPORT: Marketplace must not import other module-specific actions." }
+          ]
+        }]
+      }
     }
   ]
 }

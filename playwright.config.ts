@@ -2,42 +2,80 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Playwright E2E Test Configuration
- * See https://playwright.dev/docs/test-configuration
+ *
+ * Directory layout:
+ *   e2e/            ← Full suite (auth-required, module flows)
+ *   tests/e2e/      ← Smoke + RBAC (some tests are auth-required, some are public)
+ *
+ * Environment:
+ *   PLAYWRIGHT_BASE_URL   Override base URL (e.g. staging URL in CI)
+ *   TEST_USER_EMAIL       Regular test user email (default: e2e.user@easysalesexport.test)
+ *   TEST_USER_PASSWORD    Regular test user password
+ *   TEST_ADMIN_EMAIL      Admin test user email
+ *   TEST_ADMIN_PASSWORD   Admin test user password
+ *   TEST_BUYER_EMAIL      Marketplace buyer test email
+ *   TEST_SELLER_EMAIL     Marketplace seller test email
+ *
+ * Projects:
+ *   smoke     → tests/e2e/public-routes.spec.ts only — fast, no auth needed, runs on every PR
+ *   full      → All specs in both e2e/ and tests/e2e/ — requires running server + seed data
  */
+
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+
 export default defineConfig({
-    testDir: './tests/e2e',
-    fullyParallel: true,
+    // Default to full suite; override with --project=smoke for fast CI checks
+    testDir: './',
+    testMatch: ['e2e/**/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
+    testIgnore: [
+        'e2e/global-setup.ts',
+        'e2e/global-teardown.ts',
+    ],
+
+    fullyParallel: false,           // Tests share state (logged-in sessions) — run serially
     forbidOnly: !!process.env.CI,
-    retries: process.env.CI ? 2 : 0,
-    workers: process.env.CI ? 1 : undefined,
-    reporter: 'html',
+    retries: process.env.CI ? 1 : 0,
+    workers: process.env.CI ? 1 : 2,
+    reporter: process.env.CI ? [['html'], ['github']] : 'html',
+    timeout: 30000,
+
+    globalSetup: './e2e/global-setup.ts',
+    globalTeardown: './e2e/global-teardown.ts',
 
     use: {
-        baseURL: 'http://localhost:3000',
+        baseURL: BASE_URL,
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
+        video: 'retain-on-failure',
+        // Pass test credentials to all specs via process.env
+        // Specs read: process.env.TEST_USER_EMAIL || 'fallback'
     },
 
     projects: [
+        // ── Smoke project: public routes only, no auth, fast ──────────────────
+        {
+            name: 'smoke',
+            testMatch: ['tests/e2e/public-routes.spec.ts'],
+            use: { ...devices['Desktop Chrome'] },
+        },
+
+        // ── Full suite: Chromium (primary CI browser) ──────────────────────────
         {
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
         },
-        {
-            name: 'firefox',
-            use: { ...devices['Desktop Firefox'] },
-        },
+
+        // ── Safari: run full suite cross-browser ───────────────────────────────
         {
             name: 'webkit',
             use: { ...devices['Desktop Safari'] },
         },
     ],
 
-    // Run dev server before tests
     webServer: {
         command: 'npm run dev',
-        url: 'http://localhost:3000',
+        url: BASE_URL,
         reuseExistingServer: !process.env.CI,
-        timeout: 120000,
+        timeout: 120_000,
     },
 });

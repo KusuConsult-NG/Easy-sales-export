@@ -27,8 +27,8 @@ test.describe('RBAC Security Enforcement', () => {
     test('non-admin users should NOT access admin dashboard', async ({ page }) => {
         // Authenticate as a regular user
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || 'test@example.com');
-        await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || 'password123');
+        await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
 
         // Attempt to access admin health page
@@ -43,8 +43,8 @@ test.describe('RBAC Security Enforcement', () => {
     test('admin users SHOULD access admin dashboard', async ({ page }) => {
         // Authenticate as admin
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || 'admin@easysalesexport.com');
-        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'password123');
+        await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
 
         // Access admin health page

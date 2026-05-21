@@ -12,8 +12,8 @@ test.describe('Financial Workflows', () => {
     test.beforeEach(async ({ page }) => {
         // Authenticate with a test account that has an approved application or is at the payment step
         await page.goto('/auth/login');
-        await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || 'test@example.com');
-        await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || 'password123');
+        await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test');
+        await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
     });
 
