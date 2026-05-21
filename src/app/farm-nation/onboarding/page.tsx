@@ -59,7 +59,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
 
 export default function FarmNationOnboardingPage() {
     const router = useRouter();
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const { showToast } = useToast();
     const [currentStepId, setCurrentStepId] = useState("role");
     const [steps, setSteps] = useState<OnboardingStep[]>(ONBOARDING_STEPS);
@@ -71,6 +71,11 @@ export default function FarmNationOnboardingPage() {
 
     // Check existing application status on mount
     useEffect(() => {
+        // SESSION CRASH FIX: do not run until NextAuth has finished loading.
+        // Without this guard, checkFarmNationStatusAction() fires before requireSession()
+        // can resolve the session cookie, causing a silent auth failure.
+        if (status === "loading") return;
+
         const checkStatus = async () => {
             try {
                 const result = await checkFarmNationStatusAction();
@@ -130,7 +135,8 @@ export default function FarmNationOnboardingPage() {
             }
         };
         checkStatus();
-    }, [router, session?.user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]); // re-run once session transitions from "loading" → "authenticated"
 
     if (isLoading) {
         return (

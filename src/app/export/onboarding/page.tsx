@@ -59,7 +59,7 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
 
 export default function ExportOnboardingPage() {
     const router = useRouter();
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const { showToast } = useToast();
     const { uploadFile, uploadState } = useStorage();
     const [isUploadingClient, setIsUploadingClient] = useState(false);
@@ -75,6 +75,12 @@ export default function ExportOnboardingPage() {
 
     // Check existing application status on mount
     useEffect(() => {
+        // SESSION CRASH FIX: do not run until NextAuth has finished loading.
+        // Without this guard, checkExportStatusAction() fires before requireSession()
+        // can resolve the session cookie, causing a silent auth failure and
+        // setIsLoading(false) being called with no meaningful status check.
+        if (status === "loading") return;
+
         const checkStatus = async () => {
             try {
                 // Read ?edit=true parameter
@@ -135,7 +141,8 @@ export default function ExportOnboardingPage() {
         };
 
         checkStatus();
-    }, [router, session?.user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]); // re-run once session transitions from "loading" → "authenticated"
 
     if (isLoading) {
         return (
@@ -272,7 +279,10 @@ export default function ExportOnboardingPage() {
                 });
                 if (result.success) {
                     showToast("Application resubmitted for review!", "success");
-                    router.push("/export/onboarding/pending");
+                    // STUCK BUTTON FIX: reset before navigating so button is never
+                    // permanently disabled if navigation is slow or fails.
+                    setIsSubmitting(false);
+                    router.replace("/export/onboarding/pending");
                 } else {
                     showToast(`Failed to resubmit: ${result.error}`, "error");
                     setIsSubmitting(false);
@@ -340,7 +350,10 @@ export default function ExportOnboardingPage() {
                 const userId = session?.user?.id;
                 if (userId) { try { localStorage.removeItem(`export_draft_${userId}`); } catch { /* non-blocking */ } }
                 showToast("Onboarding submitted successfully!", "success");
-                router.push("/export/onboarding/pending");
+                // STUCK BUTTON FIX: reset before navigating so button is never
+                // permanently disabled if navigation is slow or fails.
+                setIsSubmitting(false);
+                router.replace("/export/onboarding/pending");
             } else {
                 logger.error("Onboarding submission failed:", result.error);
                 showToast(`Failed to submit: ${result.error}`, "error");

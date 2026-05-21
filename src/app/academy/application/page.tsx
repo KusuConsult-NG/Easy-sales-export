@@ -61,7 +61,7 @@ export default function AcademyApplicationPage() {
     const [revisionNote, setRevisionNote] = useState<string | null>(null);
     const [isRevisionMode, setIsRevisionMode] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
-    const { data: session } = useSession();
+    const { data: session, status } = useSession();
     const { showToast } = useToast();
 
     const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({
@@ -200,12 +200,22 @@ export default function AcademyApplicationPage() {
             }
         };
 
-        if (session) {
-            checkStatus();
-        } else {
+        // SESSION CRASH FIX: do not run until NextAuth has finished loading.
+        // The old guard `if (session)` was wrong: during the loading phase,
+        // session is null, which hit the else branch and called setIsLoading(false)
+        // immediately — causing the form to flash before auth resolved.
+        if (status === "loading") return;
+        // If not authenticated, stop the loading spinner and show the form
+        // (middleware will handle the redirect to /auth/login if needed).
+        if (!session) {
             setIsLoading(false);
+            return;
         }
-    }, [router, session]);
+
+        checkStatus();
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]); // re-run once session transitions from "loading" → "authenticated"
 
 
 
