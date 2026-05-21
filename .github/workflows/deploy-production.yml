@@ -1,0 +1,102 @@
+name: Deploy — Production (Manual Gate)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version tag (e.g. v1.3.2)'
+        required: true
+        type: string
+      certification_word:
+        description: 'Type CERTIFIED to confirm release checklist is complete'
+        required: true
+        type: string
+      staging_validated:
+        description: 'Confirm staging was validated (type YES)'
+        required: true
+        type: string
+      paystack_reconciled:
+        description: 'Confirm Paystack reconciliation passed (type YES)'
+        required: true
+        type: string
+
+jobs:
+  # Gate: all confirmations must be correct
+  gate:
+    name: Release Gate — Validate Certification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify certification inputs
+        run: |
+          if [ "${{ github.event.inputs.certification_word }}" != "CERTIFIED" ]; then
+            echo "❌ GATE FAILED: certification_word must be exactly 'CERTIFIED'"
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.staging_validated }}" != "YES" ]; then
+            echo "❌ GATE FAILED: staging_validated must be 'YES'"
+            exit 1
+          fi
+          if [ "${{ github.event.inputs.paystack_reconciled }}" != "YES" ]; then
+            echo "❌ GATE FAILED: paystack_reconciled must be 'YES'"
+            exit 1
+          fi
+          echo "✅ All certification gates passed"
+
+  # Final validation run before production deploy
+  final-validate:
+    name: Final Validation
+    needs: gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run lint
+      - run: npm test -- --passWithNoTests --ci
+
+  # Tag the release in git
+  tag-release:
+    name: Tag Release
+    needs: final-validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push git tag
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "${{ github.event.inputs.release_version }}" \
+            -m "Release ${{ github.event.inputs.release_version }} — certified production deployment"
+          git push origin "${{ github.event.inputs.release_version }}"
+
+  # Trigger Railway production deployment
+  deploy-production:
+    name: Deploy to Production
+    needs: tag-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Railway Production Deployment
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+            "https://backboard.railway.app/graphql/v2" \
+            --data '{"query":"mutation { deploymentTrigger(input: { serviceId: \"${{ secrets.RAILWAY_PRODUCTION_SERVICE_ID }}\" }) { id } }"}'
+
+      - name: Log deployment event
+        run: |
+          echo "=== PRODUCTION DEPLOYMENT ==="
+          echo "Version: ${{ github.event.inputs.release_version }}"
+          echo "Deployed by: ${{ github.actor }}"
+          echo "Timestamp: $(date -u)"
+          echo "============================="

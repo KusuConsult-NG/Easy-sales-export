@@ -1,0 +1,102 @@
+name: CI — Validate & Deploy
+
+on:
+  push:
+    branches: [main, develop, 'feature/**', 'fix/**', 'hotfix/**']
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1: Static validation (runs on every push/PR)
+  # ─────────────────────────────────────────────────────────────
+  validate:
+    name: Lint + Typecheck + Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript — type check
+        run: npx tsc --noEmit
+
+      - name: ESLint — lint check
+        run: npm run lint
+
+      - name: Jest — unit tests
+        run: npm test -- --passWithNoTests --ci
+        env:
+          CI: true
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2: Auto-deploy to STAGING (develop branch only)
+  # ─────────────────────────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - name: Trigger Railway Staging Deployment
+        run: |
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${{ secrets.RAILWAY_API_TOKEN }}" \
+            "https://backboard.railway.app/graphql/v2" \
+            --data '{"query":"mutation { deploymentTrigger(input: { serviceId: \"${{ secrets.RAILWAY_STAGING_SERVICE_ID }}\" }) { id } }"}'
+
+      - name: Comment on PR with staging URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Staging deployment triggered. Validate at: https://staging.easysalesexport.com'
+            })
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3: Release summary comment on PRs to main
+  # ─────────────────────────────────────────────────────────────
+  pr-checklist:
+    name: Release Checklist Reminder
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+
+    steps:
+      - name: Post certification reminder
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚦 Production Deployment Checklist
+
+              Before merging to \`main\`, confirm:
+
+              - [ ] All CI checks pass (lint, typecheck, unit tests)
+              - [ ] Changes validated in **staging environment**
+              - [ ] Relevant e2e tests pass against staging
+              - [ ] Paystack reconciliation script shows 0 discrepancies
+              - [ ] Firebase data integrity audit shows 0 stuck users
+              - [ ] CHANGELOG.md updated with this release entry
+              - [ ] \`/docs/releases/\` certification document created and signed
+
+              **Do not merge until all boxes are checked.**
+
+              _Governance directive enforced per ENGINEERING_GOVERNANCE.md_`
+            })
