@@ -35,7 +35,8 @@ describe('Cooperative Tier System', () => {
 
     describe('isEligibleForLoan', () => {
         it('should reject if contribution is below minimum', () => {
-            const result = isEligibleForLoan(5000, 10000, 0);
+            // minContribution is 5000 per COOPERATIVE_TIERS.Member
+            const result = isEligibleForLoan(3000, 10000, 0);
             expect(result.eligible).toBe(false);
             expect(result.reason).toContain('Minimum');
         });
@@ -54,12 +55,14 @@ describe('Cooperative Tier System', () => {
         });
 
         it('should approve valid Member tier loan', () => {
-            const result = isEligibleForLoan(15000, 25000, 0);
+            // 5000 contribution * 3x multiplier = max 15000. Request 12000.
+            const result = isEligibleForLoan(5000, 12000, 0);
             expect(result.eligible).toBe(true);
         });
 
         it('should approve loan at exact tier limit', () => {
-            const result = isEligibleForLoan(20000, 60000, 0); // Exactly 3x
+            // 10000 contribution * 3x = max 30000. Request exactly 30000.
+            const result = isEligibleForLoan(10000, 30000, 0);
             expect(result.eligible).toBe(true);
         });
     });
@@ -121,7 +124,8 @@ describe('Cooperative Tier System', () => {
     describe('COOPERATIVE_TIERS constant', () => {
         it('should have correct Member tier configuration', () => {
             expect(COOPERATIVE_TIERS.Member.name).toBe('Member');
-            expect(COOPERATIVE_TIERS.Member.minContribution).toBe(10000);
+            // Source of truth: src/lib/cooperative-tiers.ts — minContribution is 5000
+            expect(COOPERATIVE_TIERS.Member.minContribution).toBe(5000);
             expect(COOPERATIVE_TIERS.Member.maxLoanMultiplier).toBe(3);
             expect(COOPERATIVE_TIERS.Member.color).toBe('emerald');
         });
