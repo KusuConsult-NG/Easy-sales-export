@@ -141,7 +141,7 @@ export interface Product {
     productionDate?: FieldValue | Timestamp | Date;
 
     // Status
-    status: "draft" | "active" | "suspended" | "out_of_stock" | "deleted";
+    status: "draft" | "active" | "suspended" | "out_of_stock" | "deleted" | "pending" | "rejected";
     bulkAvailable: boolean;
     exportReady: boolean;
 

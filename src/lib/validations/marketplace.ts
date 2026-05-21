@@ -61,7 +61,7 @@ export const ProductSchema = z.object({
     }).default({ state: "Lagos", lga: "Unknown" }),
     deliveryMethod: z.enum(["pickup", "delivery", "both"]).default("delivery"),
     estimatedDeliveryDays: z.number().optional(),
-    status: z.enum(["draft", "active", "suspended", "out_of_stock", "deleted"]).default("draft"),
+    status: z.enum(["draft", "active", "suspended", "out_of_stock", "deleted", "pending", "rejected"]).default("draft"),
     bulkAvailable: z.boolean().default(false),
     exportReady: z.boolean().default(false),
     views: z.number().default(0),

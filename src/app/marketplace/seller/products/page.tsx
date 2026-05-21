@@ -102,7 +102,9 @@ export default function SellerProductsPage() {
             active: { bg: "bg-green-100", text: "text-green-700", label: "Active" },
             draft: { bg: "bg-slate-100", text: "text-slate-600", label: "Draft" },
             out_of_stock: { bg: "bg-red-100", text: "text-red-700", label: "Out of Stock" },
-            suspended: { bg: "bg-red-100", text: "text-red-700", label: "Suspended" }
+            suspended: { bg: "bg-red-100", text: "text-red-700", label: "Suspended" },
+            pending: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Pending Approval" },
+            rejected: { bg: "bg-red-100", text: "text-red-700", label: "Rejected" }
         };
         // Helper logic for low stock which isn't a direct status but a derived state
         if (status === "low_stock") {
@@ -155,7 +157,7 @@ export default function SellerProductsPage() {
 
                         {/* Status Filter */}
                         <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-                            {["all", "active", "draft", "out_of_stock", "low_stock", "suspended"].map((status) => (
+                            {["all", "active", "pending", "rejected", "draft", "out_of_stock", "low_stock", "suspended"].map((status) => (
                                 <button
                                     key={status}
                                     onClick={() => setFilterStatus(status)}

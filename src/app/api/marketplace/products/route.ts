@@ -30,10 +30,10 @@ export async function GET(request: NextRequest) {
         const rawLimit = parseInt(searchParams.get("limit") || "20");
         const limit = Math.min(Math.max(rawLimit, 1), 50);
 
-        // Base query — always filter approved + in-stock, ordered by createdAt desc
+        // Base query — always filter active + in-stock, ordered by createdAt desc
         let query: FirebaseFirestore.Query = db
-            .collection(COLLECTIONS.MARKETPLACE_PRODUCTS)
-            .where("status", "==", "approved")
+            .collection(COLLECTIONS.PRODUCTS)
+            .where("status", "==", "active")
             .where("inStock", "==", true)
             .orderBy("createdAt", "desc")
             .limit(limit + 1); // +1 to detect hasMore
@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
         // Apply category filter at DB level (replaces the compound query)
         if (category && category !== "all") {
             query = db
-                .collection(COLLECTIONS.MARKETPLACE_PRODUCTS)
-                .where("status", "==", "approved")
+                .collection(COLLECTIONS.PRODUCTS)
+                .where("status", "==", "active")
                 .where("inStock", "==", true)
                 .where("category", "==", category)
                 .orderBy("createdAt", "desc")
@@ -64,19 +64,23 @@ export async function GET(request: NextRequest) {
 
         let products = docs.map(doc => {
             const data = doc.data();
+            const retailPrice = data.price || data.pricingTiers?.find((t: any) => t.type === "retail")?.price || data.pricingTiers?.[0]?.price || 0;
+            const quantity = typeof data.quantity === "number" ? data.quantity : (data.availableQuantity || 0);
+            const locationString = data.sellerLocation || (data.location ? `${data.location.lga || ""}, ${data.location.state || ""}`.trim().replace(/^,\s*/, "") : "") || "Nigeria";
+            
             return {
                 id: doc.id,
-                name: data.name || "",
+                name: data.name || data.title || "",
                 description: data.description || "",
                 category: data.category || "other",
-                price: data.price || 0,
+                price: retailPrice,
                 unit: data.unit || "kg",
-                inStock: data.inStock !== false,
-                quantity: data.quantity || 0,
+                inStock: data.inStock !== false && quantity > 0,
+                quantity: quantity,
                 images: data.images || [],
                 sellerId: data.sellerId || "",
                 sellerName: data.sellerName || data.storeName || "Verified Seller",
-                sellerLocation: data.sellerLocation || data.location || "",
+                sellerLocation: locationString,
                 rating: data.rating || 0,
                 reviews: data.reviewCount || 0,
                 verified: data.verified !== false,

@@ -283,11 +283,19 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
 
         // 🔒 ATOMIC TRANSACTION: Update user and record ledger entries
         await db.runTransaction(async (transaction) => {
+            // ── READS FIRST ───────────────────────────────────────────
             const tProcessedDoc = await transaction.get(processedRef);
             if (tProcessedDoc.exists) {
                 throw new Error("Payment already processed");
             }
 
+            const appQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where("userId", "==", session.user.id)
+                .orderBy("submittedAt", "desc")
+                .limit(1);
+            const appSnap = await transaction.get(appQuery);
+
+            // ── WRITES SECOND ──────────────────────────────────────────
             // Update user registration status
             transaction.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), {
                 "serviceRegistrations.academy.paymentStatus": "completed",
@@ -305,8 +313,20 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
                 amount: paidAmount,
                 type: "academy_registration",
                 plan: metadata.plan || "foundation",
+                status: "completed",
                 reference,
             });
+
+            // Update matching application if it exists
+            if (!appSnap.empty) {
+                const appRef = appSnap.docs[0].ref;
+                transaction.update(appRef, {
+                    paymentStatus: "completed",
+                    paymentAmount: paidAmount,
+                    plan: metadata.plan || "foundation",
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                });
+            }
 
             // Global Ledger Record
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);

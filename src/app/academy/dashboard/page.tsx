@@ -64,7 +64,23 @@ export default function AcademyDashboardPage() {
                 }
                 setIsUnpaid(false);
                 fetchDashboardData();
-            } else if (membershipStatus === "not_found" || membershipStatus === "pending") {
+            } else if (membershipStatus === "pending") {
+                // If application is pending, check if they have paid
+                checkAcademyPaymentStatusAction().then((payStatus) => {
+                    if (payStatus.success && payStatus.data === "paid") {
+                        // User has paid and application is pending approval, send them to the pending screen!
+                        router.replace("/academy/application/pending");
+                    } else {
+                        // User is pending but has not paid yet (unpaid)
+                        setIsUnpaid(true);
+                        setIsLoading(false);
+                    }
+                }).catch((err) => {
+                    logger.error("Failed to check payment status on dashboard", err);
+                    setIsUnpaid(true);
+                    setIsLoading(false);
+                });
+            } else if (membershipStatus === "not_found") {
                 setIsUnpaid(true);
                 setIsLoading(false);
             }

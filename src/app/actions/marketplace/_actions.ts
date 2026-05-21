@@ -726,7 +726,7 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             estimatedDeliveryDays: validatedData.estimatedDeliveryDays,
             bulkAvailable: validatedData.bulkAvailable || false,
             exportReady: validatedData.exportReady || false,
-            status: "active",
+            status: "pending",
             sellerName,
             sellerVerified,
             sellerCategory,

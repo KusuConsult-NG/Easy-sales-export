@@ -19,7 +19,7 @@ export default function SellerDashboardPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
     const [verification, setVerification] = useState<any>(null);
-    const [filterStatus, setFilterStatus] = useState<"all" | "active" | "suspended" | "sold_out">("all");
+    const [filterStatus, setFilterStatus] = useState<"all" | "active" | "pending" | "suspended" | "sold_out">("all");
     const { showToast } = useToast();
 
     const loadSellerData = async () => {
@@ -78,6 +78,7 @@ export default function SellerDashboardPage() {
     const stats = {
         totalProducts: products.length,
         activeProducts: products.filter(p => p.status === "active").length,
+        pendingProducts: products.filter(p => p.status === "pending").length,
         totalOrders: products.reduce((sum, p) => sum + (p.orders || 0), 0),
         totalViews: products.reduce((sum, p) => sum + (p.views || 0), 0),
         averageRating: products.length > 0
@@ -197,13 +198,14 @@ export default function SellerDashboardPage() {
                     <div className="flex items-center gap-4 overflow-x-auto">
                         {[
                             { key: "all", label: "All Products", count: products.length },
+                            { key: "pending", label: "Pending", count: stats.pendingProducts },
                             { key: "active", label: "Active", count: stats.activeProducts },
                             { key: "suspended", label: "Suspended", count: products.filter(p => p.status === "suspended").length },
                             { key: "sold_out", label: "Sold Out", count: products.filter(p => p.availableQuantity === 0).length }
                         ].map((tab) => (
                             <button
                                 key={tab.key}
-                                onClick={() => setFilterStatus(tab.key as "all" | "active" | "suspended" | "sold_out")}
+                                onClick={() => setFilterStatus(tab.key as "all" | "active" | "pending" | "suspended" | "sold_out")}
                                 className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${filterStatus === tab.key
                                     ? "bg-blue-600 text-white"
                                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -261,9 +263,13 @@ export default function SellerDashboardPage() {
                                     <div className="absolute top-3 right-3">
                                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${product.status === "active" && product.availableQuantity > 0
                                             ? "bg-green-100 text-green-700"
-                                            : product.availableQuantity === 0
-                                                ? "bg-red-100 text-red-700"
-                                                : "bg-slate-100 text-slate-900"
+                                            : product.status === "pending"
+                                                ? "bg-yellow-100 text-yellow-700"
+                                                : product.status === "rejected"
+                                                    ? "bg-red-100 text-red-700"
+                                                    : product.availableQuantity === 0
+                                                        ? "bg-red-100 text-red-700"
+                                                        : "bg-slate-100 text-slate-900"
                                             }`}>
                                             {product.availableQuantity === 0 ? "Sold Out" : product.status}
                                         </span>

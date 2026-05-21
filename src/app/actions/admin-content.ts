@@ -73,27 +73,28 @@ export async function getPendingContentAction(): Promise<
         const pendingItems: PendingContentItem[] = [];
 
         // 1. Marketplace Products
-        const productsQuery = db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS)
+        const productsQuery = db.collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "pending")
             .limit(500);
         const productsSnap = await productsQuery.get();
         productsSnap.forEach((doc) => {
             const data = doc.data();
+            const retailPrice = data.pricingTiers?.find((t: any) => t.type === "retail")?.price || data.pricingTiers?.[0]?.price || data.price || 0;
             pendingItems.push({
                 id: doc.id,
                 type: "products",
-                title: data.name || "Untitled Product",
-                submittedBy: data.sellerId || "Unknown Seller",
+                title: data.title || data.name || "Untitled Product",
+                submittedBy: data.sellerName || data.sellerId || "Unknown Seller",
                 submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
                 status: "pending",
-                description: `Price: ${data.price} - Category: ${data.category}`,
+                description: `Price: ₦${retailPrice} - Category: ${data.category}`,
                 metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
         // 2. Land Listings
         const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("verificationStatus", "==", "pending")
+            .where("status", "==", "pending_verification")
             .limit(500);
         const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
@@ -102,7 +103,7 @@ export async function getPendingContentAction(): Promise<
                 id: doc.id,
                 type: "land",
                 title: data.title || "Untitled Land",
-                submittedBy: data.ownerName || "Unknown Owner",
+                submittedBy: data.ownerName || data.ownerEmail || data.ownerId || "Unknown Owner",
                 submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
                 status: "pending",
                 description: `${data.size} ${data.unit} at ${data.state}, ${data.lga}`,
@@ -143,14 +144,15 @@ export async function approveContentAction(
 
         switch (type) {
             case "products":
-                await db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS).doc(id).update({
-                    status: "approved",
+                await db.collection(COLLECTIONS.PRODUCTS).doc(id).update({
+                    status: "active",
                     approvedAt: timestamp,
                     approvedBy: adminId,
                 });
                 break;
             case "land":
                 await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
+                    status: "verified",
                     verificationStatus: "verified",
                     verifiedAt: timestamp,
                     verifiedBy: adminId,
@@ -197,7 +199,7 @@ export async function rejectContentAction(
 
         switch (type) {
             case "products":
-                await db.collection(COLLECTIONS.MARKETPLACE_PRODUCTS).doc(id).update({
+                await db.collection(COLLECTIONS.PRODUCTS).doc(id).update({
                     status: "rejected",
                     rejectionReason: reason,
                     rejectedAt: timestamp,
@@ -206,8 +208,10 @@ export async function rejectContentAction(
                 break;
             case "land":
                 await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
+                    status: "rejected",
                     verificationStatus: "rejected",
-                    verificationNotes: reason, // land uses 'verificationNotes' usually
+                    verificationNotes: reason,
+                    rejectionReason: reason,
                     rejectedAt: timestamp,
                     rejectedBy: adminId,
                 });

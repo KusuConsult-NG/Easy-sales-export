@@ -8,7 +8,7 @@ import {
     GraduationCap, BookOpen, Target, CheckCircle,
     ArrowRight, ArrowLeft, Rocket, Loader2, Clock, XCircle, Home, CreditCard, Shield
 } from "lucide-react";
-import { checkAcademyStatusAction, submitAcademyApplicationAction, AcademyApplicationData } from "@/app/actions/academy";
+import { checkAcademyStatusAction, submitAcademyApplicationAction, AcademyApplicationData, checkAcademyPaymentStatusAction } from "@/app/actions/academy";
 import { getUserProfileAction } from "@/app/actions/profile";
 import { useToast } from "@/contexts/ToastContext";
 import { logger } from "@/lib/logger";
@@ -75,9 +75,16 @@ export default function AcademyOnboardingPage() {
                 const status = await checkAcademyStatusAction();
                 setApplicationStatus(status.data || "none");
 
-                if (status.data === "approved") {
+                if (status.data === "approved" || status.data === "active") {
                     router.replace("/academy/dashboard");
-                } else if (status.data === "pending" || status.data === "rejected") {
+                } else if (status.data === "pending" || status.data === "under_review") {
+                    const payStatus = await checkAcademyPaymentStatusAction();
+                    if (payStatus.success && payStatus.data === "paid") {
+                        router.replace("/academy/application/pending");
+                    } else {
+                        router.replace("/academy/application");
+                    }
+                } else if (status.data === "rejected") {
                     setIsLoading(false);
                 } else {
                     setIsLoading(false);
