@@ -41,37 +41,52 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!data.surname.trim()) newErrors.surname = "Surname is required";
-        else if (data.surname.trim().length < 2) newErrors.surname = "Surname must be at least 2 characters";
-        if (!data.firstName.trim()) newErrors.firstName = "First name is required";
-        else if (data.firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
+        const surname = data?.surname || "";
+        const firstName = data?.firstName || "";
+        const phone = data?.phone || "";
+        const dateOfBirth = data?.dateOfBirth || "";
+        const age = data?.age || 0;
+        const residentialAddress = data?.residentialAddress || "";
+        const stateOfOrigin = data?.stateOfOrigin || "";
+        const lgaOfOrigin = data?.lgaOfOrigin || "";
+        const stateOfResidence = data?.stateOfResidence || "";
+        const lgaOfResidence = data?.lgaOfResidence || "";
+        const maritalStatus = data?.maritalStatus || "";
+        const nextOfKinName = data?.nextOfKinName || "";
+        const nextOfKinPhone = data?.nextOfKinPhone || "";
+        const nextOfKinRelationship = data?.nextOfKinRelationship || "";
+
+        if (!surname.trim()) newErrors.surname = "Surname is required";
+        else if (surname.trim().length < 2) newErrors.surname = "Surname must be at least 2 characters";
+        if (!firstName.trim()) newErrors.firstName = "First name is required";
+        else if (firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
 
         // Phone validation: Strict 11 digits
-        if (!data.phone.trim()) {
+        if (!phone.trim()) {
             newErrors.phone = "Phone number is required";
-        } else if (data.phone.length !== 11) {
+        } else if (phone.length !== 11) {
             newErrors.phone = "Phone number must be exactly 11 digits";
-        } else if (!/^0[789][01]\d{8}$/.test(data.phone)) {
+        } else if (!/^0[789][01]\d{8}$/.test(phone)) {
             newErrors.phone = "Please enter a valid Nigerian phone number";
         }
 
-        if (!data.dateOfBirth) {
+        if (!dateOfBirth) {
             newErrors.dateOfBirth = "Date of birth is required";
-        } else if (data.age < 18 || data.age > 100) {
+        } else if (age < 18 || age > 100) {
             newErrors.dateOfBirth = "You must be between 18 and 100 years old";
         }
 
-        if (!data.residentialAddress.trim()) newErrors.residentialAddress = "Residential address is required";
-        if (!data.stateOfOrigin) newErrors.stateOfOrigin = "State of origin is required";
-        if (!data.lgaOfOrigin.trim()) newErrors.lgaOfOrigin = "LGA of origin is required";
-        if (!data.stateOfResidence) newErrors.stateOfResidence = "State of residence is required";
-        if (!data.lgaOfResidence.trim()) newErrors.lgaOfResidence = "LGA of residence is required";
-        if (!data.maritalStatus) newErrors.maritalStatus = "Marital status is required";
-        if (!data.nextOfKinName.trim()) newErrors.nextOfKinName = "Next of kin name is required";
-        else if (data.nextOfKinName.trim().length < 2) newErrors.nextOfKinName = "Next of kin name must be at least 2 characters";
-        if (!data.nextOfKinPhone.trim()) newErrors.nextOfKinPhone = "Next of kin phone is required";
-        if (!data.nextOfKinRelationship.trim()) newErrors.nextOfKinRelationship = "Relationship is required";
-        else if (data.nextOfKinRelationship.trim().length < 2) newErrors.nextOfKinRelationship = "Relationship must be at least 2 characters";
+        if (!residentialAddress.trim()) newErrors.residentialAddress = "Residential address is required";
+        if (!stateOfOrigin) newErrors.stateOfOrigin = "State of origin is required";
+        if (!lgaOfOrigin.trim()) newErrors.lgaOfOrigin = "LGA of origin is required";
+        if (!stateOfResidence) newErrors.stateOfResidence = "State of residence is required";
+        if (!lgaOfResidence.trim()) newErrors.lgaOfResidence = "LGA of residence is required";
+        if (!maritalStatus) newErrors.maritalStatus = "Marital status is required";
+        if (!nextOfKinName.trim()) newErrors.nextOfKinName = "Next of kin name is required";
+        else if (nextOfKinName.trim().length < 2) newErrors.nextOfKinName = "Next of kin name must be at least 2 characters";
+        if (!nextOfKinPhone.trim()) newErrors.nextOfKinPhone = "Next of kin phone is required";
+        if (!nextOfKinRelationship.trim()) newErrors.nextOfKinRelationship = "Relationship is required";
+        else if (nextOfKinRelationship.trim().length < 2) newErrors.nextOfKinRelationship = "Relationship must be at least 2 characters";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -111,7 +126,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="text"
-                            value={data.surname}
+                            value={data?.surname || ""}
                             onChange={(e) => updateData({ surname: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Surname"
@@ -130,7 +145,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="text"
-                            value={data.firstName}
+                            value={data?.firstName || ""}
                             onChange={(e) => updateData({ firstName: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="First Name"
@@ -149,7 +164,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="text"
-                            value={data.otherNames}
+                            value={data?.otherNames || ""}
                             onChange={(e) => updateData({ otherNames: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Middle name (optional)"
@@ -165,7 +180,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="date"
-                            value={data.dateOfBirth}
+                            value={data?.dateOfBirth || ""}
                             onChange={(e) => handleDateChange(e.target.value)}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         />
@@ -183,7 +198,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="number"
-                            value={data.age || ""}
+                            value={data?.age || ""}
                             readOnly
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm bg-slate-100 cursor-not-allowed"
                             placeholder="Auto-calculated"
@@ -199,7 +214,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="tel"
-                            value={data.phone}
+                            value={data?.phone || ""}
                             onChange={(e) => {
                                 const val = e.target.value.replace(/\D/g, "").slice(0, 11);
                                 updateData({ phone: val });
@@ -222,7 +237,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         </label>
                         <input
                             type="tel"
-                            value={data.alternativePhone}
+                            value={data?.alternativePhone || ""}
                             onChange={(e) => updateData({ alternativePhone: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="08098765432 (optional)"
@@ -237,7 +252,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                     </label>
                     <input
                         type="email"
-                        value={data.email}
+                        value={data?.email || ""}
                         onChange={(e) => updateData({ email: e.target.value })}
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="youremail@example.com (optional)"
@@ -250,7 +265,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         Residential Address *
                     </label>
                     <textarea
-                        value={data.residentialAddress}
+                        value={data?.residentialAddress || ""}
                         onChange={(e) => updateData({ residentialAddress: e.target.value })}
                         rows={3}
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600 resize-none"
@@ -271,7 +286,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             State of Origin *
                         </label>
                         <select
-                            value={data.stateOfOrigin}
+                            value={data?.stateOfOrigin || ""}
                             onChange={(e) => updateData({ stateOfOrigin: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         >
@@ -295,13 +310,13 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             Local Government Area (LGA) *
                         </label>
                         <select
-                            value={data.lgaOfOrigin}
+                            value={data?.lgaOfOrigin || ""}
                             onChange={(e) => updateData({ lgaOfOrigin: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data.stateOfOrigin}
+                            disabled={!data?.stateOfOrigin}
                         >
                             <option value="">Select LGA</option>
-                            {(data.stateOfOrigin && NIGERIAN_LOCATIONS[data.stateOfOrigin]?.map((lga) => (
+                            {(data?.stateOfOrigin && NIGERIAN_LOCATIONS[data.stateOfOrigin]?.map((lga) => (
                                 <option key={lga} value={lga}>{lga}</option>
                             ))) || []}
                         </select>
@@ -321,7 +336,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             State of Residence *
                         </label>
                         <select
-                            value={data.stateOfResidence}
+                            value={data?.stateOfResidence || ""}
                             onChange={(e) => updateData({ stateOfResidence: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         >
@@ -345,13 +360,13 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             Local Government of Residence *
                         </label>
                         <select
-                            value={data.lgaOfResidence}
+                            value={data?.lgaOfResidence || ""}
                             onChange={(e) => updateData({ lgaOfResidence: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data.stateOfResidence}
+                            disabled={!data?.stateOfResidence}
                         >
                             <option value="">Select LGA</option>
-                            {(data.stateOfResidence && NIGERIAN_LOCATIONS[data.stateOfResidence]?.map((lga) => (
+                            {(data?.stateOfResidence && NIGERIAN_LOCATIONS[data.stateOfResidence]?.map((lga) => (
                                 <option key={lga} value={lga}>{lga}</option>
                             ))) || []}
                         </select>
@@ -378,7 +393,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                         ].map((status) => (
                             <label
                                 key={status.value}
-                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.maritalStatus === status.value
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data?.maritalStatus === status.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -387,7 +402,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                     type="radio"
                                     name="maritalStatus"
                                     value={status.value}
-                                    checked={data.maritalStatus === status.value}
+                                    checked={data?.maritalStatus === status.value}
                                     onChange={(e) => updateData({ maritalStatus: e.target.value as "single" | "married" | "widowed" | "divorced" })}
                                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />
@@ -415,7 +430,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                             </label>
                             <input
                                 type="text"
-                                value={data.nextOfKinName}
+                                value={data?.nextOfKinName || ""}
                                 onChange={(e) => updateData({ nextOfKinName: e.target.value })}
                                 className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                 placeholder="Full name of next of kin"
@@ -435,7 +450,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                 </label>
                                 <input
                                     type="tel"
-                                    value={data.nextOfKinPhone}
+                                    value={data?.nextOfKinPhone || ""}
                                     onChange={(e) => updateData({ nextOfKinPhone: e.target.value })}
                                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                     placeholder="08012345678"
@@ -454,7 +469,7 @@ export default function PersonalDetailsStep({ data, updateData, onNext }: Props)
                                 </label>
                                 <input
                                     type="text"
-                                    value={data.nextOfKinRelationship}
+                                    value={data?.nextOfKinRelationship || ""}
                                     onChange={(e) => updateData({ nextOfKinRelationship: e.target.value })}
                                     className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                                     placeholder="e.g., Spouse, Parent, Sibling"

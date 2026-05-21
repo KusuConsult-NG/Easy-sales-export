@@ -268,11 +268,11 @@ export default function LessonPage(props: LessonPageProps) {
         );
     }
 
-    const isCompleted = progress?.completedLessons.includes(currentLesson.id) || false;
+    const isCompleted = progress?.completedLessons?.includes(currentLesson.id) || false;
     const nextLesson = getNextLesson();
     const previousLesson = getPreviousLesson();
     const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-    const completedLessons = progress?.completedLessons.length || 0;
+    const completedLessons = progress?.completedLessons?.length || 0;
     const progressPercent = progress?.overallProgress || 0;
 
     return (
@@ -410,12 +410,12 @@ export default function LessonPage(props: LessonPageProps) {
                                     {currentModule.quiz.questions.length} questions • Passing score: {currentModule.quiz.passingScore}%
                                 </p>
                             </div>
-                            {progress?.quizScores[currentModule.id] !== undefined && (
-                                <div className={`px-4 py-2 rounded-lg font-bold ${(progress.quizScores[currentModule.id] || 0) >= currentModule.quiz.passingScore
+                            {progress?.quizScores?.[currentModule.id] !== undefined && (
+                                <div className={`px-4 py-2 rounded-lg font-bold ${(progress?.quizScores?.[currentModule.id] || 0) >= currentModule.quiz.passingScore
                                     ? 'bg-green-100 text-green-700'
                                     : 'bg-red-100 text-red-700'
                                     }`}>
-                                    Score: {progress.quizScores[currentModule.id]}%
+                                    Score: {progress?.quizScores?.[currentModule.id]}%
                                 </div>
                             )}
                         </div>
@@ -425,7 +425,7 @@ export default function LessonPage(props: LessonPageProps) {
                             moduleId={currentModule.id}
                             courseId={courseId}
                             userId={session?.user?.id || ''}
-                            existingScore={progress?.quizScores[currentModule.id]}
+                            existingScore={progress?.quizScores?.[currentModule.id]}
                             onComplete={loadLesson}
                         />
                     </div>

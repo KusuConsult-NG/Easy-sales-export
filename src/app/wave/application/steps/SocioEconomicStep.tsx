@@ -24,16 +24,22 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (!data.highestEducation) {
+        const highestEducation = data?.highestEducation || "";
+        const currentOccupation = data?.currentOccupation || "";
+        const averageMonthlyIncome = data?.averageMonthlyIncome || "";
+        const involvedInAgriculture = !!data?.involvedInAgriculture;
+        const agricultureTypes = data?.agricultureTypes || [];
+
+        if (!highestEducation) {
             newErrors.highestEducation = "Please select your education level";
         }
-        if (!data.currentOccupation.trim()) {
+        if (!currentOccupation.trim()) {
             newErrors.currentOccupation = "Current occupation is required";
         }
-        if (!data.averageMonthlyIncome) {
+        if (!averageMonthlyIncome) {
             newErrors.averageMonthlyIncome = "Please select your income range";
         }
-        if (data.involvedInAgriculture && data.agricultureTypes.length === 0) {
+        if (involvedInAgriculture && agricultureTypes.length === 0) {
             newErrors.agricultureTypes = "Please select at least one agricultural activity";
         }
 
@@ -55,10 +61,10 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                 }
             }, 100);
         }
-    };
+    }
 
     const toggleAgricultureType = (type: "farming" | "processing" | "trading" | "export" | "logistics") => {
-        const current = data.agricultureTypes || [];
+        const current = data?.agricultureTypes || [];
         if (current.includes(type)) {
             updateData({ agricultureTypes: current.filter((t) => t !== type) });
         } else {
@@ -82,7 +88,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                         Highest Level of Education *
                     </label>
                     <select
-                        value={data.highestEducation}
+                        value={data?.highestEducation || ""}
                         onChange={(e) => updateData({ highestEducation: e.target.value as "none" | "primary" | "secondary" | "tertiary" | "vocational" })}
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
@@ -108,7 +114,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                     </label>
                     <input
                         type="text"
-                        value={data.currentOccupation}
+                        value={data?.currentOccupation || ""}
                         onChange={(e) => updateData({ currentOccupation: e.target.value })}
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                         placeholder="e.g., Farmer, Trader, Processor"
@@ -127,7 +133,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                         Average Monthly Income *
                     </label>
                     <select
-                        value={data.averageMonthlyIncome}
+                        value={data?.averageMonthlyIncome || ""}
                         onChange={(e) => updateData({ averageMonthlyIncome: e.target.value as "below_50k" | "50k_100k" | "100k_250k" | "above_250k" })}
                         className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                     >
@@ -157,7 +163,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.involvedInAgriculture === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data?.involvedInAgriculture === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -165,7 +171,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                                 <input
                                     type="radio"
                                     name="involvedInAgriculture"
-                                    checked={data.involvedInAgriculture === option.value}
+                                    checked={data?.involvedInAgriculture === option.value}
                                     onChange={() => updateData({ involvedInAgriculture: option.value })}
                                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />
@@ -176,7 +182,7 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                 </div>
 
                 {/* If YES, specify the type */}
-                {data.involvedInAgriculture && (
+                {data?.involvedInAgriculture && (
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If YES, specify the type (Select all that apply) *
@@ -191,14 +197,14 @@ export default function SocioEconomicStep({ data, updateData, onNext, onBack }: 
                             ].map((type) => (
                                 <label
                                     key={type.value}
-                                    className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.agricultureTypes.includes(type.value)
+                                    className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${(data?.agricultureTypes || []).includes(type.value)
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                         : "border-slate-300 hover:bg-slate-50"
                                         }`}
                                 >
                                     <input
                                         type="checkbox"
-                                        checked={data.agricultureTypes.includes(type.value)}
+                                        checked={(data?.agricultureTypes || []).includes(type.value)}
                                         onChange={() => toggleAgricultureType(type.value)}
                                         className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                                     />

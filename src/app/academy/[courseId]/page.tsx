@@ -146,7 +146,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
     const isEnrolled = progress !== null;
     const totalLessons = course.modules.reduce((sum, mod) => sum + mod.lessons.length, 0);
-    const completedLessons = progress?.completedLessons.length || 0;
+    const completedLessons = progress?.completedLessons?.length || 0;
     const progressPercent = progress?.overallProgress || 0;
 
     return (
@@ -260,8 +260,8 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
                     <div className="space-y-6">
                         {course.modules.map((module, moduleIndex) => {
-                            const moduleCompleted = progress?.completedModules.includes(module.id);
-                            const quizScore = progress?.quizScores[module.id];
+                            const moduleCompleted = progress?.completedModules?.includes(module.id) || false;
+                            const quizScore = progress?.quizScores?.[module.id];
 
                             return (
                                 <div
@@ -296,7 +296,7 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
                                     {/* Lessons List */}
                                     <div className="space-y-2 mb-4">
                                         {module.lessons.map((lesson, lessonIndex) => {
-                                            const lessonCompleted = progress?.completedLessons.includes(lesson.id);
+                                            const lessonCompleted = progress?.completedLessons?.includes(lesson.id) || false;
 
                                             return (
                                                 <button

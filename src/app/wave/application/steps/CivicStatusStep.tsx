@@ -28,12 +28,16 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
     const [ninError, setNinError] = useState("");
 
     async function handleVerifyNin() {
-        if (!data.nin || data.nin.length !== 11) {
+        const nin = data?.nin || "";
+        const firstName = data?.firstName || "";
+        const surname = data?.surname || "";
+
+        if (!nin || nin.length !== 11) {
             setNinError("Please enter a valid 11-digit NIN");
             return;
         }
 
-        if (!data.firstName || !data.surname) {
+        if (!firstName || !surname) {
             setNinError("First name and surname required in Personal Details step to verify.");
             return;
         }
@@ -43,7 +47,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
 
         try {
             const { verifyNINAction } = await import('@/app/actions/kyc');
-            const result = await verifyNINAction({ nin: data.nin, firstName: data.firstName, lastName: data.surname });
+            const result = await verifyNINAction({ nin, firstName, lastName: surname });
 
             if (result.success && result.data?.isMatch) {
                 setNinVerified(true);
@@ -58,13 +62,14 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
         } finally {
             setVerifyingNin(false);
         }
-    };
+    }
 
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
+        const nin = data?.nin || "";
 
         // NIN — required and must be API-verified
-        if (!data.nin || data.nin.trim().length !== 11) {
+        if (!nin || nin.trim().length !== 11) {
             newErrors.nin = "NIN is required — enter your 11-digit National Identification Number";
         } else if (!ninVerified) {
             newErrors.nin = "Please click 'Verify' to validate your NIN before continuing";
@@ -90,7 +95,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 }
             }, 100);
         }
-    };
+    }
 
     return (
         <div>
@@ -114,7 +119,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 <div>
                     <IdInput
                         label="National Identification Number (NIN) 🔒"
-                        value={data.nin}
+                        value={data?.nin || ""}
                         onChange={(v) => {
                             updateData({ nin: v });
                             setNinVerified(false);
@@ -133,7 +138,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             <button
                                 type="button"
                                 onClick={handleVerifyNin}
-                                disabled={ninVerified || verifyingNin || data.nin?.length !== 11}
+                                disabled={ninVerified || verifyingNin || (data?.nin || "").length !== 11}
                                 className="px-5 py-2.5 text-sm bg-emerald-100 text-emerald-800 font-semibold rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
                             >
                                 {verifyingNin ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
@@ -161,7 +166,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                 <div>
                     <IdInput
                         label="Voter's Card Number (PVC)"
-                        value={data.votersCardNumber}
+                        value={data?.votersCardNumber || ""}
                         onChange={(v) => updateData({ votersCardNumber: v })}
                         maxLength={19}
                         showCount
@@ -179,15 +184,15 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
                         <select
-                            value={data.ward}
+                            value={data?.ward || ""}
                             onChange={(e) => updateData({ ward: e.target.value, pollingUnit: "" })}
                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data.lgaOfResidence}
+                            disabled={!data?.lgaOfResidence}
                         >
                             <option value="">Select Ward</option>
-                            {data.lgaOfResidence && getWards(data.lgaOfResidence).map((ward) => (
+                            {(data?.lgaOfResidence && getWards(data.lgaOfResidence).map((ward) => (
                                 <option key={ward} value={ward}>{ward}</option>
-                            )) || []}
+                            ))) || []}
                         </select>
                     </div>
 
@@ -197,15 +202,15 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                             <span className="text-slate-400 font-normal text-xs">(Optional)</span>
                         </label>
                         <select
-                            value={data.pollingUnit}
+                            value={data?.pollingUnit || ""}
                             onChange={(e) => updateData({ pollingUnit: e.target.value })}
                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
-                            disabled={!data.ward}
+                            disabled={!data?.ward}
                         >
                             <option value="">Select Polling Unit</option>
-                            {data.ward && getPollingUnits(data.ward).map((pu) => (
+                            {(data?.ward && getPollingUnits(data.ward).map((pu) => (
                                 <option key={pu} value={pu}>{pu}</option>
-                            )) || []}
+                            ))) || []}
                         </select>
                     </div>
                 </div>
@@ -218,7 +223,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                     </label>
                     <input
                         type="text"
-                        value={data.yearOfVoterRegistration}
+                        value={data?.yearOfVoterRegistration || ""}
                         onChange={(e) => updateData({ yearOfVoterRegistration: e.target.value.replace(/\D/g, "").slice(0, 4) })}
                         maxLength={4}
                         className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
@@ -239,7 +244,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data.votedInLastElection === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-xl cursor-pointer transition-all ${data?.votedInLastElection === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -247,7 +252,7 @@ export default function CivicStatusStep({ data, updateData, onNext, onBack }: Pr
                                 <input
                                     type="radio"
                                     name="votedInLastElection"
-                                    checked={data.votedInLastElection === option.value}
+                                    checked={data?.votedInLastElection === option.value}
                                     onChange={() => updateData({ votedInLastElection: option.value })}
                                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />

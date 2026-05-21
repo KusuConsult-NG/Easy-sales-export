@@ -34,26 +34,32 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
+        const businessName = data?.businessName || "";
+        const phone = data?.phone || "";
+        const location = data?.location || { state: "", lga: "", address: "" };
+        const state = location.state || "";
+        const lga = location.lga || "";
+        const address = location.address || "";
 
-        if (!data.businessName.trim()) {
+        if (!businessName.trim()) {
             newErrors.businessName = "Business/Farm name is required";
         }
 
-        if (!data.phone.trim()) {
+        if (!phone.trim()) {
             newErrors.phone = "Phone number is required";
-        } else if (!/^0\d{10}$/.test(data.phone.replace(/\s/g, ""))) {
+        } else if (!/^0\d{10}$/.test(phone.replace(/\s/g, ""))) {
             newErrors.phone = "Enter a valid 11-digit phone number";
         }
 
-        if (!data.location.state) {
+        if (!state) {
             newErrors.state = "State is required";
         }
 
-        if (!data.location.lga) {
+        if (!lga) {
             newErrors.lga = "LGA is required";
         }
 
-        if (!data.location.address.trim()) {
+        if (!address.trim()) {
             newErrors.address = "Address is required";
         }
 
@@ -66,6 +72,8 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
             onNext();
         }
     };
+
+    const businessType = data?.businessType || "individual";
 
     return (
         <div className="space-y-6">
@@ -87,7 +95,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                     </label>
                     <input
                         type="text"
-                        value={data.businessName}
+                        value={data?.businessName || ""}
                         onChange={(e) => onChange({ businessName: e.target.value })}
                         placeholder="Enter your business or farm name"
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.businessName ? "border-red-500" : "border-slate-300"
@@ -112,7 +120,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                             <button
                                 key={type.value}
                                 onClick={() => onChange({ businessType: type.value as "individual" | "company" | "cooperative" })}
-                                className={`px-4 py-3 border-2 rounded-lg font-semibold transition-all ${data.businessType === type.value
+                                className={`px-4 py-3 border-2 rounded-lg font-semibold transition-all ${businessType === type.value
                                     ? "border-green-500 bg-green-50 text-green-700"
                                     : "border-slate-300 hover:border-green-300"
                                     }`}
@@ -130,7 +138,7 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                     </label>
                     <input
                         type="tel"
-                        value={data.phone}
+                        value={data?.phone || ""}
                         onChange={(e) => onChange({ phone: e.target.value })}
                         placeholder="08012345678"
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.phone ? "border-red-500" : "border-slate-300"
@@ -147,8 +155,8 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         State *
                     </label>
                     <select
-                        value={data.location.state}
-                        onChange={(e) => onChange({ location: { ...data.location, state: e.target.value, lga: "" } })}
+                        value={data?.location?.state || ""}
+                        onChange={(e) => onChange({ location: { ...(data?.location || {}), state: e.target.value, lga: "" } as any })}
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.state ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                     >
@@ -170,14 +178,14 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         Local Government Area *
                     </label>
                     <select
-                        value={data.location.lga}
-                        onChange={(e) => onChange({ location: { ...data.location, lga: e.target.value } })}
-                        disabled={!data.location.state}
+                        value={data?.location?.lga || ""}
+                        onChange={(e) => onChange({ location: { ...(data?.location || {}), lga: e.target.value } as any })}
+                        disabled={!data?.location?.state}
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.lga ? "border-red-500" : "border-slate-300"
                             } focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50`}
                     >
                         <option value="">Select LGA</option>
-                        {data.location.state && NIGERIAN_LOCATIONS[data.location.state]?.map((lga) => (
+                        {data?.location?.state && NIGERIAN_LOCATIONS[data.location.state]?.map((lga) => (
                             <option key={lga} value={lga}>{lga}</option>
                         ))}
                     </select>
@@ -192,8 +200,8 @@ export default function BusinessProfileStep({ data, onChange, onNext, onBack }: 
                         Business Address *
                     </label>
                     <textarea
-                        value={data.location.address}
-                        onChange={(e) => onChange({ location: { ...data.location, address: e.target.value } })}
+                        value={data?.location?.address || ""}
+                        onChange={(e) => onChange({ location: { ...(data?.location || {}), address: e.target.value } as any })}
                         placeholder="Enter your complete business address"
                         rows={3}
                         className={`w-full px-3.5 py-2.5 border rounded-lg text-sm bg-white text-slate-900 ${errors.address ? "border-red-500" : "border-slate-300"

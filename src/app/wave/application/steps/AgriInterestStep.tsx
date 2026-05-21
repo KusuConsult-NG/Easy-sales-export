@@ -24,16 +24,21 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
     const validateForm = (): boolean => {
         const newErrors: Record<string, string> = {};
 
-        if (data.valueChainAreas.length === 0) {
+        const valueChainAreas = data?.valueChainAreas || [];
+        const preferredCommodities = data?.preferredCommodities || [];
+        const preferredCommodityOther = data?.preferredCommodityOther || "";
+        const farmlandHectares = data?.farmlandHectares || 0;
+
+        if (valueChainAreas.length === 0) {
             newErrors.valueChainAreas = "Please select at least one value chain area";
         }
-        if (data.preferredCommodities.length === 0) {
+        if (preferredCommodities.length === 0) {
             newErrors.preferredCommodities = "Please select at least one commodity";
         }
-        if (data.preferredCommodities.includes("other") && !data.preferredCommodityOther.trim()) {
+        if (preferredCommodities.includes("other") && !preferredCommodityOther.trim()) {
             newErrors.preferredCommodityOther = "Please specify the commodity";
         }
-        if (data.hasAccessToFarmland && (!data.farmlandHectares || data.farmlandHectares <= 0)) {
+        if (data?.hasAccessToFarmland && (!farmlandHectares || farmlandHectares <= 0)) {
             newErrors.farmlandHectares = "Please specify farmland size";
         }
 
@@ -55,10 +60,10 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 }
             }, 100);
         }
-    };
+    }
 
     const toggleValueChain = (area: "crop_production" | "livestock" | "processing_packaging" | "aggregation_trading" | "export_market") => {
-        const current = data.valueChainAreas || [];
+        const current = data?.valueChainAreas || [];
         if (current.includes(area)) {
             updateData({ valueChainAreas: current.filter((a) => a !== area) });
         } else {
@@ -67,7 +72,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
     };
 
     const toggleCommodity = (commodity: "rice" | "maize" | "sesame" | "soybeans" | "ginger" | "cassava" | "vegetables" | "other") => {
-        const current = data.preferredCommodities || [];
+        const current = data?.preferredCommodities || [];
         if (current.includes(commodity)) {
             updateData({ preferredCommodities: current.filter((c) => c !== commodity) });
         } else {
@@ -101,14 +106,14 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                         ].map((area) => (
                             <label
                                 key={area.value}
-                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.valueChainAreas.includes(area.value)
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${(data?.valueChainAreas || []).includes(area.value)
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
                                     type="checkbox"
-                                    checked={data.valueChainAreas.includes(area.value)}
+                                    checked={(data?.valueChainAreas || []).includes(area.value)}
                                     onChange={() => toggleValueChain(area.value)}
                                     className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                                 />
@@ -144,14 +149,14 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                         ].map((commodity) => (
                             <label
                                 key={commodity.value}
-                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${data.preferredCommodities.includes(commodity.value)
+                                className={`flex items-center gap-2 px-3.5 py-2.5 border rounded-lg text-sm cursor-pointer transition-all ${(data?.preferredCommodities || []).includes(commodity.value)
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
                             >
                                 <input
                                     type="checkbox"
-                                    checked={data.preferredCommodities.includes(commodity.value)}
+                                    checked={(data?.preferredCommodities || []).includes(commodity.value)}
                                     onChange={() => toggleCommodity(commodity.value)}
                                     className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                                 />
@@ -168,14 +173,14 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 </div>
 
                 {/* If Others specified */}
-                {data.preferredCommodities.includes("other") && (
+                {(data?.preferredCommodities || []).includes("other") && (
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             Please specify *
                         </label>
                         <input
                             type="text"
-                            value={data.preferredCommodityOther}
+                            value={data?.preferredCommodityOther || ""}
                             onChange={(e) => updateData({ preferredCommodityOther: e.target.value })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="Specify other commodity"
@@ -201,7 +206,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                         ].map((option) => (
                             <label
                                 key={option.label}
-                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.hasAccessToFarmland === option.value
+                                className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data?.hasAccessToFarmland === option.value
                                     ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                     : "border-slate-300 hover:bg-slate-50"
                                     }`}
@@ -209,7 +214,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                                 <input
                                     type="radio"
                                     name="hasAccessToFarmland"
-                                    checked={data.hasAccessToFarmland === option.value}
+                                    checked={data?.hasAccessToFarmland === option.value}
                                     onChange={() => updateData({ hasAccessToFarmland: option.value })}
                                     className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                 />
@@ -220,7 +225,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 </div>
 
                 {/* If YES, hectares */}
-                {data.hasAccessToFarmland && (
+                {data?.hasAccessToFarmland && (
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If YES, how many hectares? *
@@ -229,7 +234,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             type="number"
                             min="0"
                             step="0.1"
-                            value={data.farmlandHectares || ""}
+                            value={data?.farmlandHectares || ""}
                             onChange={(e) => updateData({ farmlandHectares: parseFloat(e.target.value) || 0 })}
                             className="w-full px-3.5 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-600 focus:border-emerald-600"
                             placeholder="e.g., 2.5"
@@ -244,7 +249,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                 )}
 
                 {/* If NO, would you like WAVE to provide */}
-                {!data.hasAccessToFarmland && (
+                {!data?.hasAccessToFarmland && (
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-2">
                             If NO, would you like WAVE to provide farmland access? *
@@ -256,7 +261,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                             ].map((option) => (
                                 <label
                                     key={option.label}
-                                    className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data.needsFarmlandAccess === option.value
+                                    className={`flex items-center gap-2 px-6 py-3 border rounded-lg cursor-pointer transition-all ${data?.needsFarmlandAccess === option.value
                                         ? "border-emerald-600 bg-emerald-50 text-emerald-700"
                                         : "border-slate-300 hover:bg-slate-50"
                                         }`}
@@ -264,7 +269,7 @@ export default function AgriInterestStep({ data, updateData, onNext, onBack }: P
                                     <input
                                         type="radio"
                                         name="needsFarmlandAccess"
-                                        checked={data.needsFarmlandAccess === option.value}
+                                        checked={data?.needsFarmlandAccess === option.value}
                                         onChange={() => updateData({ needsFarmlandAccess: option.value })}
                                         className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
                                     />

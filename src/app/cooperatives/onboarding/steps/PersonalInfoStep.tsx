@@ -34,18 +34,29 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
-        if (!data.firstName.trim()) newErrors.firstName = "First name is required";
-        else if (data.firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
-        if (!data.lastName.trim()) newErrors.lastName = "Last name is required";
-        else if (data.lastName.trim().length < 2) newErrors.lastName = "Last name must be at least 2 characters";
-        if (!data.phone.trim()) newErrors.phone = "Phone number is required";
-        if (!data.email.trim()) newErrors.email = "Email address is required";
-        if (!data.gender) newErrors.gender = "Gender is required";
-        if (!data.occupation.trim()) newErrors.occupation = "Occupation is required";
-        else if (data.occupation.trim().length < 2) newErrors.occupation = "Occupation must be at least 2 characters";
-        if (!data.address.state) newErrors.state = "State is required";
-        if (!data.address.lga) newErrors.lga = "LGA is required";
-        if (!data.address.street.trim()) newErrors.street = "Street address is required";
+        const firstName = data?.firstName || "";
+        const lastName = data?.lastName || "";
+        const phone = data?.phone || "";
+        const email = data?.email || "";
+        const gender = data?.gender || "";
+        const occupation = data?.occupation || "";
+        const address = data?.address || { state: "", lga: "", street: "" };
+        const street = address.street || "";
+        const state = address.state || "";
+        const lga = address.lga || "";
+
+        if (!firstName.trim()) newErrors.firstName = "First name is required";
+        else if (firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
+        if (!lastName.trim()) newErrors.lastName = "Last name is required";
+        else if (lastName.trim().length < 2) newErrors.lastName = "Last name must be at least 2 characters";
+        if (!phone.trim()) newErrors.phone = "Phone number is required";
+        if (!email.trim()) newErrors.email = "Email address is required";
+        if (!gender) newErrors.gender = "Gender is required";
+        if (!occupation.trim()) newErrors.occupation = "Occupation is required";
+        else if (occupation.trim().length < 2) newErrors.occupation = "Occupation must be at least 2 characters";
+        if (!state) newErrors.state = "State is required";
+        if (!lga) newErrors.lga = "LGA is required";
+        if (!street.trim()) newErrors.street = "Street address is required";
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -85,7 +96,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="First Name"
                        
                         required
-                        value={data.firstName}
+                        value={data?.firstName || ""}
                         onChange={(e) => onChange({ ...data, firstName: e.target.value })}
                         placeholder="e.g. Amina"
                         error={errors.firstName}
@@ -95,7 +106,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="Last Name"
                        
                         required
-                        value={data.lastName}
+                        value={data?.lastName || ""}
                         onChange={(e) => onChange({ ...data, lastName: e.target.value })}
                         placeholder="e.g. Ibrahim"
                         error={errors.lastName}
@@ -109,7 +120,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="Other Name"
                        
                         optional
-                        value={data.otherName || ""}
+                        value={data?.otherName || ""}
                         onChange={(e) => onChange({ ...data, otherName: e.target.value })}
                         placeholder="e.g. Fatima"
                     />
@@ -117,7 +128,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="Date of Birth"
                        
                         type="date"
-                        value={data.dateOfBirth}
+                        value={data?.dateOfBirth || ""}
                         onChange={(e) => onChange({ ...data, dateOfBirth: e.target.value })}
                     />
                 </div>
@@ -129,7 +140,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                        
                         required
                         type="tel"
-                        value={data.phone}
+                        value={data?.phone || ""}
                         onChange={(e) => onChange({ ...data, phone: e.target.value })}
                         placeholder="08012345678"
                         error={errors.phone}
@@ -139,7 +150,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                        
                         required
                         type="email"
-                        value={data.email}
+                        value={data?.email || ""}
                         onChange={(e) => onChange({ ...data, email: e.target.value })}
                         placeholder="you@email.com"
                         error={errors.email}
@@ -152,7 +163,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="Gender"
                        
                         required
-                        value={data.gender}
+                        value={data?.gender || ""}
                         onChange={(e) => onChange({ ...data, gender: e.target.value })}
                         error={errors.gender}
                     >
@@ -164,7 +175,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="Occupation"
                        
                         required
-                        value={data.occupation}
+                        value={data?.occupation || ""}
                         onChange={(e) => onChange({ ...data, occupation: e.target.value })}
                         placeholder="e.g. Farmer, Trader"
                         error={errors.occupation}
@@ -177,8 +188,8 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="State"
                        
                         required
-                        value={data.address.state}
-                        onChange={(e) => onChange({ ...data, address: { ...data.address, state: e.target.value, lga: "" } })}
+                        value={data?.address?.state || ""}
+                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), state: e.target.value, lga: "" } as any })}
                         error={errors.state}
                     >
                         <option value="">Select state</option>
@@ -188,13 +199,13 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                         label="LGA"
                        
                         required
-                        value={data.address.lga}
-                        onChange={(e) => onChange({ ...data, address: { ...data.address, lga: e.target.value } })}
-                        disabled={!data.address.state}
+                        value={data?.address?.lga || ""}
+                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), lga: e.target.value } as any })}
+                        disabled={!data?.address?.state}
                         error={errors.lga}
                     >
                         <option value="">Select LGA</option>
-                        {data.address.state && NIGERIAN_LOCATIONS[data.address.state]?.map((lga) => (
+                        {data?.address?.state && NIGERIAN_LOCATIONS[data.address.state]?.map((lga) => (
                             <option key={lga} value={lga}>{lga}</option>
                         ))}
                     </FormSelect>
@@ -205,8 +216,8 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     label="Street Address"
                    
                     required
-                    value={data.address.street}
-                    onChange={(e) => onChange({ ...data, address: { ...data.address, street: e.target.value } })}
+                    value={data?.address?.street || ""}
+                    onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), street: e.target.value } as any })}
                     placeholder="123 Main Street, Area"
                     error={errors.street}
                 />

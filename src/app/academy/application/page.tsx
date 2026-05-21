@@ -98,11 +98,41 @@ export default function AcademyApplicationPage() {
             const draft = localStorage.getItem(`academy_draft_${session.user.id}`);
             if (draft) {
                 const parsed = JSON.parse(draft);
-                if (parsed.personalInfo) setPersonalInfo(parsed.personalInfo);
-                if (parsed.education) setEducation(parsed.education);
-                if (parsed.interests) setInterests(parsed.interests);
-                // Don't auto-set currentStep to avoid skipping the flow entirely, or maybe do set it?
-                // if (parsed.currentStep) setCurrentStep(parsed.currentStep);
+                if (parsed.personalInfo) {
+                    setPersonalInfo(prev => ({
+                        ...prev,
+                        ...parsed.personalInfo,
+                        firstName: parsed.personalInfo.firstName || "",
+                        lastName: parsed.personalInfo.lastName || "",
+                        otherName: parsed.personalInfo.otherName || "",
+                        email: parsed.personalInfo.email || "",
+                        phone: parsed.personalInfo.phone || "",
+                        dateOfBirth: parsed.personalInfo.dateOfBirth || "",
+                        gender: parsed.personalInfo.gender || "",
+                        state: parsed.personalInfo.state || "",
+                        lga: parsed.personalInfo.lga || "",
+                        occupation: parsed.personalInfo.occupation || ""
+                    }));
+                }
+                if (parsed.education) {
+                    setEducation(prev => ({
+                        ...prev,
+                        ...parsed.education,
+                        educationLevel: parsed.education.educationLevel || "",
+                        fieldOfStudy: parsed.education.fieldOfStudy || "",
+                        yearsExperience: parsed.education.yearsExperience !== undefined ? parsed.education.yearsExperience : 0,
+                        currentRole: parsed.education.currentRole || ""
+                    }));
+                }
+                if (parsed.interests) {
+                    setInterests(prev => ({
+                        ...prev,
+                        ...parsed.interests,
+                        learningPaths: parsed.interests.learningPaths || [],
+                        topics: parsed.interests.topics || "",
+                        goals: parsed.interests.goals || ""
+                    }));
+                }
             }
         } catch (e) {}
         setRestored(true);
@@ -135,12 +165,37 @@ export default function AcademyApplicationPage() {
                                 setPersonalInfo((prev: any) => ({
                                     ...prev,
                                     ...pi,
-                                    firstName: pi.firstName || (pi.fullName ? pi.fullName.split(' ')[0] : '') || prev.firstName,
-                                    lastName: pi.lastName || (pi.fullName ? pi.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
+                                    firstName: pi.firstName || (pi.fullName ? pi.fullName.split(' ')[0] : '') || prev.firstName || "",
+                                    lastName: pi.lastName || (pi.fullName ? pi.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName || "",
+                                    otherName: pi.otherName || prev.otherName || "",
+                                    email: pi.email || prev.email || "",
+                                    phone: pi.phone || prev.phone || "",
+                                    dateOfBirth: pi.dateOfBirth || prev.dateOfBirth || "",
+                                    gender: pi.gender || prev.gender || "",
+                                    state: pi.state || prev.state || "",
+                                    lga: pi.lga || prev.lga || "",
+                                    occupation: pi.occupation || prev.occupation || ""
                                 }));
                             }
-                            if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
-                            if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
+                            if (d.education) {
+                                setEducation((prev: any) => ({
+                                    ...prev,
+                                    ...d.education,
+                                    educationLevel: d.education.educationLevel || prev.educationLevel || "",
+                                    fieldOfStudy: d.education.fieldOfStudy || prev.fieldOfStudy || "",
+                                    yearsExperience: d.education.yearsExperience !== undefined ? d.education.yearsExperience : prev.yearsExperience || 0,
+                                    currentRole: d.education.currentRole || prev.currentRole || ""
+                                }));
+                            }
+                            if (d.interests) {
+                                setInterests((prev: any) => ({
+                                    ...prev,
+                                    ...d.interests,
+                                    learningPaths: d.interests.learningPaths || prev.learningPaths || [],
+                                    topics: d.interests.topics || prev.topics || "",
+                                    goals: d.interests.goals || prev.goals || ""
+                                }));
+                            }
                         }
                         setIsEditMode(true);
                         const payStatus = await checkAcademyPaymentStatusAction();
@@ -177,12 +232,37 @@ export default function AcademyApplicationPage() {
                             setPersonalInfo((prev: any) => ({
                                 ...prev,
                                 ...pi,
-                                firstName: pi.firstName || (pi.fullName ? pi.fullName.split(' ')[0] : '') || prev.firstName,
-                                lastName: pi.lastName || (pi.fullName ? pi.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
+                                firstName: pi.firstName || (pi.fullName ? pi.fullName.split(' ')[0] : '') || prev.firstName || "",
+                                lastName: pi.lastName || (pi.fullName ? pi.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName || "",
+                                otherName: pi.otherName || prev.otherName || "",
+                                email: pi.email || prev.email || "",
+                                phone: pi.phone || prev.phone || "",
+                                dateOfBirth: pi.dateOfBirth || prev.dateOfBirth || "",
+                                gender: pi.gender || prev.gender || "",
+                                state: pi.state || prev.state || "",
+                                lga: pi.lga || prev.lga || "",
+                                occupation: pi.occupation || prev.occupation || ""
                             }));
                         }
-                        if (d.education) setEducation((prev: any) => ({ ...prev, ...d.education }));
-                        if (d.interests) setInterests((prev: any) => ({ ...prev, ...d.interests }));
+                        if (d.education) {
+                            setEducation((prev: any) => ({
+                                ...prev,
+                                ...d.education,
+                                educationLevel: d.education.educationLevel || prev.educationLevel || "",
+                                fieldOfStudy: d.education.fieldOfStudy || prev.fieldOfStudy || "",
+                                yearsExperience: d.education.yearsExperience !== undefined ? d.education.yearsExperience : prev.yearsExperience || 0,
+                                currentRole: d.education.currentRole || prev.currentRole || ""
+                            }));
+                        }
+                        if (d.interests) {
+                            setInterests((prev: any) => ({
+                                ...prev,
+                                ...d.interests,
+                                learningPaths: d.interests.learningPaths || prev.learningPaths || [],
+                                topics: d.interests.topics || prev.topics || "",
+                                goals: d.interests.goals || prev.goals || ""
+                            }));
+                        }
                         if (d.revisionNote) setRevisionNote(d.revisionNote);
                     }
                     setIsRevisionMode(true);
@@ -276,31 +356,31 @@ export default function AcademyApplicationPage() {
         const newErrors: Record<string, string> = {};
 
         if (step === 1) {
-            if (!personalInfo.firstName.trim()) newErrors.firstName = "First name is required";
-            if (!personalInfo.lastName.trim()) newErrors.lastName = "Last name is required";
-            if (!personalInfo.email.trim()) {
+            if (!(personalInfo?.firstName || "").trim()) newErrors.firstName = "First name is required";
+            if (!(personalInfo?.lastName || "").trim()) newErrors.lastName = "Last name is required";
+            if (!(personalInfo?.email || "").trim()) {
                 newErrors.email = "Email is required";
-            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalInfo.email)) {
+            } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalInfo?.email || "")) {
                 newErrors.email = "Invalid email format";
             }
-            if (!personalInfo.phone.trim()) newErrors.phone = "Phone number is required";
-            if (!personalInfo.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";
-            if (!personalInfo.gender) newErrors.gender = "Gender is required";
-            if (!personalInfo.state) newErrors.state = "State is required";
-            if (!personalInfo.lga) newErrors.lga = "LGA is required";
-            if (!personalInfo.occupation.trim()) newErrors.occupation = "Occupation is required";
+            if (!(personalInfo?.phone || "").trim()) newErrors.phone = "Phone number is required";
+            if (!personalInfo?.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required";
+            if (!personalInfo?.gender) newErrors.gender = "Gender is required";
+            if (!personalInfo?.state) newErrors.state = "State is required";
+            if (!personalInfo?.lga) newErrors.lga = "LGA is required";
+            if (!(personalInfo?.occupation || "").trim()) newErrors.occupation = "Occupation is required";
         }
 
         if (step === 2) {
-            if (!education.educationLevel) newErrors.educationLevel = "Education level is required";
-            if (!education.currentRole) newErrors.currentRole = "Current role is required";
+            if (!education?.educationLevel) newErrors.educationLevel = "Education level is required";
+            if (!education?.currentRole) newErrors.currentRole = "Current role is required";
         }
 
         if (step === 3) {
-            if (interests.learningPaths.length === 0) {
+            if ((interests?.learningPaths || []).length === 0) {
                 newErrors.learningPaths = "Please select at least one learning path";
             }
-            if (!interests.goals.trim()) newErrors.goals = "Learning goals are required";
+            if (!(interests?.goals || "").trim()) newErrors.goals = "Learning goals are required";
         }
 
         if (step >= 4) {
@@ -372,7 +452,7 @@ export default function AcademyApplicationPage() {
         try {
             const enrichedPersonalInfo = {
                 ...personalInfo,
-                fullName: `${personalInfo.firstName} ${personalInfo.lastName}`.trim(),
+                fullName: `${personalInfo?.firstName || ""} ${personalInfo?.lastName || ""}`.trim(),
             };
             const response = (isRevisionMode || isEditMode)
                 ? await resubmitAcademyApplicationAction({ personalInfo: enrichedPersonalInfo, education, interests })
@@ -517,7 +597,7 @@ export default function AcademyApplicationPage() {
                         <ReviewStep
                             personalInfo={{
                                 ...personalInfo,
-                                fullName: `${personalInfo.firstName} ${personalInfo.lastName}`.trim(),
+                                fullName: `${personalInfo?.firstName || ""} ${personalInfo?.lastName || ""}`.trim(),
                             }}
                             education={education}
                             interests={interests}

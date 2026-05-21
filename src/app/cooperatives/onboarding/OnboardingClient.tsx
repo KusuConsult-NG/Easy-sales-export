@@ -146,12 +146,19 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         if (d.firstName || d.fullName) {
                             setPersonalInfo((prev: any) => ({
                                 ...prev,
+                                firstName: d.firstName || (d.fullName ? d.fullName.split(' ')[0] : '') || prev.firstName,
+                                lastName: d.lastName || (d.fullName ? d.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
                                 fullName: d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
                                 phone: d.phone || prev.phone,
                                 email: d.email || prev.email,
                                 dateOfBirth: d.dateOfBirth || prev.dateOfBirth,
                                 gender: d.gender || prev.gender,
                                 occupation: d.occupation || prev.occupation,
+                                address: {
+                                    state: d.stateOfOrigin || prev.address?.state || "",
+                                    lga: d.lga || prev.address?.lga || "",
+                                    street: d.residentialAddress || prev.address?.street || ""
+                                }
                             }));
                         }
                         if (d.nextOfKinName) {
@@ -198,6 +205,11 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             dateOfBirth: d.dateOfBirth || prev.dateOfBirth,
                             gender: d.gender || prev.gender,
                             occupation: d.occupation || prev.occupation,
+                            address: {
+                                state: d.stateOfOrigin || prev.address?.state || "",
+                                lga: d.lga || prev.address?.lga || "",
+                                street: d.residentialAddress || prev.address?.street || ""
+                            }
                         }));
                     }
                     if (d.nextOfKinName) {
@@ -239,7 +251,18 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         const savedPersonalInfo = localStorage.getItem(keyOf('personal') as string);
         if (savedPersonalInfo) {
             try {
-                setPersonalInfo(JSON.parse(savedPersonalInfo));
+                const parsed = JSON.parse(savedPersonalInfo);
+                if (parsed && typeof parsed === 'object') {
+                    setPersonalInfo(prev => ({
+                        ...prev,
+                        ...parsed,
+                        address: {
+                            state: parsed.address?.state || prev.address?.state || "",
+                            lga: parsed.address?.lga || prev.address?.lga || "",
+                            street: parsed.address?.street || prev.address?.street || ""
+                        }
+                    }));
+                }
             } catch (e) {
                 console.error("Failed to parse saved personal info", e);
             }

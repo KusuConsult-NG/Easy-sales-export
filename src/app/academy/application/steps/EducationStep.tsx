@@ -43,7 +43,7 @@ const CURRENT_ROLES = [
 
 export default function EducationStep({ data, onChange, errors }: EducationStepProps) {
     function handleChange(field: keyof EducationData, value: string | number) {
-        onChange({ ...data, [field]: value });
+        onChange({ ...(data || {} as EducationData), [field]: value });
     };
 
     return (
@@ -65,7 +65,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                     <div className="relative">
                         <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <select
-                            value={data.educationLevel}
+                            value={data?.educationLevel || ""}
                             onChange={(e) => handleChange("educationLevel", e.target.value)}
                             className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.educationLevel ? "border-red-500" : "border-slate-300"
                                 } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
@@ -91,7 +91,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                         <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <input
                             type="text"
-                            value={data.fieldOfStudy}
+                            value={data?.fieldOfStudy || ""}
                             onChange={(e) => handleChange("fieldOfStudy", e.target.value)}
                             className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.fieldOfStudy ? "border-red-500" : "border-slate-300"
                                 } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
@@ -113,7 +113,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                             type="number"
                             min="0"
                             max="50"
-                            value={data.yearsExperience}
+                            value={data?.yearsExperience !== undefined ? data.yearsExperience : ""}
                             onChange={(e) => handleChange("yearsExperience", parseInt(e.target.value) || 0)}
                             className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.yearsExperience ? "border-red-500" : "border-slate-300"
                                 } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}
@@ -135,7 +135,7 @@ export default function EducationStep({ data, onChange, errors }: EducationStepP
                     <div className="relative">
                         <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                         <select
-                            value={data.currentRole}
+                            value={data?.currentRole || ""}
                             onChange={(e) => handleChange("currentRole", e.target.value)}
                             className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.currentRole ? "border-red-500" : "border-slate-300"
                                 } rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition`}

@@ -43,15 +43,18 @@ const LEARNING_PATHS = [
 
 export default function InterestsStep({ data, onChange, errors }: InterestsStepProps) {
     function handlePathToggle(pathId: string) {
-        const updatedPaths = data.learningPaths.includes(pathId)
-            ? data.learningPaths.filter((p) => p !== pathId)
-            : [...data.learningPaths, pathId];
-        onChange({ ...data, learningPaths: updatedPaths });
+        const paths = data?.learningPaths || [];
+        const updatedPaths = paths.includes(pathId)
+            ? paths.filter((p) => p !== pathId)
+            : [...paths, pathId];
+        onChange({ ...(data || {} as InterestsData), learningPaths: updatedPaths });
     };
 
     function handleChange(field: keyof InterestsData, value: string) {
-        onChange({ ...data, [field]: value });
+        onChange({ ...(data || {} as InterestsData), [field]: value });
     };
+
+    const activePaths = data?.learningPaths || [];
 
     return (
         <div className="space-y-6">
@@ -74,12 +77,12 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                             key={path.id}
                             type="button"
                             onClick={() => handlePathToggle(path.id)}
-                            className={`relative p-4 rounded-lg border-2 text-left transition-all ${data.learningPaths.includes(path.id)
+                            className={`relative p-4 rounded-lg border-2 text-left transition-all ${activePaths.includes(path.id)
                                     ? "border-blue-600 bg-blue-50"
                                     : "border-slate-300 hover:border-blue-400"
                                 }`}
                         >
-                            {data.learningPaths.includes(path.id) && (
+                            {activePaths.includes(path.id) && (
                                 <div className="absolute top-3 right-3">
                                     <CheckCircle2 className="w-5 h-5 text-blue-600" />
                                 </div>
@@ -106,7 +109,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                 <div className="relative">
                     <Lightbulb className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
                     <textarea
-                        value={data.topics}
+                        value={data?.topics || ""}
                         onChange={(e) => handleChange("topics", e.target.value)}
                         rows={4}
                         className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.topics ? "border-red-500" : "border-slate-300"
@@ -126,7 +129,7 @@ export default function InterestsStep({ data, onChange, errors }: InterestsStepP
                 <div className="relative">
                     <Target className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
                     <textarea
-                        value={data.goals}
+                        value={data?.goals || ""}
                         onChange={(e) => handleChange("goals", e.target.value)}
                         rows={4}
                         className={`w-full pl-10 pr-3.5 py-2.5 bg-white border ${errors.goals ? "border-red-500" : "border-slate-300"

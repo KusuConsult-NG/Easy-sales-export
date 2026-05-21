@@ -257,7 +257,7 @@ export default function AcademyDashboardPage() {
                                         <div className="flex items-center gap-4 text-sm text-slate-600">
                                             <div className="flex items-center gap-1">
                                                 <BookOpen className="w-4 h-4" />
-                                                {course.completedLessons.length}/{course.totalLessons} lessons
+                                                {(course.completedLessons || []).length}/{course.totalLessons} lessons
                                             </div>
                                             {course.quizPassed !== undefined && (
                                                 <div className={`flex items-center gap-1 ${course.quizPassed ? 'text-green-600' : 'text-yellow-600'

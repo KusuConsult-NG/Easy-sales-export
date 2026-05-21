@@ -65,27 +65,27 @@ export default function ReviewStep({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <p className="text-slate-500">Full Name</p>
-                        <p className="font-semibold text-slate-900">{personalInfo.fullName}</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.fullName || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Email</p>
-                        <p className="font-semibold text-slate-900">{personalInfo.email}</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.email || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Phone</p>
-                        <p className="font-semibold text-slate-900">{personalInfo.phone}</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.phone || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Date of Birth</p>
-                        <p className="font-semibold text-slate-900">{personalInfo.dateOfBirth}</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.dateOfBirth || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">State</p>
-                        <p className="font-semibold text-slate-900">{personalInfo.state}</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.state || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Occupation</p>
-                        <p className="font-semibold text-slate-900">{personalInfo.occupation}</p>
+                        <p className="font-semibold text-slate-900">{personalInfo?.occupation || ""}</p>
                     </div>
                 </div>
             </div>
@@ -101,19 +101,19 @@ export default function ReviewStep({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
                         <p className="text-slate-500">Education Level</p>
-                        <p className="font-semibold text-slate-900">{education.educationLevel}</p>
+                        <p className="font-semibold text-slate-900">{education?.educationLevel || ""}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Field of Study</p>
-                        <p className="font-semibold text-slate-900">{education.fieldOfStudy || "Not specified"}</p>
+                        <p className="font-semibold text-slate-900">{education?.fieldOfStudy || "Not specified"}</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Years of Experience</p>
-                        <p className="font-semibold text-slate-900">{education.yearsExperience} years</p>
+                        <p className="font-semibold text-slate-900">{education?.yearsExperience !== undefined ? education.yearsExperience : 0} years</p>
                     </div>
                     <div>
                         <p className="text-slate-500">Current Role</p>
-                        <p className="font-semibold text-slate-900">{education.currentRole}</p>
+                        <p className="font-semibold text-slate-900">{education?.currentRole || ""}</p>
                     </div>
                 </div>
             </div>
@@ -130,18 +130,18 @@ export default function ReviewStep({
                     <div>
                         <p className="text-slate-500 mb-2">Selected Learning Paths</p>
                         <div className="flex flex-wrap gap-2">
-                            {interests.learningPaths.map((pathId) => (
+                            {(interests?.learningPaths || []).map((pathId) => (
                                 <span
                                     key={pathId}
                                     className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold"
                                 >
                                     <Check className="w-3 h-3" />
-                                    {LEARNING_PATH_NAMES[pathId]}
+                                    {LEARNING_PATH_NAMES[pathId] || pathId}
                                 </span>
                             ))}
                         </div>
                     </div>
-                    {interests.topics && (
+                    {interests?.topics && (
                         <div>
                             <p className="text-slate-500">Topics of Interest</p>
                             <p className="font-semibold text-slate-900">{interests.topics}</p>
@@ -149,7 +149,7 @@ export default function ReviewStep({
                     )}
                     <div>
                         <p className="text-slate-500">Learning Goals</p>
-                        <p className="font-semibold text-slate-900">{interests.goals}</p>
+                        <p className="font-semibold text-slate-900">{interests?.goals || ""}</p>
                     </div>
                 </div>
             </div>
