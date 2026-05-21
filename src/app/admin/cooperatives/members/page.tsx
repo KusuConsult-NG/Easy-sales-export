@@ -450,7 +450,13 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-yellow-600 mb-1">Pending</p>
                             <p className="text-3xl font-bold text-yellow-700">
-                                {isDateFiltered ? filteredPending : (displayStats ? displayStats.pendingMembers : filteredPending)}
+                                {isDateFiltered ? (
+                                    filteredPending
+                                ) : displayStats ? (
+                                    displayStats.pendingMembers
+                                ) : (
+                                    <span className="inline-block w-16 h-8 bg-yellow-200/50 animate-pulse rounded-lg mt-1" />
+                                )}
                             </p>
                         </div>
                         <Clock className="w-12 h-12 text-yellow-500 opacity-50" />
@@ -462,7 +468,13 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-green-600 mb-1">Approved</p>
                             <p className="text-3xl font-bold text-green-700">
-                                {isDateFiltered ? filteredApproved : (displayStats ? displayStats.activeMembers : filteredApproved)}
+                                {isDateFiltered ? (
+                                    filteredApproved
+                                ) : displayStats ? (
+                                    displayStats.activeMembers
+                                ) : (
+                                    <span className="inline-block w-16 h-8 bg-green-200/50 animate-pulse rounded-lg mt-1" />
+                                )}
                             </p>
                         </div>
                         <CheckCircle className="w-12 h-12 text-green-500 opacity-50" />
@@ -474,9 +486,21 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-slate-600 mb-1">Total Paid Members</p>
                             <p className="text-3xl font-bold text-slate-900">
-                                {isDateFiltered ? filteredPaid : (displayStats ? displayStats.paidMembers : filteredPaid)}
+                                {isDateFiltered ? (
+                                    filteredPaid
+                                ) : displayStats ? (
+                                    displayStats.paidMembers
+                                ) : (
+                                    <span className="inline-block w-16 h-8 bg-slate-200/50 animate-pulse rounded-lg mt-1" />
+                                )}
                             </p>
-                            <p className="text-xs text-slate-500 mt-1">Out of {isDateFiltered ? filteredApplications.length : (displayStats ? displayStats.totalMembers : filteredApplications.length)} applications</p>
+                            {isDateFiltered ? (
+                                <p className="text-xs text-slate-500 mt-1">Out of {filteredApplications.length} applications</p>
+                            ) : displayStats ? (
+                                <p className="text-xs text-slate-500 mt-1">Out of {displayStats.totalMembers} applications</p>
+                            ) : (
+                                <span className="inline-block w-28 h-4 bg-slate-200/40 animate-pulse rounded mt-1.5" />
+                            )}
                         </div>
                         <Users className="w-12 h-12 text-slate-400 opacity-50" />
                     </div>
@@ -487,7 +511,13 @@ export default function CooperativeMembersPage() {
                         <div>
                             <p className="text-sm text-red-600 mb-1">Unpaid Members</p>
                             <p className="text-3xl font-bold text-red-700">
-                                {isDateFiltered ? filteredUnpaid : (displayStats?.unpaidMembers !== undefined ? displayStats.unpaidMembers : filteredUnpaid)}
+                                {isDateFiltered ? (
+                                    filteredUnpaid
+                                ) : (displayStats && displayStats.unpaidMembers !== undefined) ? (
+                                    displayStats.unpaidMembers
+                                ) : (
+                                    <span className="inline-block w-16 h-8 bg-red-200/50 animate-pulse rounded-lg mt-1" />
+                                )}
                             </p>
                         </div>
                         <Users className="w-12 h-12 text-red-500 opacity-50" />

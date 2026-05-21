@@ -238,7 +238,11 @@ export default function AdminTransactionsPage() {
                             <p className="text-sm text-slate-500">Total Transactions</p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900">
-                            {displayedTotalTxs}
+                            {globalStats ? (
+                                displayedTotalTxs
+                            ) : (
+                                <span className="inline-block w-16 h-8 bg-slate-100 animate-pulse rounded-lg mt-1" />
+                            )}
                         </p>
                     </div>
 
@@ -250,7 +254,11 @@ export default function AdminTransactionsPage() {
                             <p className="text-sm text-slate-500">Total Amount</p>
                         </div>
                         <p className="text-3xl font-bold text-slate-900">
-                            {formatCurrency(displayedTotalAmount)}
+                            {globalStats ? (
+                                formatCurrency(displayedTotalAmount)
+                            ) : (
+                                <span className="inline-block w-28 h-8 bg-emerald-50 animate-pulse rounded-lg mt-1" />
+                            )}
                         </p>
                     </div>
 
@@ -261,7 +269,13 @@ export default function AdminTransactionsPage() {
                             </div>
                             <p className="text-sm text-slate-500">Completed</p>
                         </div>
-                        <p className="text-3xl font-bold text-green-600">{displayedCompleted}</p>
+                        <p className="text-3xl font-bold text-green-600">
+                            {globalStats ? (
+                                displayedCompleted
+                            ) : (
+                                <span className="inline-block w-16 h-8 bg-green-50 animate-pulse rounded-lg mt-1" />
+                            )}
+                        </p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-sm">
@@ -271,11 +285,17 @@ export default function AdminTransactionsPage() {
                             </div>
                             <p className="text-sm text-slate-500">Pending / Failed</p>
                         </div>
-                        <p className="text-lg">
-                            <span className="font-bold text-yellow-600">{displayedPending}</span>
-                            <span className="text-slate-400 mx-2">•</span>
-                            <span className="font-bold text-red-600">{displayedFailed}</span>
-                        </p>
+                        <div className="text-lg">
+                            {globalStats ? (
+                                <>
+                                    <span className="font-bold text-yellow-600">{displayedPending}</span>
+                                    <span className="text-slate-400 mx-2">•</span>
+                                    <span className="font-bold text-red-600">{displayedFailed}</span>
+                                </>
+                            ) : (
+                                <span className="inline-block w-24 h-6 bg-yellow-50 animate-pulse rounded-lg mt-1" />
+                            )}
+                        </div>
                     </div>
                 </div>
 
