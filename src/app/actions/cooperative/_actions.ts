@@ -715,6 +715,12 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
 
         if (registration?.status) { // 'legacy_pending_onboarding' is a sentinel set by the import script.
             // Pass it through so OnboardingClient knows to show the form without payment.
+            // LOOP FIX: If the user submitted their form but admin hasn't approved yet,
+            // return a distinct "pending_review" sentinel so the client redirects to the
+            // pending page instead of showing the blank form again.
+            if (registration.status === 'pending' && registration.onboardingCompletedAt) {
+                return 'pending_review';
+            }
             return registration.status;
         }
 
@@ -727,6 +733,13 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             // Legacy import members: paymentStatus=completed but onboardingCompleted=false
             if (memberData.paymentStatus === 'completed' && !memberData.onboardingCompleted) {
                 return 'legacy_pending_onboarding';
+            }
+            // LOOP FIX: If the user has submitted the form (onboardingCompleted=true)
+            // but is still awaiting admin approval, return a distinct sentinel value.
+            // Returning plain "pending" caused the client to show the blank form again
+            // instead of redirecting to the pending review page.
+            if (memberData.onboardingCompleted && (memberData.membershipStatus === 'pending' || memberData.status === 'pending')) {
+                return 'pending_review';
             }
             const derivedStatus = memberData.membershipStatus ?? memberData.status ?? 'pending';
 

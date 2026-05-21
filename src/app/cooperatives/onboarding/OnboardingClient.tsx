@@ -82,6 +82,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
 
     // ── Status check on mount — replaces server-side Firestore read ────────────
     useEffect(() => {
+        // SESSION CRASH FIX: do not run until NextAuth has finished loading.
+        // Without this guard, requireSession() inside the action may fail because
+        // the session cookie hasn't been read yet, causing the component to render
+        // in an inconsistent half-loaded state that looks like a crash.
+        if (status === "loading") return;
+
         // Detect dedicated domain (easysalescooperative.com).
         // On dedicated domains, proxy maps / → /cooperatives, so '/cooperatives/dashboard'
         // causes double-rewrite → /cooperatives/cooperatives/dashboard → 404.
@@ -163,10 +169,17 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     setIsCheckingStatus(false);
                     return;
                 } else {
-                    // Stay on page — do NOT auto-redirect pending users
+                    // Stay on page — do NOT auto-redirect pending users without onboardingCompleted
                     setIsCheckingStatus(false);
                     return;
                 }
+            }
+            // LOOP FIX: "pending_review" means form was already submitted and is awaiting
+            // admin approval. Redirect to the waiting page immediately — do NOT show the
+            // blank form again, which caused users to get stuck in an infinite submit loop.
+            if (coopStatus === "pending_review") {
+                router.replace(`${prefix}/onboarding/pending`);
+                return;
             }
             if (coopStatus === "revision_required" || coopStatus === "rejected") {
                 // Pre-populate form with existing data
@@ -208,7 +221,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             setIsCheckingStatus(false);
         });
         }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [status]); // re-run once session transitions from "loading" → "authenticated"
 
     // ── User-scoped localStorage keys ────────────────────────────────────────
     // Keys are namespaced by userId so two users on the same device never share
@@ -404,12 +418,16 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     (isRevisionMode || isEditMode) ? "Application resubmitted for review!" : "Application submitted successfully!",
                     "success"
                 );
+                // STUCK BUTTON FIX: Reset isSubmitting BEFORE navigating so the button
+                // is never permanently disabled. If router.push() is slow or fails,
+                // the user can retry rather than being stuck with a disabled button.
+                setIsSubmitting(false);
                 // Use short path on dedicated domain to avoid double-rewrite
                 const isDed = typeof window !== 'undefined' &&
                     !window.location.hostname.includes('easysalesexport.com') &&
                     !window.location.hostname.includes('localhost') &&
                     !window.location.hostname.includes('railway.app');
-                router.push(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
+                router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
             } else {
                 showToast(result.error || "Registration failed. Please try again.", "error");
                 setIsSubmitting(false);

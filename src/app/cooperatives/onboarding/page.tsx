@@ -53,7 +53,11 @@ export default async function CooperativeOnboardingPage(
             }
         }
     } catch (e) {
-        // Safe fallback
+        // Safe fallback — "unknown" tells the client to re-check from the
+        // authoritative /processed_payments collection rather than assuming
+        // the user hasn't paid (which was causing already-paid users to be
+        // sent back to the payment screen on a cold-start DB failure).
+        paymentStatus = "unknown";
     }
 
     // Pass token and real paymentStatus to client
