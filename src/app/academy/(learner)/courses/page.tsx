@@ -61,11 +61,18 @@ export default function CourseCatalogPage() {
     const userId = session?.user?.id;
     const userPlan = (session?.user as any)?.serviceRegistrations?.academy?.plan || "free";
 
-    // Load initial data
+    const plan = (userPlan as string || "free").toLowerCase();
+    const isPaid = ["elite", "standard", "foundation", "advanced"].includes(plan);
+
+    // Load initial data and handle paid plan redirect
     useEffect(() => {
+        if (isPaid) {
+            router.replace("/academy/my-courses");
+            return;
+        }
         loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [isPaid, router]);
 
     async function loadData() {
         setLoading(true);
@@ -156,11 +163,11 @@ export default function CourseCatalogPage() {
         }
     }
 
-    if (loading) {
+    if (loading || isPaid) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh]">
                 <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-                <p className="text-slate-600 font-semibold animate-pulse">Loading catalog...</p>
+                <p className="text-slate-600 font-semibold animate-pulse">Loading...</p>
             </div>
         );
     }

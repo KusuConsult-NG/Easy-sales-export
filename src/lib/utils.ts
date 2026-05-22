@@ -1,13 +1,15 @@
 import { formatDistance } from "date-fns";
 import { CURRENCY_CONFIG } from "./constants";
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: any): string {
+    const value = Number(amount);
+    const safeAmount = isNaN(value) ? 0 : value;
     return new Intl.NumberFormat(CURRENCY_CONFIG.locale, {
         style: "currency",
         currency: CURRENCY_CONFIG.code,
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
-    }).format(amount);
+    }).format(safeAmount);
 }
 
 export function formatDate(date: Date | string | null | undefined | any): string {

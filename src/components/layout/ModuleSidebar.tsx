@@ -317,6 +317,13 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
         // Access check for cross-module items (like in Escrow)
         if (item.moduleAccess && !hasAppAccess(roles, item.moduleAccess as any)) return false;
 
+        // Hide "Browse Courses" for paid academy plans
+        if (item.href === "/academy/courses") {
+            const academyPlan = (session?.user as any)?.serviceRegistrations?.academy?.plan || "free";
+            const isPaidAcademy = ["elite", "standard", "foundation", "advanced"].includes(academyPlan.toLowerCase());
+            if (isPaidAcademy) return false;
+        }
+
         return true;
     });
 

@@ -1231,6 +1231,93 @@ export interface EnrolledCourseWithDetails {
     startedAt: string;
 }
 
+/**
+ * Auto-enroll paid Academy learners in all courses eligible under their tier.
+ */
+export async function autoEnrollPaidUser(userId: string, userPlan: string) {
+    if (!userId || !userPlan) return;
+    const plan = userPlan.toLowerCase();
+    const isPaid = ["elite", "standard", "foundation", "advanced"].includes(plan);
+    if (!isPaid) return;
+
+    try {
+        // 1. Fetch all courses
+        const coursesSnap = await db.collection(COLLECTIONS.ACADEMY_COURSES).get();
+        if (coursesSnap.empty) return;
+
+        // 2. Filter courses user has access to
+        const eligibleCourses = coursesSnap.docs.filter(doc => {
+            const courseData = doc.data();
+            return checkCourseAccess(plan, courseData.tier || "free");
+        });
+
+        if (eligibleCourses.length === 0) return;
+
+        // 3. Ensure enrollment in all eligible courses
+        for (const courseDoc of eligibleCourses) {
+            const courseId = courseDoc.id;
+
+            // Place A: user_progress subcollection
+            const progressSubRef = db.doc(`user_progress/${userId}/courses/${courseId}`);
+            const progressSubDoc = await progressSubRef.get();
+            if (!progressSubDoc.exists) {
+                await progressSubRef.set({
+                    userId,
+                    courseId,
+                    completedLessons: [],
+                    completedModules: [],
+                    quizScores: {},
+                    overallProgress: 0,
+                    startedAt: FieldValue.serverTimestamp(),
+                    lastAccessedAt: FieldValue.serverTimestamp(),
+                });
+                
+                // Increment enrolledCount
+                await courseDoc.ref.update({
+                    enrolledCount: FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            }
+
+            // Place B: course_progress
+            const progressRef = db.collection(COLLECTIONS.COURSE_PROGRESS).doc(`${userId}_${courseId}`);
+            const progressDoc = await progressRef.get();
+            if (!progressDoc.exists) {
+                await progressRef.set({
+                    userId,
+                    courseId,
+                    progressPercent: 0,
+                    completionPercentage: 0,
+                    lastWatchedSecond: 0,
+                    completed: false,
+                    completedAt: null,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+            }
+
+            // Place C: course_enrollments
+            const enrollmentsSnap = await db.collection(COLLECTIONS.COURSE_ENROLLMENTS)
+                .where("userId", "==", userId)
+                .where("courseId", "==", courseId)
+                .get();
+
+            if (enrollmentsSnap.empty) {
+                await db.collection(COLLECTIONS.COURSE_ENROLLMENTS).add({
+                    userId,
+                    courseId,
+                    enrolledAt: FieldValue.serverTimestamp(),
+                    status: 'active',
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+        }
+    } catch (err) {
+        logger.error("[autoEnrollPaidUser] Error during auto-enrollment:", err);
+    }
+}
+
 async function _getEnrolledCoursesWithDetailsAction(): Promise<ActionResponse<any>> {
     try {
         const sessionResult = await requireSession();
@@ -1239,6 +1326,14 @@ async function _getEnrolledCoursesWithDetailsAction(): Promise<ActionResponse<an
         if (!session?.user?.id) return { success: false as const, error: "Authentication required", data: null };
 
         const userId = session.user.id;
+
+        // Auto-enroll if the user has an active paid plan
+        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
+        const isPaid = ["elite", "standard", "foundation", "advanced"].includes(userPlan.toLowerCase());
+        if (isPaid) {
+            await autoEnrollPaidUser(userId, userPlan);
+        }
+
 
         // 1. Fetch all progress records for this user
         const progressSnap = await db.collection(`user_progress/${userId}/courses`).get();

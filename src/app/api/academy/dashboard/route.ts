@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { autoEnrollPaidUser } from "@/app/actions/academy";
 
 /**
  * API Route: Get Student Dashboard Data
@@ -20,6 +21,13 @@ export async function GET(request: NextRequest) {
         }
 
         const userId = session.user.id;
+
+        // Auto-enroll if the user has an active paid plan
+        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
+        const isPaid = ["elite", "standard", "foundation", "advanced"].includes(userPlan.toLowerCase());
+        if (isPaid) {
+            await autoEnrollPaidUser(userId, userPlan);
+        }
 
         // Get course progress (Admin SDK)
         const progressSnapshot = await db.collection(COLLECTIONS.COURSE_PROGRESS)

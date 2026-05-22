@@ -1237,7 +1237,7 @@ export async function resubmitCooperativeApplicationAction(
 
 export type MemberIdCardData = { fullName: string;
     memberNumber: string;
-    membershipTier: "Member";
+    membershipTier: string;
     gender: string;
     stateOfOrigin: string;
     passportPhotoUrl: string | null;
@@ -1260,40 +1260,149 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         const { session } = sessionResult;
 
         const userId = session.user.id;
+
+        // Fetch central user profile to get real name and paid subscription tier
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+
+        // Check if user is an active premium/paid plan subscriber in the Academy
+        const userPlan = (userData?.serviceRegistrations?.academy?.plan || "free").toLowerCase();
+        const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
+
         const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where("userId", "==", userId)
             .orderBy("createdAt", "desc")
             .limit(1)
             .get();
 
-        if (memberSnapshot.empty) { return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
+        if (memberSnapshot.empty && !isPremiumSubscriber) { 
+            return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
         }
 
-        const memberDoc = memberSnapshot.docs[0];
-        const d = memberDoc.data()!;
+        let d = memberSnapshot.empty ? null : memberSnapshot.docs[0].data()!;
 
-        // Gate 1: Paystack payment must be verified
-        if (d.paymentStatus !== "completed") { return { success: false as const, error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.", reason: "payment_required"};
+        // 1. Resolve real name and completely avoid placeholder values
+        const isPlaceholder = (name: string) => {
+            if (!name) return true;
+            const lower = name.toLowerCase();
+            return lower === "general_user" || lower.includes("kusuconsult") || lower === "general user" || lower === "null" || lower === "undefined";
+        };
+
+        let resolvedName = "";
+        
+        // Check central user profile name first
+        if (userData) {
+            const centralName = (userData.name || userData.fullName || userData.displayName || "").trim();
+            if (!isPlaceholder(centralName)) resolvedName = centralName;
+        }
+        
+        // Check session user name
+        if (!resolvedName && session.user.name) {
+            const sessName = session.user.name.trim();
+            if (!isPlaceholder(sessName)) resolvedName = sessName;
         }
 
-        // Gate 2: Admin must have approved
-        if (d.membershipStatus !== "active") {
-            return {
-                success: false as const,
-                error: "Your membership is pending admin approval. Your ID card will be available once approved.",
-                reason: "pending_approval",
-                data: null
+        // Check cooperative member record firstName and lastName
+        if (!resolvedName && d) {
+            const coopName = `${d.firstName || ""} ${d.lastName || ""}`.trim();
+            if (!isPlaceholder(coopName)) resolvedName = coopName;
+        }
+
+        // Search in all candidates for any non-placeholder name
+        if (!resolvedName) {
+            const candidates = [
+                userData?.name,
+                userData?.fullName,
+                session.user.name,
+                d ? `${d.firstName || ""} ${d.lastName || ""}` : ""
+            ];
+            for (const cand of candidates) {
+                if (cand && !isPlaceholder(cand.trim())) {
+                    resolvedName = cand.trim();
+                    break;
+                }
+            }
+        }
+
+        // Fall back cleanly if everything is empty or placeholder
+        if (!resolvedName) {
+            const rawName = (userData?.name || userData?.fullName || session.user.name || (d ? `${d.firstName || ""} ${d.lastName || ""}` : "")).trim();
+            if (rawName && !isPlaceholder(rawName)) {
+                resolvedName = rawName;
+            } else {
+                const email = userData?.email || session.user.email || "";
+                if (email) {
+                    const prefix = email.split("@")[0];
+                    resolvedName = prefix.split(/[._-]/).map((word: string) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+                } else {
+                    resolvedName = "Cooperative Member";
+                }
+            }
+        }
+
+        // If cooperative membership doc is missing but user is a premium subscriber, synthesize one
+        if (!d) {
+            d = {
+                firstName: userData?.firstName || resolvedName.split(" ")[0] || "Cooperative",
+                lastName: userData?.lastName || resolvedName.split(" ").slice(1).join(" ") || "Member",
+                gender: userData?.gender || "",
+                stateOfOrigin: userData?.stateOfOrigin || userData?.state || "",
+                documents: { passportPhoto: { url: userData?.passportPhotoUrl || userData?.photoUrl || null } },
+                membershipStatus: "active",
+                paymentStatus: "completed",
+                membershipTier: userPlan.charAt(0).toUpperCase() + userPlan.slice(1)
             };
         }
 
+        // Standard gating bypass for premium subscription plan holders
+        if (!isPremiumSubscriber) {
+            // Gate 1: Paystack payment must be verified
+            if (d.paymentStatus !== "completed") { 
+                return { success: false as const, error: "Your membership fee payment has not been verified. Please complete payment to access your ID card.", reason: "payment_required"};
+            }
+
+            // Gate 2: Admin must have approved
+            if (d.membershipStatus !== "active" && d.membershipStatus !== "approved" && d.status !== "approved") {
+                return {
+                    success: false as const,
+                    error: "Your membership is pending admin approval. Your ID card will be available once approved.",
+                    reason: "pending_approval",
+                    data: null
+                };
+            }
+        }
+
         // Deterministic member number (based on application year, not approval year)
-        const applicationDate: Date = d.createdAt?.toDate ? d.createdAt.toDate() : new Date();
+        const applicationDate: Date = d.createdAt?.toDate ? d.createdAt.toDate() : (userData?.createdAt?.toDate ? userData.createdAt.toDate() : new Date());
         const joinYear = applicationDate.getFullYear();
-        const memberNumber = `ESE-COOP-${joinYear}-${userId.slice(0, 6).toUpperCase()}`;
+
+        // Shorter, intuitive ID format connected directly to the plan/tier
+        let memberNumber = "";
+        let membershipTier = "Member";
+        
+        let tierCode = "COOP";
+        const currentTier = (d.membershipTier || "Member").toLowerCase();
+        if (currentTier.includes("elite")) {
+            tierCode = "ELITE";
+            membershipTier = "Elite Member";
+        } else if (currentTier.includes("standard") || currentTier.includes("std")) {
+            tierCode = "STD";
+            membershipTier = "Standard Member";
+        } else if (currentTier.includes("foundation") || currentTier.includes("fnd")) {
+            tierCode = "FND";
+            membershipTier = "Foundation Member";
+        } else if (currentTier.includes("advanced") || currentTier.includes("adv")) {
+            tierCode = "ADV";
+            membershipTier = "Advanced Member";
+        } else if (currentTier.includes("member")) {
+            membershipTier = "Cooperative Member";
+        } else {
+            membershipTier = d.membershipTier || "Member";
+        }
+
+        memberNumber = `ESE-${tierCode}-${userId.slice(-4).toUpperCase()}`;
 
         // Issue date = approvedAt (when admin approved) — not createdAt (when applied).
-        // A membership card is only valid from the date of admin approval.
-        // Fall back to createdAt for legacy records that pre-date the approvedAt field.
         const issuedAt: Date =
             d.approvedAt?.toDate
                 ? d.approvedAt.toDate()
@@ -1305,16 +1414,16 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         validUntil.setFullYear(validUntil.getFullYear() + 1);
 
         return { error: null, success: true as const, data: {
-                fullName: `${d.firstName || "" } ${d.lastName || ""}`.trim(),
+                fullName: resolvedName,
                 memberNumber,
-                membershipTier: d.membershipTier || "Member",
+                membershipTier,
                 gender: d.gender || "",
                 stateOfOrigin: d.stateOfOrigin || "",
                 passportPhotoUrl: d.documents?.passportPhoto?.url || null,
                 joinedAt: issuedAt.toISOString(),
                 validUntil: validUntil.toISOString(),
-                membershipStatus: d.membershipStatus,
-                paymentStatus: d.paymentStatus } };
+                membershipStatus: d.membershipStatus || "active",
+                paymentStatus: d.paymentStatus || "completed" } };
     } catch (error) { logger.error("getCooperativeMemberIdCardAction error:", error);
         return { success: false as const, error: "Failed to load ID card data. Please try again.", data: null };
     }
@@ -1336,13 +1445,53 @@ export async function updatePassportPhotoAction(
         const { session } = sessionResult;
 
         const userId = session.user.id;
+
+        // Fetch central user profile
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const userPlan = (userData?.serviceRegistrations?.academy?.plan || "free").toLowerCase();
+        const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
+
         const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where("userId", "==", userId)
             .orderBy("createdAt", "desc")
             .limit(1)
             .get();
 
-        if (memberSnapshot.empty) { return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
+        if (memberSnapshot.empty) { 
+            if (isPremiumSubscriber) {
+                const resolvedName = (userData?.name || userData?.fullName || session.user.name || "").trim();
+                const firstName = userData?.firstName || resolvedName.split(" ")[0] || "Cooperative";
+                const lastName = userData?.lastName || resolvedName.split(" ").slice(1).join(" ") || "Member";
+                
+                await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).set({
+                    userId,
+                    firstName,
+                    lastName,
+                    fullName: resolvedName || `${firstName} ${lastName}`,
+                    email: session.user.email || userData?.email || "",
+                    phone: userData?.phone || userData?.phoneNumber || "08000000000",
+                    membershipTier: userPlan.charAt(0).toUpperCase() + userPlan.slice(1),
+                    membershipStatus: "active",
+                    status: "active",
+                    paymentStatus: "completed",
+                    onboardingCompleted: true,
+                    onboardingCompletedAt: FieldValue.serverTimestamp(),
+                    documents: {
+                        passportPhoto: {
+                            name: passportName,
+                            url: passportUrl
+                        }
+                    },
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+                
+                revalidatePath("/cooperatives/id-card");
+                return { error: null, success: true as const, data: { message: "Passport photo updated" }, meta: null };
+            } else {
+                return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
+            }
         }
 
         const memberDoc = memberSnapshot.docs[0];

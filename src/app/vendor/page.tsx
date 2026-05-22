@@ -26,8 +26,10 @@ import {
     getVendorActivityFeedAction,
 } from "@/app/actions/vendor-dashboard";
 
-function formatCurrency(amount: number) {
-    return `₦${amount.toLocaleString()}`;
+function formatCurrency(amount: any) {
+    const value = Number(amount);
+    const safeAmount = isNaN(value) ? 0 : value;
+    return `₦${safeAmount.toLocaleString()}`;
 }
 
 export default function VendorDashboardPage() {

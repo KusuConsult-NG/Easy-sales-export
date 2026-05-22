@@ -57,6 +57,7 @@ export {
     getAcademyApplicationAction,
     requestAcademyRevisionAction,
     resubmitAcademyApplicationAction,
+    autoEnrollPaidUser,
 } from "./_actions";
 
 // ─── Admin actions (_admin.ts) ────────────────────────────────────────────────

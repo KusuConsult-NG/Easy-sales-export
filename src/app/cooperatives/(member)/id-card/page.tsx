@@ -187,7 +187,7 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
                 </div>
                 <div className="flex flex-col items-end shrink-0 pl-2">
                     <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-300 text-purple-900`}>
-                        MEMBER
+                        {(data.membershipTier || "Member").replace(" Member", "").toUpperCase()}
                     </div>
                     <Shield className="w-5 h-5 text-white/40 mt-1" />
                 </div>
@@ -514,7 +514,7 @@ export default function CooperativeIdCardPage() {
                                 {[
                                     ["Full Name", result.data.fullName],
                                     ["Member No.", result.data.memberNumber],
-                                    ["Tier", "Member"],
+                                    ["Tier", result.data.membershipTier || "Member"],
                                     ["Gender", result.data.gender || "—"],
                                     ["State of Origin", result.data.stateOfOrigin],
                                     ["Issue Date", fmt(result.data.joinedAt)],

@@ -81,9 +81,10 @@ function buildSVG(opts: {
     stateOfOrigin: string;
     joinedAt: string;
     validUntil: string;
+    membershipTier: string;
     hasPhoto: boolean;
 }): string {
-    const { fullName, memberNumber, gender, stateOfOrigin, joinedAt, validUntil, hasPhoto } = opts;
+    const { fullName, memberNumber, gender, stateOfOrigin, joinedAt, validUntil, membershipTier, hasPhoto } = opts;
 
     const rows: [string, string][] = [
         ["Gender",      capitalize(gender)],
@@ -117,6 +118,10 @@ function buildSVG(opts: {
         <text x="${PHOTO_X + PHOTO_W / 2}" y="${PHOTO_Y + PHOTO_H / 2 - 10}" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="rgba(200,180,255,0.8)" text-anchor="middle">No</text>
         <text x="${PHOTO_X + PHOTO_W / 2}" y="${PHOTO_Y + PHOTO_H / 2 + 16}" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="rgba(200,180,255,0.8)" text-anchor="middle">Photo</text>`;
 
+    // Format tier text and dynamically compute badge width to prevent text overflow
+    const tierText = (membershipTier || "Member").replace(" Member", "").toUpperCase();
+    const dynamicBadgeW = Math.max(130, tierText.length * 15 + 30);
+
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -133,7 +138,7 @@ function buildSVG(opts: {
       <rect x="${PHOTO_X}" y="${PHOTO_Y}" width="${PHOTO_W}" height="${PHOTO_H}" rx="10"/>
     </clipPath>
   </defs>
-
+ 
   <!-- Background -->
   <rect width="${W}" height="${H}" rx="18" fill="url(#bg)"/>
 
@@ -147,8 +152,8 @@ function buildSVG(opts: {
   <text x="${PAD}" y="88" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="rgba(200,180,255,0.85)" letter-spacing="2">COOPERATIVE MEMBERSHIP</text>
 
   <!-- MEMBER badge -->
-  <rect x="${W - PAD - BADGE_W}" y="22" width="${BADGE_W}" height="${BADGE_H}" rx="10" fill="rgba(196,181,253,1)"/>
-  <text x="${W - PAD - BADGE_W / 2}" y="${22 + BADGE_H * 0.68}" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#581c87" text-anchor="middle" letter-spacing="2">MEMBER</text>
+  <rect x="${W - PAD - dynamicBadgeW}" y="22" width="${dynamicBadgeW}" height="${BADGE_H}" rx="10" fill="rgba(196,181,253,1)"/>
+  <text x="${W - PAD - dynamicBadgeW / 2}" y="${22 + BADGE_H * 0.68}" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#581c87" text-anchor="middle" letter-spacing="2">${esc(tierText)}</text>
 
   <!-- Header divider -->
   <line x1="${PAD}" y1="${HEADER_H}" x2="${W - PAD}" y2="${HEADER_H}" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
@@ -190,6 +195,7 @@ export async function POST(req: NextRequest) {
         const {
             fullName = "",
             memberNumber = "",
+            membershipTier = "Member",
             gender = "",
             stateOfOrigin = "",
             joinedAt = "",
@@ -215,6 +221,7 @@ export async function POST(req: NextRequest) {
         const svg = buildSVG({
             fullName, memberNumber, gender,
             stateOfOrigin, joinedAt, validUntil,
+            membershipTier,
             hasPhoto: !!photoData,
         });
 
