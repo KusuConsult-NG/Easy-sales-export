@@ -1741,6 +1741,55 @@ async function _updateUserRolesAction(
             ...serviceUpdates,
         });
 
+        // ── Write Mock Applications for Admin Dashboards ────────────────────────
+        try {
+            for (const mapping of MODULE_ROLE_REGS) {
+                if (mapping.roles.some(r => roles.includes(r))) {
+                    let collectionName = "";
+                    let docData: any = {};
+                    let docId = `manual_${userId}`;
+                    
+                    if (mapping.key === "serviceRegistrations.academy") {
+                        collectionName = COLLECTIONS.ACADEMY_APPLICATIONS;
+                        docData = {
+                            applicationId: docId, userId: userId, status: "approved", plan: "elite", paymentStatus: "completed", source: "manual_admin", submittedAt: FieldValue.serverTimestamp(), reviewedAt: FieldValue.serverTimestamp(), reviewedBy: session.user.id
+                        };
+                    } else if (mapping.key === "serviceRegistrations.cooperatives") {
+                        collectionName = COLLECTIONS.COOPERATIVE_MEMBERS;
+                        docId = userId;
+                        docData = {
+                            userId: userId, status: "active", membershipStatus: "active", paymentStatus: "completed", membershipTier: "Member", savingsBalance: 0, loanBalance: 0, joinedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp()
+                        };
+                    } else if (mapping.key === "serviceRegistrations.export") {
+                        collectionName = COLLECTIONS.EXPORT_APPLICATIONS;
+                        docData = {
+                            applicationId: docId, userId: userId, status: "approved", paymentStatus: "completed", source: "manual_admin", submittedAt: FieldValue.serverTimestamp(), reviewedAt: FieldValue.serverTimestamp(), reviewedBy: session.user.id
+                        };
+                    } else if (mapping.key === "serviceRegistrations.wave") {
+                        collectionName = COLLECTIONS.WAVE_APPLICATIONS;
+                        docData = {
+                            applicationId: docId, userId: userId, status: "approved", paymentStatus: "completed", source: "manual_admin", submittedAt: FieldValue.serverTimestamp(), reviewedAt: FieldValue.serverTimestamp(), reviewedBy: session.user.id
+                        };
+                    } else if (mapping.key === "serviceRegistrations.farmNation") {
+                        collectionName = COLLECTIONS.FARM_NATION_APPLICATIONS;
+                        docData = {
+                            applicationId: docId, userId: userId, status: "approved", paymentStatus: "completed", source: "manual_admin", submittedAt: FieldValue.serverTimestamp(), reviewedAt: FieldValue.serverTimestamp(), reviewedBy: session.user.id
+                        };
+                    }
+                    
+                    if (collectionName) {
+                        const appRef = db.collection(collectionName).doc(docId);
+                        const existing = await appRef.get();
+                        if (!existing.exists) {
+                            await appRef.set(docData, { merge: true });
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            logger.error("[Role Update] Failed to create mock applications:", e);
+        }
+
         await createAdminAuditLog({
             action: "user_role_change",
             userId: session.user.id,
@@ -3296,6 +3345,28 @@ async function _manualAcademyEnrollmentAction(
             roles: FieldValue.arrayUnion("academy_participant"),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        // ── Write Mock Application for Admin Dashboard ────────────────────────
+        // Create an application document so the user appears in the admin Academy dashboard
+        try {
+            const mockAppRef = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(`manual_${userId}`);
+            const existingApp = await mockAppRef.get();
+            if (!existingApp.exists) {
+                await mockAppRef.set({
+                    applicationId: `manual_${userId}`,
+                    userId: userId,
+                    status: "approved",
+                    plan: plan,
+                    paymentStatus: "completed",
+                    source: "manual_enrollment",
+                    submittedAt: FieldValue.serverTimestamp(),
+                    reviewedAt: FieldValue.serverTimestamp(),
+                    reviewedBy: session.user.id
+                }, { merge: true });
+            }
+        } catch (e) {
+            logger.error("[Academy Manual Enrollment] Failed to create mock application:", e);
+        }
 
         // CLEAR CACHE
         try {
