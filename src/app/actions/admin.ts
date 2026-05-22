@@ -1657,12 +1657,12 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // caused legacy string-based createdAt dates to leak past the `query.where(">=", Timestamp)` boundary.
         if (options.fromDate) {
             const from = new Date(options.fromDate);
-            from.setHours(0, 0, 0, 0);
+            from.setUTCHours(0, 0, 0, 0);
             filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) >= from);
         }
         if (options.toDate) {
             const to = new Date(options.toDate);
-            to.setHours(23, 59, 59, 999);
+            to.setUTCHours(23, 59, 59, 999);
             filteredUsers = filteredUsers.filter(u => new Date(u.createdAt) <= to);
         }
 
