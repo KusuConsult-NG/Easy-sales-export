@@ -217,10 +217,14 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
         const { isAdmin } = await import("@/lib/admin-permissions");
         const isUserAdmin = isAdmin(roles);
 
+        // Check if the user is an Academy Elite member
+        const academyReg = userData?.serviceRegistrations?.academy;
+        const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
+
         // 🔒 SECURITY: Strict Gender Enforcement for standard users
-        // Admins (including module-specific admins) are always eligible to view resources.
+        // Admins (including module-specific admins) and Academy Elite members are always eligible.
         const existingGender = userData?.gender;
-        if (existingGender !== undefined && existingGender !== null && existingGender.toLowerCase() !== "female" && !isUserAdmin) {
+        if (existingGender !== undefined && existingGender !== null && existingGender.toLowerCase() !== "female" && !isUserAdmin && !isAcademyElite) {
             return {
                 error: null,
                 success: true as const,
@@ -555,11 +559,28 @@ async function _getWaveResourcesAction(
         // STRICT ENROLLMENT CHECK
         const memberDoc = await db.collection(COLLECTIONS.WAVE_MEMBERS).doc(session.user.id).get();
         const { isAdmin } = await import("@/lib/admin-permissions");
-        if (!memberDoc.exists || !memberDoc.data()?.active) {
-            if (!isAdmin(session.user.roles)) {
-                logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
-                return { success: false as const, error: "Access denied: Not enrolled in WAVE", meta: { cursor: null, hasMore: false }, data: null };
+        
+        let isAuthorized = false;
+        if (memberDoc.exists && memberDoc.data()?.active) {
+            isAuthorized = true;
+        } else if (isAdmin(session.user.roles)) {
+            isAuthorized = true;
+        } else {
+            // Academy Elite users also bypass strict enrollment checks
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                const academyReg = userData?.serviceRegistrations?.academy;
+                const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
+                if (isAcademyElite) {
+                    isAuthorized = true;
+                }
             }
+        }
+
+        if (!isAuthorized) {
+            logger.warn(`Unauthorized WAVE resource access attempt by ${session.user.id}`);
+            return { success: false as const, error: "Access denied: Not enrolled in WAVE", meta: { cursor: null, hasMore: false }, data: null };
         }
 
         const pageSize = Math.min(Math.max(limit, 1), 50);

@@ -179,7 +179,7 @@ export async function downloadResourceAction(resourceId: string): Promise<
             targetId: resourceId,
             targetType: "wave_resource" });
 
-        return { error: null,  success: true as const, data: null };
+        return { error: null,  success: true as const, data: { url: resource.fileUrl } };
     } catch (error: any) { logger.error("Download tracking error:", error);
         return { success: false as const, error: error.message || "Failed to track download", data: null };
     }
