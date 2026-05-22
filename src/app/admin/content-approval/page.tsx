@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CheckCircle, XCircle, Clock, Eye, FileText, Package, Home, GraduationCap, BookOpen, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Eye, FileText, Package, Home, GraduationCap, BookOpen, Loader2, Container } from "lucide-react";
 import { getPendingContentAction, approveContentAction, rejectContentAction, type PendingContentItem, type ContentType } from "@/app/actions/admin-content";
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -72,6 +72,7 @@ export default function ContentApprovalPage() {
             certificates: FileText,
             resources: BookOpen,
             courses: GraduationCap,
+            export: Container,
             all: Eye
         };
         const Icon = icons[type] || Eye;
@@ -184,6 +185,7 @@ export default function ContentApprovalPage() {
                                 <option value="all">All Content</option>
                                 <option value="products">Marketplace Products</option>
                                 <option value="land">Land Listings</option>
+                                <option value="export">Export Catalog</option>
                             </select>
                         </div>
                     </div>

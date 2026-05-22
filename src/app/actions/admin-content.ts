@@ -8,7 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue } from "firebase-admin/firestore";
 
-export type ContentType = "products" | "land" | "certificates" | "resources" | "courses";
+export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
 export interface PendingContentItem {
@@ -85,7 +85,7 @@ export async function getPendingContentAction(): Promise<
                 type: "products",
                 title: data.title || data.name || "Untitled Product",
                 submittedBy: data.sellerName || data.sellerId || "Unknown Seller",
-                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
+                submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
                 status: "pending",
                 description: `Price: ₦${retailPrice} - Category: ${data.category}`,
                 metadata: sanitizeForSerialization(data) as Record<string, unknown>,
@@ -104,9 +104,28 @@ export async function getPendingContentAction(): Promise<
                 type: "land",
                 title: data.title || "Untitled Land",
                 submittedBy: data.ownerName || data.ownerEmail || data.ownerId || "Unknown Owner",
-                submittedAt: (data.createdAt?.toDate() || new Date()).toISOString(),
+                submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
                 status: "pending",
                 description: `${data.size} ${data.unit} at ${data.state}, ${data.lga}`,
+                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
+            });
+        });
+
+        // 3. Export Catalog
+        const exportQuery = db.collection(COLLECTIONS.EXPORT_CATALOG)
+            .where("status", "==", "pending")
+            .limit(500);
+        const exportSnap = await exportQuery.get();
+        exportSnap.forEach((doc) => {
+            const data = doc.data();
+            pendingItems.push({
+                id: doc.id,
+                type: "export",
+                title: data.productName || data.title || "Untitled Export",
+                submittedBy: data.userId || "Unknown User",
+                submittedAt: (data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
+                status: "pending",
+                description: `${data.category || "General"} - ${data.availableQuantity || 0} ${data.unit || "units"}`,
                 metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
@@ -156,6 +175,14 @@ export async function approveContentAction(
                     verificationStatus: "verified",
                     verifiedAt: timestamp,
                     verifiedBy: adminId,
+                });
+                break;
+            case "export":
+                await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id).update({
+                    status: "live",
+                    isActive: true,
+                    approvedAt: timestamp,
+                    approvedBy: adminId,
                 });
                 break;
             default:
@@ -211,6 +238,15 @@ export async function rejectContentAction(
                     status: "rejected",
                     verificationStatus: "rejected",
                     verificationNotes: reason,
+                    rejectionReason: reason,
+                    rejectedAt: timestamp,
+                    rejectedBy: adminId,
+                });
+                break;
+            case "export":
+                await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id).update({
+                    status: "rejected",
+                    isActive: false,
                     rejectionReason: reason,
                     rejectedAt: timestamp,
                     rejectedBy: adminId,
