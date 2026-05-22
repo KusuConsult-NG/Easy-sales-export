@@ -27,7 +27,7 @@ import {
     Lock, Briefcase, Container, MessageSquare, User, Store,
     Waves, Building2, ClipboardCheck, ToggleLeft, BadgeCheck,
     UserX, MessageCircle, ShieldAlert, ChevronLeft, ChevronRight,
-    LogOut, X, Settings, Sprout, Zap
+    LogOut, X, Settings, Sprout, Zap, IdCard
 } from "lucide-react";
 
 
@@ -83,6 +83,7 @@ const WAVE_NAV: NavItem[] = [
 
 const COOPERATIVES_NAV: NavItem[] = [
     { name: "Dashboard",      href: "/cooperatives/dashboard",  icon: LayoutDashboard },
+    { name: "ID Card",        href: "/cooperatives/id-card",    icon: IdCard },
     { name: "My Savings",     href: "/cooperatives/my-savings", icon: Wallet },
     { name: "Loans",          href: "/cooperatives/loans",      icon: ScrollText },
     { name: "Contribute",     href: "/cooperatives/contribute", icon: TrendingUp },
