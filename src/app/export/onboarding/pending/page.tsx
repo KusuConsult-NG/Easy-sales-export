@@ -136,7 +136,7 @@ export default function ExportOnboardingPendingPage() {
                 <div className="mt-6 text-center text-slate-600 text-sm">
                     <p>
                         Need help?{" "}
-                        <Link href="/support" className="text-orange-600 hover:underline">
+                        <Link href="/contact" className="text-orange-600 hover:underline">
                             Contact Support
                         </Link>
                     </p>

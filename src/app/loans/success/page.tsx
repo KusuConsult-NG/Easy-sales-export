@@ -128,7 +128,7 @@ function LoanSuccessContent() {
                     className="mt-8 text-center text-slate-600"
                 >
                     <p className="text-sm">
-                        Need help? <Link href="/support" className="text-green-600 hover:text-green-700 font-medium underline">Contact Support</Link>
+                        Need help? <Link href="/contact" className="text-green-600 hover:text-green-700 font-medium underline">Contact Support</Link>
                     </p>
                 </motion.div>
             </motion.div>

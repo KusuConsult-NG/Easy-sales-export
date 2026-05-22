@@ -72,7 +72,7 @@ service cloud.firestore {
     // WAVE APPLICATIONS
     // ============================================
     match /wave_applications/{applicationId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(applicationId) || isOwner(resource.data.userId) || isAdmin();
       
       // Create: authenticated, owns record, required fields present, starts as pending
       allow create: if isSignedIn() &&
@@ -110,7 +110,7 @@ service cloud.firestore {
     // COOPERATIVE MEMBERSHIPS
     // ============================================
     match /cooperative_memberships/{membershipId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(membershipId) || isOwner(resource.data.userId) || isAdmin();
       
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid &&
@@ -129,7 +129,7 @@ service cloud.firestore {
     // COOPERATIVE MEMBERS (main collection used by app)
     // ============================================
     match /cooperative_members/{memberId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(memberId) || isOwner(resource.data.userId) || isAdmin();
       
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid;
@@ -148,7 +148,7 @@ service cloud.firestore {
     // COOPERATIVE ONBOARDING APPLICATIONS
     // ============================================
     match /cooperative_onboarding_applications/{applicationId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(applicationId) || isOwner(resource.data.userId) || isAdmin();
       
       allow create: if isSignedIn() &&
                        request.resource.data.userId == request.auth.uid;
@@ -426,7 +426,7 @@ service cloud.firestore {
     
     // Export Onboarding Applications
     match /export_onboarding_applications/{applicationId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(applicationId) || isOwner(resource.data.userId) || isAdmin();
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -613,6 +613,14 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isOwner(resource.data.userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Farm Nation Onboarding Applications
+    match /farm_nation_applications/{applicationId} {
+      allow read: if isOwner(applicationId) || isOwner(resource.data.userId) || isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     
@@ -880,7 +888,7 @@ service cloud.firestore {
     // ACADEMY MODULE (additional collections)
     // ============================================
     match /academy_applications/{applicationId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if isOwner(applicationId) || isOwner(resource.data.userId) || isAdmin();
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
