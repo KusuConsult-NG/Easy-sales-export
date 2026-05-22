@@ -1423,9 +1423,20 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             let bestLastName = data.lastName;
             let bestFullName = data.fullName;
             let bestPhone = data.phone;
-            let bestState = data.address?.state || data.state;
-            let bestLga = data.address?.lga || data.lga;
             
+            // Defensively extract state and lga (preventing React objects-as-children crashes)
+            let bestState = data.address?.state || data.state;
+            if (typeof bestState === 'object' && bestState !== null) {
+                bestState = bestState.state || bestState.name || "";
+            }
+            if (typeof bestState !== 'string') bestState = "";
+
+            let bestLga = data.address?.lga || data.lga;
+            if (typeof bestLga === 'object' && bestLga !== null) {
+                bestLga = bestLga.lga || bestLga.name || "";
+            }
+            if (typeof bestLga !== 'string') bestLga = "";
+
             // Aggressive KYC extraction from modules
             let bestBvn = data.kyc?.bvn || data.bvn;
             let bestBvnVerified = data.kyc?.bvnVerified ?? data.bvnVerified ?? false;
