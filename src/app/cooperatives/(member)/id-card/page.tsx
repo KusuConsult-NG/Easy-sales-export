@@ -161,8 +161,8 @@ function IdCardFace({ data }: { data: MemberIdCardData }) {
             id="cooperative-id-card"
             style={{ 
                 fontFamily: "'Arial', sans-serif", 
-                width: "340px", 
-                minHeight: "210px",
+                width: "338px", 
+                height: "213px",
                 background: "linear-gradient(to bottom right, #6b21a8, #7e22ce, #3730a3)"
             }}
             className="relative overflow-hidden rounded-2xl shadow-2xl select-none"

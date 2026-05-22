@@ -225,8 +225,8 @@ export async function POST(req: NextRequest) {
             hasPhoto: !!photoData,
         });
 
-        // Convert SVG → PNG base using sharp
-        let sharpPipeline = sharp(Buffer.from(svg)).png();
+        // Convert SVG → PNG base using sharp with explicit CR80 print density
+        let sharpPipeline = sharp(Buffer.from(svg)).withMetadata({ density: 267 }).png();
 
         // Composite photo on top if available
         if (photoData) {
@@ -260,6 +260,7 @@ export async function POST(req: NextRequest) {
                     top: PHOTO_Y,
                     blend: "over",
                 }])
+                .withMetadata({ density: 267 })
                 .png();
         }
 
