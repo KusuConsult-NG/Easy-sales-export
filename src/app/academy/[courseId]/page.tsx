@@ -17,6 +17,25 @@ import {
 } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
 
+// Helper client-side check replicated from checkCourseAccess inside _actions.ts
+function checkCourseAccess(userPlan: string, courseTier: string): boolean {
+    const normalizedTier = (courseTier || "free").toLowerCase();
+    const normalizedPlan = (userPlan || "free").toLowerCase();
+
+    if (normalizedTier === "free") return true;
+    if (normalizedPlan === "elite") return true;
+    
+    if (normalizedPlan === "standard" || normalizedPlan === "advanced") {
+        return normalizedTier === "foundation" || normalizedTier === "standard";
+    }
+    
+    if (normalizedPlan === "foundation") {
+        return normalizedTier === "foundation";
+    }
+    
+    return false;
+}
+
 interface CourseDetailPageProps {
     params: Promise<{ courseId: string }>;
 }
@@ -56,8 +75,29 @@ export default function CourseDetailPage(props: CourseDetailPageProps) {
 
                 if (mounted) {
                     if (courseReq.data) {
+                        const userPlan = (session.user as any)?.serviceRegistrations?.academy?.plan || "free";
+                        const hasAccess = checkCourseAccess(userPlan, courseReq.data.tier || "free");
+
+                        if (!hasAccess) {
+                            showToast("Upgrade your subscription to access this course", "error");
+                            router.push("/academy/application");
+                            return;
+                        }
+
                         setCourse(courseReq.data);
-                        setProgress(progressReq.data || null);
+
+                        if (!progressReq.data) {
+                            // Automatically enroll in the background if they have access but no progress document yet
+                            const enrollResult = await enrollInCourseAction(session.user.id, courseId);
+                            if (enrollResult.success) {
+                                const newProgressReq = await getUserProgressAction(session.user.id, courseId);
+                                setProgress(newProgressReq.data || null);
+                            } else {
+                                setProgress(null);
+                            }
+                        } else {
+                            setProgress(progressReq.data || null);
+                        }
                     } else {
                         // Handle not found
                     }

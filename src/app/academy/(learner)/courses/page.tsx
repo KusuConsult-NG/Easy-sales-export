@@ -51,7 +51,6 @@ export default function CourseCatalogPage() {
     const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set());
     
     const [loading, setLoading] = useState(true);
-    const [enrollingMap, setEnrollingMap] = useState<Record<string, boolean>>({});
 
     // Filter and Search States
     const [searchQuery, setSearchQuery] = useState("");
@@ -95,35 +94,6 @@ export default function CourseCatalogPage() {
         }
     }
 
-    // Handles the Enrollment operation
-    async function handleEnroll(courseId: string) {
-        if (!userId) {
-            showToast("You must be logged in to enroll", "error");
-            return;
-        }
-
-        setEnrollingMap(prev => ({ ...prev, [courseId]: true }));
-        const toastId = showToast("Enrolling in course...", "loading");
-
-        try {
-            const res = await enrollInCourseAction(userId, courseId);
-            if (res.success) {
-                showToast("Successfully enrolled! Welcome to the course.", "success");
-                setEnrolledIds(prev => {
-                    const next = new Set(prev);
-                    next.add(courseId);
-                    return next;
-                });
-            } else {
-                showToast(res.error || "Failed to enroll in the course", "error");
-            }
-        } catch (error) {
-            console.error("Enrollment error:", error);
-            showToast("An error occurred during enrollment", "error");
-        } finally {
-            setEnrollingMap(prev => ({ ...prev, [courseId]: false }));
-        }
-    }
 
     // Filter and Sort Processing
     const filteredCourses = courses.filter((course) => {
@@ -135,7 +105,10 @@ export default function CourseCatalogPage() {
         const matchesLevel = selectedLevel === "all" || course.level === selectedLevel;
         const matchesTier = selectedTier === "all" || (course.tier || "free") === selectedTier;
 
-        return matchesSearch && matchesLevel && matchesTier;
+        // Only show courses that are accessible under the user's active tier
+        const hasAccess = checkCourseAccess(userPlan, course.tier || "free");
+
+        return matchesSearch && matchesLevel && matchesTier && hasAccess;
     }).sort((a, b) => {
         if (sortBy === "a-z") {
             return a.title.localeCompare(b.title);
@@ -359,7 +332,6 @@ export default function CourseCatalogPage() {
                             const id = course.id!;
                             const isEnrolled = enrolledIds.has(id);
                             const hasAccess = checkCourseAccess(userPlan, course.tier || "free");
-                            const isEnrolling = !!enrollingMap[id];
                             const tConfig = getTierConfig(course.tier);
 
                             return (
@@ -434,23 +406,13 @@ export default function CourseCatalogPage() {
                                                     Resume Course
                                                 </Link>
                                             ) : hasAccess ? (
-                                                <button
-                                                    onClick={() => handleEnroll(id)}
-                                                    disabled={isEnrolling}
-                                                    className="inline-flex items-center justify-center gap-2 w-full py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl transition shadow-md hover:shadow-lg disabled:opacity-50"
+                                                <Link
+                                                    href={`/academy/${id}`}
+                                                    className="inline-flex items-center justify-center gap-2 w-full py-3 bg-slate-950 hover:bg-slate-800 text-white font-bold rounded-xl transition shadow-md hover:shadow-lg"
                                                 >
-                                                    {isEnrolling ? (
-                                                        <>
-                                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                                            Enrolling...
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Unlock className="w-4 h-4" />
-                                                            Enroll Now
-                                                        </>
-                                                    )}
-                                                </button>
+                                                    <Play className="w-4 h-4 fill-white text-white" />
+                                                    Start Course
+                                                </Link>
                                             ) : (
                                                 <Link
                                                     href="/academy/application"
