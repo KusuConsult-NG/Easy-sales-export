@@ -789,7 +789,25 @@ async function _getMarketplaceProductsAction(params: {
                 query = query.orderBy("createdAt", "desc");
         }
 
-        const snapshot = await query.limit(limitCount).get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await query.limit(limitCount).get();
+        } catch (e: any) {
+            if (e.message && e.message.toLowerCase().includes("index")) {
+                logger.warn("Marketplace products search failed due to missing index. Falling back.", { error: e.message });
+                indexError = true;
+                
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+                if (category && category !== "all") fallbackQuery = fallbackQuery.where("category", "==", category);
+                if (location) fallbackQuery = fallbackQuery.where("location.state", "==", location);
+                
+                snapshot = await fallbackQuery.limit(limitCount).get();
+            } else {
+                throw e;
+            }
+        }
+
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let products = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
@@ -800,6 +818,22 @@ async function _getMarketplaceProductsAction(params: {
                 return serializeValue({ id: doc.id, ...data });
             }
         });
+
+        if (indexError) {
+            products.sort((a: any, b: any) => {
+                if (sortBy === "popular") {
+                    const aViews = a.views || 0;
+                    const bViews = b.views || 0;
+                    return bViews - aViews;
+                } else {
+                    let aVal = a.createdAt || 0;
+                    let bVal = b.createdAt || 0;
+                    if (aVal instanceof Date) aVal = aVal.getTime();
+                    if (bVal instanceof Date) bVal = bVal.getTime();
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                }
+            });
+        }
 
         if (search) { 
             const searchLower = search.toLowerCase().trim();
@@ -952,19 +986,45 @@ async function _getSellerProductsAction(options: {
             query = query.where("availableQuantity", "<", 50).where("availableQuantity", ">", 0);
         }
 
-        try { 
-            query = query.orderBy(sortBy, sortDir);
-        } catch (e) { 
-            logger.warn("Sorting failed, likely missing index. Falling back to default sort.", { userId }); 
-        }
-
+        // Apply startAfter if provided
         if (lastId) { 
             const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
             if (lastDoc.exists) query = query.startAfter(lastDoc);
         }
 
         query = query.limit(limit);
-        const snapshot = await query.get();
+
+        let snapshot;
+        let indexError = false;
+        try { 
+            // orderBy DOES NOT throw here. It throws on get() if missing index.
+            // We apply orderBy, and if get() fails, we catch it.
+            let orderedQuery = query.orderBy(sortBy, sortDir);
+            snapshot = await orderedQuery.get();
+        } catch (e: any) { 
+            const errMsg = e.message ? e.message.toLowerCase() : "";
+            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
+                logger.warn("Sorting failed, likely missing index. Falling back to unordered query.", { userId, error: e.message }); 
+                indexError = true;
+                
+                // Rebuild query without orderBy
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("sellerId", "==", userId);
+                if (status && status !== "all" && status !== "low_stock") { 
+                    fallbackQuery = fallbackQuery.where("status", "==", status);
+                }
+                if (status === "low_stock") { 
+                    fallbackQuery = fallbackQuery.where("availableQuantity", "<", 50).where("availableQuantity", ">", 0);
+                }
+                if (lastId) {
+                    const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
+                    if (lastDoc.exists) fallbackQuery = fallbackQuery.startAfter(lastDoc);
+                }
+                fallbackQuery = fallbackQuery.limit(limit);
+                snapshot = await fallbackQuery.get();
+            } else {
+                throw e;
+            }
+        }
         const { serializeValue } = await import("@/lib/firestore-serialize");
         
         let products = snapshot.docs.map((doc: any) => { 
@@ -984,6 +1044,22 @@ async function _getSellerProductsAction(options: {
                 p.title?.toLowerCase()?.includes(searchLower) ||
                 p.category?.toLowerCase()?.includes(searchLower)
             );
+        }
+
+        if (indexError) {
+            // Sort in memory since the database query couldn't do it
+            products.sort((a: any, b: any) => {
+                let aVal = a[sortBy] || 0;
+                let bVal = b[sortBy] || 0;
+                if (aVal instanceof Date) aVal = aVal.getTime();
+                if (bVal instanceof Date) bVal = bVal.getTime();
+                
+                if (sortDir === "desc") {
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                } else {
+                    return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                }
+            });
         }
 
         let newLastId = undefined;
@@ -1043,7 +1119,31 @@ async function _getSellerOrdersAction(options: { limit?: number;
 
         query = query.limit(fetchLimit);
 
-        const snapshot = await query.get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await query.get();
+        } catch (e: any) {
+            if (e.message && e.message.toLowerCase().includes("index")) {
+                logger.warn("Get orders failed due to missing index. Falling back to unordered query.", { userId, error: e.message });
+                indexError = true;
+                
+                let fallbackQuery = db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                    .where("sellerIds", "array-contains", userId);
+                if (status && status !== "all") {
+                    fallbackQuery = fallbackQuery.where("status", "==", status);
+                }
+                if (lastId && !search) {
+                    const lastDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(lastId).get();
+                    if (lastDoc.exists) fallbackQuery = fallbackQuery.startAfter(lastDoc);
+                }
+                fallbackQuery = fallbackQuery.limit(fetchLimit);
+                snapshot = await fallbackQuery.get();
+            } else {
+                throw e;
+            }
+        }
+
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let orders = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
@@ -1064,6 +1164,16 @@ async function _getSellerOrdersAction(options: { limit?: number;
                 ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(q);
             }).slice(0, limit);
+        }
+
+        if (indexError && !search) {
+            orders.sort((a: any, b: any) => {
+                let aVal = a.createdAt || 0;
+                let bVal = b.createdAt || 0;
+                if (aVal instanceof Date) aVal = aVal.getTime();
+                if (bVal instanceof Date) bVal = bVal.getTime();
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            });
         }
 
         let newLastId = undefined;

@@ -40,21 +40,47 @@ export async function getUserExportProductsAction() { try {
 
         const userId = session.user.id;
 
-        const snapshot = await db.collection(COLLECTIONS.EXPORT_CATALOG)
-            .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await db.collection(COLLECTIONS.EXPORT_CATALOG)
+                .where("userId", "==", userId)
+                .orderBy("createdAt", "desc")
+                .get();
+        } catch (e: any) {
+            const errMsg = e.message ? e.message.toLowerCase() : "";
+            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
+                logger.warn("Get user export products failed due to missing index. Falling back.", { userId, error: e.message });
+                indexError = true;
+                snapshot = await db.collection(COLLECTIONS.EXPORT_CATALOG)
+                    .where("userId", "==", userId)
+                    .get();
+            } else {
+                throw e;
+            }
+        }
 
-        const products = snapshot.docs.map(doc => { const data = doc.data();
+        const products = snapshot.docs.map(doc => { 
+            const data = doc.data();
             return serializeValue({
                 id: doc.id,
                 ...data,
             });
         });
 
-        return { error: null, success: true as const, data: products
- };
-    } catch (error: any) { logger.error("Get user export products error:", error);
+        if (indexError) {
+            products.sort((a: any, b: any) => {
+                let aVal = a.createdAt || 0;
+                let bVal = b.createdAt || 0;
+                if (aVal instanceof Date) aVal = aVal.getTime();
+                if (bVal instanceof Date) bVal = bVal.getTime();
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            });
+        }
+
+        return { error: null, success: true as const, data: products };
+    } catch (error: any) { 
+        logger.error("Get user export products error:", error);
         return { error: "Failed to fetch products", success: false as const, data: null };
     }
 }
