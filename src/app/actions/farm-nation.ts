@@ -156,9 +156,7 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
             const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "==", userId)
-                .orderBy("submittedAt", "desc")
-                .limit(1);
+                .where("userId", "==", userId);
             
             const [userDoc, appSnap] = await Promise.all([
                 transaction.get(userRef),
@@ -177,8 +175,16 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             });
 
             // Update application
-            if (!appSnap.empty) { 
-                transaction.update(appSnap.docs[0].ref, {
+            if (!appSnap.empty) {
+                const docs = [...appSnap.docs];
+                docs.sort((a, b) => {
+                    const aVal = a.data().submittedAt;
+                    const bVal = b.data().submittedAt;
+                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                transaction.update(docs[0].ref, {
                     status: "approved",
                     approvedAt: FieldValue.serverTimestamp(),
                     approvedBy: session.user.id,
@@ -205,9 +211,7 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
             const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "==", userId)
-                .orderBy("submittedAt", "desc")
-                .limit(1);
+                .where("userId", "==", userId);
             
             const [userDoc, appSnap] = await Promise.all([
                 transaction.get(userRef),
@@ -224,8 +228,16 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
                 roles: FieldValue.arrayRemove("farmer") 
             });
 
-            if (!appSnap.empty) { 
-                transaction.update(appSnap.docs[0].ref, {
+            if (!appSnap.empty) {
+                const docs = [...appSnap.docs];
+                docs.sort((a, b) => {
+                    const aVal = a.data().submittedAt;
+                    const bVal = b.data().submittedAt;
+                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                transaction.update(docs[0].ref, {
                     status: "rejected",
                     rejectionReason: reason,
                     rejectedAt: FieldValue.serverTimestamp(),
@@ -375,12 +387,17 @@ async function _getMyPropertiesAction(): Promise<ActionResponse<{ properties: Pr
                 .orderBy("createdAt", "desc")
                 .get();
         } catch (e: any) { 
-            if (e.message?.includes("FAILED_PRECONDITION")) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                 logger.warn("Missing index for getMyPropertiesAction, falling back to memory sort");
                 snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
                     .where("ownerId", "==", session.user.id)
                     .get();
                 const properties = serializeDocs<Property>(snapshot.docs);
+                properties.sort((a, b) => {
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return bTime - aTime;
+                });
                 return { error: null, success: true as const, data: { properties }, meta: null };
             }
             throw e;
@@ -513,18 +530,23 @@ async function _getMyPurchaseRequestsAction(): Promise<ActionResponse<{ requests
                 .orderBy("createdAt", "desc")
                 .get();
         } catch (e: any) { 
-            if (e.message?.includes("FAILED_PRECONDITION")) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                 logger.warn("Missing index for getMyPurchaseRequestsAction, falling back to memory sort");
                 snapshot = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
                     .where("buyerId", "==", session.user.id)
                     .get();
-                const requests = serializeDocs(snapshot.docs);
+                const requests = serializeDocs<any>(snapshot.docs);
+                requests.sort((a, b) => {
+                    const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return bTime - aTime;
+                });
                 return { error: null, success: true as const, data: { requests }, meta: null };
             }
             throw e;
         }
 
-        const requests = serializeDocs(snapshot.docs);
+        const requests = serializeDocs<any>(snapshot.docs);
 
         return { error: null, success: true as const, data: { requests } };
     } catch (error: any) { 
@@ -870,11 +892,35 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for Farm Nation applications.
         if (status !== "approved") { 
-            const appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "==", session.user.id)
-                .orderBy("submittedAt", "desc")
-                .limit(1)
-                .get();
+            let appSnap;
+            try {
+                appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                    .where("userId", "==", session.user.id)
+                    .orderBy("submittedAt", "desc")
+                    .limit(1)
+                    .get();
+            } catch (e: any) {
+                if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
+                    logger.warn("Missing index for checkFarmNationStatusAction, falling back to memory sort");
+                    const rawSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                        .where("userId", "==", session.user.id)
+                        .get();
+                    const sortedDocs = [...rawSnap.docs];
+                    sortedDocs.sort((a, b) => {
+                        const aVal = a.data().submittedAt;
+                        const bVal = b.data().submittedAt;
+                        const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
+                        const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
+                        return bTime - aTime;
+                    });
+                    appSnap = {
+                        empty: sortedDocs.length === 0,
+                        docs: sortedDocs.slice(0, 1)
+                    };
+                } else {
+                    throw e;
+                }
+            }
 
             if (!appSnap.empty) {
                 const appData = appSnap.docs[0].data();
@@ -1206,7 +1252,7 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
                 db.collection(COLLECTIONS.USERS).doc(userId).get(),
             ]);
         } catch (e: any) { 
-            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                 logger.warn("Missing index for Dashboard Stats, falling back to sequential memory sort");
                 // Fetch sequentially without sort
                 const [lSnap, tSnap, uDoc] = await Promise.all([
@@ -1234,6 +1280,12 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
             type: d.category || 'sale',
             createdAt: d.createdAt 
         }));
+        // Sort in-memory by createdAt descending
+        properties.sort((a, b) => {
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bTime - aTime;
+        });
 
         const transactions = serializeDocs<any>(transactionsSnap.docs).map(d => ({ 
             id: d.id,
@@ -1243,6 +1295,12 @@ async function _getFarmNationDashboardStatsAction(): Promise<ActionResponse<Farm
             status: d.status || 'pending',
             createdAt: d.createdAt 
         }));
+        // Sort in-memory by createdAt descending
+        transactions.sort((a, b) => {
+            const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return bTime - aTime;
+        });
 
         // Derive stats from listings (Seller)
         const activeListings = properties.filter(p => p.status === 'available').length;

@@ -64,7 +64,8 @@ interface NavItem {
 // ---------------------------------------------------------------------------
 const ACADEMY_NAV: NavItem[] = [
     { name: "Learning Home",  href: "/academy/dashboard",   icon: GraduationCap },
-    { name: "My Courses",     href: "/academy/courses",     icon: BookOpen },
+    { name: "Browse Courses", href: "/academy/courses",     icon: Search },
+    { name: "My Courses",     href: "/academy/my-courses",  icon: BookOpen },
     { name: "Live Classes",   href: "/academy/live",        icon: Video },
     { name: "Certificates",   href: "/academy/certificate", icon: Award },
     { name: "My Progress",    href: "/academy/progress",    icon: TrendingUp },
