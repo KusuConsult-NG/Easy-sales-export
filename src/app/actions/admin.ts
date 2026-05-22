@@ -943,6 +943,25 @@ async function _approveLoanApplication(
                 return { error: null, success: true as const, alreadyProcessed: true, loanData };
             }
 
+            // Double-lending verification: Check for other active/pending loans platform-wide
+            const borrowerId = loanData.userId;
+            const otherGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("userId", "==", borrowerId)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const otherGeneralLoansSnap = await transaction.get(otherGeneralLoansQuery);
+
+            const otherCoopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .where("memberId", "==", borrowerId)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const otherCoopLoansSnap = await transaction.get(otherCoopLoansQuery);
+
+            const otherGeneralLoansCount = otherGeneralLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
+            const otherCoopLoansCount = otherCoopLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
+
+            if (otherGeneralLoansCount > 0 || otherCoopLoansCount > 0) {
+                throw new Error("Active or pending loan application already exists platform-wide for this user.");
+            }
+
             // Validate tier eligibility
             const tierMultiplier = 2.0; 
             const maxLoanAmount = (loanData.contributionAmount || 0) * tierMultiplier;

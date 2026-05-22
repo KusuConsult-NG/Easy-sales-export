@@ -26,6 +26,7 @@ const profileUpdateSchema = z.object({ firstName: z.string().max(50).optional(),
     location: z.string().optional(),
     bio: z.string().max(500).optional(),
     identityDocument: z.string().optional(),
+    photoURL: z.string().optional(),
     version: z.number().optional() });
 
 const notificationPreferencesSchema = z.object({ email: z.boolean(),
@@ -87,6 +88,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     location?: string;
     bio?: string;
     identityDocument?: string;
+    photoURL?: string;
     version?: number; }) => { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;

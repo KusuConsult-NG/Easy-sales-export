@@ -109,6 +109,8 @@ class Logger {
                 break;
         }
     }
+
+
 }
 
 // Export singleton instance

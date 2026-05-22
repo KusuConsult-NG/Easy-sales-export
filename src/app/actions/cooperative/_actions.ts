@@ -918,14 +918,20 @@ async function _applyForLoanAction(
             const membershipDoc = membershipSnapshot.docs[0];
             const membershipData = membershipDoc.data();
 
-            // 1. Check for active loans (Prevent multiple active loans if policy requires)
+            // 1. Check for active/pending loans in both collections (Double-lending protection)
             const loansRef = db.collection(COLLECTIONS.COOPERATIVE_LOANS);
-            const activeLoansQuery = loansRef
+            const activeCoopLoansQuery = loansRef
                 .where("memberId", "==", userId)
-                .where("status", "in", ["pending", "approved", "disbursed"]);
-            const activeLoansSnap = await t.get(activeLoansQuery);
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const activeCoopLoansSnap = await t.get(activeCoopLoansQuery);
 
-            if (!activeLoansSnap.empty) { throw new Error("You already have an active or pending loan application");
+            const activeGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("userId", "==", userId)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const activeGeneralLoansSnap = await t.get(activeGeneralLoansQuery);
+
+            if (!activeCoopLoansSnap.empty || !activeGeneralLoansSnap.empty) {
+                throw new Error("Active or pending loan application already exists platform-wide.");
             }
 
             // 2. Check Loan Limit (e.g., 3x Savings Balance)
@@ -1254,11 +1260,16 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         const { session } = sessionResult;
 
         const userId = session.user.id;
-        const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+        const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
 
-        if (!memberDoc.exists) { return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
+        if (memberSnapshot.empty) { return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
         }
 
+        const memberDoc = memberSnapshot.docs[0];
         const d = memberDoc.data()!;
 
         // Gate 1: Paystack payment must be verified
@@ -1325,13 +1336,17 @@ export async function updatePassportPhotoAction(
         const { session } = sessionResult;
 
         const userId = session.user.id;
-        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
-        const memberDoc = await memberRef.get();
+        const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where("userId", "==", userId)
+            .orderBy("createdAt", "desc")
+            .limit(1)
+            .get();
 
-        if (!memberDoc.exists) { return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
+        if (memberSnapshot.empty) { return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
         }
 
-        await memberRef.update({ "documents.passportPhoto": {
+        const memberDoc = memberSnapshot.docs[0];
+        await memberDoc.ref.update({ "documents.passportPhoto": {
                 name: passportName,
                 url: passportUrl },
             updatedAt: FieldValue.serverTimestamp() });

@@ -20,7 +20,7 @@ export interface LoanApplication {
     amount: number;
     purpose: string;
     durationMonths: number;
-    status: "pending" | "approved" | "rejected" | "disbursed" | "repaid";
+    status: "pending" | "approved" | "rejected" | "disbursed" | "repaid" | "partially_approved";
     contributionAmount: number;
     tier: "Member";
     interestRate: number;
@@ -90,28 +90,6 @@ export async function submitLoanApplicationAction(formData: {
                 error: `Repayment duration exceeds ${actualTier} tier limit. Maximum: ${maxDuration} months`};
         }
 
-        // ===== STANDARD ELIGIBILITY =====
-        // Check eligibility
-        const activeLoansSnapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
-            .where("userId", "==", formData.userId)
-            .where("status", "in", ["approved", "disbursed"])
-            .get();
-
-        const currentLoanBalance = activeLoansSnapshot.docs.reduce((acc, doc) => {
-            const data = doc.data();
-            return acc + (data.amount || 0);
-        }, 0);
-
-        const eligibility = isEligibleForLoan(
-            formData.contributionAmount,
-            formData.amount,
-            currentLoanBalance
-        );
-
-        if (!eligibility.eligible) {
-            return { success: false as const, error: eligibility.reason || "Not eligible", data: null };
-        }
-
         // Calculate repayment in kobo to eliminate floating-point drift
         const interestRate = getTierInterestRate(formData.tier);
         const amountKobo = Math.round(formData.amount * 100);
@@ -137,7 +115,7 @@ export async function submitLoanApplicationAction(formData: {
         const totalRepayment = (amountKobo + totalInterestKobo) / 100;
         const monthlyPayment = Math.round((amountKobo + totalInterestKobo) / n) / 100;
 
-        // Create application
+        // Create application payload
         const application: Omit<LoanApplication, "id"> = {
             userId: formData.userId,
             userEmail: formData.userEmail,
@@ -154,7 +132,48 @@ export async function submitLoanApplicationAction(formData: {
             appliedAt: FieldValue.serverTimestamp(),
         };
 
-        const docRef = await db.collection(COLLECTIONS.LOAN_APPLICATIONS).add(application);
+        // ATOMIC TRANSACTION: Double-Lending & Eligibility Verification
+        const docRef = await db.runTransaction(async (transaction) => {
+            // 1. Double-lending verification
+            const generalLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("userId", "==", formData.userId)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const generalLoansSnap = await transaction.get(generalLoansQuery);
+
+            const coopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .where("memberId", "==", formData.userId)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const coopLoansSnap = await transaction.get(coopLoansQuery);
+
+            if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
+                throw new Error("Active or pending loan application already exists platform-wide.");
+            }
+
+            // 2. Standard eligibility check (using active/disbursed only for balance calculation)
+            const activeLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("userId", "==", formData.userId)
+                .where("status", "in", ["approved", "disbursed"]);
+            const activeLoansSnap = await transaction.get(activeLoansQuery);
+
+            const currentLoanBalance = activeLoansSnap.docs.reduce((acc, doc) => {
+                const data = doc.data();
+                return acc + (data.amount || 0);
+            }, 0);
+
+            const eligibility = isEligibleForLoan(
+                formData.contributionAmount,
+                formData.amount,
+                currentLoanBalance
+            );
+
+            if (!eligibility.eligible) {
+                throw new Error(eligibility.reason || "Not eligible");
+            }
+
+            const newDocRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
+            transaction.set(newDocRef, application);
+            return newDocRef;
+        });
 
         await createAdminAuditLog({
             action: "loan_applied",
@@ -170,9 +189,9 @@ export async function submitLoanApplicationAction(formData: {
         });
 
         return { error: null, success: true as const, applicationId: docRef.id , data: null };
-    } catch (error) {
+    } catch (error: any) {
         logger.error("Loan application error:", error);
-        return { success: false as const, error: "Failed to submit loan application", data: null };
+        return { success: false as const, error: error?.message || "Failed to submit loan application", data: null };
     }
 }
 
@@ -527,42 +546,75 @@ export async function approveLoanAction(
 
             const appData = appDoc.data() as LoanApplication;
 
-            if (appData.status !== "pending") {
-                throw new Error("Application is not pending");
+            if (appData.status !== "pending" && appData.status !== "partially_approved") {
+                throw new Error("Application is not pending or partially approved");
             }
 
-            // CRITICAL CHECK: Does this user already have an active loan?
-            // We must query INSIDE the transaction or use a locking document.
-            // Since we can't easily query across common fields in a transaction query unless indexed and specific,
-            // we will check the 'loan_applications' for this user.
-            // However, Firestore transactions require reads to come before writes.
-            // We will query for "approved" or "disbursed" loans for this user.
-
-            const activeLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+            // Double-lending verification: Check for other active/pending loans platform-wide
+            const otherGeneralLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
                 .where("userId", "==", appData.userId)
-                .where("status", "in", ["approved", "disbursed"]);
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const otherGeneralLoansSnap = await transaction.get(otherGeneralLoansQuery);
 
-            const activeLoansSnapshot = await transaction.get(activeLoansQuery);
+            const otherCoopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .where("memberId", "==", appData.userId)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const otherCoopLoansSnap = await transaction.get(otherCoopLoansQuery);
 
-            let currentLoanBalance = 0;
-            activeLoansSnapshot.forEach(doc => {
-                currentLoanBalance += (doc.data().amount || 0);
-            });
+            const otherGeneralLoansCount = otherGeneralLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
+            const otherCoopLoansCount = otherCoopLoansSnap.docs.filter(doc => doc.id !== applicationId).length;
+
+            if (otherGeneralLoansCount > 0 || otherCoopLoansCount > 0) {
+                throw new Error("Active or pending loan application already exists platform-wide for this user.");
+            }
 
             const { getMaxLoanAmount } = await import("@/lib/cooperative-tiers");
             const maxLoan = getMaxLoanAmount(appData.contributionAmount);
 
-            if (currentLoanBalance + appData.amount > maxLoan) {
-                throw new Error(`Total active loan balance plus this new loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
+            if (appData.amount > maxLoan) {
+                throw new Error(`This loan exceeds maximum limit of ₦${maxLoan.toLocaleString()}.`);
             }
 
-            // Approve the loan
-            transaction.update(appRef, {
-                status: "approved",
-                reviewedAt: FieldValue.serverTimestamp(),
-                reviewedBy: effectiveAdminId,
-                updatedAt: FieldValue.serverTimestamp()
-            });
+            // High-Value Maker-Checker Logic
+            const MAKER_CHECKER_THRESHOLD = 1000000;
+            if (appData.amount >= MAKER_CHECKER_THRESHOLD) {
+                const approvalChain = (appData as any).approvalChain || {};
+
+                if (!approvalChain.firstApprover) {
+                    // First Approval (Maker)
+                    transaction.update(appRef, {
+                        approvalChain: {
+                            firstApprover: effectiveAdminId,
+                            firstApprovalAt: FieldValue.serverTimestamp(),
+                            firstApproverName: session.user.name || session.user.email
+                        },
+                        status: "partially_approved",
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                } else {
+                    // Second Approval (Checker)
+                    if (approvalChain.firstApprover === effectiveAdminId) {
+                        throw new Error("Security Violation: You cannot verify your own approval. Another admin is required.");
+                    }
+                    transaction.update(appRef, {
+                        "approvalChain.secondApprover": effectiveAdminId,
+                        "approvalChain.secondApprovalAt": FieldValue.serverTimestamp(),
+                        "approvalChain.secondApproverName": session.user.name || session.user.email,
+                        status: "approved",
+                        reviewedAt: FieldValue.serverTimestamp(),
+                        reviewedBy: effectiveAdminId,
+                        updatedAt: FieldValue.serverTimestamp()
+                    });
+                }
+            } else {
+                // Regular approval (no Maker-Checker needed for low value)
+                transaction.update(appRef, {
+                    status: "approved",
+                    reviewedAt: FieldValue.serverTimestamp(),
+                    reviewedBy: effectiveAdminId,
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
         });
 
         // Fetch fresh data for audit log
@@ -570,7 +622,7 @@ export async function approveLoanAction(
         const appData = updatedAppDoc.data() as LoanApplication;
 
         await createAdminAuditLog({
-            action: "loan_approved",
+            action: appData.status === "partially_approved" ? "loan_partially_approved" : "loan_approved",
             userId: effectiveAdminId,
             targetId: applicationId,
             targetType: "loan_application",

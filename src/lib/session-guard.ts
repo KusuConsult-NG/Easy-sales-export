@@ -79,6 +79,7 @@ export async function requireSession(): Promise<
                         roles: ["general_user"],
                         isVerified: true,
                         verified: true,
+                        profileComplete: false,
                     };
 
                     // Only write name fields when we have a real name — avoids

@@ -1,5 +1,6 @@
 import { logger } from "@/lib/logger";
 import { logTelemetryAction } from "@/app/actions/telemetry";
+import { logObservabilityTrace } from "@/lib/logger-server";
 import { z } from "zod";
 
 /**
@@ -42,6 +43,45 @@ function redactSensitiveData(data: any): any {
 }
 
 /**
+ * Capture structured observability trace and write to telemetry database
+ */
+async function captureObservabilityTrace(actionName: string, error: any, args: any[]): Promise<void> {
+    try {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        let userState = "anonymous";
+        let sessionContext: any = null;
+
+        try {
+            const { requireSession } = await import("@/lib/session-guard");
+            const sessionRes = await requireSession();
+            if (sessionRes && sessionRes.session?.user) {
+                userState = JSON.stringify({
+                    id: sessionRes.session.user.id,
+                    roles: sessionRes.session.user.roles || [],
+                });
+                sessionContext = {
+                    userEmail: sessionRes.session.user.email,
+                    userName: sessionRes.session.user.name,
+                };
+            }
+        } catch (sessionErr) {
+            console.error("[captureObservabilityTrace] Failed to get session:", sessionErr);
+        }
+
+        await logObservabilityTrace({
+            rootCause: errorMessage,
+            affectedModule: actionName,
+            userState,
+            queryOrAction: JSON.stringify(redactSensitiveData(args)),
+            stackTrace: error instanceof Error ? error.stack || "" : "No stack trace",
+            sessionContext
+        });
+    } catch (e) {
+        console.error("[captureObservabilityTrace] Failed to log telemetry trace:", e);
+    }
+}
+
+/**
  * A higher-order function that wraps Server Actions to catch any unhandled exceptions
  * and return them safely as structured { success: false, error: string } objects.
  * Prevents Node.js runtime crashes and 500 Server Errors in Next.js 16.
@@ -74,6 +114,11 @@ export function withSafeAction<TArgs extends any[], TReturn>(
             logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { 
                 stack: error?.stack,
                 input: redactSensitiveData(args)
+            });
+
+            // Asynchronously capture the detailed observability trace to Firestore
+            captureObservabilityTrace(actionName, error, args).catch(err => {
+                console.error("[withSafeAction] Failed to capture trace:", err);
             });
 
             // Return safe string to client boundaries
@@ -119,6 +164,11 @@ export function withFlexibleSafeAction<TArgs extends any[], TReturn>(
             logTelemetryAction('error', `[Unhandled Exception in Action: ${actionName}] ${errorMessage}`, { 
                 stack: error?.stack,
                 input: redactSensitiveData(args)
+            });
+
+            // Asynchronously capture the detailed observability trace to Firestore
+            captureObservabilityTrace(actionName, error, args).catch(err => {
+                console.error("[withFlexibleSafeAction] Failed to capture trace:", err);
             });
 
             // Return safe string to client boundaries

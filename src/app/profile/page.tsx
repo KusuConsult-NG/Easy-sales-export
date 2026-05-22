@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
@@ -38,6 +38,7 @@ export default function ProfilePage() {
         location: "",
         bio: "",
         identityDocument: "",
+        photoURL: "",
         notifications: {
             email: true,
             push: false,
@@ -49,12 +50,64 @@ export default function ProfilePage() {
     const [rawPhone, setRawPhone] = useState("");
     const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+
     // Password change state
     const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
     const [isChangingPassword, setIsChangingPassword] = useState(false);
     const [passwordData, setPasswordData] = useState({ current: "", new: "", confirm: "" });
     const [passwordError, setPasswordError] = useState("");
     const [passwordSuccess, setPasswordSuccess] = useState("");
+
+    const handleAvatarClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingImage(true);
+        setSaveMessage(null);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("folder", "avatars");
+
+            const res = await fetch("/api/upload", { method: "POST", body: formData });
+            const data = await res.json();
+
+            if (data.success && data.url) {
+                // Update Firestore profile with the photoURL
+                const result = await guardRun(updateUserProfileAction({
+                    photoURL: data.url
+                }));
+
+                if (result.success) {
+                    setUserData(prev => ({ ...prev, photoURL: data.url }));
+                    
+                    // Sync the NextAuth session image on the client
+                    await update({ image: data.url });
+
+                    setSaveMessage({ type: 'success', text: 'Profile picture updated successfully!' });
+                } else {
+                    setSaveMessage({ type: 'error', text: result.error || 'Failed to save profile picture URL' });
+                }
+            } else {
+                setSaveMessage({ type: 'error', text: data.error || 'Failed to upload image' });
+            }
+        } catch (err) {
+            console.error("Avatar upload error:", err);
+            setSaveMessage({ type: 'error', text: 'An error occurred during avatar upload' });
+        } finally {
+            setIsUploadingImage(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+            setTimeout(() => setSaveMessage(null), 4000);
+        }
+    };
 
     // Load user profile on mount
     useEffect(() => {
@@ -75,6 +128,7 @@ export default function ProfilePage() {
                     location: p.location || "",
                     bio: p.bio || "",
                     identityDocument: p.identityDocument || "",
+                    photoURL: p.photoURL || "",
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
 
@@ -309,9 +363,15 @@ export default function ProfilePage() {
                         {/* User Card */}
                         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
                             <div className="flex flex-col items-center text-center">
-                                <div className="relative mb-4 group cursor-pointer">
-                                    <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-4 border-white shadow-lg">
-                                        {user.image ? (
+                                <div 
+                                    onClick={handleAvatarClick}
+                                    className="relative mb-4 group cursor-pointer"
+                                    title="Click to change profile picture"
+                                >
+                                    <div className="w-24 h-24 rounded-full overflow-hidden bg-slate-100 border-4 border-white shadow-lg flex items-center justify-center">
+                                        {isUploadingImage ? (
+                                            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                                        ) : user.image ? (
                                             <Image
                                                 src={user.image}
                                                 alt={user.name || "User"}
@@ -325,10 +385,19 @@ export default function ProfilePage() {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                                        <Camera className="w-6 h-6 text-white" />
-                                    </div>
+                                    {!isUploadingImage && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                                            <Camera className="w-6 h-6 text-white" />
+                                        </div>
+                                    )}
                                 </div>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleAvatarChange}
+                                    accept="image/*"
+                                    className="hidden"
+                                />
                                 <h2 className="text-xl font-bold text-slate-900">{user.name}</h2>
                                 <p className="text-sm text-slate-500 capitalize">
                                     {user.roles && user.roles.length > 0 ? user.roles[0] : 'Member'}

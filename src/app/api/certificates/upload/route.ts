@@ -44,10 +44,7 @@ export async function POST(request: NextRequest) {
             try {
                 const parsedUrl = new URL(fileUrl);
                 const allowedHostnames = [
-                    "res.cloudinary.com",
-                    "storage.googleapis.com",
-                    "firebasestorage.googleapis.com",
-                    "storage.cloud.google.com"
+                    "res.cloudinary.com"
                 ];
                 const hostname = parsedUrl.hostname;
                 const isAllowed = allowedHostnames.some(allowed => 

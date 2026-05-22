@@ -27,6 +27,21 @@ export async function submitLoanApplication(
 
         // Create loan application in Firestore via transaction to ensure side-effects are atomic
         const result = await db.runTransaction(async (transaction) => {
+            // Double-lending verification
+            const generalLoansQuery = db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+                .where("userId", "==", session.user.id)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const generalLoansSnap = await transaction.get(generalLoansQuery);
+
+            const coopLoansQuery = db.collection(COLLECTIONS.COOPERATIVE_LOANS)
+                .where("memberId", "==", session.user.id)
+                .where("status", "in", ["pending", "reviewing", "approved", "partially_approved", "disbursed"]);
+            const coopLoansSnap = await transaction.get(coopLoansQuery);
+
+            if (!generalLoansSnap.empty || !coopLoansSnap.empty) {
+                throw new Error("Active or pending loan application already exists platform-wide.");
+            }
+
             const loanRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc();
             transaction.set(loanRef, {
                 ...validated,

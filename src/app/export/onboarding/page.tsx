@@ -100,9 +100,7 @@ export default function ExportOnboardingPage() {
                         setIsEditMode(true);
                         setIsLoading(false);
                     } else {
-                        // Stay on page — do NOT auto-redirect pending users
-                        // They can navigate to the pending status page themselves via a link
-                        setIsLoading(false);
+                        router.replace("/export/onboarding/pending");
                     }
                 } else if (status === "approved" || status === "active") {
                     const hasAccess = await checkExportAccessAction();

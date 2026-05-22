@@ -200,7 +200,15 @@ export async function POST(req: NextRequest) {
         // Fetch passport photo as base64
         let photoData: { b64: string; mime: string } | null = null;
         if (passportPhotoUrl) {
-            photoData = await fetchAsBase64(passportPhotoUrl);
+            let finalPhotoUrl = passportPhotoUrl;
+            if (!/^https?:\/\//i.test(passportPhotoUrl)) {
+                try {
+                    finalPhotoUrl = new URL(passportPhotoUrl, req.url).toString();
+                } catch (e) {
+                    logger.error("Failed to construct absolute URL for passport photo:", e);
+                }
+            }
+            photoData = await fetchAsBase64(finalPhotoUrl);
         }
 
         // Build SVG (photo slot left transparent — will be composited)
