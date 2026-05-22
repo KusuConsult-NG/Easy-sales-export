@@ -1376,31 +1376,9 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         const applicationDate: Date = d.createdAt?.toDate ? d.createdAt.toDate() : (userData?.createdAt?.toDate ? userData.createdAt.toDate() : new Date());
         const joinYear = applicationDate.getFullYear();
 
-        // Shorter, intuitive ID format connected directly to the plan/tier
-        let memberNumber = "";
-        let membershipTier = "Member";
-        
-        let tierCode = "COOP";
-        const currentTier = (d.membershipTier || "Member").toLowerCase();
-        if (currentTier.includes("elite")) {
-            tierCode = "ELITE";
-            membershipTier = "Elite Member";
-        } else if (currentTier.includes("standard") || currentTier.includes("std")) {
-            tierCode = "STD";
-            membershipTier = "Standard Member";
-        } else if (currentTier.includes("foundation") || currentTier.includes("fnd")) {
-            tierCode = "FND";
-            membershipTier = "Foundation Member";
-        } else if (currentTier.includes("advanced") || currentTier.includes("adv")) {
-            tierCode = "ADV";
-            membershipTier = "Advanced Member";
-        } else if (currentTier.includes("member")) {
-            membershipTier = "Cooperative Member";
-        } else {
-            membershipTier = d.membershipTier || "Member";
-        }
-
-        memberNumber = `ESE-${tierCode}-${userId.slice(-4).toUpperCase()}`;
+        // Shorter, intuitive ID format for cooperative members
+        const membershipTier = "Member";
+        const memberNumber = `ESE-COOP-${userId.slice(-4).toUpperCase()}`;
 
         // Issue date = approvedAt (when admin approved) — not createdAt (when applied).
         const issuedAt: Date =
