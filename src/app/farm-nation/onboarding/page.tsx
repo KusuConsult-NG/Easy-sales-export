@@ -224,10 +224,16 @@ export default function FarmNationOnboardingPage() {
                 sellerCategories: z.array(z.string()).optional(),
             }).optional(),
             terms: z.object({
-                accepted: z.boolean().refine(val => val === true, {
-                    message: "You must accept the terms and conditions.",
+                termsAccepted: z.boolean().refine(val => val === true, {
+                    message: "You must accept the Terms of Service.",
                 }),
-            }, { message: "You must accept the terms and conditions." }),
+                privacyAccepted: z.boolean().refine(val => val === true, {
+                    message: "You must accept the Privacy Policy.",
+                }),
+                feeDisclosureAccepted: z.boolean().refine(val => val === true, {
+                    message: "You must accept the Fee Disclosure.",
+                }),
+            }, { message: "You must accept all terms to continue." }),
         });
 
         const validation = farmNationOnboardingSchema.safeParse(finalData);
@@ -369,14 +375,14 @@ export default function FarmNationOnboardingPage() {
                         <div key={step.id} className="flex items-center flex-1">
                             <div className="flex flex-col items-center">
                                 <div
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors ${step.completed
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-colors ${(step.completed || index < currentStepIndex)
                                         ? "bg-teal-600 text-white"
                                         : index === currentStepIndex
                                             ? "bg-teal-100 text-teal-600 border-2 border-teal-600"
                                             : "bg-slate-200 text-slate-500"
                                         }`}
                                 >
-                                    {step.completed ? (
+                                    {(step.completed || index < currentStepIndex) ? (
                                         <CheckCircle className="w-5 h-5" />
                                     ) : (
                                         index + 1
@@ -390,7 +396,7 @@ export default function FarmNationOnboardingPage() {
                             </div>
                             {index < steps.length - 1 && (
                                 <div
-                                    className={`flex-1 h-1 mx-2 ${step.completed
+                                    className={`flex-1 h-1 mx-2 ${(step.completed || index < currentStepIndex)
                                         ? "bg-teal-600"
                                         : "bg-slate-200"
                                         }`}

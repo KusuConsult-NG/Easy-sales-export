@@ -67,7 +67,9 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
     if (!session?.user) return null;
 
     const user = session.user as any;
-    const isInstructor = user.roles?.includes("instructor") || user.roles?.includes("admin");
+    const isInstructor = user.roles?.includes("instructor") || 
+                         user.roles?.includes("admin") || 
+                         user.serviceRegistrations?.academy?.plan === "elite";
 
     return (
         <div className="min-h-screen bg-slate-50 py-8">
