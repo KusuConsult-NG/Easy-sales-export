@@ -4472,9 +4472,12 @@ async function _onboardLegacyMemberAction(
         }
 
         // 9. Send Welcome Email with the temporary PIN included
+        // 9. Send Welcome Email with the temporary PIN included (only for new users)
         // They will use this to log in, and getPostLoginRedirect will force them
         // to change their password via /auth/reset-legacy-password
-        await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+        if (isNewUser) {
+            await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+        }
 
         // 10. Audit Log
         await createAdminAuditLog({
@@ -4493,7 +4496,7 @@ async function _onboardLegacyMemberAction(
             error: null, success: true as const, 
             message: isNewUser 
                 ? `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
-                : `Legacy member ${data.fullName} successfully updated. Password reset link sent to ${data.email}.`
+                : `Legacy member ${data.fullName} successfully updated.`
         };
 
     } catch (error: any) {

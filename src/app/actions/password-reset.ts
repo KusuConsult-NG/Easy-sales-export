@@ -167,6 +167,17 @@ export async function resetPasswordAction(
             return { success: false as const, error: 'Failed to update password', data: null };
         }
 
+        // Also clear requiresPasswordChange if it exists (e.g. for legacy members)
+        try {
+            const auth = getAuth();
+            const user = await auth.getUserByEmail(resetData.email);
+            await db.collection(COLLECTIONS.USERS).doc(user.uid).update({
+                requiresPasswordChange: FieldValue.delete()
+            });
+        } catch (updateErr) {
+            // Ignore if field doesn't exist
+        }
+
         // Mark token as used
         await db.collection(COLLECTIONS.PASSWORD_RESETS).doc(resetDoc.id).update({ used: true,
             usedAt: FieldValue.serverTimestamp()
