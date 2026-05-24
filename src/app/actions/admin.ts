@@ -4471,25 +4471,10 @@ async function _onboardLegacyMemberAction(
             await farmBatch.commit();
         }
 
-        // 9. Generate a password reset link so the user can set their own password
-        //    immediately after first login — this fulfils the "change default PIN" requirement.
-        let passwordResetLink: string | undefined;
-        try {
-            passwordResetLink = await adminAuth.generatePasswordResetLink(data.email, {
-                url: `${process.env.NEXTAUTH_URL || "https://easysalesexport.com"}/login?mode=resetPassword&legacy=true`,
-            });
-        } catch (linkErr: any) {
-            // Non-fatal — log and continue. The user can request a reset manually.
-            logger.warn("[Legacy Onboarding] Could not generate password reset link:", linkErr.message);
-        }
-
-        // 10. Send Welcome Email with the reset link included
-        await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword, passwordResetLink);
-        
-        if (passwordResetLink) {
-            // Send explicit password reset notification to satisfy "change password" requirement
-            await sendPasswordResetEmail(data.email, passwordResetLink);
-        }
+        // 9. Send Welcome Email with the temporary PIN included
+        // They will use this to log in, and getPostLoginRedirect will force them
+        // to change their password via /auth/reset-legacy-password
+        await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
 
         // 10. Audit Log
         await createAdminAuditLog({

@@ -819,8 +819,7 @@ export async function sendExportProductRejectionEmail(
 export async function sendLegacyMemberWelcomeEmail(
     userEmail: string,
     userName: string,
-    temporaryPassword: string,
-    passwordResetLink?: string
+    temporaryPassword: string
 ) {
     return sendEmailNotification({
         to: userEmail,
@@ -838,33 +837,29 @@ export async function sendLegacyMemberWelcomeEmail(
                     
                     <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
                         <p style="font-size: 15px; color: #166534; margin: 0 0 16px; font-weight: bold;">
-                            🔐 Action Required: Set Your Password & Access Dashboard
+                            🔐 Action Required: Secure Your Account
                         </p>
                         <p style="font-size: 14px; color: #166534; margin: 0 0 20px;">
-                            To securely access your account, please click the button below to set your password. Once set, you will be redirected to your dashboard.
+                            Your account has been secured with a temporary 6-digit PIN. Please log in using this PIN. You will be immediately prompted to create a new, secure password.
                         </p>
-                        ${passwordResetLink ? `
-                        <a href="${passwordResetLink}"
+                        <div style="background-color: #ffffff; border: 2px dashed #16a34a; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                            <p style="margin: 0; font-size: 12px; color: #4b5563; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Your Temporary PIN</p>
+                            <p style="margin: 8px 0 0; font-size: 32px; color: #16a34a; font-weight: bold; letter-spacing: 4px;">${temporaryPassword}</p>
+                        </div>
+                        <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/auth/login"
                            style="display: inline-block; background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold;">
-                            Set My Password →
+                            Log In Now →
                         </a>
-                        ` : `
-                        <p style="font-size: 14px; color: #b91c1c;">
-                            Link generation failed. Please visit easysalesexport.com/login and click "Forgot Password".
-                        </p>
-                        `}
                     </div>
 
                     <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; margin: 24px 0;">
                         <h4 style="margin: 0 0 12px; color: #0f172a; font-size: 15px;">How to Access Your Account:</h4>
                         <ol style="margin: 0; padding-left: 20px; color: #374151; font-size: 14px; line-height: 1.8;">
-                            <li>Click the "Set My Password" button above.</li>
-                            <li>Create a secure password.</li>
-                            <li>Log in to your dashboard to start using the platform.</li>
+                            <li>Click the "Log In Now" button above.</li>
+                            <li>Log in using your email and the 6-digit PIN.</li>
+                            <li>Create a new, secure password when prompted.</li>
+                            <li>Access your dashboard and begin using the platform.</li>
                         </ol>
-                        <p style="margin: 16px 0 0; color: #ef4444; font-size: 13px; font-weight: bold;">
-                            ⚠️ Note: For your security, this link expires in 1 hour. If it expires, simply go to the login page and click "Forgot Password" to request a new one.
-                        </p>
                     </div>
                     
                     <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
