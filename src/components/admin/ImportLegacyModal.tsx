@@ -44,7 +44,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
         fullName: "",
         email: "",
         phone: "",
-        gender: "" as "" | "male" | "female",
+        gender: "" as "" | "Male" | "Female",
         dateOfBirth: "",
         occupation: "",
         // Step 2 – Location
@@ -307,11 +307,11 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                     <div>
                         <label className={labelCls}>Gender</label>
                         <select value={formData.gender}
-                            onChange={(e) => field("gender", e.target.value as "" | "male" | "female")}
+                            onChange={(e) => field("gender", e.target.value as "" | "Male" | "Female")}
                             className={inputCls}>
                             <option value="">Select gender</option>
-                            <option value="male">Male</option>
-                            <option value="female">Female</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
                         </select>
                     </div>
                     <div>
