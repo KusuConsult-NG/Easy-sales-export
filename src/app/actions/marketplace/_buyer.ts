@@ -89,13 +89,38 @@ export const getProductsAction = withSafeAction("getProductsAction", _getProduct
  */
 async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: Product[] }>> { 
     try {
-        const snapshot = await db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "active")
-            .orderBy("orders", "desc")
-            .limit(8)
-            .get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+                .where("status", "==", "active")
+                .orderBy("orders", "desc")
+                .limit(8)
+                .get();
+        } catch (e: any) {
+            if (e.message && e.message.toLowerCase().includes("index")) {
+                logger.warn("Get featured products failed due to missing index. Falling back.", { error: e.message });
+                indexError = true;
+                snapshot = await db.collection(COLLECTIONS.PRODUCTS)
+                    .where("status", "==", "active")
+                    .limit(50) // limit more since we'll sort in memory and slice
+                    .get();
+            } else {
+                throw e;
+            }
+        }
 
-        const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+        let products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+        
+        if (indexError) {
+            products.sort((a: any, b: any) => {
+                const aOrders = a.orders || 0;
+                const bOrders = b.orders || 0;
+                return bOrders - aOrders;
+            });
+            products = products.slice(0, 8);
+        }
+        
         return { error: null, success: true as const, data: { products: serializeValue(products) } };
     } catch (error) { 
         logger.error("Get featured products error:", error);

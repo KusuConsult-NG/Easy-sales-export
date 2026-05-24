@@ -309,8 +309,43 @@ async function _searchLandListingsAction(filters: {
                 const limit = filters.limit || 12;
                 q = q.limit(limit);
 
-                const snapshot = await q.get();
+                let snapshot;
+                let indexError = false;
+                try {
+                    snapshot = await q.get();
+                } catch (e: any) {
+                    if (e.message && e.message.toLowerCase().includes("index")) {
+                        logger.warn("Land search failed due to missing index. Falling back.", { error: e.message });
+                        indexError = true;
+                        
+                        // Fallback without orderBy
+                        let fallbackQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified");
+                        if (filters.state) fallbackQuery = fallbackQuery.where("location.state", "==", filters.state);
+                        if (filters.category) fallbackQuery = fallbackQuery.where("category", "==", filters.category);
+                        if (filters.lastDocId) { 
+                            const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
+                            if (lastDoc.exists) fallbackQuery = fallbackQuery.startAfter(lastDoc);
+                        }
+                        fallbackQuery = fallbackQuery.limit(limit);
+                        snapshot = await fallbackQuery.get();
+                    } else {
+                        throw e;
+                    }
+                }
+
                 let results = serializeDocs(snapshot.docs) as unknown as LandListing[];
+                
+                if (indexError) {
+                    results.sort((a: any, b: any) => {
+                        let aVal = a.createdAt || 0;
+                        let bVal = b.createdAt || 0;
+                        if (aVal instanceof Date) aVal = aVal.getTime();
+                        if (bVal instanceof Date) bVal = bVal.getTime();
+                        if (typeof aVal === 'string') aVal = new Date(aVal).getTime();
+                        if (typeof bVal === 'string') bVal = new Date(bVal).getTime();
+                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                    });
+                }
 
                 // Client-side filtering for numeric ranges
                 if (filters.minSize) { results = results.filter((l) => l.size >= filters.minSize!); }

@@ -36,7 +36,7 @@ export const cooperativeMembershipSchema = z.object({
     otherName: strictNameSchema.optional(),
     lastName: strictNameSchema,
     dateOfBirth: z.string().min(1, "Date of birth is required"),
-    gender: z.enum(["male", "female"], { message: "Please select gender" }),
+    gender: z.enum(["male", "female", "Male", "Female"], { message: "Please select gender" }),
     email: strictEmailSchema,
     phone: strictPhoneSchema,
     stateOfOrigin: z.string().min(1, "State of origin is required"),

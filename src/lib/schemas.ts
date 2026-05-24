@@ -59,7 +59,7 @@ export const registerSchema = z
         fullName: strictNameSchema,
         email: strictEmailSchema,
         phone: strictPhoneSchema,
-        gender: z.enum(["Male", "Female"]).optional(),
+        gender: z.enum(["Male", "Female", "male", "female"]).optional(),
         password: z
             .string()
             .min(8, "Password must be at least 8 characters")
@@ -267,7 +267,7 @@ export const LegacyOnboardingSchema = z.object({
     fullName: strictNameSchema,
     email: strictEmailSchema,
     phone: strictPhoneSchema,
-    gender: z.enum(["Male", "Female"]).optional(),
+    gender: z.enum(["Male", "Female", "male", "female"]).optional(),
     dateOfBirth: z.string().optional(),
     occupation: z.string().optional(),
     roles: z.array(UserRoleSchema).min(1, "At least one role is required"),
@@ -311,7 +311,7 @@ export const LegacyOnboardingSchema = z.object({
         industry: z.string().optional(),
     }).optional(),
     farmNationInfo: z.object({
-        role: z.enum(["buyer", "seller", "both"]).optional(),
+        role: z.enum(["farmer", "buyer", "seller", "both"]).optional(),
         farmSize: z.string().optional(),
         cropTypes: z.array(z.string()).optional(),
         propertyTypes: z.array(z.string()).optional(),
