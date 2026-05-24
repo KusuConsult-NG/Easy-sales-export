@@ -382,7 +382,7 @@ export default function CooperativeIdCardPage() {
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
             showToast("ID card downloaded!", "success");
         } catch (e) {
             console.error("[handleDownload] ID card generation failed:", e);

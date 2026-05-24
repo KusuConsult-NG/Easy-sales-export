@@ -184,7 +184,7 @@ export default function CertificateGenerator({
             link.href = url;
             link.download = `certificate-${courseId || courseName.toLowerCase().replace(/\s+/g, '-')}.pdf`;
             link.click();
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         } catch (error) {
             console.error('Failed to generate certificate:', error);
             showToast('Failed to generate certificate. Please try again.', "error");
