@@ -12,6 +12,7 @@ export default function ContentApprovalPage() {
     const [selectedItem, setSelectedItem] = useState<PendingContentItem | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
+    const [hasAttemptedAutoToggle, setHasAttemptedAutoToggle] = useState(false);
 
     const {
         data: items,
@@ -26,6 +27,14 @@ export default function ContentApprovalPage() {
             }
             if (result.stats) {
                 setStats(result.stats);
+                
+                // Auto-toggle to approved tab on first load if pending is empty but approved has listings
+                if (!hasAttemptedAutoToggle && activeStatusFilter === "pending" && (!result.data || result.data.length === 0) && result.stats.approved > 0) {
+                    setHasAttemptedAutoToggle(true);
+                    setTimeout(() => {
+                        setActiveStatusFilter("approved");
+                    }, 0);
+                }
             }
             return {
                 success: true,
@@ -354,14 +363,9 @@ export default function ContentApprovalPage() {
                             <h3 className="text-xl font-semibold text-slate-900 mb-2">
                                 All caught up!
                             </h3>
-                            <p className="text-slate-600 mb-5">
+                            <p className="text-slate-600">
                                 {getEmptyStateText()}
                             </p>
-                            {activeStatusFilter === "pending" && (stats.approved > 0 || stats.rejected > 0) && (
-                                <div className="text-sm text-blue-800 bg-blue-50/80 px-5 py-3.5 rounded-xl border border-blue-100 max-w-lg mx-auto shadow-xs leading-relaxed animate-in fade-in duration-300">
-                                    💡 <strong>Notice:</strong> You are currently viewing the <strong>Pending Review</strong> tab, which is empty. There are currently <strong>{stats.approved} approved</strong> and <strong>{stats.rejected} rejected</strong> items in the database. Click the tabs at the top to view them!
-                                </div>
-                            )}
                         </div>
                     ) : (
                         <div className="divide-y divide-slate-200">
