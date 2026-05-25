@@ -103,6 +103,125 @@ export default function ContentApprovalPage() {
         );
     };
 
+    const renderDetails = (item: PendingContentItem) => {
+        const meta = (item.metadata || {}) as Record<string, any>;
+        
+        const formatVal = (val: any): string => {
+            if (val === null || val === undefined) return "N/A";
+            if (typeof val === "boolean") return val ? "Yes" : "No";
+            if (typeof val === "object") return JSON.stringify(val);
+            return String(val);
+        };
+
+        const renderRow = (label: string, value: React.ReactNode) => {
+            if (!value || value === "N/A" || value === "No") return null;
+            return (
+                <div className="flex flex-col sm:flex-row sm:justify-between py-2 border-b border-slate-200/60 last:border-0 text-sm">
+                    <span className="font-semibold text-slate-500">{label}</span>
+                    <span className="text-slate-800 font-medium sm:text-right">{value}</span>
+                </div>
+            );
+        };
+
+        if (item.type === "land") {
+            const loc = (meta.location || {}) as any;
+            const address = loc.address || meta.address;
+            const lga = loc.lga || meta.lga;
+            const state = loc.state || meta.state;
+            const fullLocation = [address, lga, state].filter(Boolean).join(", ");
+            
+            return (
+                <div className="space-y-1">
+                    {renderRow("Owner Name", meta.ownerName)}
+                    {renderRow("Owner Email", meta.ownerEmail)}
+                    {renderRow("Size", `${meta.size} ${meta.unit || "acres"}`)}
+                    {renderRow("Category", meta.category)}
+                    {renderRow("Location", fullLocation || "N/A")}
+                    {meta.price !== undefined && Number(meta.price) > 0 && renderRow("Price", `₦${Number(meta.price).toLocaleString()}`)}
+                    {renderRow("Escrow Available", meta.escrowAvailable)}
+                    {meta.gpsCoordinates && renderRow("GPS Coordinates", `Lat: ${(meta.gpsCoordinates as any).latitude}, Lng: ${(meta.gpsCoordinates as any).longitude}`)}
+                    {Array.isArray(meta.images) && meta.images.length > 0 && renderRow("Images Uploaded", `${meta.images.length} image(s)`)}
+                    {Array.isArray(meta.documents) && meta.documents.length > 0 && renderRow("Verification Documents", `${meta.documents.length} document(s)`)}
+                </div>
+            );
+        }
+
+        if (item.type === "products") {
+            const priceTiers = meta.pricingTiers as any[];
+            const priceDisplay = Array.isArray(priceTiers) ? (
+                <div className="space-y-1 text-xs">
+                    {priceTiers.map((t, idx) => (
+                        <div key={idx} className="bg-slate-200/50 px-2.5 py-1.5 rounded-lg text-slate-700">
+                            <span className="font-semibold capitalize">{t.type}:</span> ₦{Number(t.price).toLocaleString()} (Min Qty: {t.minQuantity})
+                        </div>
+                    ))}
+                </div>
+            ) : meta.price ? `₦${Number(meta.price).toLocaleString()}` : "N/A";
+
+            return (
+                <div className="space-y-1">
+                    {renderRow("Seller Name", meta.sellerName || meta.sellerId)}
+                    {renderRow("Category", meta.category)}
+                    {renderRow("Available Stock", `${meta.availableQuantity || meta.quantity || 0} ${meta.unit || "units"}`)}
+                    {renderRow("Minimum Order Qty", meta.minOrderQuantity)}
+                    {renderRow("Pricing", priceDisplay)}
+                    {renderRow("Location/State", meta.state || meta.location)}
+                    {renderRow("Delivery Method", meta.deliveryMethod)}
+                    {renderRow("Est. Delivery Days", meta.estDeliveryDays)}
+                </div>
+            );
+        }
+
+        if (item.type === "export") {
+            const priceTiers = meta.pricingTiers as any[];
+            const priceDisplay = Array.isArray(priceTiers) ? (
+                <div className="space-y-1 text-xs">
+                    {priceTiers.map((t, idx) => (
+                        <div key={idx} className="bg-slate-200/50 px-2.5 py-1.5 rounded-lg text-slate-700">
+                            <span className="font-semibold capitalize">{t.type}:</span> ₦{Number(t.price).toLocaleString()} (Min Qty: {t.minQuantity})
+                        </div>
+                    ))}
+                </div>
+            ) : meta.price ? `₦${Number(meta.price).toLocaleString()}` : "N/A";
+
+            return (
+                <div className="space-y-1">
+                    {renderRow("Exporter ID", meta.userId)}
+                    {renderRow("Category", meta.category)}
+                    {renderRow("Available Stock", `${meta.availableQuantity || meta.quantity || 0} ${meta.unit || "units"}`)}
+                    {renderRow("Pricing", priceDisplay)}
+                    {renderRow("Origin Port", meta.originPort || meta.port)}
+                    {renderRow("Packaging", meta.packaging)}
+                    {meta.specifications && typeof meta.specifications === "object" && (
+                        <div className="py-2 border-b border-slate-200/60 last:border-0 text-sm">
+                            <span className="font-semibold text-slate-500 block mb-1">Specifications</span>
+                            <div className="grid grid-cols-2 gap-2 text-xs font-medium">
+                                {Object.entries(meta.specifications).map(([k, v]) => (
+                                    <div key={k} className="bg-slate-100 p-2 rounded">
+                                        <span className="text-slate-400 block capitalize">{k.replace(/([A-Z])/g, " $1")}</span>
+                                        <span className="text-slate-700">{formatVal(v)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        return (
+            <div className="space-y-1">
+                {Object.entries(meta).map(([key, val]) => {
+                    if (key === "id" || key === "createdAt" || key === "updatedAt") return null;
+                    const label = key
+                        .replace(/([A-Z])/g, " $1")
+                        .replace(/^./, (str) => str.toUpperCase());
+                    return renderRow(label, formatVal(val));
+                })}
+            </div>
+        );
+    };
+
     const filteredItems = items.filter(item => {
         if (contentFilter !== "all" && item.type !== contentFilter) return false;
         return true;
@@ -285,11 +404,13 @@ export default function ContentApprovalPage() {
                                     {selectedItem?.id === item.id && (
                                         <div className="mt-6 pt-6 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                                                <div className="bg-slate-50 p-4 rounded-lg">
-                                                    <h4 className="text-sm font-semibold text-slate-900 mb-2 font-mono">Details</h4>
-                                                    <pre className="text-xs text-slate-600 whitespace-pre-wrap overflow-auto max-h-56 font-mono leading-relaxed">
-                                                        {JSON.stringify(item.metadata, null, 2)}
-                                                    </pre>
+                                                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
+                                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                                                        Listing Attributes
+                                                    </h4>
+                                                    <div className="divide-y divide-slate-100">
+                                                        {renderDetails(item)}
+                                                    </div>
                                                 </div>
                                                 <div className="flex flex-col justify-end gap-3">
                                                     {activeStatusFilter === "pending" ? (
