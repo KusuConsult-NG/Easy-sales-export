@@ -169,6 +169,23 @@ export async function getContentApprovalItemsAction(
             pending: pendingProductsCount.data().count + pendingLandCount.data().count + pendingExportCount.data().count,
             approved: approvedProductsCount.data().count + approvedLandCount.data().count + approvedExportCount.data().count,
             rejected: rejectedProductsCount.data().count + rejectedLandCount.data().count + rejectedExportCount.data().count,
+            typeStats: {
+                products: {
+                    pending: pendingProductsCount.data().count,
+                    approved: approvedProductsCount.data().count,
+                    rejected: rejectedProductsCount.data().count,
+                },
+                land: {
+                    pending: pendingLandCount.data().count,
+                    approved: approvedLandCount.data().count,
+                    rejected: rejectedLandCount.data().count,
+                },
+                export: {
+                    pending: pendingExportCount.data().count,
+                    approved: approvedExportCount.data().count,
+                    rejected: rejectedExportCount.data().count,
+                }
+            }
         };
 
         return { error: null, success: true as const, data: items, stats };

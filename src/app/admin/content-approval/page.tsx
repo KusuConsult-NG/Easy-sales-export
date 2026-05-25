@@ -11,7 +11,7 @@ export default function ContentApprovalPage() {
     const [activeStatusFilter, setActiveStatusFilter] = useState<ApprovalStatus>("pending");
     const [selectedItem, setSelectedItem] = useState<PendingContentItem | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
-    const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
+    const [stats, setStats] = useState<any>({ pending: 0, approved: 0, rejected: 0, typeStats: null });
     const [hasAttemptedAutoToggle, setHasAttemptedAutoToggle] = useState(false);
 
     const {
@@ -45,6 +45,33 @@ export default function ContentApprovalPage() {
         limit: 500, // Effectively load all since the backend caps it
         dependencies: [activeStatusFilter]
     });
+
+    const handleContentFilterChange = (newType: ContentType | "all") => {
+        setContentFilter(newType);
+        setSelectedItem(null);
+
+        if (newType === "all" || !stats?.typeStats) return;
+
+        const currentTypeStats = stats.typeStats[newType];
+        if (!currentTypeStats) return;
+
+        const currentCount =
+            activeStatusFilter === "pending"
+                ? currentTypeStats.pending
+                : activeStatusFilter === "approved"
+                ? currentTypeStats.approved
+                : currentTypeStats.rejected;
+
+        if (currentCount === 0) {
+            if (currentTypeStats.pending > 0) {
+                setActiveStatusFilter("pending");
+            } else if (currentTypeStats.approved > 0) {
+                setActiveStatusFilter("approved");
+            } else if (currentTypeStats.rejected > 0) {
+                setActiveStatusFilter("rejected");
+            }
+        }
+    };
 
     async function handleApprove(item: PendingContentItem) {
         if (!confirm(`Are you sure you want to approve "${item.title}"?`)) return;
@@ -343,7 +370,7 @@ export default function ContentApprovalPage() {
                             </label>
                             <select
                                 value={contentFilter}
-                                onChange={(e) => setContentFilter(e.target.value as ContentType | "all")}
+                                onChange={(e) => handleContentFilterChange(e.target.value as ContentType | "all")}
                                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
                             >
                                 <option value="all">All Content</option>
