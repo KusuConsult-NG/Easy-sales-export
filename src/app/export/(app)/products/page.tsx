@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Package, Plus, Clock, CheckCircle2, XCircle } from "lucide-react";
-import { getUserExportProductsAction } from "@/app/actions/export-products";
+import { Package, Plus, Clock, CheckCircle2, XCircle, Trash2, Loader2 } from "lucide-react";
+import { getUserExportProductsAction, deleteExportProductAction } from "@/app/actions/export-products";
+import { useToast } from "@/contexts/ToastContext";
 
 export default function MyExportProductsPage() {
     const [products, setProducts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const { showToast } = useToast();
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     useEffect(() => {
         async function loadProducts() {
@@ -24,6 +27,28 @@ export default function MyExportProductsPage() {
         }
         loadProducts();
     }, []);
+
+    async function handleDeleteProduct(productId: string, productName: string) {
+        if (!confirm(`Are you sure you want to delete "${productName}" from your export catalog? This action cannot be undone.`)) {
+            return;
+        }
+
+        setDeletingId(productId);
+        try {
+            const res = await deleteExportProductAction(productId);
+            if (res.success) {
+                showToast("Product deleted successfully", "success");
+                setProducts(prev => prev.filter(p => p.id !== productId));
+            } else {
+                showToast(res.error || "Failed to delete product", "error");
+            }
+        } catch (error) {
+            console.error("Failed to delete product:", error);
+            showToast("An error occurred while deleting the product.", "error");
+        } finally {
+            setDeletingId(null);
+        }
+    }
 
     const getStatusIcon = (status: string) => {
         if (status === 'live') return <CheckCircle2 className="w-5 h-5 text-green-500" />;
@@ -145,6 +170,25 @@ export default function MyExportProductsPage() {
                                         </span>
                                     ))}
                                 </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-4">
+                                <span className="text-xs text-slate-400">
+                                    {product.createdAt ? `Submitted ${new Date(product.createdAt.seconds ? product.createdAt.seconds * 1000 : product.createdAt).toLocaleDateString()}` : ""}
+                                </span>
+                                <button
+                                    onClick={() => handleDeleteProduct(product.id, product.name)}
+                                    disabled={deletingId === product.id}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition disabled:opacity-50 text-xs font-semibold"
+                                    title="Delete product"
+                                >
+                                    {deletingId === product.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>{deletingId === product.id ? "Deleting..." : "Delete"}</span>
+                                </button>
                             </div>
                         </div>
                     </div>

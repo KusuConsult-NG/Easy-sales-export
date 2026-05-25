@@ -115,7 +115,21 @@ export default function CooperativeMembersPage() {
     // paymentStatus is now filtered server-side — no client-side override needed.
     // State/LGA filters remain client-side (no Firestore index for them).
     if (stateFilter) {
-        filteredApplications = filteredApplications.filter(a => a.data.stateOfOrigin === stateFilter);
+        const cleanStateFilter = stateFilter.toLowerCase().replace(/\s*state$/i, "").trim();
+        filteredApplications = filteredApplications.filter(a => {
+            const stateOfOrigin = a.data.stateOfOrigin || "";
+            const userState = a.user?.state || "";
+            
+            const cleanStateOfOrigin = typeof stateOfOrigin === 'string' 
+                ? stateOfOrigin.toLowerCase().replace(/\s*state$/i, "").trim() 
+                : "";
+            const cleanUserState = typeof userState === 'string' 
+                ? userState.toLowerCase().replace(/\s*state$/i, "").trim() 
+                : "";
+                
+            return (cleanStateOfOrigin && cleanStateOfOrigin.includes(cleanStateFilter)) || 
+                   (cleanUserState && cleanUserState.includes(cleanStateFilter));
+        });
     }
     if (lgaFilter) {
         filteredApplications = filteredApplications.filter(a => a.data.lga?.toLowerCase().includes(lgaFilter.toLowerCase()));

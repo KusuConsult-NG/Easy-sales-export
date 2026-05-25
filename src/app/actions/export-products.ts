@@ -84,3 +84,35 @@ export async function getUserExportProductsAction() { try {
         return { error: "Failed to fetch products", success: false as const, data: null };
     }
 }
+
+export async function deleteExportProductAction(productId: string) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
+        const userId = session.user.id;
+
+        const productRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(productId);
+        const productDoc = await productRef.get();
+        if (!productDoc.exists) {
+            return { success: false as const, error: "Product not found", data: null };
+        }
+
+        const productData = productDoc.data();
+        if (productData?.userId !== userId) {
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+            const roles = userDoc.data()?.roles || [];
+            const isAdmin = roles.some((r: string) => r === "admin" || r === "super_admin");
+            if (!isAdmin) {
+                return { success: false as const, error: "Unauthorized: You do not own this product", data: null };
+            }
+        }
+
+        await productRef.delete();
+
+        return { error: null, success: true as const, data: { message: "Product deleted successfully" } };
+    } catch (error: any) {
+        logger.error("Delete export product error:", error);
+        return { success: false as const, error: "Failed to delete product", data: null };
+    }
+}

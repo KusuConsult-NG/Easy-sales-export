@@ -1340,12 +1340,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             // the defensive chain: `data.isVerified ?? data.verified ?? false`
 
             // Location filters (No composite indexes exist for state/lga + createdAt desc)
-            if (options.state && options.state !== "all") {
-                query = query.where("address.state", "==", options.state);
-                hasUnindexedFilter = true;
-            }
-            if (options.lga && options.lga !== "all") {
-                query = query.where("address.lga", "==", options.lga);
+            if ((options.state && options.state !== "all") || (options.lga && options.lga !== "all")) {
                 hasUnindexedFilter = true;
             }
         }
@@ -1377,12 +1372,6 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         if (!options.search) {
             if (options.role && options.role !== "all") {
                 countQuery = countQuery.where("roles", "array-contains", options.role);
-            }
-            if (options.state && options.state !== "all") {
-                countQuery = countQuery.where("address.state", "==", options.state);
-            }
-            if (options.lga && options.lga !== "all") {
-                countQuery = countQuery.where("address.lga", "==", options.lga);
             }
         }
         // For search (email/phone), count directly against the filter
@@ -1621,6 +1610,25 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // Client-side search + date range filtering
         let filteredUsers = deduplicatedUsers;
 
+        // In-memory Location filtering (State and LGA) — resolves the bug where direct Firestore
+        // where("address.state") equality checks silently excluded users with state stored in other properties
+        if (options.state && options.state !== "all") {
+            const cleanStateFilter = options.state.toLowerCase().replace(/\s*state$/i, "").trim();
+            filteredUsers = filteredUsers.filter(u => {
+                const cleanUserState = typeof u.state === 'string' 
+                    ? u.state.toLowerCase().replace(/\s*state$/i, "").trim() 
+                    : "";
+                return cleanUserState && cleanUserState.includes(cleanStateFilter);
+            });
+        }
+        if (options.lga && options.lga !== "all") {
+            const cleanLgaFilter = options.lga.toLowerCase().trim();
+            filteredUsers = filteredUsers.filter(u => {
+                const cleanUserLga = typeof u.lga === 'string' ? u.lga.toLowerCase().trim() : "";
+                return cleanUserLga && cleanUserLga.includes(cleanLgaFilter);
+            });
+        }
+
         if (options.search) {
             const s = options.search.toLowerCase().trim();
             filteredUsers = filteredUsers.filter(user => {
@@ -1687,7 +1695,9 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             lastDocId: String(page + 1),
             hasMore: offset + pageSize < filteredUsers.length,
             meta: {
-                totalCount: absoluteDbCount
+                totalCount: (options.state && options.state !== "all") || (options.lga && options.lga !== "all")
+                    ? filteredUsers.length
+                    : absoluteDbCount
             }
         };
     } catch (error: any) {
@@ -1996,24 +2006,41 @@ async function _approveExportOnboardingAction(
             }
         }
 
-        // 1. Get Application Doc
-        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("applicationId", "==", applicationId).limit(1);
-        const appSnapshot = await appRef.get();
+        // 1. Get Application Doc — may be passed either as the Firestore doc ID or applicationId field
+        let appDocRef: FirebaseFirestore.DocumentReference;
+        let appData: FirebaseFirestore.DocumentData;
 
-        if (appSnapshot.empty) {
-            return { error: "Application not found", success: false as const };
+        // First try exact doc ID
+        const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
+        if (directDoc.exists) {
+            appDocRef = directDoc.ref;
+            appData = directDoc.data()!;
+        } else {
+            // Fallback: query by applicationId field
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where("applicationId", "==", applicationId)
+                .limit(1)
+                .get();
+            if (snap.empty) {
+                return { error: "Application not found", success: false as const };
+            }
+            appDocRef = snap.docs[0].ref;
+            appData = snap.docs[0].data();
         }
 
-        const appDoc = appSnapshot.docs[0];
-        const appData = appDoc.data();
         const userId = appData.userId;
-
         if (!userId) {
             return { error: "Invalid application: Missing User ID", success: false as const };
         }
 
+        // Double-validation: Ensure user document exists in COLLECTIONS.USERS
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!userDoc.exists) {
+            return { error: `Database desync: Corresponding user document [${userId}] not found in users collection`, success: false as const };
+        }
+
         // 2. Update Application Status
-        await appDoc.ref.update({
+        await appDocRef.update({
             status: "approved",
             reviewedBy: session.user.id,
             reviewedAt: FieldValue.serverTimestamp(),
@@ -2149,6 +2176,12 @@ async function _requestExportApplicationRevisionAction(
         const userId = appData.userId;
         if (!userId) {
             return { error: "Invalid application: Missing User ID", success: false as const };
+        }
+
+        // Double-validation: Ensure user document exists in COLLECTIONS.USERS
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!userDoc.exists) {
+            return { error: `Database desync: Corresponding user document [${userId}] not found in users collection`, success: false as const };
         }
 
         // Update application status
@@ -2478,24 +2511,41 @@ async function _rejectExportApplicationAction(
             return { error: (valid.error as ZodError).issues[0].message, success: false as const };
         }
 
-        // 1. Get Application Doc
-        const appRef = db.collection(COLLECTIONS.EXPORT_APPLICATIONS).where("applicationId", "==", applicationId).limit(1);
-        const appSnapshot = await appRef.get();
+        // 1. Get Application Doc — may be passed either as the Firestore doc ID or applicationId field
+        let appDocRef: FirebaseFirestore.DocumentReference;
+        let appData: FirebaseFirestore.DocumentData;
 
-        if (appSnapshot.empty) {
-            return { error: "Application not found", success: false as const };
+        // First try exact doc ID
+        const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
+        if (directDoc.exists) {
+            appDocRef = directDoc.ref;
+            appData = directDoc.data()!;
+        } else {
+            // Fallback: query by applicationId field
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where("applicationId", "==", applicationId)
+                .limit(1)
+                .get();
+            if (snap.empty) {
+                return { error: "Application not found", success: false as const };
+            }
+            appDocRef = snap.docs[0].ref;
+            appData = snap.docs[0].data();
         }
 
-        const appDoc = appSnapshot.docs[0];
-        const appData = appDoc.data();
         const userId = appData.userId;
-
         if (!userId) {
             return { error: "Invalid application: Missing User ID", success: false as const };
         }
 
+        // Double-validation: Ensure user document exists in COLLECTIONS.USERS
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        if (!userDoc.exists) {
+            return { error: `Database desync: Corresponding user document [${userId}] not found in users collection`, success: false as const };
+        }
+
         // 2. Update Application Status
-        await appDoc.ref.update({
+        await appDocRef.update({
             status: "rejected",
             rejectionReason: reason,
             reviewedBy: session.user.id,

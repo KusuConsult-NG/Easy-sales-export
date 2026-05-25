@@ -165,7 +165,7 @@ export default function FarmNationApplicationsPage() {
 
         try {
             const { approveFarmNationSellerAction } = await import("@/app/actions/farm-nation");
-            const result = await approveFarmNationSellerAction(seller.id);
+            const result = await approveFarmNationSellerAction(seller.user.id);
 
             if (result.success) {
                 showToast("Seller approved successfully", "success");
@@ -187,7 +187,7 @@ export default function FarmNationApplicationsPage() {
 
         try {
             const { rejectFarmNationSellerAction } = await import("@/app/actions/farm-nation");
-            const result = await rejectFarmNationSellerAction(seller.id, reason);
+            const result = await rejectFarmNationSellerAction(seller.user.id, reason);
 
             if (result.success) {
                 showToast("Seller application rejected", "success");

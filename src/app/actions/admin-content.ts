@@ -162,29 +162,47 @@ export async function approveContentAction(
         const adminId = session.user.id;
 
         switch (type) {
-            case "products":
-                await db.collection(COLLECTIONS.PRODUCTS).doc(id).update({
+            case "products": {
+                const docRef = db.collection(COLLECTIONS.PRODUCTS).doc(id);
+                const docSnap = await docRef.get();
+                if (!docSnap.exists) {
+                    return { success: false as const, error: "Product listing not found" , data: null };
+                }
+                await docRef.update({
                     status: "active",
                     approvedAt: timestamp,
                     approvedBy: adminId,
                 });
                 break;
-            case "land":
-                await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
+            }
+            case "land": {
+                const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
+                const docSnap = await docRef.get();
+                if (!docSnap.exists) {
+                    return { success: false as const, error: "Land listing not found" , data: null };
+                }
+                await docRef.update({
                     status: "verified",
                     verificationStatus: "verified",
                     verifiedAt: timestamp,
                     verifiedBy: adminId,
                 });
                 break;
-            case "export":
-                await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id).update({
+            }
+            case "export": {
+                const docRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id);
+                const docSnap = await docRef.get();
+                if (!docSnap.exists) {
+                    return { success: false as const, error: "Export listing not found" , data: null };
+                }
+                await docRef.update({
                     status: "live",
                     isActive: true,
                     approvedAt: timestamp,
                     approvedBy: adminId,
                 });
                 break;
+            }
             default:
                 return { success: false as const, error: "Invalid content type" , data: null };
         }
@@ -225,16 +243,27 @@ export async function rejectContentAction(
         }
 
         switch (type) {
-            case "products":
-                await db.collection(COLLECTIONS.PRODUCTS).doc(id).update({
+            case "products": {
+                const docRef = db.collection(COLLECTIONS.PRODUCTS).doc(id);
+                const docSnap = await docRef.get();
+                if (!docSnap.exists) {
+                    return { success: false as const, error: "Product listing not found" , data: null };
+                }
+                await docRef.update({
                     status: "rejected",
                     rejectionReason: reason,
                     rejectedAt: timestamp,
                     rejectedBy: adminId,
                 });
                 break;
-            case "land":
-                await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).update({
+            }
+            case "land": {
+                const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
+                const docSnap = await docRef.get();
+                if (!docSnap.exists) {
+                    return { success: false as const, error: "Land listing not found" , data: null };
+                }
+                await docRef.update({
                     status: "rejected",
                     verificationStatus: "rejected",
                     verificationNotes: reason,
@@ -243,8 +272,14 @@ export async function rejectContentAction(
                     rejectedBy: adminId,
                 });
                 break;
-            case "export":
-                await db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id).update({
+            }
+            case "export": {
+                const docRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id);
+                const docSnap = await docRef.get();
+                if (!docSnap.exists) {
+                    return { success: false as const, error: "Export listing not found" , data: null };
+                }
+                await docRef.update({
                     status: "rejected",
                     isActive: false,
                     rejectionReason: reason,
@@ -252,6 +287,7 @@ export async function rejectContentAction(
                     rejectedBy: adminId,
                 });
                 break;
+            }
             default:
                 return { success: false as const, error: "Invalid content type" , data: null };
         }

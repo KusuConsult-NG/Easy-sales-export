@@ -611,7 +611,7 @@ async function getCollectionBroadcastList(collectionName: string, filters?: Broa
  * Core logic for generating broadcast lists.
  * This is decoupled from 'use server' and 'server-only' to allow use in Node.js scripts.
  */
-export async function getCleanBroadcastList(filters?: BroadcastFilters) {
+async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
     try {
         logger.info(`[BroadcastLogic] Generating clean list using stream (Audience: ${filters?.audience || 'all'})...`);
 
@@ -892,4 +892,20 @@ export async function getCleanBroadcastList(filters?: BroadcastFilters) {
         logger.error("[BroadcastLogic] List generation failed:", error);
         return { success: false as const, error: "Failed to generate broadcast list.", data: null };
     }
+}
+
+export async function getCleanBroadcastList(filters?: BroadcastFilters) {
+    const result = await getCleanBroadcastListInternal(filters);
+    if (result.success && result.data && filters?.state) {
+        const stateFilterClean = filters.state.toLowerCase().trim();
+        if (stateFilterClean !== "" && stateFilterClean !== "all") {
+            const filteredRecipients = result.data.recipients.filter(r => {
+                if (!r.state || typeof r.state !== 'string') return false;
+                return r.state.toLowerCase().trim().includes(stateFilterClean);
+            });
+            result.data.recipients = filteredRecipients;
+            result.data.count = filteredRecipients.length;
+        }
+    }
+    return result;
 }

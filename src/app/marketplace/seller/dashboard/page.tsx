@@ -357,7 +357,7 @@ export default function SellerDashboard() {
                                             </div>
 
                                             <Link
-                                                href={`/marketplace/sell/edit/${product.id}`}
+                                                href={`/marketplace/seller/products/${product.id}/edit`}
                                                 className="block w-full mt-4 py-2 bg-slate-100 text-slate-900 text-center rounded-lg text-sm font-semibold hover:bg-slate-200"
                                             >
                                                 Manage Product

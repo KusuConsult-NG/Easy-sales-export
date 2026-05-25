@@ -97,21 +97,23 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
 
         const snapshot = await listingsQuery.get();
 
-        let listings = snapshot.docs.map(doc => { 
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                location: {
-                    ...data.location,
-                    lat: data.location.geopoint?.latitude || data.location.lat,
-                    lng: data.location.geopoint?.longitude || data.location.lng 
-                },
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
-            } as unknown as LandListing;
-        });
+        let listings = snapshot.docs
+            .map(doc => { 
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    location: {
+                        ...data.location,
+                        lat: data.location.geopoint?.latitude || data.location.lat,
+                        lng: data.location.geopoint?.longitude || data.location.lng 
+                    },
+                    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                    verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
+                } as unknown as LandListing;
+            })
+            .filter(listing => (listing as any).status !== 'deleted');
 
         // Apply client-side filters
         if (filters) { 
@@ -195,21 +197,23 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
 
         const snapshot = await listingsQuery.get();
 
-        const listings = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                location: {
-                    ...data.location,
-                    lat: data.location.geopoint?.latitude || data.location.lat,
-                    lng: data.location.geopoint?.longitude || data.location.lng 
-                },
-                createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
-                verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
-            } as unknown as LandListing;
-        });
+        const listings = snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    location: {
+                        ...data.location,
+                        lat: data.location.geopoint?.latitude || data.location.lat,
+                        lng: data.location.geopoint?.longitude || data.location.lng 
+                    },
+                    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() || new Date().toISOString(),
+                    verifiedAt: data.verifiedAt ? (data.verifiedAt as Timestamp).toDate().toISOString() : null 
+                } as unknown as LandListing;
+            })
+            .filter(listing => (listing as any).status !== 'deleted');
 
         return { success: true, error: null, data: listings };
     } catch (error: any) { 
