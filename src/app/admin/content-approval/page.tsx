@@ -1,28 +1,31 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { CheckCircle, XCircle, Clock, Eye, FileText, Package, Home, GraduationCap, BookOpen, Loader2, Container } from "lucide-react";
-import { getPendingContentAction, approveContentAction, rejectContentAction, type PendingContentItem, type ContentType } from "@/app/actions/admin-content";
+import { getContentApprovalItemsAction, approveContentAction, rejectContentAction, type PendingContentItem, type ContentType, type ApprovalStatus } from "@/app/actions/admin-content";
 import { toast } from "sonner";
 import { useAdminData } from "@/hooks/useAdminData";
 
-type ApprovalStatus = "pending" | "approved" | "rejected";
-
 export default function ContentApprovalPage() {
     const [contentFilter, setContentFilter] = useState<ContentType | "all">("all");
+    const [activeStatusFilter, setActiveStatusFilter] = useState<ApprovalStatus>("pending");
     const [selectedItem, setSelectedItem] = useState<PendingContentItem | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
+    const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
 
     const {
-        data: pendingItems,
+        data: items,
         loading,
         refresh: loadContent
     } = useAdminData<PendingContentItem>({
         fetchAction: async () => {
-            const result = await getPendingContentAction();
+            const result = await getContentApprovalItemsAction(activeStatusFilter);
             if (!result.success) {
                 toast.error(result.error || "Failed to load content");
                 return { success: false, data: [], meta: { hasMore: false }, error: result.error };
+            }
+            if (result.stats) {
+                setStats(result.stats);
             }
             return {
                 success: true,
@@ -31,7 +34,7 @@ export default function ContentApprovalPage() {
             };
         },
         limit: 500, // Effectively load all since the backend caps it
-        dependencies: []
+        dependencies: [activeStatusFilter]
     });
 
     async function handleApprove(item: PendingContentItem) {
@@ -47,7 +50,7 @@ export default function ContentApprovalPage() {
             toast.error(result.error || "Failed to approve content");
         }
         setActionLoading(false);
-    };
+    }
 
     async function handleReject(item: PendingContentItem) {
         const reason = prompt("Enter rejection reason:");
@@ -63,7 +66,7 @@ export default function ContentApprovalPage() {
             toast.error(result.error || "Failed to reject content");
         }
         setActionLoading(false);
-    };
+    }
 
     const getIcon = (type: string) => {
         const icons: any = {
@@ -90,6 +93,7 @@ export default function ContentApprovalPage() {
             approved: CheckCircle,
             rejected: XCircle
         };
+
         const Icon = icons[status] || Clock;
         return (
             <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-semibold ${styles[status]}`}>
@@ -99,15 +103,20 @@ export default function ContentApprovalPage() {
         );
     };
 
-    const filteredItems = pendingItems.filter(item => {
+    const filteredItems = items.filter(item => {
         if (contentFilter !== "all" && item.type !== contentFilter) return false;
         return true;
     });
 
-    const stats = {
-        pending: pendingItems.filter(i => i.status === "pending").length,
-        approved: pendingItems.filter(i => i.status === "approved").length,
-        rejected: pendingItems.filter(i => i.status === "rejected").length,
+    const getEmptyStateText = () => {
+        switch (activeStatusFilter) {
+            case "approved":
+                return "No approved content matches this filter.";
+            case "rejected":
+                return "No rejected content matches this filter.";
+            default:
+                return "No pending content to review at the moment.";
+        }
     };
 
     if (loading) {
@@ -131,43 +140,70 @@ export default function ContentApprovalPage() {
                     </p>
                 </div>
 
-                {/* Stats */}
+                {/* Stats / Interactive Status Tabs */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <button
-                        onClick={() => setContentFilter("all")}
-                        className="bg-yellow-50 p-6 rounded-xl border border-yellow-100 text-left hover:shadow-md transition hover:-translate-y-0.5"
+                        onClick={() => {
+                            setActiveStatusFilter("pending");
+                            setSelectedItem(null);
+                        }}
+                        className={`p-6 rounded-xl border text-left transition hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+                            activeStatusFilter === "pending"
+                                ? "bg-yellow-50/80 border-yellow-300 ring-2 ring-yellow-400/20 shadow-xs"
+                                : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
                     >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-yellow-700 mb-1">Pending Review</p>
+                                <p className="text-sm font-semibold text-yellow-700 mb-1">Pending Review</p>
                                 <p className="text-3xl font-bold text-yellow-900">{stats.pending}</p>
                             </div>
-                            <Clock className="w-12 h-12 text-yellow-600 opacity-50" />
+                            <Clock className={`w-12 h-12 transition ${activeStatusFilter === "pending" ? "text-yellow-600 opacity-80" : "text-slate-400 opacity-45"}`} />
                         </div>
-                        <p className="text-xs text-yellow-600 mt-2">Click to show pending →</p>
+                        <p className="text-xs text-yellow-600 mt-2 font-medium">Click to view pending items →</p>
                     </button>
 
-                    <div className="bg-green-50 p-6 rounded-xl border border-green-100">
+                    <button
+                        onClick={() => {
+                            setActiveStatusFilter("approved");
+                            setSelectedItem(null);
+                        }}
+                        className={`p-6 rounded-xl border text-left transition hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+                            activeStatusFilter === "approved"
+                                ? "bg-green-50/80 border-green-300 ring-2 ring-green-400/20 shadow-xs"
+                                : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
+                    >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-green-700 mb-1">Approved</p>
+                                <p className="text-sm font-semibold text-green-700 mb-1">Approved</p>
                                 <p className="text-3xl font-bold text-green-900">{stats.approved}</p>
                             </div>
-                            <CheckCircle className="w-12 h-12 text-green-600 opacity-50" />
+                            <CheckCircle className={`w-12 h-12 transition ${activeStatusFilter === "approved" ? "text-green-600 opacity-80" : "text-slate-400 opacity-45"}`} />
                         </div>
-                        <p className="text-xs text-green-600 mt-2">Items approved this session</p>
-                    </div>
+                        <p className="text-xs text-green-600 mt-2 font-medium">Click to view approved items →</p>
+                    </button>
 
-                    <div className="bg-red-50 p-6 rounded-xl border border-red-100">
+                    <button
+                        onClick={() => {
+                            setActiveStatusFilter("rejected");
+                            setSelectedItem(null);
+                        }}
+                        className={`p-6 rounded-xl border text-left transition hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+                            activeStatusFilter === "rejected"
+                                ? "bg-red-50/80 border-red-300 ring-2 ring-red-400/20 shadow-xs"
+                                : "bg-white border-slate-200 hover:border-slate-300"
+                        }`}
+                    >
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-red-700 mb-1">Rejected</p>
+                                <p className="text-sm font-semibold text-red-700 mb-1">Rejected</p>
                                 <p className="text-3xl font-bold text-red-900">{stats.rejected}</p>
                             </div>
-                            <XCircle className="w-12 h-12 text-red-600 opacity-50" />
+                            <XCircle className={`w-12 h-12 transition ${activeStatusFilter === "rejected" ? "text-red-600 opacity-80" : "text-slate-400 opacity-45"}`} />
                         </div>
-                        <p className="text-xs text-red-600 mt-2">Items rejected this session</p>
-                    </div>
+                        <p className="text-xs text-red-600 mt-2 font-medium">Click to view rejected items →</p>
+                    </button>
                 </div>
 
                 {/* Filters */}
@@ -180,7 +216,7 @@ export default function ContentApprovalPage() {
                             <select
                                 value={contentFilter}
                                 onChange={(e) => setContentFilter(e.target.value as ContentType | "all")}
-                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
                             >
                                 <option value="all">All Content</option>
                                 <option value="products">Marketplace Products</option>
@@ -200,7 +236,7 @@ export default function ContentApprovalPage() {
                                 All caught up!
                             </h3>
                             <p className="text-slate-600">
-                                No pending content to review at the moment.
+                                {getEmptyStateText()}
                             </p>
                         </div>
                     ) : (
@@ -208,7 +244,7 @@ export default function ContentApprovalPage() {
                             {filteredItems.map((item) => (
                                 <div
                                     key={item.id}
-                                    className={`p-6 hover:bg-slate-50 transition cursor-pointer ${selectedItem?.id === item.id ? 'bg-blue-50' : ''}`}
+                                    className={`p-6 hover:bg-slate-50 transition cursor-pointer ${selectedItem?.id === item.id ? 'bg-blue-50/50' : ''}`}
                                     onClick={() => setSelectedItem(item === selectedItem ? null : item)}
                                 >
                                     <div className="flex items-start justify-between">
@@ -248,30 +284,67 @@ export default function ContentApprovalPage() {
                                     {/* Expandable Action Area */}
                                     {selectedItem?.id === item.id && (
                                         <div className="mt-6 pt-6 border-t border-slate-200 animate-in slide-in-from-top-2 duration-200">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
                                                 <div className="bg-slate-50 p-4 rounded-lg">
-                                                    <h4 className="text-sm font-semibold text-slate-900 mb-2">Details</h4>
-                                                    <pre className="text-xs text-slate-600 whitespace-pre-wrap overflow-auto max-h-40">
+                                                    <h4 className="text-sm font-semibold text-slate-900 mb-2 font-mono">Details</h4>
+                                                    <pre className="text-xs text-slate-600 whitespace-pre-wrap overflow-auto max-h-56 font-mono leading-relaxed">
                                                         {JSON.stringify(item.metadata, null, 2)}
                                                     </pre>
                                                 </div>
                                                 <div className="flex flex-col justify-end gap-3">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleApprove(item); }}
-                                                        disabled={actionLoading}
-                                                        className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-green-900/20"
-                                                    >
-                                                        {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
-                                                        Approve Request
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleReject(item); }}
-                                                        disabled={actionLoading}
-                                                        className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-red-900/20"
-                                                    >
-                                                        {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
-                                                        Reject Request
-                                                    </button>
+                                                    {activeStatusFilter === "pending" ? (
+                                                        <>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleApprove(item); }}
+                                                                disabled={actionLoading}
+                                                                className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-xl transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 cursor-pointer"
+                                                            >
+                                                                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                                                                Approve Request
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleReject(item); }}
+                                                                disabled={actionLoading}
+                                                                className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl transition font-medium flex items-center justify-center gap-2 shadow-lg shadow-red-900/20 cursor-pointer"
+                                                            >
+                                                                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
+                                                                Reject Request
+                                                            </button>
+                                                        </>
+                                                    ) : activeStatusFilter === "approved" ? (
+                                                        <div className="bg-green-50 border border-green-200 text-green-800 p-5 rounded-xl flex flex-col gap-2 shadow-xs">
+                                                            <div className="flex items-center gap-2 text-green-700 font-semibold">
+                                                                <CheckCircle className="w-5 h-5" />
+                                                                <span>Listing is Live</span>
+                                                            </div>
+                                                            <p className="text-sm text-green-600 leading-relaxed">
+                                                                This content has been fully verified and approved. It is currently active and visible to all users.
+                                                            </p>
+                                                            {typeof item.metadata?.approvedAt === "string" && (
+                                                                <p className="text-xs text-green-500 mt-2 font-medium">
+                                                                    Approved on {new Date(item.metadata.approvedAt).toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-red-50 border border-red-200 text-red-800 p-5 rounded-xl flex flex-col gap-2 shadow-xs">
+                                                            <div className="flex items-center gap-2 text-red-700 font-semibold">
+                                                                <XCircle className="w-5 h-5" />
+                                                                <span>Listing Rejected</span>
+                                                            </div>
+                                                            <p className="text-sm leading-relaxed">
+                                                                <span className="font-semibold">Rejection Reason: </span>
+                                                                <span className="italic text-red-700">
+                                                                    "{item.metadata?.rejectionReason as string || item.metadata?.verificationNotes as string || "No specific reason provided."}"
+                                                                </span>
+                                                            </p>
+                                                            {typeof item.metadata?.rejectedAt === "string" && (
+                                                                <p className="text-xs text-red-500 mt-2 font-medium">
+                                                                    Rejected on {new Date(item.metadata.rejectedAt).toLocaleDateString()}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -285,4 +358,3 @@ export default function ContentApprovalPage() {
         </div>
     );
 }
-

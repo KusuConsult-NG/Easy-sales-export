@@ -43,21 +43,22 @@ function sanitizeForSerialization(obj: unknown): unknown {
 }
 
 /**
- * Fetches all pending content from various collections.
+ * Fetches all content from various collections matching the given status.
  * Aggregates:
- * - Marketplace Products (status: pending)
- * - Land Listings (verificationStatus: pending)
- * - Marketplace Products (status: pending)
- * - Land Listings (verificationStatus: pending)
+ * - Marketplace Products
+ * - Land Listings
+ * - Export Catalog
  */
-export async function getPendingContentAction(): Promise<
-    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
-    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+export async function getContentApprovalItemsAction(
+    status: ApprovalStatus = "pending"
+): Promise<
+    | { success: true; error: null; data: PendingContentItem[]; stats: { pending: number; approved: number; rejected: number }; [key: string]: any }
+    | { success: false; error: string; data: null; stats?: null; [key: string]: any }
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
-    const { session } = sessionResult;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Not authenticated" , data: null };
         }
@@ -70,77 +71,123 @@ export async function getPendingContentAction(): Promise<
             return { success: false as const, error: "Unauthorized" , data: null };
         }
 
-        const pendingItems: PendingContentItem[] = [];
+        const items: PendingContentItem[] = [];
+
+        // Determine Firestore query filters per status
+        // products
+        const productStatus = status === "pending" ? "pending" : status === "approved" ? "active" : "rejected";
+        // land listings
+        const landStatus = status === "pending" ? "pending_verification" : status === "approved" ? "verified" : "rejected";
+        // export catalog
+        const exportStatus = status === "pending" ? "pending" : status === "approved" ? "live" : "rejected";
 
         // 1. Marketplace Products
         const productsQuery = db.collection(COLLECTIONS.PRODUCTS)
-            .where("status", "==", "pending")
+            .where("status", "==", productStatus)
             .limit(500);
         const productsSnap = await productsQuery.get();
         productsSnap.forEach((doc) => {
             const data = doc.data();
             const retailPrice = data.pricingTiers?.find((t: any) => t.type === "retail")?.price || data.pricingTiers?.[0]?.price || data.price || 0;
-            pendingItems.push({
+            items.push({
                 id: doc.id,
                 type: "products",
                 title: data.title || data.name || "Untitled Product",
                 submittedBy: data.sellerName || data.sellerId || "Unknown Seller",
                 submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
-                status: "pending",
-                description: `Price: ₦${retailPrice} - Category: ${data.category}`,
+                status: status,
+                description: `Price: ₦${retailPrice.toLocaleString()} - Category: ${data.category}`,
                 metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
         // 2. Land Listings
         const landQuery = db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("status", "==", "pending_verification")
+            .where("status", "==", landStatus)
             .limit(500);
         const landSnap = await landQuery.get();
         landSnap.forEach((doc) => {
             const data = doc.data();
-            pendingItems.push({
+            items.push({
                 id: doc.id,
                 type: "land",
                 title: data.title || "Untitled Land",
                 submittedBy: data.ownerName || data.ownerEmail || data.ownerId || "Unknown Owner",
                 submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
-                status: "pending",
-                description: `${data.size} ${data.unit} at ${data.state}, ${data.lga}`,
+                status: status,
+                description: `${data.size} ${data.unit || 'acres'} at ${data.location?.state || data.state || 'Unknown State'}, ${data.location?.lga || data.lga || 'Unknown LGA'}`,
                 metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
         // 3. Export Catalog
         const exportQuery = db.collection(COLLECTIONS.EXPORT_CATALOG)
-            .where("status", "==", "pending")
+            .where("status", "==", exportStatus)
             .limit(500);
         const exportSnap = await exportQuery.get();
         exportSnap.forEach((doc) => {
             const data = doc.data();
-            pendingItems.push({
+            items.push({
                 id: doc.id,
                 type: "export",
                 title: data.productName || data.title || "Untitled Export",
                 submittedBy: data.userId || "Unknown User",
                 submittedAt: (data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
-                status: "pending",
+                status: status,
                 description: `${data.category || "General"} - ${data.availableQuantity || 0} ${data.unit || "units"}`,
                 metadata: sanitizeForSerialization(data) as Record<string, unknown>,
             });
         });
 
-        // Removed Loans and WAVE logic from Content Approval Center since they have dedicated administrative dashboards.
-
         // Sort by submittedAt desc (ISO strings sort lexicographically)
-        pendingItems.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+        items.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
-        return { error: null, success: true as const, data: pendingItems };
+        // Fast count aggregations across the three collections for global totals
+        const [
+            pendingProductsCount,
+            approvedProductsCount,
+            rejectedProductsCount,
+            pendingLandCount,
+            approvedLandCount,
+            rejectedLandCount,
+            pendingExportCount,
+            approvedExportCount,
+            rejectedExportCount,
+        ] = await Promise.all([
+            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
+            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "rejected").count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
+            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "pending").count().get(),
+            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "live").count().get(),
+            db.collection(COLLECTIONS.EXPORT_CATALOG).where("status", "==", "rejected").count().get(),
+        ]);
+
+        const stats = {
+            pending: pendingProductsCount.data().count + pendingLandCount.data().count + pendingExportCount.data().count,
+            approved: approvedProductsCount.data().count + approvedLandCount.data().count + approvedExportCount.data().count,
+            rejected: rejectedProductsCount.data().count + rejectedLandCount.data().count + rejectedExportCount.data().count,
+        };
+
+        return { error: null, success: true as const, data: items, stats };
 
     } catch (error: any) {
-        logger.error("Get pending content error:", error);
+        logger.error("Get content approval items error:", error);
         return { success: false as const, error: error.message , data: null };
     }
+}
+
+export async function getPendingContentAction(): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
+    const res = await getContentApprovalItemsAction("pending");
+    if (!res.success) {
+        return { success: false, error: res.error, data: null };
+    }
+    return { success: true, error: null, data: res.data };
 }
 
 export async function approveContentAction(
