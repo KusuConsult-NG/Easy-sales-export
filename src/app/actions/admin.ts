@@ -1387,10 +1387,13 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         const countSnap = await countQuery.count().get();
         const absoluteDbCount = countSnap.data().count;
 
-        // Fetch a large batch — no orderBy (avoids missing-field exclusion).
+        // Fetch a dynamic batch — no orderBy (avoids missing-field exclusion).
         // We page in-memory after sort.
-        // INCREASED LIMIT: Expanded to 5000 to improve search coverage across legacy data without crashing memory
-        const FETCH_LIMIT = 5000;
+        // If searching or applying an unindexed filter, fetch a larger batch (5000) to ensure high search/filter coverage.
+        // If doing standard navigation, scale limit based on the requested page to reduce expensive reads by 97%+
+        const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all"))
+            ? 5000
+            : Math.min(5000, (page + 1) * pageSize + 100);
         query = query.limit(FETCH_LIMIT);
 
         const snapshot = await query.get();
