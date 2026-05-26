@@ -201,7 +201,21 @@ export default function ContentApprovalPage() {
                     {renderRow("Available Stock", `${meta.availableQuantity || meta.quantity || 0} ${meta.unit || "units"}`)}
                     {renderRow("Minimum Order Qty", meta.minOrderQuantity)}
                     {renderRow("Pricing", priceDisplay)}
-                    {renderRow("Location/State", meta.state || meta.location)}
+                    {(() => {
+                        let locationDisplay = "N/A";
+                        if (meta.state) {
+                            locationDisplay = typeof meta.state === "object" ? (meta.state.state || meta.state.name || "N/A") : String(meta.state);
+                        } else if (meta.location) {
+                            if (typeof meta.location === "object" && meta.location !== null) {
+                                const lga = meta.location.lga || "";
+                                const state = meta.location.state || "";
+                                locationDisplay = [lga, state].filter(Boolean).join(", ") || "N/A";
+                            } else {
+                                locationDisplay = String(meta.location);
+                            }
+                        }
+                        return renderRow("Location/State", locationDisplay);
+                    })()}
                     {renderRow("Delivery Method", meta.deliveryMethod)}
                     {renderRow("Est. Delivery Days", meta.estDeliveryDays)}
                 </div>
