@@ -1,13 +1,13 @@
 {
   "stats": {
-    "totalSellersChecked": 783,
-    "missingBankInRoot": 3,
-    "missingBankInSeller": 678,
-    "missingDocsInSeller": 769,
-    "desyncedPhone": 41,
-    "desyncedState": 34,
-    "orphanedSellerVerifications": 14,
-    "usersWithMarketplaceButNoVerificationDoc": 27
+    "totalSellersChecked": 801,
+    "missingBankInRoot": 9,
+    "missingBankInSeller": 685,
+    "missingDocsInSeller": 788,
+    "desyncedPhone": 66,
+    "desyncedState": 38,
+    "orphanedSellerVerifications": 13,
+    "usersWithMarketplaceButNoVerificationDoc": 30
   },
-  "timestamp": "2026-05-21T11:56:25.914Z"
+  "timestamp": "2026-05-29T17:13:00.276Z"
 }

@@ -4056,6 +4056,7 @@ async function _onboardLegacyMemberAction(
         }
 
         const data = validated.data;
+        data.email = data.email.toLowerCase(); // Permanent Fix: Force lowercase normalization
 
         // 1. Resolve Identity and Enforce Uniqueness
         let targetUid: string | null = null;
