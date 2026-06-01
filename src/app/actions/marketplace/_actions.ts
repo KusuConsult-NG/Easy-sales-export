@@ -1169,7 +1169,7 @@ async function _getSellerProductsAction(options: {
         try { 
             // orderBy DOES NOT throw here. It throws on get() if missing index.
             // We apply orderBy, and if get() fails, we catch it.
-            let orderedQuery = query.orderBy(sortBy, sortDir);
+            const orderedQuery = query.orderBy(sortBy, sortDir);
             snapshot = await orderedQuery.get();
         } catch (e: any) { 
             const errMsg = e.message ? e.message.toLowerCase() : "";
