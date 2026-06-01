@@ -1,1 +1,1 @@
-/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/lib/types/roles.ts
+../../../src/lib/types/roles.ts

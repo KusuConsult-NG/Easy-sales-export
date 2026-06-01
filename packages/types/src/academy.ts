@@ -1,1 +1,1 @@
-/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/lib/types/academy.ts
+../../../src/lib/types/academy.ts

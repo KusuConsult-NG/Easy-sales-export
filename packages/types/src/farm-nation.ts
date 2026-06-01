@@ -1,1 +1,1 @@
-/Users/mac/Easy sales Export/easy-sales-export-nextjs/src/lib/types/farm-nation.ts
+../../../src/lib/types/farm-nation.ts
