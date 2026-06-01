@@ -1646,12 +1646,80 @@ async function _searchProductsAction(params: { query?: string;
 
         query = query.limit(limit);
 
-        const snapshot = await query.get();
-        const products = snapshot.docs.map((doc: any) => { 
-            const data = doc.data();
-            return ProductSchema.parse({ id: doc.id, ...data });
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await query.get();
+        } catch (e: any) {
+            const errMsg = e.message ? e.message.toLowerCase() : "";
+            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
+                logger.warn("Search products failed due to missing index. Falling back to in-memory filters and sorting.", { params, error: e.message });
+                indexError = true;
+                
+                // Fallback: simple query with status and category
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+                if (params.category && params.category !== "All Categories") {
+                    fallbackQuery = fallbackQuery.where("category", "==", params.category);
+                }
+                
+                snapshot = await fallbackQuery.limit(300).get();
+            } else {
+                throw e;
+            }
+        }
+
+        let productsData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        let lastVisible = indexError ? null : snapshot.docs[snapshot.docs.length - 1];
+        let hasMore = indexError ? false : snapshot.docs.length === limit;
+
+        if (indexError) {
+            // Apply availableQuantity filter
+            productsData = productsData.filter((p: any) => (p.availableQuantity ?? 0) > 0);
+            
+            // Apply location filter
+            if (params.state && params.state !== "All Locations") {
+                productsData = productsData.filter((p: any) => p.location?.state === params.state);
+            }
+            
+            // Apply sorting in memory
+            if (params.sortBy === "price_asc") {
+                productsData.sort((a: any, b: any) => (a.pricingTiers?.[0]?.price ?? 0) - (b.pricingTiers?.[0]?.price ?? 0));
+            } else if (params.sortBy === "price_desc") {
+                productsData.sort((a: any, b: any) => (b.pricingTiers?.[0]?.price ?? 0) - (a.pricingTiers?.[0]?.price ?? 0));
+            } else if (params.sortBy === "rating") {
+                productsData.sort((a: any, b: any) => (b.rating ?? 0) - (a.rating ?? 0));
+            } else {
+                // newest
+                productsData.sort((a: any, b: any) => {
+                    let aTime = a.createdAt;
+                    let bTime = b.createdAt;
+                    if (aTime?.toDate) aTime = aTime.toDate().getTime();
+                    if (bTime?.toDate) bTime = bTime.toDate().getTime();
+                    if (aTime instanceof Date) aTime = aTime.getTime();
+                    if (bTime instanceof Date) bTime = bTime.getTime();
+                    return (bTime || 0) - (aTime || 0);
+                });
+            }
+            
+            // Apply pagination in memory
+            if (params.lastId) {
+                const startIndex = productsData.findIndex((p: any) => p.id === params.lastId);
+                if (startIndex !== -1) {
+                    productsData = productsData.slice(startIndex + 1);
+                }
+            }
+            
+            hasMore = productsData.length > limit;
+            productsData = productsData.slice(0, limit);
+            if (productsData.length > 0) {
+                const lastId = productsData[productsData.length - 1].id;
+                lastVisible = snapshot.docs.find(d => d.id === lastId) || null;
+            }
+        }
+
+        const products = productsData.map((p: any) => {
+            return ProductSchema.parse(p);
         });
-        const lastVisible = snapshot.docs[snapshot.docs.length - 1];
 
         // Fetch seller names (optimize this with a separate user index/cache later)
         const productsWithSellers = await Promise.all(
@@ -1689,7 +1757,7 @@ async function _searchProductsAction(params: { query?: string;
             data: { 
                 products: serializeValue(finalProducts), 
                 lastId: lastVisible ? lastVisible.id : undefined, 
-                hasMore: snapshot.docs.length === limit 
+                hasMore: hasMore 
             }
         };
 

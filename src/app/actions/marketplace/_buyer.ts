@@ -49,8 +49,46 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
             query = query.where("exportReady", "==", true);
         }
 
-        const snapshot = await query.get();
-        let products = serializeDocs<Product>(snapshot.docs);
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await query.get();
+        } catch (e: any) {
+            const errMsg = e.message ? e.message.toLowerCase() : "";
+            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || String(e.code) === "failed_precondition" || errMsg.includes("precondition")) {
+                logger.warn("Get products failed due to missing index. Falling back to in-memory filters.", { filters, error: e.message });
+                indexError = true;
+                
+                // Fallback: only filter by status and category at DB level
+                let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
+                if (filters?.category && filters.category !== "all") {
+                    fallbackQuery = fallbackQuery.where("category", "==", filters.category);
+                }
+                snapshot = await fallbackQuery.limit(300).get();
+            } else {
+                throw e;
+            }
+        }
+
+        let products: Product[] = [];
+        if (indexError) {
+            let productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            // Apply filtered states in-memory
+            if (filters?.state) {
+                productsData = productsData.filter((p: any) => p.location?.state === filters.state);
+            }
+            if (filters?.bulkAvailable) {
+                productsData = productsData.filter((p: any) => p.bulkAvailable === true);
+            }
+            if (filters?.exportReady) {
+                productsData = productsData.filter((p: any) => p.exportReady === true);
+            }
+            
+            products = serializeValue(productsData) as Product[];
+        } else {
+            products = serializeDocs<Product>(snapshot.docs);
+        }
 
         // Client-side filters (for complex/non-indexed queries)
         if (filters?.minPrice !== undefined || filters?.maxPrice !== undefined) { 
