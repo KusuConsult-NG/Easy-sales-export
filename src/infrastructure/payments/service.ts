@@ -515,12 +515,19 @@ export async function processFarmNationRegistration(reference: string, amount: n
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        transaction.update(userRef, {
-            "serviceRegistrations.farm_nation.paymentStatus": "completed",
-            "serviceRegistrations.farm_nation.paymentReference": reference,
-            "serviceRegistrations.farm_nation.status": "pending",
+        // ROOT CAUSE #3 FIX: use set(merge:true) not update() — update() throws if
+        // serviceRegistrations.farm_nation doesn't exist yet (brand-new users), silently
+        // failing the entire webhook transaction and leaving users debited but unregistered.
+        transaction.set(userRef, {
+            serviceRegistrations: {
+                farm_nation: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    status: "pending",
+                }
+            },
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         transaction.set(processedRef, {
             reference,
@@ -571,12 +578,19 @@ export async function processWaveRegistration(reference: string, amount: number,
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        transaction.update(userRef, {
-            "serviceRegistrations.wave.paymentStatus": "completed",
-            "serviceRegistrations.wave.paymentReference": reference,
-            "serviceRegistrations.wave.status": "pending",
+        // ROOT CAUSE #3 FIX: use set(merge:true) not update() — update() throws if
+        // serviceRegistrations.wave doesn't exist yet (brand-new users), silently
+        // failing the entire webhook transaction and leaving users debited but unregistered.
+        transaction.set(userRef, {
+            serviceRegistrations: {
+                wave: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    status: "pending",
+                }
+            },
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         transaction.set(processedRef, {
             reference,

@@ -157,8 +157,26 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
 
         // ✅ FIX: If webhook already processed this payment, return success not an error.
         // Users saw "verification failed" after paying because the webhook fires first.
+        // ROOT CAUSE #2 FIX: Also sync enrollment doc so status checks don't fall through.
         if (existingPayment.exists) {
-            logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already processed — returning success.`);
+            logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already processed — syncing enrollment status and returning success.`);
+            try {
+                const processedData = existingPayment.data();
+                const courseId = processedData?.courseId;
+                if (courseId && session.user.id) {
+                    const enrollmentId = `${session.user.id}_${courseId}`;
+                    await db.collection(COLLECTIONS.ACADEMY_ENROLLMENTS ?? "academy_enrollments").doc(enrollmentId).set({
+                        userId: session.user.id,
+                        courseId,
+                        status: "active",
+                        paymentStatus: "completed",
+                        paymentReference: reference,
+                        enrolledAt: FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                }
+            } catch (syncErr: unknown) {
+                logger.warn(`[verifyEnrollmentPaymentAction] Enrollment sync failed (non-fatal): ${String(syncErr)}`);
+            }
             return { error: null, success: true as const, data: null };
         }
 
