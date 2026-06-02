@@ -94,13 +94,25 @@ export async function sendSMS(to: string, message: string): Promise<ATSendResult
         }
 
         const recipient = recipients[0];
-        // Standard AT status codes: 101 = Sent, 102 = Queued, 100 = Processed
+
+        // Official AT statusCode reference:
+        // 100 = Processed, 101 = Sent, 102 = Queued  → success
+        // 401 = RiskHold, 403 = InvalidPhoneNumber
+        // 405 = InsufficientBalance, 500 = InternalServerError → failure
         const statusCode = Number(recipient.statusCode);
-        const isSuccess = statusCode === 101 || statusCode === 102 || statusCode === 100 || recipient.status === "Success" || recipient.status === "Sent";
+        const isSuccess = statusCode === 101 || statusCode === 102 || statusCode === 100
+            || recipient.status === "Success" || recipient.status === "Sent";
 
         if (!isSuccess) {
-            logger.error("[africastalking] SMS failed for recipient:", recipient);
-            return { success: false, error: recipient.status || "SMS delivery failed" };
+            const friendlyError =
+                statusCode === 403 ? `InvalidPhoneNumber: ${normalisedTo}` :
+                statusCode === 405 ? "InsufficientBalance — please top up your Africa's Talking account" :
+                statusCode === 401 ? "RiskHold — contact Africa's Talking support" :
+                statusCode === 500 ? "AT InternalServerError — try again later" :
+                recipient.status || "SMS delivery failed";
+
+            logger.error("[africastalking] SMS failed for recipient:", { recipient, statusCode, friendlyError });
+            return { success: false, error: friendlyError };
         }
 
         logger.info(`[africastalking] SMS sent OK → ${normalisedTo} | messageId: ${recipient.messageId}`);
