@@ -579,12 +579,14 @@ export async function sendSmsBroadcastAction(
                 if (result.status === "fulfilled") {
                     if (result.value.success) {
                         sent++;
+                    } else if (result.value.error === "DoNotDisturbRejection") {
+                        skipped++; // DND — user opted out, not our error
+                        logger.warn(`[SmsBroadcast] DND skipped ${chunk[idx]?.phone}`);
                     } else {
                         failed++;
                         logger.warn(`[SmsBroadcast] SMS failed for ${chunk[idx]?.phone}: ${result.value.error}`);
                     }
                 } else {
-                    // Promise itself rejected (should be rare — sendSMS catches internally)
                     failed++;
                     logger.error(`[SmsBroadcast] SMS promise rejected for ${chunk[idx]?.phone}:`, result.reason);
                 }

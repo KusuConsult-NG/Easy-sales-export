@@ -96,16 +96,24 @@ export async function sendSMS(to: string, message: string): Promise<ATSendResult
         const recipient = recipients[0];
 
         // Official AT statusCode reference:
-        // 100 = Processed, 101 = Sent, 102 = Queued  → success
-        // 401 = RiskHold, 403 = InvalidPhoneNumber
+        // 100 = Processed, 101 = Sent, 102 = Queued       → success
+        // 409 = DoNotDisturbRejection                      → skipped (user opted out, not our error)
+        // 401 = RiskHold, 403 = InvalidSenderId/Phone
         // 405 = InsufficientBalance, 500 = InternalServerError → failure
         const statusCode = Number(recipient.statusCode);
         const isSuccess = statusCode === 101 || statusCode === 102 || statusCode === 100
             || recipient.status === "Success" || recipient.status === "Sent";
 
+        // DND (Do Not Disturb) — recipient opted out of promotional SMS in Nigeria
+        // Treat as skipped, not failed — it is not an account or code error
+        if (statusCode === 409 || recipient.status === "DoNotDisturbRejection") {
+            logger.warn(`[africastalking] DND rejection (skipped) → ${normalisedTo}`);
+            return { success: false, error: "DoNotDisturbRejection" };
+        }
+
         if (!isSuccess) {
             const friendlyError =
-                statusCode === 403 ? `InvalidPhoneNumber: ${normalisedTo}` :
+                statusCode === 403 ? `InvalidSenderId or InvalidPhoneNumber: check AT_SENDER_ID is registered` :
                 statusCode === 405 ? "InsufficientBalance — please top up your Africa's Talking account" :
                 statusCode === 401 ? "RiskHold — contact Africa's Talking support" :
                 statusCode === 500 ? "AT InternalServerError — try again later" :
