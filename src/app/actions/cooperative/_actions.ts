@@ -20,6 +20,7 @@ import { contributionSchema,
     type FixedSavingsState,
     type WithdrawalActionState } from "@/lib/types/cooperative";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { parseFormData } from "@/lib/form-validation";
 import type { CooperativeMembership,
     CooperativeTransaction,
     JoinCooperativeState,
@@ -278,29 +279,20 @@ export async function registerCooperativeMemberAction(
             }
         }
 
-        // Parse and validate form data
-        const rawData = { firstName: formData.get("firstName") as string,
-            otherName: (formData.get("otherName") as string) || undefined,
-            lastName: formData.get("lastName") as string,
-            dateOfBirth: formData.get("dateOfBirth") as string,
-            gender: formData.get("gender") as "male" | "female",
-            email: formData.get("email") as string,
-            phone: formData.get("phone") as string,
-            stateOfOrigin: formData.get("stateOfOrigin") as string,
-            lga: formData.get("lga") as string,
-            residentialAddress: formData.get("residentialAddress") as string,
-            occupation: formData.get("occupation") as string,
-            nextOfKinName: formData.get("nextOfKinName") as string,
-            nextOfKinPhone: formData.get("nextOfKinPhone") as string,
-            nextOfKinAddress: formData.get("nextOfKinAddress") as string,
-            membershipTier: membershipTier };
+        // DISEASE 6 FIX: parseFormData validates FormData directly against the Zod
+        // schema in one step. Field names are now the single binding point — a rename
+        // in the HTML form or the schema will surface as a structured fieldError.
+        // Note: membershipTier is read separately above because it requires the
+        // PROCESSED_PAYMENTS lookup; we inject it here as a pre-validated value.
+        const formDataWithTier = new FormData();
+        for (const [k, v] of formData.entries()) formDataWithTier.append(k, v);
+        formDataWithTier.set("membershipTier", membershipTier);
 
-        // Validate with Zod
-        const validationResult = cooperativeMembershipSchema.safeParse(rawData);
-        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Validation failed", success: false as const, data: null };
+        const parsed = parseFormData(cooperativeMembershipSchema, formDataWithTier);
+        if (!parsed.success) {
+            return { error: parsed.error ?? "Validation failed", success: false as const, data: null };
         }
-
-        const validatedData = validationResult.data;
+        const validatedData = parsed.data;
 
         // 🔒 DEDUP GUARD: Collection-level phone & email check
         // Catches cross-account duplicates (same phone/email, different account)
@@ -550,16 +542,12 @@ async function _makeContributionAction(
 
         const userId = session.user.id;
 
-        // Parse and validate form data
-        const rawData = { cooperativeId: formData.get("cooperativeId") as string,
-            amount: Number(formData.get("amount")),
-            type: formData.get("type") as "savings" | "loan_repayment" };
-
-        const validationResult = contributionSchema.safeParse(rawData);
-        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Invalid contribution data", success: false as const, data: null };
+        // DISEASE 6 FIX: parseFormData binding
+        const parsed = parseFormData(contributionSchema, formData);
+        if (!parsed.success) {
+            return { error: parsed.error ?? "Validation failed", success: false as const, data: null };
         }
-
-        const { cooperativeId, amount, type } = validationResult.data!;
+        const { cooperativeId, amount, type } = parsed.data;
 
         if (amount <= 0) { return { error: "Contribution amount must be positive", success: false as const, data: null };
         }
@@ -899,16 +887,17 @@ async function _applyForLoanAction(
 
         const userId = session.user.id;
 
-        // Parse and validate
-        const rawData = { productId: formData.get("productId") as string,
-            amount: Number(formData.get("amount")),
-            purpose: formData.get("purpose") as string };
+        // DISEASE 6 FIX: parseFormData binding
+        const amountNum = parseFloat(formData.get("amount") as string);
+        const loanFd = new FormData();
+        for (const [k, v] of formData.entries()) loanFd.append(k, v);
+        loanFd.set("amount", isNaN(amountNum) ? "0" : String(amountNum));
 
-        const validationResult = loanApplicationSchema.safeParse(rawData);
-        if (!validationResult.success) { return { error: validationResult.error.issues[0]?.message || "Invalid loan application", success: false as const, data: null };
+        const parsed = parseFormData(loanApplicationSchema, loanFd);
+        if (!parsed.success) {
+            return { error: parsed.error ?? "Validation failed", success: false as const, data: null };
         }
-
-        const { productId, amount, purpose } = validationResult.data;
+        const { productId, amount, purpose } = parsed.data;
 
         await db.runTransaction(async (t) => { // Verify membership and eligibility
             const membershipsRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);

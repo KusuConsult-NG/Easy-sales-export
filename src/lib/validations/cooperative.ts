@@ -2,8 +2,21 @@ import { z } from "zod";
 import { dateSchema, addressSchema, bankDetailsSchema } from "./shared";
 
 /**
- * Cooperative Membership & Onboarding Schemas
- * Used to ensure strict data integrity and heal fragmented legacy records.
+ * @deprecated ORPHANED SCHEMA — DO NOT USE IN SERVER ACTIONS.
+ *
+ * DISEASE 6 NOTE: This file contains `CooperativeOnboardingSchema` which uses
+ * NESTED field names (personalInfo.state, personalInfo.lga, nextOfKin.name).
+ *
+ * The LIVE schema used by server actions is `cooperativeMembershipSchema` in:
+ *   src/lib/types/cooperative.ts
+ *
+ * That schema uses FLAT field names (stateOfOrigin, lga, nextOfKinName) which
+ * match the actual HTML form fields. Using CooperativeOnboardingSchema in a
+ * server action would cause silent validation failures because formData.get("state")
+ * would not populate personalInfo.state.
+ *
+ * This file is kept for legacy Firestore document validation only (data scrubbing).
+ * If you need to validate form input, import from src/lib/types/cooperative.ts.
  */
 
 export const CooperativeOnboardingSchema = z.object({

@@ -26,6 +26,7 @@ import { ProductSchema,
     MarketplaceOnboardingSchema,
     SellerVerificationSchema } from "@/lib/validations/marketplace";
 import { withSafeAction, ActionResponse } from "@/lib/safe-action";
+import { parseFormData } from "@/lib/form-validation";
 
 // ============================================
 // Check Marketplace Application Status Action
@@ -205,11 +206,14 @@ async function _submitSellerVerificationAction(
         const verificationId = `seller_${userId}_${Date.now()}`;
         const verificationRef = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId);
 
+        // DISEASE 6 FIX: Field name correction.
+        // Form sends "phone" (not "phoneNumber") and "address" (not "street").
+        // The SellerVerification type uses phoneNumber internally, but the FormData key is "phone".
         const verificationData: SellerVerification = { 
             id: verificationId,
             userId,
             status: "pending",
-            phoneNumber: formData.get("phoneNumber") as string,
+            phoneNumber: (formData.get("phoneNumber") || formData.get("phone")) as string,
             phoneVerified: false,
             nin: (formData.get("nin") as string) || undefined,
             bvn: (formData.get("bvn") as string) || undefined,
@@ -221,11 +225,12 @@ async function _submitSellerVerificationAction(
                 bankCode: formData.get("bankCode") as string 
             },
             address: { 
-                street: formData.get("street") as string,
+                // Form sends "address" (flat) or "street" — accept both
+                street: (formData.get("street") || formData.get("address")) as string,
                 city: formData.get("city") as string,
                 state: formData.get("state") as string,
                 lga: formData.get("lga") as string,
-                country: formData.get("country") as string || "Nigeria" 
+                country: (formData.get("country") as string) || "Nigeria" 
             },
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -363,6 +368,22 @@ async function _submitMarketplaceOnboardingAction(
         if (existingStatus === 'approved') { 
             return { success: false as const, error: "You are already registered for Marketplace.", data: null };
         }
+
+        // DISEASE 6 FIX: Validate the fields this action actually reads from FormData.
+        // MarketplaceOnboardingSchema has different field names than the form, so we
+        // inline-validate the minimum required fields here to prevent empty submissions.
+        const accountType = formData.get("accountType") as string;
+        const businessName = formData.get("businessName") as string;
+        if (!accountType) {
+            return { success: false as const, error: "Account type is required.", data: null };
+        }
+        if (!businessName?.trim()) {
+            return { success: false as const, error: "Business name is required.", data: null };
+        }
+        if (!["seller", "buyer", "both"].includes(accountType)) {
+            return { success: false as const, error: "Invalid account type.", data: null };
+        }
+
 
         // 1. Handle File Uploads (Admin SDK Storage)
         const uploadFile = async (file: File, path: string) => {
