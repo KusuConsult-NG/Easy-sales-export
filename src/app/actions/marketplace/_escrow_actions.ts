@@ -95,7 +95,9 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         let transactions = snapshot.docs.map(doc => { const data = doc.data();
             return {
                 id: doc.id,
-                ...data,
+                // DISEASE 5 FIX: serializeValue catches ALL Timestamp fields (including any
+                // future ones like disputedAt, completedAt) — not just the named ones below
+                ...serializeValue(data),
                 createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate().toISOString() : null,
                 updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate().toISOString() : null,
                 paidAt: data.paidAt ? (data.paidAt as Timestamp).toDate().toISOString() : null,

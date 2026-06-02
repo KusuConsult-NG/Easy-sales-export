@@ -1825,6 +1825,18 @@ async function _updateUserRolesAction(
             },
         });
 
+        // DISEASE 1 FIX: Invalidate the user's Redis cache immediately after a role change.
+        // The JWT callback reads from getUserProfile() which hits the cache. Without this,
+        // the user's new roles won't appear in their session until the cache TTL expires
+        // (up to 1 hour), meaning they get bounced to onboarding even after being approved.
+        try {
+            const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+            await invalidateUserCache(userId);
+        } catch (e) {
+            // Non-fatal: cache invalidation failure doesn't undo the role write
+            logger.warn("[updateUserRolesAction] Cache invalidation failed (non-fatal):", e as Error);
+        }
+
         return { success: true as const, error: null, message: "User roles updated" };
     } catch (error: any) {
         return { success: false as const, error: error.message };

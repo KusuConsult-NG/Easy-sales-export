@@ -195,8 +195,18 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) { 
-            return { error: "Payment has already been processed", success: false as const, data: null };
+        // ✅ FIX: If the Paystack webhook already processed this payment (fires before user
+        // is redirected back), return SUCCESS instead of an error. The order IS live.
+        // Before this fix, users saw "Payment verification failed" even after being charged.
+        if (existingPayment.exists) {
+            // Find the order to return its ID to the UI
+            const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
+                .where("paymentReference", "==", reference)
+                .limit(1)
+                .get();
+            const orderId = orderQuery.empty ? reference : orderQuery.docs[0].data()?.orderId || orderQuery.docs[0].id;
+            logger.info(`[verifyOrderPaymentAction] Payment ${reference} already processed by webhook — returning success to client.`);
+            return { error: null, success: true as const, data: { orderId, message: "Order payment successful!" } };
         }
 
         // Verify payment with Paystack

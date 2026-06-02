@@ -321,16 +321,23 @@ export async function processCooperativeRegistration(reference: string, amount: 
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // Update central USERS doc
-        transaction.update(userRef, {
-            "serviceRegistrations.cooperatives.paymentStatus": "completed",
-            "serviceRegistrations.cooperatives.paymentReference": reference,
-            "serviceRegistrations.cooperatives.paymentAmount": amount,
-            "serviceRegistrations.cooperatives.membershipTier": normalisedTier,
-            "serviceRegistrations.cooperatives.status": "legacy_pending_onboarding",
-            "serviceRegistrations.cooperatives.paidAt": FieldValue.serverTimestamp(),
+        // FIX: Use set(merge:true) instead of update() so this never throws for
+        // new users whose USERS doc doesn't yet have a serviceRegistrations field.
+        // update() throws NOT_FOUND if the nested path doesn't exist, causing the
+        // entire webhook transaction to fail and leaving the user in payment limbo.
+        transaction.set(userRef, {
+            serviceRegistrations: {
+                cooperatives: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: amount,
+                    membershipTier: normalisedTier,
+                    status: "legacy_pending_onboarding",
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         // Create transaction fee record
         transaction.set(transactionRef, {
@@ -430,14 +437,20 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        transaction.update(userRef, {
-            "serviceRegistrations.academy.paymentStatus": "completed",
-            "serviceRegistrations.academy.paymentReference": reference,
-            "serviceRegistrations.academy.paymentAmount": amount,
-            "serviceRegistrations.academy.plan": planToStore,
-            "serviceRegistrations.academy.paidAt": FieldValue.serverTimestamp(),
+        // FIX: Use set(merge:true) instead of update() — same reason as cooperative.
+        // update() throws if serviceRegistrations.academy doesn't exist on the USERS doc.
+        transaction.set(userRef, {
+            serviceRegistrations: {
+                academy: {
+                    paymentStatus: "completed",
+                    paymentReference: reference,
+                    paymentAmount: amount,
+                    plan: planToStore,
+                    paidAt: FieldValue.serverTimestamp(),
+                }
+            },
             updatedAt: FieldValue.serverTimestamp(),
-        });
+        }, { merge: true });
 
         transaction.set(processedRef, {
             reference,
@@ -470,40 +483,13 @@ export async function processAcademyRegistration(reference: string, amount: numb
         return;
     }
 
-    // Auto-create application doc
-    try {
-        const userSnap = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const userData = userSnap.data();
-        const applicationId = `ACADEMY-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-        await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).set({
-            userId,
-            applicationId,
-            personalInfo: {
-                fullName: userData?.fullName || userData?.name || "Unknown",
-                email: userData?.email || "Unknown",
-                phone: userData?.phone || userData?.phoneNumber || "",
-            },
-            education: {
-                educationLevel: "Not provided (auto-created from payment)",
-                fieldOfStudy: "Not provided",
-            },
-            status: "pending",
-            paymentStatus: "completed",
-            paymentReference: reference,
-            paymentAmount: amount,
-            plan: planToStore,
-            submittedAt: FieldValue.serverTimestamp(),
-            source: "webhook",
-        });
-
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({
-            "serviceRegistrations.academy.applicationId": applicationId,
-            "serviceRegistrations.academy.status": "pending",
-        });
-    } catch (appError) {
-        logger.error(`[Paystack Webhook] Failed to create academy_applications doc for ${userId}:`, appError);
-    }
+    // FIX: Do NOT auto-create an ACADEMY_APPLICATIONS doc here.
+    // Previously this created a skeleton doc with status="pending", which caused
+    // checkAcademyStatusAction() to return "pending" for users who had paid but
+    // not yet submitted their form. The UI then redirected them to the
+    // "application under review" page, making it impossible to fill the form.
+    // The real application doc is created when the user submits the form themselves.
+    logger.info(`[Paystack Webhook] Academy payment confirmed for ${userId} — application form not yet submitted.`);
 
     try {
         await invalidateUserCache(userId);

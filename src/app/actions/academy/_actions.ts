@@ -960,7 +960,11 @@ async function _submitAcademyApplicationAction(
             const userData = userDoc.data();
             const existingStatus = userData?.serviceRegistrations?.academy?.status;
 
-            if (existingStatus === 'pending' || existingStatus === 'under_review') {
+            // Only block if an actual application was already submitted (has applicationId).
+            // IMPORTANT: status="pending" is also set by the payment verification step — do NOT
+            // treat it as a blocking condition unless a real application doc was also created.
+            const existingApplicationId = userData?.serviceRegistrations?.academy?.applicationId;
+            if (existingApplicationId && (existingStatus === 'pending' || existingStatus === 'under_review')) {
                 throw new Error("Your previous application is still being processed.");
             }
             if (existingStatus === 'approved') {
@@ -1605,8 +1609,8 @@ async function _getAcademyApplicationAction(): Promise<ActionResponse<any>> {
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
-        const data = sortedDocs[0];
-        return { success: true, error: null, data: null };
+        const data = serializeValue(sortedDocs[0]);
+        return { success: true, error: null, data };
     } catch (error) {
         logger.error("getAcademyApplicationAction error:", {
             error: error instanceof Error ? error.message : String(error)

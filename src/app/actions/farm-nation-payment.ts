@@ -153,8 +153,14 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) { 
-            return { success: false, error: "Payment has already been processed", data: null };
+        // ✅ FIX: If webhook already processed this payment, return success not an error.
+        if (existingPayment.exists) {
+            logger.info(`[verifyPropertyPaymentAction] Payment ${reference} already processed — returning success.`);
+            // Find the property from metadata so we can return its ID
+            const txQuery = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
+                .where("paymentReference", "==", reference).limit(1).get();
+            const propertyId = txQuery.empty ? "" : txQuery.docs[0].data()?.propertyId || "";
+            return { success: true, error: null, data: { propertyId, message: "Payment successful! Your funds are held securely in escrow." } };
         }
 
         // Verify payment with Paystack

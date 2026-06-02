@@ -241,7 +241,10 @@ export async function registerCooperativeMemberAction(
         const memberData = existingMember.data();
 
         let isLegacyImport = false;
-        const membershipTier = (memberData?.membershipTier ?? "Member") as "Member";
+        // DISEASE 6 FIX: The form appends "membershipTier" but this was only reading from
+        // the Firestore doc — which doesn't exist yet for new registrations. Read form value first.
+        const formTier = (formData.get("membershipTier") as string) || "";
+        const membershipTier = (formTier || memberData?.membershipTier || "Member") as "Member";
 
         if (inviteToken) { if (existingMember.exists && memberData?.onboardingCompleted) {
                  return { error: "You have already completed onboarding.", success: false as const, data: null };

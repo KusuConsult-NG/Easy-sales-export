@@ -1548,7 +1548,9 @@ async function _getBuyerStatsAction(): Promise<ActionResponse<{ stats: { activeO
             .where("buyerId", "==", session.user.id)
             .get();
 
-        const orders = snapshot.docs.map((doc: any) => doc.data() as Order);
+        // DISEASE 5 FIX: serializeValue converts Firestore Timestamps → ISO strings
+        // so they don't crash React when passed to client components.
+        const orders = serializeDocs<Order>(snapshot.docs);
 
         const activeOrders = orders.filter(o => o.status !== "delivered" && o.status !== "cancelled" && o.status !== "completed").length;
         const completedOrders = orders.filter(o => o.status === "delivered" || o.status === "completed").length;
@@ -1668,7 +1670,8 @@ async function _searchProductsAction(params: { query?: string;
             }
         }
 
-        let productsData = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+        // DISEASE 5 FIX: serialize before any in-memory processing
+        let productsData = serializeDocs(snapshot.docs);
         let lastVisible = indexError ? null : snapshot.docs[snapshot.docs.length - 1];
         let hasMore = indexError ? false : snapshot.docs.length === limit;
 

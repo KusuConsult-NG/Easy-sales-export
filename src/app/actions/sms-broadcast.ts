@@ -548,44 +548,69 @@ export async function previewSmsBroadcastAction(
 export async function sendSmsBroadcastAction(
     filters: SmsFilters,
     message: string
-): Promise<SmsBroadcastResult> { const authCheck = await requireAdmin();
+): Promise<SmsBroadcastResult> {
+    const authCheck = await requireAdmin();
     if ("error" in authCheck) return { success: false, error: "Unauthorized: admin role required", data: null };
-    try { const recipients = await collectSmsRecipients(filters);
+
+    // FIX: Warn loudly if AT_USERNAME is "sandbox" — SMS won't reach real phones
+    const atUsername = process.env.AT_USERNAME || "sandbox";
+    if (atUsername.toLowerCase() === "sandbox") {
+        logger.warn("[SmsBroadcast] AT_USERNAME is 'sandbox' — SMS will hit the sandbox API and NOT reach real phones. Set AT_USERNAME to your live Africa's Talking username in production env.");
+    }
+
+    try {
+        const recipients = await collectSmsRecipients(filters);
         if (recipients.length === 0) {
             return { success: false, error: "No recipients with valid phone numbers matched your filters.", data: null };
         }
 
         let sent = 0;
         let failed = 0;
-        const skipped = 0;
+        let skipped = 0;
 
         // Send in batches of 10 with a 1s pause between batches
         const BATCH = 10;
-        for (let i = 0; i < recipients.length; i += BATCH) { const chunk = recipients.slice(i, i + BATCH);
+        for (let i = 0; i < recipients.length; i += BATCH) {
+            const chunk = recipients.slice(i, i + BATCH);
             const results = await Promise.allSettled(
                 chunk.map((r) => sendSMS(r.phone, message))
             );
-            results.forEach((result) => {
-                if (result.status === "fulfilled" && result.value.success) sent++;
-                else failed++;
+            results.forEach((result, idx) => {
+                if (result.status === "fulfilled") {
+                    if (result.value.success) {
+                        sent++;
+                    } else {
+                        failed++;
+                        logger.warn(`[SmsBroadcast] SMS failed for ${chunk[idx]?.phone}: ${result.value.error}`);
+                    }
+                } else {
+                    // Promise itself rejected (should be rare — sendSMS catches internally)
+                    failed++;
+                    logger.error(`[SmsBroadcast] SMS promise rejected for ${chunk[idx]?.phone}:`, result.reason);
+                }
             });
             if (i + BATCH < recipients.length) await sleep(1000);
         }
 
-        // Persist broadcast log
+        // FIX: Log real admin userId from auth session, not hardcoded "admin"
         const db = getAdminDb();
-        const logRef = await db.collection("sms_broadcast_logs").add({ message,
+        const adminId = (authCheck as any).session?.user?.id || (authCheck as any).userId || "admin";
+        const logRef = await db.collection("sms_broadcast_logs").add({
+            message,
             audience: filters.audience,
             filters,
-            sentBy: "admin",
+            sentBy: adminId,
+            sandboxMode: atUsername.toLowerCase() === "sandbox",
             sentAt: FieldValue.serverTimestamp(),
             totalRecipients: recipients.length,
             sent,
             failed,
             skipped,
-            status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial" });
+            status: failed === 0 ? "done" : sent === 0 ? "failed" : "partial",
+        });
 
         return { success: true, error: null, data: { sent, failed, skipped, logId: logRef.id } };
-    } catch (error: any) { return { success: false, error: error.message, data: null };
+    } catch (error: any) {
+        return { success: false, error: error.message, data: null };
     }
 }

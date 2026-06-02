@@ -133,8 +133,12 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) { return { error: "Payment has already been processed", success: false as const, meta: null
- };
+        // ✅ FIX: If webhook already processed this payment, return success not an error.
+        if (existingPayment.exists) {
+            logger.info(`[verifyExportOrderPaymentAction] Payment ${reference} already processed — returning success.`);
+            const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders")
+                .where("paymentReference", "==", reference).limit(1).get();
+            return { error: null, success: true as const, meta: null, data: { orderId: orderQuery.empty ? reference : orderQuery.docs[0].id } };
         }
 
         // Verify payment with Paystack
@@ -350,8 +354,12 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) { return { error: "Payment has already been processed", success: false as const, meta: null
- };
+        // ✅ FIX: If webhook already processed this payment, return success not an error.
+        if (existingPayment.exists) {
+            logger.info(`[verifyInvestmentPaymentAction] Payment ${reference} already processed — returning success.`);
+            const invQuery = await db.collection(COLLECTIONS.EXPORT_INVESTMENTS)
+                .where("paymentReference", "==", reference).limit(1).get();
+            return { error: null, success: true as const, meta: null, data: { investmentId: invQuery.empty ? reference : invQuery.docs[0].id } };
         }
 
         // Verify payment with Paystack

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useOnce } from "@/hooks/useOnce";
 import { Loader2, CheckCircle, XCircle, PartyPopper, ArrowRight } from "lucide-react";
 import { verifyAcademyPaymentAction } from "@/app/actions/academy";
 import { Suspense } from "react";
@@ -12,7 +13,7 @@ function PaymentCallbackContent() {
     const reference = searchParams.get("reference") || searchParams.get("trxref");
     const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
 
-    useEffect(() => {
+    useOnce(() => {
         const verify = async () => {
             if (!reference) {
                 setStatus("failed");
@@ -28,7 +29,7 @@ function PaymentCallbackContent() {
         };
 
         verify();
-    }, [reference]);
+    });
 
     if (status === "loading") {
         return (

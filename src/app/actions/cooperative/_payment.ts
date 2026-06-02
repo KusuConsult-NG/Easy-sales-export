@@ -84,7 +84,10 @@ export async function verifyContributionPaymentAction(
         const processedRef = doc(db, 'processedPayments', reference);
         const existingPayment = await getDoc(processedRef);
 
-        if (existingPayment.exists()) { return { error: 'Payment has already been processed', success: false as const, data: undefined };
+        // ✅ FIX: If webhook already processed this payment, return success not an error.
+        if (existingPayment.exists()) {
+            logger.info(`[verifyContributionPaymentAction] Payment ${reference} already processed — returning success.`);
+            return { error: null, success: true as const, message: 'Your contribution has been recorded.', data: undefined };
         }
 
         // Verify payment with Paystack

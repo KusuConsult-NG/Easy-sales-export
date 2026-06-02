@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState, useRef } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { verifyOrderPaymentAction } from "@/app/actions/marketplace";
 import { CheckCircle, XCircle, Loader2, Home, ShoppingBag } from "lucide-react";
 import Link from "next/link";
+import { useOnce } from "@/hooks/useOnce";
 
 function PaymentCallbackContent() {
     const router = useRouter();
@@ -15,7 +16,7 @@ function PaymentCallbackContent() {
     const [message, setMessage] = useState("");
     const [orderId, setOrderId] = useState<string | null>(null);
 
-    useEffect(() => {
+    useOnce(() => {
         async function verifyPayment() {
             const reference = searchParams.get("reference");
 
@@ -43,15 +44,14 @@ function PaymentCallbackContent() {
                     setStatus("error");
                     setMessage(result.error || "Payment verification failed");
                 }
-            } catch (error) {
+            } catch {
                 setStatus("error");
                 setMessage("An error occurred while verifying your payment");
             }
-        };
+        }
 
         verifyPayment();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
+    });
 
     return (
         <div className="min-h-screen bg-linear-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4">

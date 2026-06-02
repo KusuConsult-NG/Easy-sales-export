@@ -6,6 +6,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
 import { logger } from "@/lib/logger";
+import { serializeDocs } from "@/lib/firestore-serialize";
 
 const DEFAULT_CATALOG = [
     { id: "cashew-nuts", name: "Cashew Nuts", icon: "🥜", origin: "Ogbomoso, Oyo State", season: "Feb - May", category: "nuts", grades: ["W320", "W240", "W210"], certifications: ["NAFDAC", "SON"], pricePerMT: 2850, minOrderMT: 20 },
@@ -40,11 +41,12 @@ export async function getAdminExportCatalogAction(options: { limit?: number;
         const hasMore = snapshot.docs.length > fetchLimit;
         const docs = hasMore ? snapshot.docs.slice(0, fetchLimit) : snapshot.docs;
 
-        if (docs.length > 0) { const products = docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (docs.length > 0) {
+            // DISEASE 5 FIX: serialize to convert Timestamps → ISO strings
+            const products = serializeDocs(docs);
             const nextCursor = hasMore ? docs[docs.length - 1].id : undefined;
 
-            return { error: null, success: true as const, data: products, lastDocId: nextCursor, hasMore: hasMore, meta: { hasMore, lastDocId: nextCursor } 
-            };
+            return { error: null, success: true as const, data: products, lastDocId: nextCursor, hasMore: hasMore, meta: { hasMore, lastDocId: nextCursor } };
         }
 
         // Only return default catalog if not paginated and collection is empty
@@ -194,7 +196,8 @@ export async function getAdminPendingExportProductsAction(): Promise<
             .orderBy("createdAt", "desc")
             .get();
 
-        const products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // DISEASE 5 FIX: use serializeDocs to prevent Timestamp objects crashing the client
+        const products = serializeDocs(snapshot.docs);
 
         return { success: true as const, data: products, error: null };
     } catch (error: any) { logger.error("Get pending export products error:", error);

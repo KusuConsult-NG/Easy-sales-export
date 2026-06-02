@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, Suspense, useCallback, useRef } from "react";
+import { useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle, XCircle, Loader2, PartyPopper, FileText, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useOnce } from "@/hooks/useOnce";
 
 function PaymentCallbackContent() {
     const searchParams = useSearchParams();
@@ -33,18 +34,15 @@ function PaymentCallbackContent() {
         }
     }, []);
 
-    useEffect(() => {
+    useOnce(() => {
         const reference = searchParams.get("reference");
         if (!reference) {
-            setTimeout(() => {
-                setStatus("failed");
-                setMessage("No payment reference found");
-            }, 0);
+            setStatus("failed");
+            setMessage("No payment reference found");
             return;
         }
-         
         verifyPayment(reference);
-    }, [searchParams, verifyPayment]);
+    });
 
     // Auto-redirect after success
     useEffect(() => {

@@ -155,7 +155,11 @@ export async function verifyEnrollmentPaymentAction(reference: string): Promise<
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const existingPayment = await processedRef.get();
 
-        if (existingPayment.exists) { return { error: "Payment has already been processed", success: false as const, data: null };
+        // ✅ FIX: If webhook already processed this payment, return success not an error.
+        // Users saw "verification failed" after paying because the webhook fires first.
+        if (existingPayment.exists) {
+            logger.info(`[verifyEnrollmentPaymentAction] Payment ${reference} already processed — returning success.`);
+            return { error: null, success: true as const, data: null };
         }
 
         // Verify payment with Paystack
@@ -257,10 +261,10 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             return { error: null, success: true as const, data: { paymentUrl: "/academy/dashboard" } };
         }
 
-        // Check if already paid
+        // Check if already paid — return success with redirect so the UI continues gracefully
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         if (userDoc.data()?.serviceRegistrations?.academy?.paymentStatus === "completed") {
-            return { error: "You have already paid. Please proceed to complete your application.", success: false as const , data: null };
+            return { error: null, success: true as const, data: { paymentUrl: "/academy/application" } };
         }
 
         const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
@@ -330,12 +334,44 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         const paidAmount = verify.data.amount / 100;
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
+        // ✅ FIX: If the Paystack webhook already processed this payment, return SUCCESS.
+        // The webhook fires before the user is redirected back on fast connections.
+        // Before this fix, users saw "Payment verification failed" even after paying.
+        // ADDITIONAL FIX: Also sync the USERS doc here so the primary status check
+        // (serviceRegistrations.academy.paymentStatus) is always populated.
+        // Previously this early-return skipped that write, so future logins always
+        // fell through to the slow PROCESSED_PAYMENTS fallback query.
+        const existingProcessed = await processedRef.get();
+        if (existingProcessed.exists) {
+            logger.info(`[verifyAcademyPaymentAction] Payment ${reference} already processed by webhook — syncing USERS doc and returning success.`);
+            try {
+                const processedData = existingProcessed.data();
+                await db.collection(COLLECTIONS.USERS).doc(session.user.id).set({
+                    serviceRegistrations: {
+                        academy: {
+                            paymentStatus: "completed",
+                            paymentReference: reference,
+                            paymentAmount: processedData?.amount ?? null,
+                            plan: processedData?.plan ?? null,
+                        }
+                    },
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            } catch (syncErr) {
+                // Non-fatal — log and continue. The PROCESSED_PAYMENTS fallback
+                // will still work for this session even if the sync fails.
+                logger.warn(`[verifyAcademyPaymentAction] USERS doc sync failed (non-fatal):`, syncErr as any);
+            }
+            return { success: true, error: null, data: null };
+        }
+
         // 🔒 ATOMIC TRANSACTION: Update user and record ledger entries
         await db.runTransaction(async (transaction) => {
             // ── READS FIRST ───────────────────────────────────────────
             const tProcessedDoc = await transaction.get(processedRef);
             if (tProcessedDoc.exists) {
-                throw new Error("Payment already processed");
+                // Another concurrent call processed it — return gracefully
+                return;
             }
 
             const appQuery = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)

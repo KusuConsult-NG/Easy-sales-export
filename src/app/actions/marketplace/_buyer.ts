@@ -72,7 +72,8 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
 
         let products: Product[] = [];
         if (indexError) {
-            let productsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            // DISEASE 5 FIX: serialize first to convert Timestamps before in-memory filtering
+            let productsData = serializeDocs(snapshot.docs);
             
             // Apply filtered states in-memory
             if (filters?.state) {
@@ -85,7 +86,7 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                 productsData = productsData.filter((p: any) => p.exportReady === true);
             }
             
-            products = serializeValue(productsData) as Product[];
+            products = productsData as unknown as Product[];
         } else {
             products = serializeDocs<Product>(snapshot.docs);
         }
@@ -148,12 +149,13 @@ async function _getFeaturedProductsAction(): Promise<ActionResponse<{ products: 
             }
         }
 
-        let products = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+        // DISEASE 5 FIX: serialize immediately to prevent Timestamps crashing sorting/rendering
+        let products = serializeDocs<Product>(snapshot.docs);
         
         if (indexError) {
             products.sort((a: any, b: any) => {
-                const aOrders = a.orders || 0;
-                const bOrders = b.orders || 0;
+                const aOrders = (a as any).orders || 0;
+                const bOrders = (b as any).orders || 0;
                 return bOrders - aOrders;
             });
             products = products.slice(0, 8);

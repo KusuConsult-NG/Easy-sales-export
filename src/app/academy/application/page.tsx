@@ -202,15 +202,32 @@ export default function AcademyApplicationPage() {
                         setPaymentStatus(payStatus.data || "unpaid");
                         setIsLoading(false);
                     } else {
-                        // Stay on page — do NOT auto-redirect pending users
+                        // Check payment status
                         const payStatus = await checkAcademyPaymentStatusAction();
                         setPaymentStatus(payStatus.data || "unpaid");
+
                         if (payStatus.data === "unpaid") {
+                            // Hasn't paid yet — show payment step
                             setCurrentStep(5);
                             setIsLoading(false);
                         } else {
-                            // If they are pending AND paid, they shouldn't be here. Send them to the waiting screen.
-                            router.replace("/academy/application/pending");
+                            // Paid but status shows "pending" — verify an actual application exists
+                            // before redirecting. Payment alone sets status="pending" on the USERS doc,
+                            // so we must check the ACADEMY_APPLICATIONS collection to distinguish
+                            // "paid but form not submitted yet" from "application submitted and pending review".
+                            const appResult = await getAcademyApplicationAction();
+                            const hasSubmittedApplication = appResult.success && appResult.data && (
+                                appResult.data.personalInfo?.firstName || appResult.data.firstName
+                            );
+
+                            if (hasSubmittedApplication) {
+                                // Real application submitted — go to pending review page
+                                router.replace("/academy/application/pending");
+                            } else {
+                                // Paid but form not submitted — stay on form, show payment confirmed
+                                setCurrentStep(5);
+                                setIsLoading(false);
+                            }
                         }
                     }
                 } else if (status.data === "approved" || status.data === "active") {
@@ -409,7 +426,14 @@ export default function AcademyApplicationPage() {
         try {
             const result = await initiateAcademyPaymentAction(selectedPlan);
             if (result.success && result.data?.paymentUrl) {
-                window.location.href = result.data.paymentUrl;
+                // If already paid, the action returns paymentUrl = "/academy/application".
+                // Navigating there would cause an infinite loop — detect and handle gracefully.
+                if (result.data.paymentUrl === "/academy/application") {
+                    setPaymentStatus("paid");
+                    showToast("Payment already confirmed. You can now submit your application.", "info");
+                } else {
+                    window.location.href = result.data.paymentUrl;
+                }
             } else {
                 showToast(result.error || "Failed to initiate payment", "error");
             }

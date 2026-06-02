@@ -221,6 +221,21 @@ export default function SmsBroadcastPage() {
 
             <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
 
+                {/* SANDBOX WARNING — shown when AT_USERNAME=sandbox */}
+                {process.env.NEXT_PUBLIC_AT_SANDBOX_MODE === "true" && (
+                    <div className="rounded-2xl border border-amber-500/50 p-4 flex items-start gap-3" style={{ background: "rgba(245, 158, 11, 0.08)" }}>
+                        <span className="text-amber-400 text-xl flex-shrink-0">⚠️</span>
+                        <div>
+                            <p className="text-amber-400 font-semibold text-sm">Sandbox Mode Active — SMS will NOT reach real phones</p>
+                            <p className="text-amber-300/70 text-xs mt-1">
+                                The <code className="bg-black/30 px-1 rounded">AT_USERNAME</code> environment variable is set to{" "}
+                                <code className="bg-black/30 px-1 rounded">sandbox</code>. Messages are sent to Africa's Talking's test environment only.
+                                To send real SMS, update <code className="bg-black/30 px-1 rounded">AT_USERNAME</code> to your production username in your hosting environment variables.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Audience Picker */}
                 <div className="rounded-2xl border border-white/10 p-6" style={{ background: "rgba(255,255,255,0.04)" }}>
                     <h2 className="text-white font-semibold text-base mb-4 flex items-center gap-2">
@@ -379,7 +394,7 @@ export default function SmsBroadcastPage() {
                                 <div className="mt-2 space-y-1">
                                     {preview.sample.map((r, i) => (
                                         <p key={i} className="text-white/50 text-xs">
-                                            {r.name} · +{r.phone}
+                                            {r.name} · {r.phone}
                                         </p>
                                     ))}
                                     {preview.count > 3 && (
