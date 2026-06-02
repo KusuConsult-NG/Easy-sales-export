@@ -322,7 +322,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     // NextAuth v5 automatically handles secure cookies in production with '__Secure-'
     // prefix and correct SameSite settings. Custom overrides prevent session
     // persistence on Vercel deployments.
-    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || (process.env.NODE_ENV !== "production" ? "e2e_development_auth_secret_placeholder_must_be_changed_in_production" : undefined),
     debug: process.env.NODE_ENV === "development" || process.env.NEXTAUTH_DEBUG === "true",
 
     // ── THE FIX: Verbose Internal Logging ────────────────────────────────────

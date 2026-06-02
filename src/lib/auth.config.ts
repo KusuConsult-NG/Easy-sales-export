@@ -17,7 +17,7 @@ export const authConfig = {
     },
     // Prevent Session Drops: Guarantee Edge and Node runtime use the EXACT same secret
     // Vercel sometimes injects AUTH_SECRET automatically, which conflicts if Node uses NEXTAUTH_SECRET.
-    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
+    secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || (process.env.NODE_ENV !== "production" ? "e2e_development_auth_secret_placeholder_must_be_changed_in_production" : undefined),
 
     // ── THE FIX: Explicit Cookie Configuration for Edge Rewrites ─────────────
     // Vercel Middleware rewrites domains (e.g. /marketplace) internally. NextAuth's
