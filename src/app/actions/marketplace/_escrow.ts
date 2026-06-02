@@ -9,7 +9,7 @@ import { requireSession } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { verifyPaystackPayment } from "@/lib/paystack-server";
-import { smsEscrowReleased, smsDisputeResolved } from "@/lib/termii";
+import { smsEscrowReleased, smsDisputeResolved } from "@/lib/africastalking";
 import { pushEscrowReleased, pushDisputeResolved } from "@/lib/fcm";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";

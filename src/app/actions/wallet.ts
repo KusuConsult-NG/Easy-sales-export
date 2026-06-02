@@ -18,7 +18,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import type { Wallet, WalletTransaction } from "@/lib/types/marketplace";
-import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/termii";
+import { smsWithdrawalApproved, smsWithdrawalRejected } from "@/lib/africastalking";
 import { pushWithdrawalDecision } from "@/lib/fcm";
 import { isAdmin } from "@/lib/admin-permissions";
 import { ActionResponse } from "@/lib/safe-action";

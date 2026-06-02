@@ -22,7 +22,7 @@ export default function AdminCommunicationsPage() {
         },
         {
             title: "SMS Broadcast",
-            description: "Send a text message to selected users by audience — powered by Termii",
+            description: "Send a text message to selected users by audience — powered by Africa's Talking",
             icon: MessageSquare,
             href: "/admin/communications/sms",
             color: "text-blue-600",
@@ -135,7 +135,7 @@ export default function AdminCommunicationsPage() {
                         <p className="font-semibold mb-1">How each channel works</p>
                         <ul className="space-y-1 text-blue-700">
                             <li>📧 <strong>Email:</strong> Sent in batches via Resend. Each send is logged in Broadcast History.</li>
-                            <li>📱 <strong>SMS:</strong> Sent via Termii in batches of 10. Consumes Termii credits per recipient.</li>
+                            <li>📱 <strong>SMS:</strong> Sent via Africa's Talking in batches of 10. Consumes Africa's Talking credits per recipient.</li>
                             <li>🔔 <strong>In-App:</strong> Written directly to Firestore. Users see it instantly if online, or on next login if offline.</li>
                         </ul>
                     </div>

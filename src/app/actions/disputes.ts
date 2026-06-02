@@ -13,7 +13,7 @@ import { hasRole } from "@/lib/role-utils";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
-import { smsDisputeResolved } from "@/lib/termii";
+import { smsDisputeResolved } from "@/lib/africastalking";
 import { pushDisputeResolved } from "@/lib/fcm";
 
 

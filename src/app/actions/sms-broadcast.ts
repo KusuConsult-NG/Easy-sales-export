@@ -1,20 +1,20 @@
 /**
  * SMS Broadcast — Server Action
  *
- * Sends bulk SMS messages to targeted audiences using the Termii client.
+ * Sends bulk SMS messages to targeted audiences using the Africa's Talking client.
  * Phone numbers are extracted from the users collection, falling back to
  * module sub-collections (academy_applications, cooperative_members,
  * wave_applications) when no phone is found on the root user document.
  *
  * Rate: Messages are sent in batches of 10 with a 1-second pause between
- * batches to avoid overwhelming the Termii API.
+ * batches to avoid overwhelming the Africa's Talking API.
  */
 
 "use server";
 
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { sendSMS } from "@/lib/termii";
+import { sendSMS } from "@/lib/africastalking";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
@@ -70,7 +70,7 @@ function normalisePhone(raw: string | undefined | null): string | null { if (!ra
     let p = String(raw).replace(/\D/g, "");
     if (p.startsWith("0")) p = "234" + p.slice(1);
     if (p.length < 10) return null;
-    return p; }
+    return "+" + p; }
 
 async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
     const compact = Array.from(new Set(userIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)));
@@ -542,7 +542,7 @@ export async function previewSmsBroadcastAction(
 }
 
 /**
- * Send — fans out to all matched recipients in batches via Termii,
+ * Send — fans out to all matched recipients in batches via Africa's Talking,
  * then writes a log to the `sms_broadcast_logs` collection.
  */
 export async function sendSmsBroadcastAction(
