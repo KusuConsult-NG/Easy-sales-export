@@ -11,6 +11,7 @@ import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
+import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { z } from "zod";
 
 /**
@@ -817,8 +818,9 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
             const fullName = [data.profile.firstName, data.profile.otherName, data.profile.lastName]
                 .filter(Boolean).join(" ").trim();
 
-            // Update user document
-            transaction.update(userRef, { 
+            // DISEASE 2 FIX: normalizeUserUpdate mirrors farmNation→farm_nation
+            // and phone→phoneNumber so both canonical key variants are always in sync.
+            transaction.update(userRef, normalizeUserUpdate({ 
                 "farmNation.role": data.role,
                 "farmNation.profile": {
                     ...data.profile,
@@ -828,13 +830,11 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
                 "farmNation.onboardingCompletedAt": new Date().toISOString(),
                 "farmNation.termsAcceptedAt": new Date().toISOString(),
                 roles: FieldValue.arrayUnion(...roles),
-                // Safe dot-notation for serviceRegistrations
                 "serviceRegistrations.farmNation.status": "pending",
                 "serviceRegistrations.farmNation.paymentStatus": "completed",
                 "serviceRegistrations.farmNation.role": data.role,
                 "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
-                
                 firstName: data.profile.firstName,
                 lastName: data.profile.lastName,
                 otherName: data.profile.otherName || null,
@@ -844,7 +844,7 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
                 lga: data.profile.lga,
                 residentialAddress: data.profile.address,
                 updatedAt: FieldValue.serverTimestamp() 
-            });
+            }));
 
             // Create authoritative record
             transaction.set(appRef, { 

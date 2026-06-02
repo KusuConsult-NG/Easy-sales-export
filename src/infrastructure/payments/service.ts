@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { ACADEMY_CONFIG } from "@/lib/constants";
+import { normalizeUserDoc } from "@/lib/schema-normalizer";
 
 /**
  * Handle Marketplace Order Fulfillment
@@ -325,7 +326,9 @@ export async function processCooperativeRegistration(reference: string, amount: 
         // new users whose USERS doc doesn't yet have a serviceRegistrations field.
         // update() throws NOT_FOUND if the nested path doesn't exist, causing the
         // entire webhook transaction to fail and leaving the user in payment limbo.
-        transaction.set(userRef, {
+        // DISEASE 2 FIX: normalizeUserDoc mirrors cooperatives→cooperative so both keys
+        // are always in sync regardless of which code path reads the user doc.
+        transaction.set(userRef, normalizeUserDoc({
             serviceRegistrations: {
                 cooperatives: {
                     paymentStatus: "completed",
@@ -337,7 +340,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        }), { merge: true });
 
         // Create transaction fee record
         transaction.set(transactionRef, {
@@ -437,9 +440,8 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        // FIX: Use set(merge:true) instead of update() — same reason as cooperative.
-        // update() throws if serviceRegistrations.academy doesn't exist on the USERS doc.
-        transaction.set(userRef, {
+        // DISEASE 2 FIX: normalizeUserDoc ensures academy key is canonical.
+        transaction.set(userRef, normalizeUserDoc({
             serviceRegistrations: {
                 academy: {
                     paymentStatus: "completed",
@@ -450,7 +452,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        }), { merge: true });
 
         transaction.set(processedRef, {
             reference,
@@ -515,10 +517,9 @@ export async function processFarmNationRegistration(reference: string, amount: n
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        // ROOT CAUSE #3 FIX: use set(merge:true) not update() — update() throws if
-        // serviceRegistrations.farm_nation doesn't exist yet (brand-new users), silently
-        // failing the entire webhook transaction and leaving users debited but unregistered.
-        transaction.set(userRef, {
+        // DISEASE 2 FIX: normalizeUserDoc mirrors farm_nation→farmNation so both keys
+        // are always in sync.
+        transaction.set(userRef, normalizeUserDoc({
             serviceRegistrations: {
                 farm_nation: {
                     paymentStatus: "completed",
@@ -527,7 +528,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        }), { merge: true });
 
         transaction.set(processedRef, {
             reference,
@@ -578,10 +579,8 @@ export async function processWaveRegistration(reference: string, amount: number,
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
-        // ROOT CAUSE #3 FIX: use set(merge:true) not update() — update() throws if
-        // serviceRegistrations.wave doesn't exist yet (brand-new users), silently
-        // failing the entire webhook transaction and leaving users debited but unregistered.
-        transaction.set(userRef, {
+        // DISEASE 2 FIX: normalizeUserDoc mirrors wave key and ensures canonical form.
+        transaction.set(userRef, normalizeUserDoc({
             serviceRegistrations: {
                 wave: {
                     paymentStatus: "completed",
@@ -590,7 +589,7 @@ export async function processWaveRegistration(reference: string, amount: number,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+        }), { merge: true });
 
         transaction.set(processedRef, {
             reference,
