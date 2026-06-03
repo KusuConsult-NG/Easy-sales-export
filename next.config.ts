@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withBundleAnalyzer from '@next/bundle-analyzer';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
 
@@ -150,5 +151,29 @@ const withAnalyzer = withBundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
-export default withAnalyzer(nextConfig);
+export default withSentryConfig(
+  withAnalyzer(nextConfig),
+  {
+    // Suppress Sentry CLI output in build logs
+    silent: !process.env.CI,
+
+    // Automatically tree-shake Sentry logger statements in production
+    disableLogger: true,
+
+    // Upload wider set of files so stack traces resolve correctly
+    widenClientFileUpload: true,
+
+    // Tunnel Sentry requests through /monitoring to bypass ad-blockers
+    tunnelRoute: '/monitoring',
+
+    // Upload source maps to Sentry then delete them from the public bundle
+    sourcemaps: { deleteSourcemapsAfterUpload: true },
+
+    // Annotate React component names for session replay breadcrumbs
+    reactComponentAnnotation: { enabled: true },
+
+    // Disable automatic instrumentation overlay (we do it manually in instrumentation.ts)
+    autoInstrumentServerFunctions: false,
+  },
+);
 
