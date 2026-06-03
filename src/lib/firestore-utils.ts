@@ -104,3 +104,78 @@ export async function paginatedQuery(
 export function withSafeLimit<T extends Query>(query: T, limit = 500): T {
     return query.limit(limit) as T;
 }
+
+// ─── safeCollection — Proxy-based auto-limit wrapper ──────────────────────────
+
+import type { Firestore } from 'firebase-admin/firestore';
+
+/**
+ * safeCollection — A Firestore collection() wrapper that enforces a default
+ * document limit on every query chain, preventing accidental unbounded reads.
+ *
+ * Usage (replaces db.collection('x')):
+ *   const q = safeCollection(db, COLLECTIONS.USERS);
+ *   const snap = await q.where('status', '==', 'active').get(); // auto-capped at 500
+ *
+ * To explicitly override the limit (e.g. for broadcast full-scans):
+ *   const q = safeCollection(db, COLLECTIONS.USERS, { limit: 0 }); // 0 = no cap
+ *   // or: q.limit(5000).get()  ← explicit limit overrides the default
+ *
+ * HOW IT WORKS:
+ * Returns a Proxy around the CollectionReference. The Proxy intercepts .get()
+ * and, if no .limit() was previously called in the chain, injects .limit(defaultLimit)
+ * before executing the query.
+ */
+export function safeCollection(
+    db: Firestore,
+    collectionPath: string,
+    options: { limit?: number } = {}
+) {
+    const defaultLimit = options.limit ?? 500;
+    const ref = db.collection(collectionPath);
+
+    // If limit is explicitly 0, return the raw ref (opt-out)
+    if (defaultLimit === 0) return ref;
+
+    return createSafeQuery(ref, defaultLimit);
+}
+
+function createSafeQuery(
+    query: FirebaseFirestore.Query | FirebaseFirestore.CollectionReference,
+    defaultLimit: number
+): any {
+    let hasLimit = false;
+
+    return new Proxy(query, {
+        get(target: any, prop: string) {
+            if (prop === 'limit') {
+                return (...args: any[]) => {
+                    hasLimit = true;
+                    return createSafeQuery(target.limit(...args), defaultLimit);
+                };
+            }
+            if (
+                prop === 'where' || prop === 'orderBy' || prop === 'startAfter' ||
+                prop === 'endBefore' || prop === 'startAt' || prop === 'endAt' ||
+                prop === 'select' || prop === 'offset'
+            ) {
+                return (...args: any[]) =>
+                    createSafeQuery(target[prop](...args), defaultLimit);
+            }
+            if (prop === 'get') {
+                return async () => {
+                    const finalQuery = hasLimit ? target : target.limit(defaultLimit);
+                    if (!hasLimit) {
+                        // Only warn if genuinely uncapped — this is the whole point
+                        const { logger } = await import('./logger');
+                        logger.debug(`[safeCollection] auto-applied .limit(${defaultLimit}) — consider adding explicit .limit() to this query`);
+                    }
+                    return finalQuery.get();
+                };
+            }
+            // stream(), count(), etc. — pass through directly
+            const val = target[prop];
+            return typeof val === 'function' ? val.bind(target) : val;
+        },
+    });
+}
