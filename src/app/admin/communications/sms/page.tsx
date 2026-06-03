@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -116,6 +116,29 @@ export default function SmsBroadcastPage() {
     const smsCount = smsInfo.parts;
     const badChars = findNonGSM7Chars(message);
 
+    // Track whether the message was GSM-7 on the previous keystroke.
+    // This lets us fire the warning toast exactly ONCE when the admin
+    // first types a special character — not on every keystroke after that.
+    const wasGSM7 = useRef(true);
+
+    const handleMessageChange = useCallback((newText: string) => {
+        setMessage(newText);
+        setPreview(null);
+        const info = getSMSInfo(newText);
+        const bad = findNonGSM7Chars(newText);
+
+        // Fire toast only on the transition GSM-7 → UCS-2
+        if (wasGSM7.current && !info.isGSM7 && bad.length > 0) {
+            const uniqueNames = [...new Set(bad.map(b => b.name))].join(', ');
+            toast.warning(
+                `⚠️ Special character detected: ${uniqueNames}. SMS limit dropped to 70 chars — click Auto-fix to correct it.`,
+                { id: 'gsm7-warn', duration: 6000 }
+            );
+        }
+        // Also fire if they go back to GSM-7 (so the warning resets for next time)
+        wasGSM7.current = info.isGSM7;
+    }, []);
+
     const parseCustomPhones = (text: string): string[] => {
         const matches = text.match(/\d{10,}/g) || [];
         return Array.from(new Set(matches));
@@ -184,8 +207,14 @@ export default function SmsBroadcastPage() {
             toast.error("Please run a preview first and ensure there are recipients.");
             return;
         }
+
+        // Build a clear confirmation message — include special char warning if relevant
+        const specialCharWarning = badChars.length > 0
+            ? `\n\n⚠️ WARNING: Your message contains special characters (${[...new Set(badChars.map(b => b.name))].join(', ')}).\nThis will be billed as ${smsInfo.parts} SMS messages per recipient instead of 1.\nClick Cancel and use Auto-fix to correct this before sending.`
+            : '';
+
         const confirmed = confirm(
-            `You are about to send an SMS to ${preview.count.toLocaleString()} recipients. This cannot be undone. Continue?`
+            `You are about to send an SMS to ${preview.count.toLocaleString()} recipients.${specialCharWarning}\n\nThis cannot be undone. Continue?`
         );
         if (!confirmed) return;
 
@@ -357,10 +386,10 @@ export default function SmsBroadcastPage() {
                     </h2>
                     <textarea
                         value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        onChange={(e) => handleMessageChange(e.target.value)}
                         placeholder="Type your SMS message here... Keep it concise and clear."
                         rows={5}
-                        maxLength={160}
+                        maxLength={480}
                         className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-500 resize-none"
                     />
                     {/* Encoding warning — shown when non-GSM7 characters detected */}
@@ -374,12 +403,22 @@ export default function SmsBroadcastPage() {
                                         {[...new Set(badChars.map(b => b.name))].join(', ')}
                                     </p>
                                     <p className="text-amber-300/70 text-xs mt-0.5">
-                                        This message will be billed as <strong className="text-amber-400">{smsInfo.parts} SMS{smsInfo.parts > 1 ? ' messages' : ''}</strong> per recipient.
+                                        This message will be billed as <strong className="text-amber-400">{smsInfo.parts} SMS{smsInfo.parts > 1 ? ' messages' : ''}</strong> per recipient instead of 1.
                                     </p>
                                 </div>
                                 <button
                                     type="button"
-                                    onClick={() => setMessage(sanitiseForGSM7(message))}
+                                    onClick={() => {
+                                        const fixed = sanitiseForGSM7(message);
+                                        const fixedBad = findNonGSM7Chars(message);
+                                        const uniqueFixed = [...new Set(fixedBad.map(b => b.name))];
+                                        setMessage(fixed);
+                                        wasGSM7.current = true;
+                                        toast.success(
+                                            `✅ Fixed: ${uniqueFixed.join(', ')} replaced with safe characters. Message is now GSM-7 (160 chars/SMS).`,
+                                            { duration: 5000 }
+                                        );
+                                    }}
                                     className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium transition-colors"
                                 >
                                     Auto-fix
