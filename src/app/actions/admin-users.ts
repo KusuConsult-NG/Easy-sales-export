@@ -10,6 +10,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { hasRole } from "@/lib/role-utils";
 import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 /**
  * Fetch all admin and super_admin users — used to populate the assignment dropdown.
@@ -35,11 +36,11 @@ export async function getAdminUsersAction(): Promise<ActionResponse<any[]>> { tr
         for (const doc of [...adminSnap.docs, ...superAdminSnap.docs]) { if (seen.has(doc.id)) continue;
             seen.add(doc.id);
             const d = doc.data();
-            admins.push({
+            admins.push(serializeValue({
                 id: doc.id,
                 name: d.displayName || d.name || d.email || "Admin",
                 email: d.email || "",
-                role: (d.roles as string[])?.includes("super_admin") ? "super_admin" : "admin" });
+                role: (d.roles as string[])?.includes("super_admin") ? "super_admin" : "admin" }));
         }
 
         return { success: true as const, data: admins, error: null };

@@ -1688,8 +1688,9 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         const offset = page * pageSize;
         const pagedUsers = filteredUsers.slice(offset, offset + pageSize);
         
-        // Strip Firestore class instances (e.g. Timestamps in serviceRegistrations) to avoid Next.js Server Action serialization errors
-        const serializedUsers = JSON.parse(JSON.stringify(pagedUsers));
+        // Strip Firestore class instances (e.g. Timestamps in serviceRegistrations, address, metadata) using the shared
+        // serializeValue() utility which recursively converts Timestamps to ISO strings — safer than JSON round-trip.
+        const serializedUsers = serializeValue(pagedUsers);
 
         return {
             error: null,
@@ -3876,12 +3877,12 @@ async function _getMarketplaceUsersAction(options: {
                 buyerRole,
                 status: data.status || "active",
                 createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt ? new Date(data.createdAt).toISOString() : null),
-                bankDetails: data.bankDetails || {
+                bankDetails: serializeValue(data.bankDetails || {
                     bankName: data.bankName || data.bankAccount?.bankName || "",
                     accountNumber: data.accountNumber || data.bankAccountNumber || data.bankAccount?.accountNumber || "",
                     accountName: data.accountName || data.bankAccountName || data.bankAccount?.accountName || data.fullName || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : ""),
                     bankCode: data.bankCode || data.bankAccount?.bankCode || ""
-                }
+                }) ?? null
             };
         }).filter(Boolean) as any[];
 

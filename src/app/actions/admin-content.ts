@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue } from "firebase-admin/firestore";
+import { serializeValue } from "@/lib/firestore-serialize";
 
 export type ContentType = "products" | "land" | "certificates" | "resources" | "courses" | "export";
 export type ApprovalStatus = "pending" | "approved" | "rejected";
@@ -22,25 +23,8 @@ export interface PendingContentItem {
     metadata?: Record<string, unknown>; // Sanitized document data
 }
 
-/** Convert Firestore Timestamps / Date objects to ISO strings so the
- *  value can be serialized across the Server Action boundary. */
-function sanitizeForSerialization(obj: unknown): unknown {
-    if (obj === null || obj === undefined) return obj;
-    // Firestore Timestamp
-    if (typeof obj === "object" && typeof (obj as any).toDate === "function") {
-        return (obj as any).toDate().toISOString();
-    }
-    if (obj instanceof Date) return obj.toISOString();
-    if (Array.isArray(obj)) return obj.map(sanitizeForSerialization);
-    if (typeof obj === "object") {
-        const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-            out[k] = sanitizeForSerialization(v);
-        }
-        return out;
-    }
-    return obj;
-}
+// sanitizeForSerialization() has been replaced by the shared serializeValue() from @/lib/firestore-serialize.
+// serializeValue is a superset: it also handles plain-object Timestamps (_seconds/_nanoseconds).
 
 /**
  * Fetches all content from various collections matching the given status.
@@ -97,7 +81,7 @@ export async function getContentApprovalItemsAction(
                 submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
                 status: status,
                 description: `Price: ₦${retailPrice.toLocaleString()} - Category: ${data.category}`,
-                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
+                metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
@@ -116,7 +100,7 @@ export async function getContentApprovalItemsAction(
                 submittedAt: (typeof data.createdAt?.toDate === 'function' ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
                 status: status,
                 description: `${data.size} ${data.unit || 'acres'} at ${data.location?.state || data.state || 'Unknown State'}, ${data.location?.lga || data.lga || 'Unknown LGA'}`,
-                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
+                metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
@@ -135,7 +119,7 @@ export async function getContentApprovalItemsAction(
                 submittedAt: (data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now())).toISOString(),
                 status: status,
                 description: `${data.category || "General"} - ${data.availableQuantity || 0} ${data.unit || "units"}`,
-                metadata: sanitizeForSerialization(data) as Record<string, unknown>,
+                metadata: serializeValue(data) as Record<string, unknown>,
             });
         });
 
