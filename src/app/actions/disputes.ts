@@ -4,7 +4,7 @@
 
 "use server";
 
-import { requireSession } from "@/lib/session-guard";
+import { requireSession, isAdmin } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
@@ -309,11 +309,11 @@ async function _getDisputeByIdAction(disputeId: string) { let sessionResult;
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
         const userData = userDoc.data();
-        const isAdmin = hasRole(userData?.roles || [], "admin");
+        const isAdminUser = isAdmin(userData?.roles);
         const isBuyer = dispute.buyerId === userId;
         const isSeller = dispute.sellerId === userId;
 
-        if (!isAdmin && !isBuyer && !isSeller) { return { success: false as const, error: "Not authorized to view this dispute", data: null };
+        if (!isAdminUser && !isBuyer && !isSeller) { return { success: false as const, error: "Not authorized to view this dispute", data: null };
         }
 
         const disputeData: Dispute & { buyerDetails?: any; sellerDetails?: any } = { ...dispute,

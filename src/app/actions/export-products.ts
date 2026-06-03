@@ -3,7 +3,7 @@
 import { db } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
 import { FieldValue } from "firebase-admin/firestore";
-import { requireSession } from "@/lib/session-guard";
+import { requireSession, isAdmin } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { serializeValue } from "@/lib/firestore-serialize";
 
@@ -102,8 +102,7 @@ export async function deleteExportProductAction(productId: string) {
         if (productData?.userId !== userId) {
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
             const roles = userDoc.data()?.roles || [];
-            const isAdmin = roles.some((r: string) => r === "admin" || r === "super_admin");
-            if (!isAdmin) {
+            if (!isAdmin(roles)) {
                 return { success: false as const, error: "Unauthorized: You do not own this product", data: null };
             }
         }

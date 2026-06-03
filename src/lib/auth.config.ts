@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 import { isPublicPath, isProtectedPath } from "@/lib/route-manifest";
 import type { UserRole } from "@/lib/types/roles";
 import { HUB_MODULES } from "@/config/modules.config";
+import { logger } from "@/lib/logger";
 
 /**
  * Edge-compatible authentication configuration.
@@ -83,7 +84,7 @@ export const authConfig = {
         async authorized({ auth, request: { nextUrl } }: { auth: any; request: { nextUrl: URL } }) {
             const isLoggedIn = !!auth?.user;
             const { pathname } = nextUrl;
-            console.log("AUTHORIZED CALLBACK RUNNING:", { pathname, isLoggedIn });
+            logger.debug("[Auth] authorized callback:", { pathname, isLoggedIn });
 
             // Module root redirects (these just redirect to landing pages)
             if (pathname === "/wave" || pathname === "/cooperatives") return true;
@@ -95,7 +96,7 @@ export const authConfig = {
             if (isPublicPath(pathname)) return true;
 
             if (isProtectedPath(pathname) && !isLoggedIn) {
-                console.log("AUTHORIZED CALLBACK RETURNING FALSE FOR:", pathname);
+                logger.debug("[Auth] authorized callback returning false for path", { pathname });
                 return false; // NextAuth redirects to signIn page
             }
 

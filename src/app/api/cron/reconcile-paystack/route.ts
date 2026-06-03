@@ -24,13 +24,18 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get("Authorization");
     const cronSecret = process.env.CRON_SECRET;
 
-    if (process.env.NODE_ENV === "production" || cronSecret) {
-        if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-            return NextResponse.json(
-                { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
-                { status: 401 }
-            );
-        }
+    if (!cronSecret) {
+        return NextResponse.json(
+            { error: "CRON_SECRET not configured" },
+            { status: 500 }
+        );
+    }
+
+    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+        return NextResponse.json(
+            { error: "Unauthorized. Provide Authorization: Bearer <CRON_SECRET>" },
+            { status: 401 }
+        );
     }
 
     const startedAt = new Date();

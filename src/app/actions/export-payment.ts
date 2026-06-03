@@ -99,7 +99,7 @@ export async function initializeExportOrderPaymentAction(
 
         // Pre-create the order as "pending_payment"
         const orderId = `EXP-ORD-${Date.now()}-${session.user.id.substring(0, 5)}`;
-        await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderId).set({ orderId,
+        await db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderId).set({ orderId,
             buyerId: session.user.id,
             buyerDetails,
             items: validatedItems,
@@ -136,7 +136,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         // ✅ FIX: If webhook already processed this payment, return success not an error.
         if (existingPayment.exists) {
             logger.info(`[verifyExportOrderPaymentAction] Payment ${reference} already processed — returning success.`);
-            const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders")
+            const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS)
                 .where("paymentReference", "==", reference).limit(1).get();
             return { error: null, success: true as const, meta: null, data: { orderId: orderQuery.empty ? reference : orderQuery.docs[0].id } };
         }
@@ -161,7 +161,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         }
 
         // Find the pending order
-        const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders")
+        const orderQuery = await db.collection(COLLECTIONS.EXPORT_ORDERS)
             .where("paymentReference", "==", reference)
             .limit(1)
             .get();
@@ -173,7 +173,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         const orderData = orderDoc.data();
 
         await db.runTransaction(async (transaction) => { // Update order status
-            const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS || "export_orders").doc(orderDoc.id);
+            const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderDoc.id);
             transaction.update(orderRef, {
                 status: "processing",
                 paymentStatus: "paid",

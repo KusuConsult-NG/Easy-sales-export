@@ -14,8 +14,19 @@ import type { Session } from "next-auth";
 import { SESSION_EXPIRED_CODE, type SessionExpiredResult } from "@/lib/session-expiry-code";
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { logger } from "@/lib/logger";
+import { isAdmin as _isAdmin } from "@/lib/role-utils";
+import type { UserRole } from "@/lib/types/roles";
 
 export { SESSION_EXPIRED_CODE, type SessionExpiredResult };
+
+/**
+ * Check if a list of roles contains an admin-level role.
+ * Thin wrapper over role-utils so callers can import from a single server-only module.
+ */
+export function isAdmin(roles: UserRole[] | string[] | undefined): boolean {
+    return _isAdmin((roles ?? []) as UserRole[]);
+}
 
 type ValidSession = Session & { user: NonNullable<Session["user"]> & { id: string } };
 
@@ -58,11 +69,11 @@ export async function requireSession(): Promise<
             const db = getAdminDb();
             const userId = session.user.id;
             const userEmail = session.user.email;
-            console.log(`[SessionGuard] Fetching user doc for ID: ${userId} (Email: ${userEmail}) from collection: ${COLLECTIONS.USERS}`);
+            logger.debug(`[SessionGuard] Fetching user doc for ID: ${userId} from collection: ${COLLECTIONS.USERS}`);
             const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
 
             if (!userDoc.exists) {
-                console.warn(`[SessionGuard] Account NOT found in Firestore for ID: ${userId}. Attempting auto-repair.`);
+                logger.debug(`[SessionGuard] Account NOT found in Firestore for ID: ${userId}. Attempting auto-repair.`);
                 try {
                     const { FieldValue } = await import("firebase-admin/firestore");
                     // IMPORTANT: session.user.name can be literally "User" when NextAuth
@@ -97,7 +108,7 @@ export async function requireSession(): Promise<
                     }, { merge: true });
                     
                     data = userProfile;
-                    console.log(`[SessionGuard] Successfully auto-repaired ghost account for ID: ${userId}`);
+                    logger.debug(`[SessionGuard] Successfully auto-repaired ghost account for ID: ${userId}`);
                 } catch (repairErr) {
                     console.error(`[SessionGuard] Failed to auto-repair ghost account for ID: ${userId}`, repairErr);
                     return {

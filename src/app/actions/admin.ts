@@ -1073,7 +1073,7 @@ async function _approveLoanApplication(
         try {
             const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
             await invalidateCooperativeCache(loanData.userId);
-        } catch (e) {}
+        } catch (e) { logger.error('[admin] cache invalidation failed silently:', e); }
 
         if (process.env.RESEND_API_KEY && loanData.userEmail) {
             try {
@@ -1105,7 +1105,7 @@ async function _approveLoanApplication(
                         </div>
                     `,
                 });
-            } catch (e) {}
+            } catch (e) { logger.error('[admin] loan approval email failed silently:', e); }
         }
 
         await createNotificationAction({
@@ -1195,7 +1195,7 @@ async function _rejectLoanApplication(
                         </div>
                     </div>`
                 });
-            } catch (e) {}
+            } catch (e) { logger.error('[admin] loan rejection email failed silently:', e); }
         }
 
         await createNotificationAction({
@@ -2304,7 +2304,7 @@ async function _getExportApplicationsStatsAction(): Promise<ActionResponse<any>>
 
         try {
             await setCache(cacheKey, payload, 120); // Cache for 2 minutes
-        } catch (e) {}
+        } catch (e) { logger.error('[admin] cache set failed silently:', e); }
 
         return { success: true as const, data: payload, error: null };
     } catch (error) {
