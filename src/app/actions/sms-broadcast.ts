@@ -15,6 +15,7 @@
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendSMS } from "@/lib/africastalking";
+import { normalisePhone } from "@/lib/phone";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireAdmin } from "@/lib/require-admin";
 import { ActionResponse } from "@/lib/safe-action";
@@ -66,11 +67,6 @@ export type SmsBroadcastResult = ActionResponse<{
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function normalisePhone(raw: string | undefined | null): string | null { if (!raw) return null;
-    let p = String(raw).replace(/\D/g, "");
-    if (p.startsWith("0")) p = "234" + p.slice(1);
-    if (p.length < 10) return null;
-    return "+" + p; }
 
 async function resolveUsers(db: FirebaseFirestore.Firestore, userIds: string[]) {
     const compact = Array.from(new Set(userIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)));

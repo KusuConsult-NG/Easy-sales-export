@@ -13,6 +13,7 @@
  */
 
 import { logger } from "@/lib/logger";
+import { normalisePhone } from "@/lib/phone";
 
 interface ATSendResult {
     success: boolean;
@@ -35,17 +36,8 @@ export async function sendSMS(to: string, message: string): Promise<ATSendResult
         return { success: false, error: "AT_API_KEY not configured" };
     }
 
-    // Normalise number: must start with "+" and be in E.164 format
-    let normalisedTo = to.trim();
-    if (!normalisedTo.startsWith("+")) {
-        if (normalisedTo.startsWith("0")) {
-            normalisedTo = `+234${normalisedTo.slice(1)}`; // 08012345678 -> +2348012345678
-        } else if (normalisedTo.startsWith("234")) {
-            normalisedTo = `+${normalisedTo}`;             // 2348012345678 -> +2348012345678
-        } else {
-            normalisedTo = `+${normalisedTo}`;             // Fallback
-        }
-    }
+    // Normalise number to E.164 via shared utility
+    const normalisedTo = normalisePhone(to) ?? to.trim();
 
     const isSandbox = username.toLowerCase() === "sandbox";
     const AT_BASE_URL = isSandbox

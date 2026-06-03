@@ -70,6 +70,38 @@ export type {
 } from "./shared";
 // ──────────────────────────────────────────────────────────────────────────
 
+// ─── Canonical Payment Status ─────────────────────────────────────────────
+/**
+ * Canonical payment status values used across all modules.
+ * Use these constants everywhere instead of raw strings.
+ */
+export const PAYMENT_STATUS = {
+    PENDING: 'pending',
+    PAID: 'paid',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+    UNPAID: 'unpaid',
+    PROCESSING: 'processing',
+} as const;
+
+export type PaymentStatus = typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS];
+
+/**
+ * Normalises any payment status variant to a canonical value.
+ * Handles legacy 'successful' → 'completed', 'successful_payment' → 'completed' etc.
+ */
+export function normalisePaymentStatus(status: string | null | undefined): PaymentStatus {
+    if (!status) return PAYMENT_STATUS.PENDING;
+    const s = status.toLowerCase().trim();
+    if (s === 'paid' || s === 'successful' || s === 'success') return PAYMENT_STATUS.PAID;
+    if (s === 'completed' || s === 'successful_payment' || s === 'paid_completed') return PAYMENT_STATUS.COMPLETED;
+    if (s === 'failed' || s === 'failure' || s === 'declined') return PAYMENT_STATUS.FAILED;
+    if (s === 'pending' || s === 'pending_payment' || s === 'awaiting') return PAYMENT_STATUS.PENDING;
+    if (s === 'processing') return PAYMENT_STATUS.PROCESSING;
+    if (s === 'unpaid') return PAYMENT_STATUS.UNPAID;
+    return PAYMENT_STATUS.PENDING;
+}
+// ──────────────────────────────────────────────────────────────────────────
 
 
 export type { User } from "@easy-sales/types";

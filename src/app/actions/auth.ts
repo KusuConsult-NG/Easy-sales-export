@@ -16,6 +16,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { rateLimit, getActionClientIp } from '@/lib/rate-limiter';
 import { rateLimitConfig } from '@/lib/rate-limits.config';
+import { normalisePhone } from '@/lib/phone';
 
 const loginLimiter = rateLimit(rateLimitConfig.login);
 
@@ -228,8 +229,9 @@ export async function registerAction(prevState: any, formData: FormData) { const
 
         // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
         // Prevents multi-account fraud (same phone, different email addresses)
-        if (validatedData.phone) { const phoneCheck = await db.collection(COLLECTIONS.USERS)
-                .where("phone", "==", validatedData.phone)
+        const normalisedPhone = normalisePhone(validatedData.phone) || validatedData.phone;
+        if (normalisedPhone) { const phoneCheck = await db.collection(COLLECTIONS.USERS)
+                .where("phone", "==", normalisedPhone)
                 .limit(1)
                 .get();
             if (!phoneCheck.empty) {
@@ -267,7 +269,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
             lastName: registrationLastName,
             otherName: registrationOtherName || undefined,
             email: validatedData.email,
-            phone: validatedData.phone,
+            phone: normalisedPhone,
             roles: userRoles,
             isVerified: true,  // canonical field
             verified: true,    // legacy compat field — keep both so old queries still work
