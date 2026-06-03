@@ -9,6 +9,7 @@ import {
     type SmsAudience,
     type SmsFilters,
 } from "@/app/actions/sms-broadcast";
+import { getSMSInfo, sanitiseForGSM7, findNonGSM7Chars } from "@/lib/sms-utils";
 import { toast } from "sonner";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -110,8 +111,10 @@ export default function SmsBroadcastPage() {
 
     const isSellerAudience = ["sellers", "wholesale_sellers", "retail_sellers"].includes(audience);
     const hasModuleStatus = audience in MODULE_STATUS_OPTIONS;
+    const smsInfo = getSMSInfo(message);
     const charCount = message.length;
-    const smsCount = Math.ceil(charCount / SMS_MAX_LENGTH) || 1;
+    const smsCount = smsInfo.parts;
+    const badChars = findNonGSM7Chars(message);
 
     const parseCustomPhones = (text: string): string[] => {
         const matches = text.match(/\d{10,}/g) || [];
@@ -360,12 +363,36 @@ export default function SmsBroadcastPage() {
                         maxLength={160}
                         className="w-full px-4 py-3 rounded-xl border border-white/10 bg-white/5 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-emerald-500 resize-none"
                     />
+                    {/* Encoding warning — shown when non-GSM7 characters detected */}
+                    {badChars.length > 0 && (
+                        <div className="mt-3 rounded-xl border border-amber-500/40 p-3" style={{ background: "rgba(245, 158, 11, 0.08)" }}>
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-amber-400 text-xs font-semibold">⚠️ Special characters detected — SMS limit drops to 70 chars</p>
+                                    <p className="text-amber-300/70 text-xs mt-1">
+                                        Characters found:{" "}
+                                        {[...new Set(badChars.map(b => b.name))].join(', ')}
+                                    </p>
+                                    <p className="text-amber-300/70 text-xs mt-0.5">
+                                        This message will be billed as <strong className="text-amber-400">{smsInfo.parts} SMS{smsInfo.parts > 1 ? ' messages' : ''}</strong> per recipient.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setMessage(sanitiseForGSM7(message))}
+                                    className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-medium transition-colors"
+                                >
+                                    Auto-fix
+                                </button>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex items-center justify-between mt-2">
                         <p className="text-white/40 text-xs">
-                            {charCount} characters (Maximum 160)
+                            {charCount} chars · {smsInfo.isGSM7 ? '160' : '70'} per SMS · <span className={smsInfo.parts > 1 ? 'text-amber-400 font-semibold' : 'text-white/40'}>{smsInfo.parts} SMS{smsInfo.parts > 1 ? ' messages' : ''}</span> per recipient
                         </p>
-                        <p className={`text-xs font-medium ${charCount >= 160 ? "text-amber-400" : "text-white/40"}`}>
-                            {charCount}/160
+                        <p className={`text-xs font-medium ${charCount >= (smsInfo.isGSM7 ? 160 : 70) ? "text-amber-400" : "text-white/40"}`}>
+                            {charCount}/{smsInfo.isGSM7 ? 160 : 70}
                         </p>
                     </div>
                 </div>

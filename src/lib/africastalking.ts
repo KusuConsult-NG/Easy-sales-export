@@ -14,6 +14,7 @@
 
 import { logger } from "@/lib/logger";
 import { normalisePhone } from "@/lib/phone";
+import { sanitiseForGSM7, getSMSInfo } from "@/lib/sms-utils";
 
 interface ATSendResult {
     success: boolean;
@@ -39,6 +40,20 @@ export async function sendSMS(to: string, message: string): Promise<ATSendResult
     // Normalise number to E.164 via shared utility
     const normalisedTo = normalisePhone(to) ?? to.trim();
 
+    // Sanitise message to GSM-7 to prevent UCS-2 encoding.
+    // UCS-2 cuts each SMS from 160 → 70 chars, tripling costs silently.
+    const safeMessage = sanitiseForGSM7(message);
+    if (safeMessage !== message) {
+        logger.warn('[africastalking] Message contained non-GSM7 characters — sanitised before send.', {
+            original: message,
+            sanitised: safeMessage,
+        });
+    }
+    const smsInfo = getSMSInfo(safeMessage);
+    if (!smsInfo.isGSM7) {
+        logger.warn('[africastalking] Message still contains non-GSM7 characters after sanitisation — will send as UCS-2', smsInfo);
+    }
+
     const isSandbox = username.toLowerCase() === "sandbox";
     const AT_BASE_URL = isSandbox
         ? "https://api.sandbox.africastalking.com/version1/messaging"
@@ -50,7 +65,7 @@ export async function sendSMS(to: string, message: string): Promise<ATSendResult
     const bodyParams = new URLSearchParams({
         username: username,
         to: normalisedTo,
-        message: message,
+        message: safeMessage,
     });
 
     // Sandbox doesn't support custom Alphanumeric Sender IDs; omit if sandbox
