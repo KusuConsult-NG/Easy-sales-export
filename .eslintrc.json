@@ -9,7 +9,7 @@
       "argsIgnorePattern": "^_",
       "varsIgnorePattern": "^_"
     }],
-    "no-console": ["warn", { "allow": ["warn", "error"] }],
+    "no-console": ["error", { "allow": ["warn", "error"] }],
     "prefer-const": "error"
   },
   "overrides": [
@@ -83,6 +83,20 @@
             { "group": ["*/actions/cooperative*", "*/actions/academy*", "*/actions/wave*", "*/actions/farm-nation*", "*/actions/export*"], "message": "CROSS-MODULE IMPORT: Marketplace must not import other module-specific actions." }
           ]
         }]
+      }
+    },
+    {
+      "comment": "Test files — console.log is acceptable for test output",
+      "files": ["src/**/*.test.{ts,tsx}", "src/**/*.spec.{ts,tsx}", "src/__tests__/**/*.{ts,tsx}"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "comment": "Error boundaries — must use console.error to report to monitoring",
+      "files": ["**/error.tsx", "**/global-error.tsx"],
+      "rules": {
+        "no-console": ["error", { "allow": ["warn", "error"] }]
       }
     }
   ]

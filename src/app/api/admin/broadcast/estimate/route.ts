@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/session-guard";
 import { isAdmin } from "@/lib/admin-permissions";
 import { previewBroadcastAction } from "@/app/actions/broadcast";
+import { logger } from "@/lib/logger";
 
 export const maxDuration = 300; // 5 min timeout
 
 export async function POST(req: NextRequest) {
     try {
         const filters = await req.json();
-        console.log("=== ESTIMATE ENDPOINT HIT === v7", filters);
+        logger.debug('[broadcast/estimate] filters received', { filters });
         
         const isTest = req.nextUrl.searchParams.get("debug") === "antigravity";
         if (!isTest) {

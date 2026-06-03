@@ -116,13 +116,13 @@ export default function VideoClassroom({
                 apiRef.current.addListener("videoConferenceJoined", () => {
                     setIsLoading(false);
                     if (process.env.NODE_ENV !== 'production') {
-                        console.log("Joined video conference");
+                        // joined video conference
                     }
                 });
 
                 apiRef.current.addListener("videoConferenceLeft", () => {
                     if (process.env.NODE_ENV !== 'production') {
-                        console.log("Left video conference");
+                        // left video conference
                     }
                     onMeetingEnd?.();
                 });

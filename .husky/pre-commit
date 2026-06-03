@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Easy Sales Export — pre-commit hook
+# Runs lint-staged: TypeScript check + ESLint on staged files only.
+# Fast: only checks files you actually changed, not the whole project.
+npx lint-staged

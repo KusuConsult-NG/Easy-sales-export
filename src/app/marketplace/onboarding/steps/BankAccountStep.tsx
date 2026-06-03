@@ -30,7 +30,7 @@ export default function BankAccountStep({ data, onChange, onNext, onBack, isSubm
     };
 
     function handleContinue() {
-        console.log("BankAccountStep: Continuing with data:", data);
+        // debug removed — use logger if needed
         if (data?.accountName) {
             onNext();
         } else {

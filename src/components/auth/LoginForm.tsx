@@ -77,7 +77,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
             }
 
             // 2. Success! Cookie is set. Now get redirect URL from server.
-            console.log("Client-side login success, fetching redirect...");
+
 
             // Register session as active in this tab to satisfy SessionGuard
             if (typeof window !== 'undefined') {
@@ -109,14 +109,11 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                     // If they are trying to access a deep admin link (e.g. /admin/users), let them.
                     // But if they are just trying to go to /admin or a non-admin page, force them to their specific admin portal.
                     if (rawCallback.startsWith("/admin/") && rawCallback !== "/admin") {
-                        console.log("Admin detected, allowing deep admin link:", rawCallback);
                         window.location.assign(rawCallback);
                     } else {
-                        console.log(`Admin detected, overriding callbackUrl to ${smartUrl}`);
                         window.location.assign(smartUrl);
                     }
                 } else {
-                    console.log("Using explicit callback URL:", rawCallback);
                     window.location.assign(rawCallback);
                 }
             } else {
@@ -124,7 +121,6 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 try {
                     const redirectResult = await getPostLoginRedirect(formData.email);
                     if (redirectResult.success && redirectResult.data?.redirectUrl) {
-                        console.log("Using smart redirect:", redirectResult.data.redirectUrl);
                         window.location.assign(redirectResult.data.redirectUrl);
                     } else {
                         window.location.assign("/dashboard");
