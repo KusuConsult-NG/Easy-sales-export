@@ -215,7 +215,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
         // Notify Admins
         try { const { sendEmailNotification } = await import("@/lib/email-notifications");
             const sysConfig = await db.collection(COLLECTIONS.SYSTEM_SETTINGS).doc("general").get();
-            const adminEmail = sysConfig.data()?.adminEmail || "admin@easysales.com";
+            const adminEmail = sysConfig.data()?.adminEmail || "admin@easysalesexport.com";
             
             await sendEmailNotification({
                 to: adminEmail,
