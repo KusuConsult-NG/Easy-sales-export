@@ -1261,17 +1261,26 @@ export async function getCooperativeMemberIdCardAction(): Promise<
         const userPlan = (userData?.serviceRegistrations?.academy?.plan || "free").toLowerCase();
         const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
 
+        // NOTE: .orderBy removed — requires composite index (userId+createdAt) that crashes without deploy.
+        // In-memory sort below handles ordering (users have at most 1-2 membership docs).
         const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .limit(1)
+            .limit(5)
             .get();
 
-        if (memberSnapshot.empty && !isPremiumSubscriber) { 
+
+        // Sort in memory: most recent createdAt first (mirrors the removed .orderBy)
+        const sortedDocs = memberSnapshot.docs.sort((a, b) => {
+            const aTs = a.data().createdAt?.toMillis?.() ?? 0;
+            const bTs = b.data().createdAt?.toMillis?.() ?? 0;
+            return bTs - aTs;
+        });
+
+        if (sortedDocs.length === 0 && !isPremiumSubscriber) {
             return { success: false as const, error: "No cooperative membership found.", reason: "not_member"};
         }
 
-        let d = memberSnapshot.empty ? null : memberSnapshot.docs[0].data()!;
+        let d = sortedDocs.length === 0 ? null : sortedDocs[0].data()!;
 
         // 1. Resolve real name and completely avoid placeholder values
         const isPlaceholder = (name: string) => {
