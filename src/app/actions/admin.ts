@@ -33,6 +33,7 @@ import { sendLegacyMemberWelcomeEmail, sendPasswordResetEmail } from "@/lib/emai
 import { hasAdminPermission, isAdmin } from "@/lib/admin-permissions";
 import { requireAdmin } from "@/lib/require-admin";
 import { atomicUpdateUser } from "@/lib/services/userService";
+import { writeGuard, UserRolesWriteSchema } from "@/lib/write-guard";
 
 /**
  * Admin Server Actions
@@ -1773,11 +1774,15 @@ async function _updateUserRolesAction(
             }
         }
 
-        await atomicUpdateUser(userId, {
-            roles: roles,
-            updatedBy: session.user.id,
-            ...serviceUpdates,
-        });
+        await atomicUpdateUser(userId, writeGuard(
+            UserRolesWriteSchema,
+            {
+                roles: roles,
+                updatedBy: session.user.id,
+                ...serviceUpdates,
+            },
+            'admin/updateUserRoles'
+        ));
 
         // ── Write Mock Applications for Admin Dashboards ────────────────────────
         try {

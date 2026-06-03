@@ -9,6 +9,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getBaseUrl } from "@/lib/server-utils";
 import { getExchangeRates } from "@/lib/system-settings";
+import { writeGuard, PaymentStatusWriteSchema } from "@/lib/write-guard";
 
 // Helper function to convert Naira to Kobo (Paystack uses kobo)
 function nairaToKobo(naira: number): number { return Math.round(naira * 100); }
@@ -174,11 +175,16 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
 
         await db.runTransaction(async (transaction) => { // Update order status
             const orderRef = db.collection(COLLECTIONS.EXPORT_ORDERS).doc(orderDoc.id);
-            transaction.update(orderRef, {
-                status: "processing",
-                paymentStatus: "paid",
-                paymentVerifiedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() });
+            transaction.update(orderRef, writeGuard(
+                PaymentStatusWriteSchema.partial(),
+                {
+                    status: "processing",
+                    paymentStatus: "paid",
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                'export-payment/verifyExportOrderPayment'
+            ));
 
             // Mark payment as processed
             transaction.set(processedRef, { processedAt: FieldValue.serverTimestamp(),
@@ -406,11 +412,16 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
         // 🔒 SECURITY FIX #4: Use Firestore transaction for atomicity
         await db.runTransaction(async (transaction) => { // Update investment status
             const investmentRef = db.collection(COLLECTIONS.EXPORT_INVESTMENTS).doc(investmentDoc.id);
-            transaction.update(investmentRef, {
-                status: "active",
-                paymentStatus: "paid",
-                paymentVerifiedAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp() });
+            transaction.update(investmentRef, writeGuard(
+                PaymentStatusWriteSchema.partial(),
+                {
+                    status: "active",
+                    paymentStatus: "paid",
+                    paymentVerifiedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                },
+                'export-payment/verifyInvestmentPayment'
+            ));
 
             // Update export window funding
             const windowRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(windowId);
