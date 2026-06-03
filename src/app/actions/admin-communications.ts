@@ -30,9 +30,9 @@ async function getRecipientEmails(segment: string): Promise<string[]> {
 export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ recipientCount: number }>> { const adminCheck = await requireAdmin();
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
     try {
-        const recipients = formData.get('recipients') as string;
-        const subject = formData.get('subject') as string;
-        const body = formData.get('body') as string;
+        const recipients = (formData.get('recipients') as string | null)?.trim() ?? "";
+        const subject = (formData.get('subject') as string | null)?.trim() ?? "";
+        const body = (formData.get('body') as string | null)?.trim() ?? "";
 
         logger.info(`[AdminComms] sendBulkEmailAction — recipients: '${recipients}', subject: '${subject?.substring(0, 50)}', body length: ${body?.length || 0}`);
 
@@ -107,9 +107,9 @@ export async function sendBulkEmailAction(prevState: ActionResponse<unknown>, fo
  */
 export async function createAnnouncementAction(prevState: ActionResponse<unknown>, formData: FormData): Promise<ActionResponse<{ id: string }>> { const adminCheck = await requireAdmin();
     if ("error" in adminCheck) return { success: false as const, error: "Unauthorized: admin role required", data: null };
-    try { const title = formData.get('title') as string;
-        const message = formData.get('message') as string;
-        const priority = formData.get('priority') as string;
+    try { const title = (formData.get('title') as string | null)?.trim() ?? "";
+        const message = (formData.get('message') as string | null)?.trim() ?? "";
+        const priority = (formData.get('priority') as string | null)?.trim() ?? "";
 
         if (!title || !message || !priority) {
             return { success: false as const, error: 'All fields are required', data: null };

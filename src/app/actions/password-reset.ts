@@ -31,7 +31,7 @@ export async function sendResetEmailAction(
     prevState: SendResetEmailState,
     formData: FormData
 ): Promise<SendResetEmailState> { try {
-        const rawEmail = formData.get('email') as string;
+        const rawEmail = (formData.get('email') as string | null)?.trim() ?? "";
 
         if (!rawEmail) {
             return { success: false as const, error: 'Email is required', data: null };
@@ -125,9 +125,9 @@ export async function resetPasswordAction(
     prevState: ResetPasswordState,
     formData: FormData
 ): Promise<ResetPasswordState> { try {
-        const token = formData.get('token') as string;
-        const password = formData.get('password') as string;
-        const confirmPassword = formData.get('confirmPassword') as string;
+        const token = (formData.get('token') as string | null)?.trim() ?? "";
+        const password = (formData.get('password') as string | null) ?? "";
+        const confirmPassword = (formData.get('confirmPassword') as string | null) ?? "";
 
         // Validation
         if (!token || !password || !confirmPassword) {

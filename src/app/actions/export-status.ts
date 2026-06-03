@@ -23,8 +23,13 @@ async function _updateExportStatusAction(
         if (!sessionResult.session) return { error: sessionResult.error?.error || "Unauthorized", success: false as const, data: null, meta: null };
         const { session } = sessionResult;
 
-        const exportId = formData.get("exportId") as string;
-        const newStatus = formData.get("status") as ExportStatus;
+        const exportId = (formData.get("exportId") as string | null)?.trim() ?? "";
+        const rawStatus = (formData.get("status") as string | null)?.trim() ?? "";
+        const validStatuses: ExportStatus[] = ["pending", "in_transit", "delivered", "completed"];
+        if (!validStatuses.includes(rawStatus as ExportStatus)) {
+            return { error: "Invalid status value", success: false as const, data: null, meta: null };
+        }
+        const newStatus = rawStatus as ExportStatus;
 
         if (!exportId || !newStatus) { return { error: "Missing required fields", success: false as const, data: null, meta: null };
         }

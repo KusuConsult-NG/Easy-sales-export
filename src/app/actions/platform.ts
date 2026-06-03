@@ -59,14 +59,14 @@ export async function submitWaveApplicationAction(
         const { session } = sessionResult;
 
         // Extract and validate form data
-        const applicationData = { fullName: formData.get("fullName") as string,
-            email: formData.get("email") as string,
-            phone: formData.get("phone") as string,
-            gender: formData.get("gender") as string,
-            businessName: formData.get("businessName") as string,
-            businessType: formData.get("businessType") as string,
-            yearsInBusiness: parseInt(formData.get("yearsInBusiness") as string) || 0,
-            reasonForApplying: formData.get("reasonForApplying") as string };
+        const applicationData = { fullName: (formData.get("fullName") as string | null)?.trim() ?? "",
+            email: (formData.get("email") as string | null)?.trim() ?? "",
+            phone: (formData.get("phone") as string | null)?.trim() ?? "",
+            gender: (formData.get("gender") as string | null)?.trim() ?? "",
+            businessName: (formData.get("businessName") as string | null)?.trim() ?? "",
+            businessType: (formData.get("businessType") as string | null)?.trim() ?? "",
+            yearsInBusiness: (() => { const y = parseInt((formData.get("yearsInBusiness") as string | null) ?? "0", 10); return isNaN(y) ? 0 : y; })(),
+            reasonForApplying: (formData.get("reasonForApplying") as string | null)?.trim() ?? "" };
 
         // Validate with Zod (enforces female-only validation)
         const validatedData = waveApplicationSchema.parse(applicationData);
@@ -113,10 +113,10 @@ export async function enrollInCourseAction(
         const { session } = sessionResult;
 
         // Extract and validate form data
-        const enrollmentData = { fullName: formData.get("fullName") as string,
-            email: formData.get("email") as string,
-            phone: formData.get("phone") as string,
-            courseId: formData.get("courseId") as string };
+        const enrollmentData = { fullName: (formData.get("fullName") as string | null)?.trim() ?? "",
+            email: (formData.get("email") as string | null)?.trim() ?? "",
+            phone: (formData.get("phone") as string | null)?.trim() ?? "",
+            courseId: (formData.get("courseId") as string | null)?.trim() ?? "" };
 
         // Validate with Zod
         const validatedData = academyEnrollmentSchema.parse(enrollmentData);
@@ -172,17 +172,22 @@ export async function submitWithdrawalAction(
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required"};
         const { session } = sessionResult;
 
-        const idempotencyKey = formData.get("idempotencyKey") as string;
+        const idempotencyKey = (formData.get("idempotencyKey") as string | null)?.trim() ?? "";
         if (!idempotencyKey) { return { error: "Missing security token. Please refresh the page.", success: false as const };
         }
 
         // Extract and validate form data
-        const withdrawalData = { cooperativeId: formData.get("cooperativeId") as string,
-            amount: parseFloat(formData.get("amount") as string),
-            accountNumber: formData.get("accountNumber") as string,
-            accountName: formData.get("accountName") as string,
-            bankName: formData.get("bankName") as string,
-            reason: formData.get("reason") as string };
+        const rawAmount = formData.get("amount") as string | null;
+        const parsedAmount = rawAmount ? parseFloat(rawAmount) : NaN;
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+            return { error: "Invalid amount", success: false as const };
+        }
+        const withdrawalData = { cooperativeId: (formData.get("cooperativeId") as string | null)?.trim() ?? "",
+            amount: parsedAmount,
+            accountNumber: (formData.get("accountNumber") as string | null)?.trim() ?? "",
+            accountName: (formData.get("accountName") as string | null)?.trim() ?? "",
+            bankName: (formData.get("bankName") as string | null)?.trim() ?? "",
+            reason: (formData.get("reason") as string | null)?.trim() ?? "" };
 
         // Validate with Zod
         const validatedData = withdrawalSchema.parse(withdrawalData);

@@ -83,11 +83,11 @@ export async function createExportWindowAction(
         }
 
         // Extract and validate form data
-        const exportData = { commodity: formData.get("commodity") as string,
-            quantity: formData.get("quantity") as string,
-            amount: parseFloat(formData.get("amount") as string),
-            deliveryDate: formData.get("deliveryDate") as string | undefined,
-            destination: formData.get("destination") as string | undefined };
+        const exportData = { commodity: (formData.get("commodity") as string | null)?.trim() ?? "",
+            quantity: (formData.get("quantity") as string | null)?.trim() ?? "",
+            amount: (() => { const raw = formData.get("amount") as string | null; const n = raw ? parseFloat(raw) : NaN; return isNaN(n) ? -1 : n; })(),
+            deliveryDate: (formData.get("deliveryDate") as string | null)?.trim() || undefined,
+            destination: (formData.get("destination") as string | null)?.trim() || undefined };
 
         // Validate with Zod
         const validatedData = exportWindowSchema.parse(exportData);
@@ -432,11 +432,19 @@ export async function submitExportOnboardingAction(
         if (existingStatus === 'approved') { return { success: false as const, data: undefined, error: "You are already registered for Export.", meta: null };
         }
 
-        // Extract Data
-        const profile = JSON.parse(formData.get("profile") as string || "{}");
-        const kycData = JSON.parse(formData.get("kycData") as string || "{}");
-        const bank = JSON.parse(formData.get("bank") as string || "{}");
-        const terms = JSON.parse(formData.get("terms") as string || "{}");
+        // Extract Data — wrap JSON.parse in try/catch to guard against malformed input
+        let profile: Record<string, unknown>;
+        let kycData: Record<string, unknown>;
+        let bank: Record<string, unknown>;
+        let terms: Record<string, unknown>;
+        try { profile = JSON.parse((formData.get("profile") as string | null) ?? "{}"); }
+        catch { return { success: false as const, error: "Invalid profile data", meta: null }; }
+        try { kycData = JSON.parse((formData.get("kycData") as string | null) ?? "{}"); }
+        catch { return { success: false as const, error: "Invalid KYC data", meta: null }; }
+        try { bank = JSON.parse((formData.get("bank") as string | null) ?? "{}"); }
+        catch { return { success: false as const, error: "Invalid bank data", meta: null }; }
+        try { terms = JSON.parse((formData.get("terms") as string | null) ?? "{}"); }
+        catch { return { success: false as const, error: "Invalid terms data", meta: null }; }
 
         const idDocument = formData.get("idDocument");
         const proofOfAddress = formData.get("proofOfAddress");
@@ -508,8 +516,8 @@ export async function submitExportOnboardingAction(
             ...(profileLastName   && { lastName: profileLastName }),
             ...(profileOtherName  !== null && { otherName: profileOtherName }),
             ...(computedFullName  && { fullName: computedFullName }),
-            ...(profile.phone     && { phone: profile.phone }),
-            ...(profile.state     && { stateOfOrigin: profile.state }),
+            ...(profile.phone     ? { phone: profile.phone as string }    : {}),
+            ...(profile.state     ? { stateOfOrigin: profile.state as string } : {}),
             updatedAt: FieldValue.serverTimestamp() });
 
         await batch.commit();
