@@ -740,7 +740,7 @@ async function _verifyLandListing(
 // Loan Application Management (Admin)
 // ============================================
 
-async function _getPendingLoanApplications(): Promise<ActionResponse<any[]>> {
+async function _getPendingLoanApplications(limit = 50, lastDocId?: string): Promise<ActionResponse<any[]>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
@@ -749,12 +749,23 @@ async function _getPendingLoanApplications(): Promise<ActionResponse<any[]>> {
             return { error: "Unauthorized: Permission required - cooperatives:approve_loans", success: false as const, data: null };
         }
 
-        const snapshot = await db.collection(COLLECTIONS.LOAN_APPLICATIONS)
+        const loanCol = db.collection(COLLECTIONS.LOAN_APPLICATIONS);
+        let loanQuery: FirebaseFirestore.Query = loanCol
             .where("status", "==", "pending")
             .orderBy("appliedAt", "desc")
-            .get();
+            .limit(limit + 1);
 
-        const applications = serializeDocs(snapshot.docs);
+        if (lastDocId) {
+            const cursor = await loanCol.doc(lastDocId).get();
+            if (cursor.exists) loanQuery = loanQuery.startAfter(cursor);
+        }
+
+        const snapshot = await loanQuery.get();
+        const pageDocs = snapshot.docs.slice(0, limit);
+        const hasMore = snapshot.docs.length > limit;
+        const nextCursor = hasMore ? pageDocs[pageDocs.length - 1]?.id ?? null : null;
+
+        const applications = serializeDocs(pageDocs);
 
         // HYDRATION: Batch-resolve user bank details
         const userIds = [...new Set(applications.map((app: any) => app.userId).filter(Boolean))];
@@ -808,6 +819,8 @@ async function _getPendingLoanApplications(): Promise<ActionResponse<any[]>> {
             error: null,
             success: true as const,
             data: enrichedApplications,
+            hasMore,
+            lastDocId: nextCursor,
         };
     } catch (error: any) {
         logger.error("Get pending loan applications error:", error);
@@ -1392,8 +1405,8 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         // If searching or applying an unindexed filter, fetch a larger batch (5000) to ensure high search/filter coverage.
         // If doing standard navigation, scale limit based on the requested page to reduce expensive reads by 97%+
         const FETCH_LIMIT = (options.search || hasUnindexedFilter || options.fromDate || options.toDate || (options.role && options.role !== "all"))
-            ? 5000
-            : Math.min(5000, (page + 1) * pageSize + 100);
+            ? 2000
+            : Math.min(2000, (page + 1) * pageSize + 100);
         query = query.limit(FETCH_LIMIT);
 
         const snapshot = await query.get();

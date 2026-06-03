@@ -25,8 +25,8 @@ export async function getAdminUsersAction(): Promise<ActionResponse<any[]>> { tr
 
         // Query users who have admin or super_admin in their roles array
         const [adminSnap, superAdminSnap] = await Promise.all([
-            db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "admin").get(),
-            db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "super_admin").get(),
+            db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "admin").limit(100).get(),
+            db.collection(COLLECTIONS.USERS).where("roles", "array-contains", "super_admin").limit(100).get(),
         ]);
 
         // Merge + deduplicate by id

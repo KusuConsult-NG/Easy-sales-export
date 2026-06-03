@@ -55,3 +55,52 @@ export async function safeUpdate(
 
     return { id: docId };
 }
+
+// ─── Pagination & Safe Query Helpers ──────────────────────────────────────────
+
+import type { CollectionReference, Query } from 'firebase-admin/firestore';
+
+/**
+ * Applies cursor-based pagination to any Firestore query.
+ * Uses the same startAfter(docSnapshot) pattern already used throughout the codebase.
+ *
+ * @param query      - The base query (already has .where() / .orderBy() applied)
+ * @param collection - The collection reference to fetch the cursor doc from
+ * @param limit      - Max documents to return per page
+ * @param lastDocId  - Document ID of the last item from the previous page (cursor)
+ * @returns { docs, hasMore, nextCursor }
+ */
+export async function paginatedQuery(
+    query: Query,
+    collection: CollectionReference,
+    limit: number,
+    lastDocId?: string
+): Promise<{
+    docs: FirebaseFirestore.QueryDocumentSnapshot[];
+    hasMore: boolean;
+    nextCursor: string | null;
+}> {
+    let q = query.limit(limit + 1);
+
+    if (lastDocId) {
+        const cursorDoc = await collection.doc(lastDocId).get();
+        if (cursorDoc.exists) {
+            q = q.startAfter(cursorDoc) as Query;
+        }
+    }
+
+    const snapshot = await q.get();
+    const docs = snapshot.docs.slice(0, limit);
+    const hasMore = snapshot.docs.length > limit;
+    const nextCursor = hasMore ? docs[docs.length - 1]?.id ?? null : null;
+
+    return { docs, hasMore, nextCursor };
+}
+
+/**
+ * Safe collection query with a mandatory limit cap.
+ * Falls back to 500 if no limit is provided.
+ */
+export function withSafeLimit<T extends Query>(query: T, limit = 500): T {
+    return query.limit(limit) as T;
+}
