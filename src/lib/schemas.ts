@@ -44,8 +44,8 @@ export const strictNigerianPhoneSchema = z.string()
  * Validates email and password for user authentication
  */
 export const loginSchema = z.object({
-    email: strictEmailSchema,
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    email: z.string().email("Invalid email address").toLowerCase().trim(),
+    password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 export type LoginFormData = z.infer<typeof loginSchema>;
