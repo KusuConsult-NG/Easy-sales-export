@@ -36,7 +36,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                     // Default to paid cooperative members
                     query = query.where("paymentStatus", "==", "completed");
                 }
-                const snap = await query.select("email").get();
+                const snap = await query.select("email").limit(10000).get();
                 snap.docs.forEach(doc => {
                     const data = doc.data();
                     if (data.email) emails.push(data.email);
@@ -47,7 +47,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                 if (status) {
                     query = query.where("status", "==", status);
                 }
-                const snap = await query.select("email", "userEmail").get();
+                const snap = await query.select("email", "userEmail").limit(10000).get();
                 snap.docs.forEach(doc => {
                     const data = doc.data();
                     const email = data.email || data.userEmail;
@@ -59,7 +59,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                 if (status) {
                     query = query.where("status", "==", status);
                 }
-                const snap = await query.select("email", "userEmail").get();
+                const snap = await query.select("email", "userEmail").limit(10000).get();
                 snap.docs.forEach(doc => {
                     const data = doc.data();
                     const email = data.email || data.userEmail;
@@ -88,7 +88,7 @@ export class CommunicationsService implements CommunicationsServiceContract {
                         break;
                 }
 
-                const snap = await query.get();
+                const snap = await query.select("email", "roles", "status").limit(10000).get();
                 snap.docs.forEach(doc => {
                     const data = doc.data();
                     if (data.status === "suspended") return;
