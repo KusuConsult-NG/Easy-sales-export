@@ -7,6 +7,7 @@
 
 import { redis } from './redis';
 import { Ratelimit } from '@upstash/ratelimit';
+import { checkFallbackLimit } from './rate-limiter-fallback';
 
 interface RateLimitConfig {
     interval: number; // Time window in milliseconds
@@ -37,13 +38,14 @@ export function rateLimit(config: RateLimitConfig) {
                     reset,
                 };
             } catch (error) {
-                // Redis error - fail open (allow request) but log
-                console.error('[Rate Limiter] Redis error:', error);
+                // Redis error - fall back to in-memory fallback rate limiter instead of failing fully open
+                console.error('[Rate Limiter] Redis error (falling back to in-memory):', error);
+                const fallback = checkFallbackLimit(identifier, config.maxRequests, config.interval);
                 return {
-                    success: true, // Fail open for availability
+                    success: fallback.success,
                     limit: config.maxRequests,
-                    remaining: config.maxRequests,
-                    reset: now + config.interval,
+                    remaining: fallback.remaining,
+                    reset: fallback.reset,
                 };
             }
         },

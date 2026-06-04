@@ -8,7 +8,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const dryRun = searchParams.get("dryRun") !== "false"; // Default to true (safe)
-    const secret = searchParams.get("secret");
+    
+    // Read secret from Authorization header: Bearer <secret>
+    const authHeader = request.headers.get("authorization");
+    const secret = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
 
     // 🔒 SECURITY: Require CRON_SECRET or authenticated super_admin
     const hasValidSecret = process.env.CRON_SECRET && secret === process.env.CRON_SECRET;

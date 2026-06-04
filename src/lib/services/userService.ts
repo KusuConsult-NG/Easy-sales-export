@@ -1,6 +1,7 @@
 import { getAdminDb } from "@/lib/firebase-admin";
 import { COLLECTIONS, type User } from "@/lib/types/firestore";
 import { invalidateUserCache } from "@/lib/user-cache";
+import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 
 /**
  * ── DATA CONSISTENCY LAYER ──────────────────────────────────────────────────
@@ -55,9 +56,12 @@ export async function atomicUpdateUser(userId: string, updates: Record<string, a
     const db = getAdminDb();
     const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
+    // Normalize updates to prevent schema drift (cooperatives vs cooperative, etc.)
+    const normalizedUpdates = normalizeUserUpdate(updates);
+
     // Block protected fields from unauthorized modification
     for (const field of PROTECTED_FIELDS) {
-        if (field in updates) {
+        if (field in normalizedUpdates) {
             throw new Error(`Security Violation: Cannot arbitrarily modify protected field: ${field}`);
         }
     }
@@ -74,7 +78,7 @@ export async function atomicUpdateUser(userId: string, updates: Record<string, a
         // Construct the theoretical updated document
         const newData = {
             ...currentData,
-            ...updates,
+            ...normalizedUpdates,
             updatedAt: new Date()
         };
 
@@ -83,7 +87,7 @@ export async function atomicUpdateUser(userId: string, updates: Record<string, a
 
         // Commit transaction
         transaction.update(userRef, {
-            ...updates,
+            ...normalizedUpdates,
             updatedAt: newData.updatedAt
         });
 

@@ -121,10 +121,10 @@ async function _getBuyerDisputesAction() { let sessionResult;
             return {
                 ...data,
                 id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined };
-        }) as Dispute[];
+                createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate ? (data.updatedAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate ? (data.resolvedAt as Timestamp).toDate().toISOString() : undefined };
+        }) as any as Dispute[];
 
         return { error: null, success: true as const, data: disputes };
     } catch (error) { logger.error("Get buyer disputes error:", {
@@ -155,10 +155,10 @@ async function _getSellerDisputesAction() { let sessionResult;
             return {
                 ...data,
                 id: doc.id,
-                createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
-                updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
-                resolvedAt: (data.resolvedAt as Timestamp)?.toDate() || undefined };
-        }) as Dispute[];
+                createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
+                updatedAt: (data.updatedAt as Timestamp)?.toDate ? (data.updatedAt as Timestamp).toDate().toISOString() : new Date().toISOString(),
+                resolvedAt: (data.resolvedAt as Timestamp)?.toDate ? (data.resolvedAt as Timestamp).toDate().toISOString() : undefined };
+        }) as any as Dispute[];
 
         return { error: null, success: true as const, data: disputes };
     } catch (error) { logger.error("Get seller disputes error:", {

@@ -2,6 +2,7 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { redis } from './redis';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimitConfig } from './security';
+import { checkFallbackLimit } from './rate-limiter-fallback';
 
 /**
  * Distributed Rate Limiter (Redis-backed for 100k+ users)
@@ -47,12 +48,21 @@ export async function rateLimit(
             };
         }
     } catch (error) {
-        console.error("Rate limit error:", error);
-        // Fail open to avoid blocking legitimate users on Redis error
-        return {
-            success: true,
-            remaining: 1,
-        };
+        console.error("Rate limit error (falling back to in-memory):", error);
+        // Fall back to a conservative in-memory rate limiter instead of failing fully open
+        const fallback = checkFallbackLimit(key, rateLimitConfig.maxRequests, rateLimitConfig.windowMs);
+        if (fallback.success) {
+            return {
+                success: true,
+                remaining: fallback.remaining,
+            };
+        } else {
+            const retryAfterSeconds = Math.ceil((fallback.reset - Date.now()) / 1000);
+            return {
+                success: false,
+                error: `Too many requests (Redis connection failed). Please try again in ${retryAfterSeconds} seconds.`,
+            };
+        }
     }
 }
 
@@ -128,9 +138,23 @@ export async function consumeLoginAttempt(
             };
         }
     } catch (error) {
-        console.error("Login rate limit error:", error);
-        // Fail open for login to prevent DoS via Redis failure
-        return { allowed: true };
+        console.error("Login rate limit error (falling back to in-memory):", error);
+        // Fall back to a conservative in-memory rate limiter instead of failing fully open
+        const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10);
+        const fallback = checkFallbackLimit(key, maxAttempts, 15 * 60 * 1000); // 15 minutes window
+        if (fallback.success) {
+            return {
+                allowed: true,
+                remainingAttempts: fallback.remaining,
+            };
+        } else {
+            const now = Date.now();
+            const minutesRemaining = Math.ceil((fallback.reset - now) / 1000 / 60);
+            return {
+                allowed: false,
+                error: `Too many failed login attempts (Redis connection failed). Please try again in ${minutesRemaining} minutes.`,
+            };
+        }
     }
 }
 
