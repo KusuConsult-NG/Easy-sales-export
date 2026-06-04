@@ -47,7 +47,7 @@ export async function logAuditAction(
     details: Record<string, any> = {}
 ): Promise<LogAuditState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
+        if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
         const { session } = sessionResult;
 
         await createAuditLog({ action,

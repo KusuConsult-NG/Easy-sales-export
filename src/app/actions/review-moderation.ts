@@ -40,7 +40,7 @@ export async function getFlaggedReviewsAction(options?: { status?: "pending" | "
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) { return { success: false as const, error: "Unauthorized: Permission required - marketplace:moderate_reviews", data: null };
         }
@@ -101,7 +101,7 @@ export async function approveReviewAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) { return { success: false as const, error: "Unauthorized: Permission required - marketplace:moderate_reviews", data: null };
         }
@@ -142,7 +142,7 @@ export async function deleteReviewAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) { return { success: false as const, error: "Unauthorized: Permission required - marketplace:moderate_reviews", data: null };
         }
@@ -215,7 +215,7 @@ export async function suspendReviewerAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) { return { success: false as const, error: "Unauthorized: Permission required - users:suspend", data: null };
         }
@@ -273,7 +273,7 @@ export async function bulkApproveReviewsAction(
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "marketplace:moderate_reviews")) { return { success: false as const, approved: 0, error: "Unauthorized: Permission required - marketplace:moderate_reviews", data: null };
         }

@@ -17,7 +17,7 @@ export interface CreateBookingData { exportWindowId: string;
  */
 export async function createBookingAction(data: CreateBookingData) { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }
@@ -79,7 +79,7 @@ export async function createBookingAction(data: CreateBookingData) { try {
  */
 export async function getUserBookingsAction() { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id) { return { success: false as const, data: null, error: 'Not authenticated', meta: null };
         }

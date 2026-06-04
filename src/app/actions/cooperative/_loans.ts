@@ -52,7 +52,7 @@ export async function submitLoanApplicationAction(formData: {
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== formData.userId) {
             return { success: false as const, error: "Unauthorized" , data: null };
@@ -201,7 +201,7 @@ export async function submitLoanApplicationAction(formData: {
 export async function getUserLoanApplicationsAction(userId: string): Promise<LoanApplication[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return [];
     const { session } = sessionResult;
         if (!session?.user?.id || (session.user.id !== userId && (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin")))) {
             return [];
@@ -224,7 +224,7 @@ export async function getUserLoanApplicationsAction(userId: string): Promise<Loa
 export async function getPendingLoanApplicationsAction(): Promise<LoanApplication[]> {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return [];
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return [];
@@ -527,7 +527,7 @@ export async function approveLoanAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false as const, error: "Unauthorized", data: null };
@@ -652,7 +652,7 @@ export async function rejectLoanAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false as const, error: "Unauthorized", data: null };
@@ -706,7 +706,7 @@ export async function disburseLoanAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id || (!session.user.roles?.includes("admin") && !session.user.roles?.includes("super_admin"))) {
             return { success: false as const, error: "Unauthorized", data: null };
@@ -928,7 +928,7 @@ export async function submitRepaymentAction(data: {
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id || session.user.id !== data.userId) {
             return { success: false as const, error: "Unauthorized", data: null };
@@ -1075,7 +1075,7 @@ export async function getRepaymentHistoryAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user?.id) {
             return { success: false as const, error: "Unauthorized" , data: null };

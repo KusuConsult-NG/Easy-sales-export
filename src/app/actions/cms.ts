@@ -11,7 +11,7 @@ import { isAdmin } from "@/lib/admin-permissions";
 
 /** Helper: verify admin session */
 async function requireAdmin(): Promise<{ id: string } | null> { const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return null;
     const { session } = sessionResult;
     if (!session?.user?.id || !isAdmin(session.user.roles)) { return null;
     }

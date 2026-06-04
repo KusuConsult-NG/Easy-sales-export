@@ -28,7 +28,7 @@ export async function bulkSuspendUsersAction(
 ): Promise<ActionResponse<{ suspended: number; failed: string[] }>> { 
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:suspend")) { 
             return { success: false, error: "Unauthorized: Permission required - users:suspend", data: null };
@@ -122,7 +122,7 @@ export async function bulkActivateUsersAction(
 ): Promise<ActionResponse<{ activated: number; failed: string[] }>> { 
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) { 
             return { success: false, error: "Unauthorized: Permission required - users:update", data: null };
@@ -203,7 +203,7 @@ export async function bulkAssignRolesAction(
 ): Promise<ActionResponse<{ updated: number; failed: string[] }>> { 
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:assign_roles")) { 
             return { success: false, error: "Unauthorized: Permission required - users:assign_roles", data: null };
@@ -283,7 +283,7 @@ export async function bulkDeleteUsersAction(
 ): Promise<ActionResponse<{ deleted: number; failed: string[] }>> { 
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:delete")) { 
             return { success: false, error: "Unauthorized: Permission required - users:delete (super_admin only)", data: null };
@@ -382,7 +382,7 @@ export async function createImpersonationTokenAction(
 ): Promise<ActionResponse<{ token: string; expiresAt: string }>> { 
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:impersonate")) { return { success: false as const, error: "Unauthorized: Permission required - users:impersonate (super_admin only)", data: null };
         }
@@ -444,7 +444,7 @@ export async function exportUserDataAction(
 ): Promise<ActionResponse<any>> { 
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         if (!session?.user || !hasAdminPermission(session.user.roles, "users:read")) { 
             return { success: false, error: "Unauthorized: Permission required - users:read", data: null };

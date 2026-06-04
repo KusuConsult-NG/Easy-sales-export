@@ -174,7 +174,7 @@ export async function getFinancialOverviewAction(): Promise<FinancialOverview> {
 
 export async function getModuleRegistrationStatsAction(): Promise<ModuleRegistrationStats> {
     const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) throw new Error("Unauthorized");
     const { session } = sessionResult;
     if (!isAdmin(session.user.roles)) {
         throw new Error("Unauthorized");

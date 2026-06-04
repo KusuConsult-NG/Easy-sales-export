@@ -24,7 +24,7 @@ export async function initializeContributionPaymentAction(
     amount: number
 ): Promise<ActionState & { data?: { authorizationUrl: string; reference: string } }> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
+        if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
         const { session } = sessionResult;
 
         if (!session?.user) { return { error: 'Authentication required', success: false as const, data: undefined };
@@ -62,7 +62,7 @@ export async function verifyContributionPaymentAction(
     reference: string
 ): Promise<ActionState> { try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return null as any;
+        if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
         const { session } = sessionResult;
 
         if (!session?.user) { return { error: 'Authentication required', success: false as const, data: undefined };

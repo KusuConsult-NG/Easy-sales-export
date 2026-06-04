@@ -17,7 +17,7 @@ export async function runForensicScanAction(): Promise<
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > { try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return null as any;
+    if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
         // Strict Admin Check
         if (!session?.user?.roles?.includes("super_admin") && (!session?.user?.roles?.includes("admin") && !session?.user?.roles?.includes("super_admin"))) { return { success: false as const, results: [], error: "Unauthorized: Admin access required", data: null };
