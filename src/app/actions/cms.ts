@@ -71,7 +71,7 @@ export async function createAnnouncementAction(data: { title: string;
             priority: data.priority,
             publishedAt: FieldValue.serverTimestamp(),
             expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
-            createdBy: data.adminId,
+            createdBy: admin.id,
             createdAt: FieldValue.serverTimestamp(),
             active: true };
 
@@ -79,7 +79,7 @@ export async function createAnnouncementAction(data: { title: string;
 
         await logAdminAction(
             "announcement_created",
-            data.adminId,
+            admin.id,
             docRef.id,
             "announcement"
         );
@@ -158,7 +158,7 @@ export async function deactivateAnnouncementAction(
 
         await logAdminAction(
             "announcement_deactivated",
-            adminId,
+            admin.id,
             announcementId,
             "announcement"
         );
@@ -196,7 +196,7 @@ export async function createBannerAction(data: { title: string;
             startDate: new Date(data.startDate),
             endDate: new Date(data.endDate),
             position: data.position,
-            createdBy: data.adminId,
+            createdBy: admin.id,
             createdAt: FieldValue.serverTimestamp(),
             active: true };
 
@@ -204,7 +204,7 @@ export async function createBannerAction(data: { title: string;
 
         await logAdminAction(
             "banner_created",
-            data.adminId,
+            admin.id,
             docRef.id,
             "banner"
         );
@@ -271,7 +271,7 @@ export async function deactivateBannerAction(
 
         await logAdminAction(
             "banner_deactivated",
-            adminId,
+            admin.id,
             bannerId,
             "banner"
         );
