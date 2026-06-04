@@ -2,9 +2,9 @@ name: CI — Validate & Deploy
 
 on:
   push:
-    branches: [main, develop, 'feature/**', 'fix/**', 'hotfix/**']
+    branches: [main, staging, develop, 'feature/**', 'fix/**', 'hotfix/**']
   pull_request:
-    branches: [main, develop]
+    branches: [main, staging, develop]
 
 jobs:
   # ─────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -54,7 +54,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies

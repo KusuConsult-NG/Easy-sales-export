@@ -1,11 +1,19 @@
 #!/usr/bin/env sh
 # Easy Sales Export — pre-push hook
-# Runs a full TypeScript check before any push to remote.
-# This catches cross-file type errors that lint-staged misses (staged files only).
+# Runs a full TypeScript check and Jest unit tests before any push to remote.
+
 echo "🔍 Running full TypeScript check before push..."
 npx tsc --noEmit --project tsconfig.json
 if [ $? -ne 0 ]; then
   echo "❌ TypeScript errors found. Fix them before pushing."
   exit 1
 fi
-echo "✅ TypeScript OK — push proceeding."
+echo "✅ TypeScript OK."
+
+echo "🧪 Running Jest unit tests..."
+npm run test
+if [ $? -ne 0 ]; then
+  echo "❌ Unit tests failed. Fix them before pushing."
+  exit 1
+fi
+echo "✅ Unit tests passed — push proceeding."
