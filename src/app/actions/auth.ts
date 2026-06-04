@@ -203,6 +203,178 @@ export async function getPostLoginRedirect(email: string) { try {
     }
 }
 
+function getLevenshteinDistance(a: string, b: string): number {
+    const tmp: number[][] = [];
+    for (let i = 0; i <= a.length; i++) {
+        tmp[i] = [i];
+    }
+    for (let j = 0; j <= b.length; j++) {
+        tmp[0][j] = j;
+    }
+    for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+            tmp[i][j] = Math.min(
+                tmp[i - 1][j] + 1,
+                tmp[i][j - 1] + 1,
+                tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+            );
+        }
+    }
+    return tmp[a.length][b.length];
+}
+
+async function suggestEmailCorrection(enteredEmail: string): Promise<string | null> {
+    try {
+        const emailLower = enteredEmail.toLowerCase().trim();
+        const parts = emailLower.split('@');
+        if (parts.length !== 2) return null;
+        
+        const prefix = parts[0];
+        const domain = parts[1];
+        
+        // Strip trailing digits to find base prefix (e.g. hadizasabo68 -> hadizasabo)
+        const basePrefix = prefix.replace(/\d+$/, '');
+        if (basePrefix.length < 4) return null;
+        
+        // Prefix query in Firestore
+        const snapshot = await db.collection(COLLECTIONS.USERS)
+            .where("email", ">=", basePrefix)
+            .where("email", "<=", basePrefix + "\uf8ff")
+            .limit(20)
+            .get();
+            
+        let bestMatch: string | null = null;
+        let minDistance = 3; // Only accept distance <= 2
+        
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            const dbEmail = (data.email || "").toLowerCase().trim();
+            if (!dbEmail || dbEmail === emailLower) continue;
+            
+            const dbParts = dbEmail.split('@');
+            if (dbParts.length !== 2 || dbParts[1] !== domain) continue; // Must be same domain (e.g. gmail.com)
+            
+            const distance = getLevenshteinDistance(prefix, dbParts[0]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                bestMatch = dbEmail;
+            }
+        }
+        
+        return bestMatch;
+    } catch (e) {
+        logger.error("suggestEmailCorrection error:", e);
+        return null;
+    }
+}
+
+export async function preValidateLoginAction(credentials: any): Promise<{ success: boolean; error: string | null }> {
+    try {
+        const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+        if (!firebaseApiKey || firebaseApiKey === "mock-api-key-for-build") {
+            return { success: false, error: "Service configuration error. Please contact support." };
+        }
+
+        // 1. Validate credentials with Zod
+        const parsed = loginSchema.safeParse(credentials);
+        if (!parsed.success) {
+            return { success: false, error: parsed.error.issues[0]?.message || "Invalid input" };
+        }
+        const { email, password } = parsed.data;
+
+        // 2. Rate limit check
+        const { consumeLoginAttempt } = await import("@/lib/rate-limit");
+        try {
+            const rateLimitResult = await consumeLoginAttempt(email);
+            if (!rateLimitResult.allowed) {
+                return { success: false, error: rateLimitResult.error || "Too many login attempts. Please try again later." };
+            }
+        } catch (err: any) {
+            logger.error(`[PreValidate:Fallback] Redis consumeLoginAttempt failed. Error: ${err.message}`);
+        }
+
+        // 3. Authenticate with Firebase REST API
+        const response = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    password,
+                    returnSecureToken: true
+                })
+            }
+        );
+
+        const responseData = await response.json();
+
+        if (!response.ok) {
+            const errorCode = responseData.error?.message || "auth/internal-error";
+            
+            // Check if email exists in Firestore to give a typo helper hint
+            const emailCheck = await db.collection(COLLECTIONS.USERS)
+                .where("email", "==", email)
+                .limit(1)
+                .get();
+                
+            if (emailCheck.empty) {
+                const suggestion = await suggestEmailCorrection(email);
+                if (suggestion) {
+                    return { 
+                        success: false, 
+                        error: `Invalid email or password. Did you mean ${suggestion}?` 
+                    };
+                }
+            }
+
+            const firebaseErrorMap: Record<string, string> = {
+                "auth/invalid-api-key": "Service configuration error. Please contact support.",
+                "auth/app-not-authorized": "Service configuration error. Please contact support.",
+                "auth/invalid-credential": "Invalid email or password.",
+                "auth/wrong-password": "Invalid email or password.",
+                "auth/user-not-found": "Invalid email or password.",
+                "INVALID_LOGIN_CREDENTIALS": "Invalid email or password.",
+                "INVALID_PASSWORD": "Invalid email or password.",
+                "EMAIL_NOT_FOUND": "Invalid email or password.",
+                "auth/user-disabled": "Your account has been disabled. Please contact support.",
+                "USER_DISABLED": "Your account has been disabled. Please contact support.",
+                "auth/too-many-requests": "Too many attempts. Please try again later.",
+                "TOO_MANY_ATTEMPTS_TRY_LATER": "Too many attempts. Please try again later.",
+                "auth/network-request-failed": "Network error — please check your connection and try again.",
+                "auth/operation-not-allowed": "Email/password login is not enabled. Please contact support.",
+                "OPERATION_NOT_ALLOWED": "Email/password login is not enabled. Please contact support.",
+            };
+            
+            return { 
+                success: false, 
+                error: firebaseErrorMap[errorCode] || firebaseErrorMap[responseData.error?.message] || "Invalid email or password." 
+            };
+        }
+
+        const uid = responseData.localId;
+
+        // 4. Fetch user profile and check status
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+
+        if (!userDoc.exists) {
+            return { success: false, error: "User profile not found. Please contact support or register again." };
+        }
+
+        const userData = userDoc.data() as FirestoreUser;
+
+        // 5. Ban/suspend check
+        if ((userData as any).isBanned === true || (userData as any).status === 'banned' || (userData as any).suspended === true) {
+            return { success: false, error: "Your account has been suspended. Please contact support." };
+        }
+
+        return { success: true, error: null };
+    } catch (e: any) {
+        logger.error(`[PreValidate] Exception: ${e.message}`, e);
+        return { success: false, error: "An unexpected error occurred. Please try again." };
+    }
+}
+
 // DEPRECATED: Old Server Action Login
 // Keeping a stub for type safety if needed, but logic moved to client
 export async function loginAction(prevState: any, formData: FormData) { return { error: "Please use client-side login", success: false as const, data: null };

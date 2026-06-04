@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn, useSession } from "next-auth/react";
 import { Mail, Lock, AlertCircle, Eye, EyeOff, CheckCircle, ArrowRight, Loader2, Home, User } from "lucide-react";
-import { getPostLoginRedirect } from "@/app/actions/auth";
+import { getPostLoginRedirect, preValidateLoginAction } from "@/app/actions/auth";
 import { useToast } from "@/contexts/ToastContext";
 import LoadingButton from "@/components/ui/LoadingButton";
 
@@ -52,7 +52,19 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
         setError("");
 
         try {
-            // 1. Client-side Sign In (Guarantees Cookie Set)
+            // 1. Pre-validate credentials on server to bypass NextAuth error masking and offer typo hints
+            const preValidateResult = await preValidateLoginAction({
+                email: formData.email,
+                password: formData.password,
+            });
+
+            if (!preValidateResult.success) {
+                setError(preValidateResult.error || "Invalid email or password.");
+                setIsLoading(false);
+                return;
+            }
+
+            // 2. Client-side Sign In (Guarantees Cookie Set)
             // redirect: false prevents NextAuth from automatically redirecting,
             // allowing us to control the flow and wait for the cookie.
             const result = await signIn("credentials", {
