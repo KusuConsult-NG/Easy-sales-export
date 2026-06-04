@@ -310,6 +310,7 @@ async function _initiateAcademyPaymentAction(plan: "foundation" | "standard" | "
             nairaToKobo(amount),
             {
                 userId,
+                type: "academy_registration",
                 purpose: "academy_registration",
                 plan: planToStore,
                 callback_url: callbackUrl
@@ -345,7 +346,8 @@ async function _verifyAcademyPaymentAction(reference: string): Promise<ActionRes
         }
 
         const metadata = verify.data.metadata;
-        if (metadata.purpose !== "academy_registration") {
+        const type = metadata.type || metadata.purpose;
+        if (type !== "academy_registration") {
             return { success: false as const, error: "Invalid payment type", data: null };
         }
 

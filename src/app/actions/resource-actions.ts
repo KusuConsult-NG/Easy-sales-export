@@ -71,6 +71,10 @@ export async function uploadResourceAction(formData: FormData): Promise<
             guide: ["application/pdf"]
         };
 
+        if (!category || !(category in allowedTypes)) {
+            return { success: false as const, error: "Invalid resource category", data: null };
+        }
+
         if (!allowedTypes[category].includes(file.type)) { return { success: false as const, error: "Invalid file type for this category"};
         }
 

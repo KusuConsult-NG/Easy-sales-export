@@ -324,6 +324,7 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                     orderId: orderData.orderId,
                     buyerId: userId,
                     sellerId: sellerId,
+                    participants: [userId, sellerId],
                     grossAmount: grossAmount,
                     platformFee: platformFee,
                     netAmount: netAmount,
