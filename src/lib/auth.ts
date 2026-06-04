@@ -251,6 +251,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             token.onboardingCompleted = (cachedProfile as any).onboardingCompleted;
                             token.sellerVerificationStatus = (cachedProfile as any).sellerVerificationStatus;
                             token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
+                            token.isBanned = cachedProfile.isBanned || cachedProfile.status === "banned" || cachedProfile.suspended || false;
                             token.lastSyncedAt = now;
                         } else {
                             // Cache miss (invalidated by admin approval) and getUserProfile returned null.
@@ -267,6 +268,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                     token.onboardingCompleted = userData.onboardingCompleted;
                                     token.sellerVerificationStatus = userData.sellerVerificationStatus;
                                     token.serviceRegistrations = userData.serviceRegistrations || {};
+                                    token.isBanned = userData.isBanned || userData.status === "banned" || userData.suspended || false;
                                     token.lastSyncedAt = now;
                                 }
                             } catch (fsErr) {
@@ -297,6 +299,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
             // 2. Node-specific Firebase logic
             if (session.user) {
+                // Instantly block session and clear Firebase custom token if user is banned (M-10)
+                if (token.isBanned) {
+                    session.firebaseToken = undefined;
+                    token.firebaseToken = undefined;
+                    session.user = null as any;
+                    return session;
+                }
+
                 // Firebase custom token caching strategy:
                 // Tokens expire after 60 minutes. We cache in the JWT and only
                 // re-mint when the cached token is older than 50 minutes.

@@ -57,15 +57,15 @@ export function rateLimit(config: RateLimitConfig) {
  * Get client IP address from request
  */
 export function getClientIp(request: Request): string {
-    const forwarded = request.headers.get('x-forwarded-for');
     const realIp = request.headers.get('x-real-ip');
-
-    if (forwarded) {
-        return forwarded.split(',')[0].trim();
-    }
+    const forwarded = request.headers.get('x-forwarded-for');
 
     if (realIp) {
         return realIp;
+    }
+
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
     }
 
     return 'unknown';
@@ -77,15 +77,15 @@ export function getClientIp(request: Request): string {
 export async function getActionClientIp(): Promise<string> {
     const { headers } = await import('next/headers');
     const headersList = await headers();
-    const forwarded = headersList.get('x-forwarded-for');
     const realIp = headersList.get('x-real-ip');
-
-    if (forwarded) {
-        return forwarded.split(',')[0].trim();
-    }
+    const forwarded = headersList.get('x-forwarded-for');
 
     if (realIp) {
         return realIp;
+    }
+
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
     }
 
     return 'unknown';

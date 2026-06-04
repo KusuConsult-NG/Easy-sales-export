@@ -88,8 +88,8 @@ export async function requireSession(): Promise<
                         uid: userId,
                         email: userEmail || "",
                         roles: ["general_user"],
-                        isVerified: true,
-                        verified: true,
+                        isVerified: false,
+                        verified: false,
                         profileComplete: false,
                     };
 

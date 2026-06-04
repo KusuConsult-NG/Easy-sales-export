@@ -402,23 +402,9 @@ async function _toggleUserKycVerificationAction(
          if (!session?.user || !hasAdminPermission(session.user.roles, "users:update")) {
              return { error: "Unauthorized: Permission required - users:update", success: false as const };
          }
-         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-         const userDoc = await userRef.get();
-         if (!userDoc.exists) {
-             return { error: "User not found", success: false as const };
-         }
-         await userRef.update({
+         await atomicUpdateUser(userId, {
              gender,
-             updatedAt: FieldValue.serverTimestamp(),
          });
-         // CLEAR CACHE
-         try {
-             const { invalidateUserCache } = await import('@/lib/cache-invalidation');
-             await invalidateUserCache(userId);
-             logger.info(`[User Gender Update] Cache cleared for user: ${userId}`);
-         } catch (cacheError) {
-             logger.error('[User Gender Update] Cache clear error:', cacheError);
-         }
          // Log audit
          await createAdminAuditLog({
              action: "user_gender_update",

@@ -144,9 +144,21 @@ export const MarketplaceOnboardingSchema = z.object({
 });
 
 export const SellerVerificationSchema = z.object({
-    idType: z.enum(["nin", "passport", "voters_card", "drivers_license"]),
-    idNumber: z.string().min(5, "Invalid ID number"),
-    idImage: z.string().url("Invalid ID image URL"),
-    selfieImage: z.string().url("Invalid selfie image URL"),
-    businessRegNumber: z.string().optional(),
+    phoneNumber: z.string().min(7, "Phone number is too short").max(20, "Phone number is too long"),
+    nin: z.string().length(11, "NIN must be 11 digits").optional().or(z.literal("")),
+    bvn: z.string().length(11, "BVN must be 11 digits").optional().or(z.literal("")),
+    cac: z.string().optional().or(z.literal("")),
+    bankAccount: z.object({
+        accountNumber: z.string().length(10, "Account number must be 10 digits"),
+        bankName: z.string().min(2, "Bank name is required"),
+        accountName: z.string().min(2, "Account name is required"),
+        bankCode: z.string().min(2, "Bank code is required"),
+    }),
+    address: z.object({
+        street: z.string().min(2, "Street address is required"),
+        city: z.string().min(2, "City is required"),
+        state: z.string().min(2, "State is required"),
+        lga: z.string().min(2, "LGA is required"),
+        country: z.string().default("Nigeria"),
+    }),
 });

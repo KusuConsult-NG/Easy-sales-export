@@ -237,6 +237,24 @@ async function _submitSellerVerificationAction(
             _version: 0 
         };
 
+        // Validate payload using Zod schema (H-05)
+        const validation = SellerVerificationSchema.safeParse({
+            phoneNumber: verificationData.phoneNumber,
+            nin: verificationData.nin,
+            bvn: verificationData.bvn,
+            cac: verificationData.cac,
+            bankAccount: verificationData.bankAccount,
+            address: verificationData.address,
+        });
+
+        if (!validation.success) {
+            return {
+                success: false as const,
+                error: validation.error.issues.map(i => i.message).join(", "),
+                data: null
+            };
+        }
+
         // Atomic update of verification doc and user record
         await db.runTransaction(async (transaction) => { 
             transaction.set(verificationRef, verificationData);

@@ -115,6 +115,7 @@ async function _getBuyerDisputesAction() { let sessionResult;
         const snapshot = await db.collection(COLLECTIONS.DISPUTES)
             .where("buyerId", "==", userId)
             .orderBy("createdAt", "desc")
+            .limit(100)
             .get();
 
         const disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
@@ -149,6 +150,7 @@ async function _getSellerDisputesAction() { let sessionResult;
         const snapshot = await db.collection(COLLECTIONS.DISPUTES)
             .where("sellerId", "==", userId)
             .orderBy("createdAt", "desc")
+            .limit(100)
             .get();
 
         const disputes: Dispute[] = snapshot.docs.map(doc => { const data = doc.data();
@@ -404,6 +406,7 @@ async function _updateDisputeStatusAction(
         // Query the active escrow transaction prior to transaction block
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
             .where("orderId", "==", dispute.orderId)
+            .limit(10)
             .get();
 
         if (escrowQuery.empty) {
@@ -433,6 +436,11 @@ async function _updateDisputeStatusAction(
             if (!freshEscrowDoc.exists) throw new Error("Escrow transaction not found");
             const freshEscrow = freshEscrowDoc.data();
             if (!freshEscrow) throw new Error("Escrow transaction data not found");
+
+            const status = freshEscrow.status;
+            if (status !== "funded" && status !== "disputed" && status !== "pending") {
+                throw new Error(`Escrow is already ${status} and cannot be resolved.`);
+            }
 
             const updateData: Record<string, unknown> = { status: "resolved",
                 resolution,
@@ -494,8 +502,8 @@ async function _updateDisputeStatusAction(
                 });
             }
 
-            // Write the global ledger record under DISPUTE-RES-${disputeId.substring(0, 8)}
-            const txId = `DISPUTE-RES-${disputeId.substring(0, 8)}`;
+            // Write the global ledger record under DISPUTE-RES-${disputeId}
+            const txId = `DISPUTE-RES-${disputeId}`;
             const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
             tx.set(txRef, {
                 id: txId,

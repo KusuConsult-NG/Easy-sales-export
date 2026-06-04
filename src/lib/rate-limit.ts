@@ -3,6 +3,7 @@ import { redis } from './redis';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimitConfig } from './security';
 import { checkFallbackLimit } from './rate-limiter-fallback';
+import { auth } from '@/lib/auth';
 
 /**
  * Distributed Rate Limiter (Redis-backed for 100k+ users)
@@ -22,11 +23,19 @@ export async function rateLimit(
     request: NextRequest,
     identifier?: string
 ): Promise<{ success: boolean; remaining?: number; error?: string }> {
-    // Get identifier from parameter, or fallback to IP from headers
+    let userId: string | undefined;
+    try {
+        const session = await auth();
+        userId = session?.user?.id;
+    } catch {}
+
+    // Get identifier from parameter, or fallback to authenticated userId,
+    // or platform-verified X-Real-IP, or client-controlled X-Forwarded-For
     const key =
         identifier ||
-        request.headers.get('x-forwarded-for')?.split(',')[0] ||
+        userId ||
         request.headers.get('x-real-ip') ||
+        request.headers.get('x-forwarded-for')?.split(',')[0] ||
         'anonymous';
 
     try {

@@ -367,7 +367,7 @@ async function _releaseEscrowAction(
             }
 
             // 3. Record in Global Ledger
-            const txId = `ESCROW-RELEASE-${escrowId.substring(0, 8)}`;
+            const txId = `ESCROW-RELEASE-${escrowId}`;
             const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
             tx.set(txRef, {
                 id: txId,
@@ -610,7 +610,7 @@ async function _resolveDisputeAction(
             }
 
             // 4. Record in Global Ledger
-            const txId = `DISPUTE-RES-${disputeId.substring(0, 8)}`;
+            const txId = `DISPUTE-RES-${disputeId}`;
             const txRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
             tx.set(txRef, {
                 id: txId,
