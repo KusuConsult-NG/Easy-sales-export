@@ -29,6 +29,7 @@ import type { UserRole } from "@/lib/types/roles";
 import { getPrimaryApp } from "@/lib/role-app-mapping";
 import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { useUnreadNotifications } from "@/hooks/useUnreadNotifications";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 interface NavItem {
     label: string;
@@ -81,23 +82,26 @@ export default function DashboardNav() {
     const userName = session?.user?.name || "User";
     const userEmail = session?.user?.email || "";
 
+    const isAuthed = useFirebaseAuthed(userId);
     const { unreadCount } = useUnreadNotifications(userId);
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
     // Real-time Service Registrations
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
             if (docSnap.exists()) {
                 setServiceRegs(docSnap.data()?.serviceRegistrations || {});
             }
+        }, (error) => {
+            console.error("DashboardNav user listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // Real-time unread messages count
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId)
@@ -113,9 +117,11 @@ export default function DashboardNav() {
                 }
             });
             setUnreadMessages(count);
+        }, (error) => {
+            console.error("DashboardNav messages count listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     const moduleLinks = getModuleLinks(roles, serviceRegs);
     const toggles = useFeatureToggles(["digital_id_system", "escrow_messaging"]);

@@ -10,6 +10,7 @@ import { collection, query, where, onSnapshot, Timestamp, orderBy, limit } from 
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
 
@@ -24,15 +25,15 @@ export default function NotificationCenter() {
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(true);
 
+    const userId = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(userId);
+
     // Real-time Firestore listener
     useEffect(() => {
-        if (!session?.user?.id) {
-             
+        if (!userId || !isAuthed) {
             setLoading(false);
             return;
         }
-
-        const userId = session.user.id;
 
         // Query notifications for current user
         const q = query(
@@ -73,7 +74,7 @@ export default function NotificationCenter() {
 
         // Cleanup listener on unmount
         return () => unsubscribe();
-    }, [session?.user?.id]);
+    }, [userId, isAuthed]);
 
     const unreadCount = notifications.filter((n) => !n.read).length;
 

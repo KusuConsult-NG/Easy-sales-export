@@ -27,6 +27,7 @@ import { useFeatureToggles } from "@/hooks/useFeatureToggle";
 import { db } from "@/lib/firebase";
 import { doc, onSnapshot } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 const ALL_SIDEBAR_TOGGLES = Array.from(new Set([
     ...Object.values(MODULE_NAVIGATION).flat().map(i => i.featureToggle),
@@ -44,6 +45,7 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const pathname = usePathname();
     const { data: session } = useSession();
     const userId = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(userId);
 
     const featureToggles = useFeatureToggles(ALL_SIDEBAR_TOGGLES);
 
@@ -53,14 +55,16 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }: SidebarProps) {
     const [serviceRegs, setServiceRegs] = useState<any>({});
 
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const unsub = onSnapshot(doc(db, COLLECTIONS.USERS, userId), (docSnap) => {
             if (docSnap.exists()) {
                 setServiceRegs(docSnap.data()?.serviceRegistrations || {});
             }
+        }, (error) => {
+            console.error("Sidebar user listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     useEffect(() => {
         setMounted(true);

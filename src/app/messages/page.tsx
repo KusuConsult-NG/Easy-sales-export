@@ -11,6 +11,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, orderBy, limit, onSnapshot, where } from "firebase/firestore";
 import { format } from "date-fns";
 import { useToast } from "@/contexts/ToastContext";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 export default function MessagesPage() {
     const { data: session } = useSession();
@@ -18,6 +19,9 @@ export default function MessagesPage() {
     const searchParams = useSearchParams();
     const defaultConv = searchParams.get("conversation");
     
+    const userId = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(userId);
+
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConv, setSelectedConv] = useState<string | null>(defaultConv);
     const [messages, setMessages] = useState<Message[]>([]);
@@ -39,7 +43,7 @@ export default function MessagesPage() {
 
     // Load conversations on mount using Real-time Listener
     useEffect(() => {
-        if (!session?.user?.id) return;
+        if (!userId || !isAuthed) return;
 
         setLoading(true);
         // Let's use the explicit where clause and locally sort.
@@ -47,7 +51,7 @@ export default function MessagesPage() {
         // Re-implement getConversationsAction's query logic synchronously to avoid memory leaks:
         const convsQuery = query(
             collection(db, "conversations"),
-            where("participants", "array-contains", session.user.id)
+            where("participants", "array-contains", userId)
         );
 
         const unsubscribe = onSnapshot(convsQuery, (snapshot) => {
@@ -65,16 +69,18 @@ export default function MessagesPage() {
 
             setConversations(convs);
             setLoading(false);
+        }, (error) => {
+            console.error("Messages page conversations listener failed:", error);
+            setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [session]);
+    }, [userId, isAuthed]);
 
     // Load messages for selected conversation
     useEffect(() => {
-        if (!selectedConv) {
-             
-            setMessages([]);
+        if (!selectedConv || !userId || !isAuthed) {
+            if (!selectedConv) setMessages([]);
             return;
         }
 
@@ -102,10 +108,12 @@ export default function MessagesPage() {
             });
             setMessages(newMessages.reverse());
             scrollToBottom();
+        }, (error) => {
+            console.error(`Messages page messages listener failed for conversation ${selectedConv}:`, error);
         });
 
         return () => unsubscribe();
-    }, [selectedConv]);
+    }, [selectedConv, userId, isAuthed]);
 
     // Handle send message
     async function handleSend() {

@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/firebase";
 import { collection, doc, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import type { UserRole } from "@/lib/types/roles";
 
 const fmt = (n: number = 0) =>
@@ -145,6 +146,7 @@ function DashboardHomeContent() {
     const userId = session?.user?.id;
     const roles = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name?.split(" ")[0] || "there";
+    const isAuthed = useFirebaseAuthed(userId);
 
     const [stats, setStats] = useState<StatsState>({
         walletBalance: 0, activeOrders: 0,
@@ -156,19 +158,21 @@ function DashboardHomeContent() {
 
     // Real-time user profile (for serviceRegistrations)
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const userRef = doc(db, COLLECTIONS.USERS, userId);
         const unsub = onSnapshot(userRef, (snap) => {
             if (snap.exists()) {
                 setServiceRegistrations(snap.data()?.serviceRegistrations || {});
             }
+        }, (error) => {
+            console.error("Dashboard userRef listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // Real-time unread notifications
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const q = query(
             collection(db, COLLECTIONS.NOTIFICATIONS),
             where("userId", "==", userId),
@@ -176,13 +180,15 @@ function DashboardHomeContent() {
         );
         const unsub = onSnapshot(q, (snap) => {
             setStats(s => ({ ...s, unreadNotifications: snap.size }));
+        }, (error) => {
+            console.error("Dashboard unread notifications listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // Real-time unread messages
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId)
@@ -196,25 +202,29 @@ function DashboardHomeContent() {
                 if (lastMsg && (!lastRead || lastMsg.toMillis?.() > lastRead.toMillis?.())) count++;
             });
             setStats(s => ({ ...s, unreadMessages: count, loading: false }));
+        }, (error) => {
+            console.error("Dashboard unread messages listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // Wallet balance — keyed by userId (walletId === userId)
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const walletRef = doc(db, COLLECTIONS.WALLETS, userId);
         const unsub = onSnapshot(walletRef, (snap) => {
             if (snap.exists()) {
                 setStats(s => ({ ...s, walletBalance: snap.data()?.balance || 0 }));
             }
+        }, (error) => {
+            console.error("Dashboard walletRef listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // Recent notifications (last 4)
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const q = query(
             collection(db, COLLECTIONS.NOTIFICATIONS),
             where("userId", "==", userId),
@@ -223,15 +233,17 @@ function DashboardHomeContent() {
         );
         const unsub = onSnapshot(q, (snap) => {
             setRecentNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as RecentNotification)));
+        }, (error) => {
+            console.error("Dashboard recent notifications listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // Active orders count — real-time onSnapshot (avoids getDocs stale count and composite index crash).
     // ⚠️ Firestore requires a composite index for (buyerId + orderStatus IN [...]) which may not exist.
     // Safe alternative: listen on buyerId only, then filter client-side (resultset is small per-user).
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const q = query(
             collection(db, COLLECTIONS.MARKETPLACE_ORDERS),
             where("buyerId", "==", userId)
@@ -240,12 +252,13 @@ function DashboardHomeContent() {
         const unsub = onSnapshot(q, (snap) => {
             const activeCount = snap.docs.filter(d => ACTIVE_STATUSES.has(d.data().orderStatus)).length;
             setStats(s => ({ ...s, activeOrders: activeCount, loading: false }));
-        }, () => {
+        }, (error) => {
+            console.error("Dashboard active orders listener failed:", error);
             // On error (e.g. missing index) silently set loading done, count stays 0
             setStats(s => ({ ...s, loading: false }));
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
 
     if (status === "loading") {

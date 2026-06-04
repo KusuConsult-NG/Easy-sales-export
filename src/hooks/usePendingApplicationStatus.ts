@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
+import { useFirebaseAuthed } from "./useFirebaseAuthed";
 
 interface UsePendingApplicationStatusOptions {
     collectionName: string;
@@ -18,8 +19,10 @@ export function usePendingApplicationStatus({
     const [rejectionReason, setRejectionReason] = useState<string | null>(null);
     const [createdAt, setCreatedAt] = useState<Date | null>(null);
 
+    const isAuthed = useFirebaseAuthed(userId);
+
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
 
         let unsub: () => void;
 
@@ -35,7 +38,8 @@ export function usePendingApplicationStatus({
                 if (currentStatus) {
                     setStatus(currentStatus);
                 }
-            }, () => {
+            }, (error) => {
+                console.error("usePendingApplicationStatus user doc listener failed:", error);
                 setIsLoading(false);
             });
         } else {
@@ -67,7 +71,8 @@ export function usePendingApplicationStatus({
                 if (data.rejectionReason) {
                     setRejectionReason(data.rejectionReason);
                 }
-            }, () => {
+            }, (error) => {
+                console.error(`usePendingApplicationStatus ${collectionName} listener failed:`, error);
                 setIsLoading(false);
             });
         }
@@ -75,7 +80,7 @@ export function usePendingApplicationStatus({
         return () => {
             unsub?.();
         };
-    }, [userId, collectionName, statusField]);
+    }, [userId, isAuthed, collectionName, statusField]);
 
     return { status, isLoading, rejectionReason, createdAt };
 }

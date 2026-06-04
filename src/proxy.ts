@@ -54,7 +54,15 @@ const authMiddleware = auth((req: any) => {
         return NextResponse.redirect(loginUrl);
     }
 
-    const response = NextResponse.next();
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-url", req.url);
+    requestHeaders.set("x-invoke-path", pathname);
+
+    const response = NextResponse.next({
+        request: {
+            headers: requestHeaders,
+        },
+    });
     response.headers.set("x-app-version", process.env.NEXT_PUBLIC_APP_VERSION || "1.1.0");
 
     // ── 2. Domain Rewrite Logic (Module Silos) ─────────────────────────────────
@@ -81,7 +89,11 @@ const authMiddleware = auth((req: any) => {
         if (!pathname.startsWith(rewritePrefix) && !isSharedDomainPath(pathname)) {
             const url = req.nextUrl.clone();
             url.pathname = pathname === "/" ? rewritePrefix : `${rewritePrefix}${pathname}`;
-            const rewriteRes = NextResponse.rewrite(url);
+            const rewriteRes = NextResponse.rewrite(url, {
+                request: {
+                    headers: requestHeaders,
+                },
+            });
             response.headers.forEach((v, k) => rewriteRes.headers.set(k, v));
             return rewriteRes;
         }

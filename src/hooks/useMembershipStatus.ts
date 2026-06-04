@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { doc, collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { useFirebaseAuthed } from "./useFirebaseAuthed";
 
 /**
  * Real-time Membership Status Guard
@@ -17,10 +18,15 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 export function useMembershipStatus(userId: string | undefined, moduleType: string) {
     const [status, setStatus] = useState<string>("loading");
     const [data, setData] = useState<any>(null);
+    const isAuthed = useFirebaseAuthed(userId);
 
     useEffect(() => {
         if (!userId) {
             setStatus("unauthenticated");
+            return;
+        }
+        if (!isAuthed) {
+            setStatus("loading");
             return;
         }
 
@@ -83,7 +89,7 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
                 unsubDoc();
             }
         };
-    }, [userId, moduleType]);
+    }, [userId, isAuthed, moduleType]);
 
     return { status, data, isLoading: status === "loading" };
 }

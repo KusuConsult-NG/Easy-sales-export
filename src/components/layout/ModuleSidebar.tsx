@@ -41,6 +41,7 @@ import type { UserRole } from "@/lib/types/roles";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 
 const COLLAPSED_KEY = "sidebar_collapsed_v2";
@@ -299,6 +300,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
     const [unreadMessages, setUnreadMessages] = useState(0);
 
     const userId   = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(userId);
     const roles    = (session?.user?.roles as UserRole[]) || [];
     const userName = session?.user?.name || "User";
     const isSeller = roles.includes("seller");
@@ -354,7 +356,7 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
 
     // ── Real-time unread messages (lightweight) ───────────────────────────
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS),
             where("participants", "array-contains", userId)
@@ -368,9 +370,11 @@ export function ModuleSidebar({ isMobileOpen = false, onMobileClose }: ModuleSid
                 if (lastMsg && (!lastRead || lastMsg.toMillis?.() > lastRead.toMillis?.())) count++;
             });
             setUnreadMessages(count);
+        }, (error) => {
+            console.error("ModuleSidebar messages listener failed:", error);
         });
         return () => unsub();
-    }, [userId]);
+    }, [userId, isAuthed]);
 
     // ── Active path helper ────────────────────────────────────────────────
     const isActive = (href: string, exact?: boolean) => {

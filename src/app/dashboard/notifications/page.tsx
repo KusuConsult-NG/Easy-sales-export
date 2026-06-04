@@ -14,6 +14,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, where, orderBy, limit, onSnapshot, doc, deleteDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useToast } from "@/contexts/ToastContext";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 /* ──────────────────────────────────────────────────────────────
  * Types — aligned with Firestore schema in actions/notifications.ts
@@ -105,11 +106,12 @@ export default function NotificationsPage() {
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const userId = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(userId);
 
     /* ── Real-time Firestore listener ── */
     useEffect(() => {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
 
         const q = query(
             collection(db, COLLECTIONS.NOTIFICATIONS),
@@ -131,7 +133,7 @@ export default function NotificationsPage() {
         });
 
         return () => unsub();
-    }, [userId, status, router]);
+    }, [userId, isAuthed, status, router]);
 
     /* ── Filtered list ── */
     const filtered = notifications.filter(n => {

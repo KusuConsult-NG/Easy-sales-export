@@ -27,11 +27,13 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { sendMessageAction, getAllConversationsAdminAction } from "@/app/actions/messages";
 import { useToast } from "@/contexts/ToastContext";
 import type { Conversation, Message } from "@/lib/types/messages";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 
 export default function AdminMessagesPage() {
     const { data: session } = useSession();
     const { showToast } = useToast();
     const adminId = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(adminId);
 
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export default function AdminMessagesPage() {
 
     // Real-time listener for conversations
     useEffect(() => {
-        if (!adminId) return;
+        if (!adminId || !isAuthed) return;
         
         const roles: string[] = (session?.user as any)?.roles || [];
         const isFullAdmin = roles.includes("admin") || roles.includes("super_admin");
@@ -77,9 +79,12 @@ export default function AdminMessagesPage() {
             })) as Conversation[];
             setConversations(convs);
             setLoading(false);
+        }, (error) => {
+            console.error("Admin support conversations listener failed:", error);
+            setLoading(false);
         });
         return () => unsubscribe();
-    }, [adminId, session]);
+    }, [adminId, isAuthed, session]);
 
     // Initial load for messages using server action to guarantee delivery
     useEffect(() => {
@@ -107,7 +112,7 @@ export default function AdminMessagesPage() {
 
     // Real-time listener for messages in active conversation
     useEffect(() => {
-        if (!activeConversationId) return;
+        if (!activeConversationId || !adminId || !isAuthed) return;
 
         const q = query(
             collection(db, COLLECTIONS.CONVERSATIONS, activeConversationId, "messages"),
@@ -123,10 +128,12 @@ export default function AdminMessagesPage() {
             })) as Message[];
             setMessages(msgs.reverse());
             scrollToBottom();
+        }, (error) => {
+            console.error(`Admin support messages listener failed for conversation ${activeConversationId}:`, error);
         });
 
         return () => unsubscribe();
-    }, [activeConversationId]);
+    }, [activeConversationId, adminId, isAuthed]);
 
     function scrollToBottom() {
         setTimeout(() => {

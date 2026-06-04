@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/firebase";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
+import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { useToast } from "@/contexts/ToastContext";
 import { startConversationAction } from "@/app/actions/messages";
 
@@ -64,11 +65,12 @@ export default function DisputesPage() {
     const [filterStatus, setFilterStatus] = useState<"all" | Dispute["status"]>("all");
 
     const userId = session?.user?.id;
+    const isAuthed = useFirebaseAuthed(userId);
 
     // Real-time listener
     useEffect(() => {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
-        if (!userId) return;
+        if (!userId || !isAuthed) return;
 
         const q = query(
             collection(db, COLLECTIONS.DISPUTES),
@@ -79,10 +81,13 @@ export default function DisputesPage() {
         const unsub = onSnapshot(q, (snap) => {
             setDisputes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Dispute)));
             setLoading(false);
-        }, () => setLoading(false));
+        }, (error) => {
+            console.error("Disputes listener failed:", error);
+            setLoading(false);
+        });
 
         return () => unsub();
-    }, [userId, status, router]);
+    }, [userId, isAuthed, status, router]);
 
     async function handleContactSupport(dispute: Dispute) {
         if (!dispute.sellerId) {
