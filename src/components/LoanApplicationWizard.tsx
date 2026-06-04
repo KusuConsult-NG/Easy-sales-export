@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ArrowRight, ArrowLeft, Check, Calculator, FileText, Upload } from "lucide-react";
 import { calculateLoanCost, COOPERATIVE_TIERS, getTierInterestRate, type CooperativeTier } from "@/lib/cooperative-tiers";
 import { logger } from "@/lib/logger";
+import { submitLoanApplicationAction } from "@/app/actions/cooperative";
 
 interface LoanApplicationWizardProps {
     userId: string;
@@ -30,6 +31,8 @@ export default function LoanApplicationWizard({
         purpose: "",
         durationMonths: 3,
     });
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const tierInfo = COOPERATIVE_TIERS[tier];
     const maxLoan = contributionAmount * tierInfo.maxLoanMultiplier;
@@ -46,9 +49,30 @@ export default function LoanApplicationWizard({
     };
 
     async function handleSubmit() {
-        // Submit loan application
-        logger.info("Submitting loan application", { userId, ...formData });
-        onComplete();
+        setSubmitting(true);
+        setError(null);
+        try {
+            logger.info("Submitting loan application", { userId, ...formData });
+            const res = await submitLoanApplicationAction({
+                userId,
+                userEmail,
+                fullName,
+                amount: formData.amount,
+                purpose: formData.purpose,
+                durationMonths: formData.durationMonths,
+                contributionAmount,
+                tier: "Member",
+            });
+            if (res.success) {
+                onComplete();
+            } else {
+                setError(res.error || "Failed to submit application");
+            }
+        } catch (err: any) {
+            setError(err?.message || "An unexpected error occurred");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -81,6 +105,12 @@ export default function LoanApplicationWizard({
 
             {/* Content */}
             <div className="px-8 py-8">
+                {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-6">
+                        {error}
+                    </div>
+                )}
+
                 {/* Step 1: Loan Amount */}
                 {step === 1 && (
                     <div className="space-y-6">
@@ -242,7 +272,8 @@ export default function LoanApplicationWizard({
             <div className="bg-slate-50 px-8 py-6 flex items-center justify-between border-t border-slate-200">
                 <button
                     onClick={step === 1 ? onCancel : handlePrevious}
-                    className="flex items-center space-x-2 px-6 py-3 text-slate-900 hover:bg-slate-200 rounded-lg font-semibold transition"
+                    disabled={submitting}
+                    className="flex items-center space-x-2 px-6 py-3 text-slate-900 hover:bg-slate-200 rounded-lg font-semibold transition disabled:opacity-50"
                 >
                     <ArrowLeft className="w-5 h-5" />
                     <span>{step === 1 ? "Cancel" : "Previous"}</span>
@@ -250,11 +281,21 @@ export default function LoanApplicationWizard({
 
                 <button
                     onClick={step === 4 ? handleSubmit : handleNext}
-                    disabled={step === 1 && (formData.amount === 0 || formData.amount > maxLoan)}
+                    disabled={submitting || (step === 1 && (formData.amount === 0 || formData.amount > maxLoan))}
                     className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                    <span>{step === 4 ? "Submit Application" : "Next"}</span>
-                    {step === 4 ? <Check className="w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
+                    <span>
+                        {step === 4 ? (submitting ? "Submitting..." : "Submit Application") : "Next"}
+                    </span>
+                    {step === 4 ? (
+                        submitting ? (
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <Check className="w-5 h-5" />
+                        )
+                    ) : (
+                        <ArrowRight className="w-5 h-5" />
+                    )}
                 </button>
             </div>
         </div>

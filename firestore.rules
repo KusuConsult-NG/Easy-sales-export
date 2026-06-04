@@ -45,17 +45,12 @@ service cloud.firestore {
                        request.resource.data.keys().hasAll(['email', 'fullName', 'roles']) &&
                        request.resource.data.roles.hasOnly(['user']);
       
-      // EXPANDED: users can update their own profile including KYC identity fields
+      // EXPANDED: users can update their own profile (excluding secure KYC fields)
       allow update: if isOwner(userId) &&
                        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                          // Core profile fields written by updateUserProfileAction
                          'firstName', 'lastName', 'otherName', 'fullName',
                          'phone', 'address', 'location', 'bio', 'businessType', 'updatedAt',
-                         // KYC / Identity fields (collected or live-verified)
-                         'nin', 'ninVerified', 'votersCardNumber',
-                         'bvn', 'bvnVerified', 'idType', 'idNumber', 'idVerified',
-                         // Nested KYC map (written by live QoreID server actions)
-                         'kyc',
                          // Bank details
                          'bankDetails', 'bankAccountNumber', 'bankAccountName', 'bankCode',
                          // Notification preferences
@@ -119,7 +114,7 @@ service cloud.firestore {
       allow update: if isAdmin() || 
                        (isOwner(resource.data.userId) && 
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                          'totalContributions', 'tier', 'updatedAt'
+                          'totalContributions', 'updatedAt'
                         ]));
       
       allow delete: if isAdmin();
@@ -138,7 +133,7 @@ service cloud.firestore {
                        (isOwner(resource.data.userId) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                           'totalContributions', 'contributionAmount', 'savingsBalance',
-                          'tier', 'status', 'updatedAt'
+                          'updatedAt'
                         ]));
       
       allow delete: if isAdmin();
@@ -351,14 +346,14 @@ service cloud.firestore {
     // ============================================
     match /audit_logs/{logId} {
       allow read: if isAdmin();
-      allow create: if request.auth != null;
+      allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
     
     match /admin_audit_logs/{logId} {
       allow read: if isAdmin();
-      allow create: if request.auth != null;
+      allow create: if false;
       allow update: if false;
       allow delete: if false;
     }
@@ -951,9 +946,9 @@ service cloud.firestore {
     }
 
     match /lesson_video_progress/{progressId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
       allow delete: if false;
     }
 

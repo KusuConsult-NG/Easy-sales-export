@@ -48,12 +48,12 @@ export async function requireSession(): Promise<
     }
 
     let shouldRedirectToPasswordReset = false;
+    let data: any = null;
 
     try {
         const { getCached, CacheKeys, setCache, CACHE_TTL } = await import("@/lib/redis");
         const cacheKey = CacheKeys.userProfile(session.user.id);
 
-        let data: any = null;
         let fromCache = false;
 
         // 1. Try Redis cache first
@@ -137,8 +137,14 @@ export async function requireSession(): Promise<
             }
         }
 
+    } catch (e) {
+        console.error("[SessionGuard] Verification failed:", e);
+        // Fail open if database lookup fails for some reason or network error to avoid breaking platform
+    }
+
+    if (data) {
         // 4. Verify account status
-        if (data?.isBanned || data?.status === "banned" || data?.suspended) {
+        if (data.isBanned || data.status === "banned" || data.suspended) {
             return {
                 session: null,
                 error: {
@@ -150,28 +156,26 @@ export async function requireSession(): Promise<
         }
 
         // Force-sync live roles and serviceRegistrations from database/cache over stale JWT roles
-        if (data?.roles) {
+        if (data.roles) {
             session.user.roles = data.roles;
         }
-        if (data?.serviceRegistrations) {
+        if (data.serviceRegistrations) {
             session.user.serviceRegistrations = data.serviceRegistrations;
         }
 
         // Check for password change requirement (Legacy Reset Bypass)
-        if (data?.requiresPasswordChange) {
+        if (data.requiresPasswordChange) {
             let isResetPasswordRoute = false;
             try {
                 const { headers } = await import("next/headers");
                 const headerList = await headers();
-                const referer = headerList.get("referer") || "";
                 const xUrl = headerList.get("x-url") || "";
                 const xInvokePath = headerList.get("x-invoke-path") || "";
                 
-                // Secure path check: only allow bypass if explicitly on the reset-legacy-password page or referer matches it (for server actions executed on that page)
+                // Secure path check: only allow bypass if explicitly on the reset-legacy-password page
                 isResetPasswordRoute = 
                     xInvokePath === "/auth/reset-legacy-password" || 
-                    xUrl.includes("/auth/reset-legacy-password") || 
-                    referer.includes("/auth/reset-legacy-password");
+                    xUrl.includes("/auth/reset-legacy-password");
             } catch (e) {
                 console.error("[SessionGuard] Headers check failed:", e);
             }
@@ -180,9 +184,6 @@ export async function requireSession(): Promise<
                 shouldRedirectToPasswordReset = true;
             }
         }
-    } catch (e) {
-        console.error("[SessionGuard] Verification failed:", e);
-        // Fail open if database lookup fails for some reason or network error to avoid breaking platform
     }
 
     if (shouldRedirectToPasswordReset) {

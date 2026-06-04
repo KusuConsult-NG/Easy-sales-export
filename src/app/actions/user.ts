@@ -29,14 +29,25 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
         if (!userSnap.exists) { return { success: false as const, error: "User profile not found.", data: null };
         }
 
+        // Delete related KYC verifications
+        const kycSnap = await db.collection(COLLECTIONS.KYC_VERIFICATIONS).where("userId", "==", userId).get();
+        const batch = db.batch();
+        kycSnap.docs.forEach(doc => batch.delete(doc.ref));
+
+        // Delete seller verification & wallet
+        batch.delete(db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(userId));
+        batch.delete(db.collection(COLLECTIONS.WALLETS).doc(userId));
+
         // Scrub all PII. We retain the UID so that database foreign keys (like
         // 'sellerId' on an order or 'buyerId' on a farm purchase) do not break.
-        await userRef.update({ fullName: "Redacted User",
+        batch.update(userRef, {
+            fullName: "Redacted User",
             email: "deleted_" + userId + "@redacted.local",
             phone: FieldValue.delete(),
             gender: FieldValue.delete(),
             address: FieldValue.delete(),
             bankDetails: FieldValue.delete(),
+            serviceRegistrations: FieldValue.delete(),
             mfaEnabled: false,
             totpSecret: FieldValue.delete(),
             mfaRecoveryCodes: FieldValue.delete(),
@@ -44,7 +55,10 @@ async function _deleteUserAccountAction(): Promise<ActionResponse<null>> { try {
             // Track deletion status and timestamp
             deleted: true,
             deletedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        await batch.commit();
 
         logger.info(`[NDPR Compliance] User PII successfully scrubbed for UID: ${userId}`);
 

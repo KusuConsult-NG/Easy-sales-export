@@ -17,6 +17,7 @@ import { withSafeAction, type ActionResponse } from '@/lib/safe-action';
 import { isObviouslyFakeId, fakeIdErrorMessage } from '@/lib/kyc-validators';
 import { atomicUpdateUser } from '@/lib/services/userService';
 import { invalidateUserCache } from '@/lib/cache-invalidation';
+import { hashData } from '@/lib/security';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,16 +56,12 @@ async function _verifyBVNAction(payload: { bvn: string;
             return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
         }
 
-        // BYPASS QOREID: Mark as successfully verified
-        const result = { success: true as const, isMatch: true, error: null };
+        const shouldBypass = process.env.NEXT_PUBLIC_BYPASS_KYC_VERIFICATION === 'true';
 
-        // Persist result to Firestore as fully verified
-        await atomicUpdateUser(userId, { 
-            'kyc.bvn': bvn,
-            'kyc.bvnVerified': true, // Auto-verified
-            'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.bvnStatus': 'verified'
-        });
+        // Perform live check or bypass
+        const result = shouldBypass
+            ? { success: true as const, isMatch: true, error: null }
+            : await qoreIdService.verifyBVN(bvn, firstName, lastName);
 
         if (!result.success) { 
             return { success: false as const, error: result.error || 'BVN verification failed', data: null };
@@ -73,6 +70,14 @@ async function _verifyBVNAction(payload: { bvn: string;
         if (!result.isMatch) { 
             return { success: false, error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.', data: null };
         }
+
+        // Persist result to Firestore as fully verified with hashed BVN
+        await atomicUpdateUser(userId, { 
+            'kyc.bvn': hashData(bvn),
+            'kyc.bvnVerified': true,
+            'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
+            'kyc.bvnStatus': 'verified'
+        });
 
         // Update overall KYC status if BVN now verified
         await updateOverallKYCStatus(userId);
@@ -118,16 +123,12 @@ async function _verifyNINAction(payload: { nin: string;
             return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
-        // BYPASS QOREID: Mark as successfully verified
-        const result = { success: true as const, isMatch: true, error: null };
+        const shouldBypass = process.env.NEXT_PUBLIC_BYPASS_KYC_VERIFICATION === 'true';
 
-        // Persist result to Firestore as fully verified
-        await atomicUpdateUser(userId, { 
-            'kyc.nin': nin,
-            'kyc.ninVerified': true, // Auto-verified
-            'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
-            'kyc.ninStatus': 'verified'
-        });
+        // Perform live check or bypass
+        const result = shouldBypass
+            ? { success: true as const, isMatch: true, error: null }
+            : await qoreIdService.verifyNIN(nin, firstName, lastName);
 
         if (!result.success) { 
             return { success: false as const, error: result.error || 'NIN verification failed', data: null };
@@ -136,6 +137,14 @@ async function _verifyNINAction(payload: { nin: string;
         if (!result.isMatch) { 
             return { success: false, error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.', data: null };
         }
+
+        // Persist result to Firestore as fully verified with hashed NIN
+        await atomicUpdateUser(userId, { 
+            'kyc.nin': hashData(nin),
+            'kyc.ninVerified': true,
+            'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
+            'kyc.ninStatus': 'verified'
+        });
 
         // Update overall KYC status if NIN now verified
         await updateOverallKYCStatus(userId);

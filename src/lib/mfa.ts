@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, updateDoc, Timestamp, runTransaction } from 'firebase/firestore';
 import app from './firebase';
 import { generateOTP, isOTPExpired, encryptData, decryptData } from './security';
 
@@ -108,41 +108,49 @@ export async function verifyMFACode(
         }
 
         const codeDoc = codesSnapshot.docs[0];
-        const mfaCode = codeDoc.data() as MFACode;
-
-        // Check if code is expired
-        const expiryMinutes = parseInt(process.env.MFA_OTP_EXPIRY_MINUTES || '10', 10);
-        if (isOTPExpired(mfaCode.createdAt.toDate(), expiryMinutes)) {
-            await deleteDoc(codeDoc.ref);
-            return { success: false, error: 'Verification code has expired. Please request a new one.' };
-        }
-
-        // Check attempts (max 3)
-        if (mfaCode.attempts >= 3) {
-            await deleteDoc(codeDoc.ref);
-            return { success: false, error: 'Too many failed attempts. Please request a new code.' };
-        }
-
-        // Decrypt and verify code
+        const codeDocRef = codeDoc.ref;
         const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
-        const decryptedOTP = decryptData(mfaCode.code, secretKey);
 
-        if (code !== decryptedOTP) {
-            // Increment attempts
-            await updateDoc(codeDoc.ref, {
-                attempts: mfaCode.attempts + 1,
-            });
+        const result = await runTransaction(db, async (transaction) => {
+            const freshDoc = await transaction.get(codeDocRef);
+            if (!freshDoc.exists) {
+                throw new Error('Verification code not found.');
+            }
+            const mfaCode = freshDoc.data() as MFACode;
 
-            return { success: false, error: 'Invalid verification code. Please try again.' };
-        }
+            // Check if code is expired
+            const expiryMinutes = parseInt(process.env.MFA_OTP_EXPIRY_MINUTES || '10', 10);
+            if (isOTPExpired(mfaCode.createdAt.toDate(), expiryMinutes)) {
+                transaction.delete(codeDocRef);
+                return { success: false, error: 'Verification code has expired. Please request a new one.' };
+            }
 
-        // Mark as verified and delete
-        await deleteDoc(codeDoc.ref);
+            // Check attempts (max 3)
+            if (mfaCode.attempts >= 3) {
+                transaction.delete(codeDocRef);
+                return { success: false, error: 'Too many failed attempts. Please request a new code.' };
+            }
 
-        return { success: true };
-    } catch (error) {
+            // Decrypt and verify code
+            const decryptedOTP = decryptData(mfaCode.code, secretKey);
+
+            if (code !== decryptedOTP) {
+                // Increment attempts
+                transaction.update(codeDocRef, {
+                    attempts: mfaCode.attempts + 1,
+                });
+                return { success: false, error: 'Invalid verification code. Please try again.' };
+            }
+
+            // Mark as verified and delete
+            transaction.delete(codeDocRef);
+            return { success: true };
+        });
+
+        return result;
+    } catch (error: any) {
         console.error('Failed to verify MFA code:', error);
-        return { success: false, error: 'Verification failed. Please try again.' };
+        return { success: false, error: error.message || 'Verification failed. Please try again.' };
     }
 }
 
@@ -225,7 +233,7 @@ import QRCode from 'qrcode';
  */
 export function generateTOTPSecret(): string {
     // Generate 20-byte random secret and base32 encode
-    const buffer = Buffer.from(Array.from({ length: 20 }, () => Math.floor(Math.random() * 256)));
+    const buffer = require('crypto').randomBytes(20);
     return base32Encode(buffer);
 }
 

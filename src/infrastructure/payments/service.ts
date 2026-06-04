@@ -11,29 +11,7 @@ import { normalizeUserDoc } from "@/lib/schema-normalizer";
  * Handle Marketplace Order Fulfillment
  */
 export async function processMarketplaceOrder(reference: string, amount: number, userId: string) {
-    // 1. Check outbox entry first before transaction
     const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
-    const processedSnap = await processedRef.get();
-
-    if (processedSnap.exists) {
-        const data = processedSnap.data();
-        if (data?.status === "completed") {
-            logger.info(`[Paystack Fulfillment] Marketplace Order ${reference} already processed and completed.`);
-            return;
-        }
-        // If it's pending_fulfillment, we continue to fulfill it.
-    } else {
-        // Create the pending outbox entry first!
-        await processedRef.set({
-            processedAt: FieldValue.serverTimestamp(),
-            userId: userId,
-            amount: amount,
-            type: "marketplace_order",
-            reference,
-            status: "pending_fulfillment",
-            source: "webhook"
-        });
-    }
 
     // Find order
     const orderQuery = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS)
@@ -80,11 +58,17 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             paymentMethod: "paystack_webhook"
         });
 
-        // 2. Transition Outbox Document Status to completed
-        transaction.update(processedRef, {
+        // 2. Set Outbox Document Status to completed
+        transaction.set(processedRef, {
+            processedAt: FieldValue.serverTimestamp(),
+            userId: userId || orderData.buyerId,
+            amount: amount,
+            type: "marketplace_order",
+            reference,
             status: "completed",
+            source: "webhook",
             updatedAt: FieldValue.serverTimestamp()
-        });
+        }, { merge: true });
 
         // 2b. Write to Unified Ledger
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
@@ -209,6 +193,44 @@ export async function processExportInvestment(reference: string, amount: number,
             return { alreadyProcessed: true };
         }
 
+        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
+        const freshExport = await t.get(exportRef);
+        const freshExportData = freshExport.data();
+
+        if (!freshExport.exists || !freshExportData) {
+            throw new Error(`Export window ${exportId} not found`);
+        }
+
+        const fundingGoal = freshExportData.fundingGoal || freshExportData.goal || 0;
+        const currentFunded = freshExportData.fundedAmount || 0;
+
+        if (currentFunded + amount > fundingGoal) {
+            // Overfunded! Route to manual review/audit queue
+            t.set(db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference), {
+                reference,
+                type: "export_investment",
+                userId,
+                exportId,
+                amount,
+                status: "overfunded_review",
+                gatewayResponse: "Investment exceeds export window funding goal",
+                failedAt: FieldValue.serverTimestamp(),
+            }, { merge: true });
+
+            t.set(processedRef, {
+                reference,
+                type: "export_investment",
+                userId,
+                exportId,
+                amount,
+                processedAt: FieldValue.serverTimestamp(),
+                status: "overfunded_review",
+                source: "webhook"
+            });
+
+            return { success: true, overfunded: true };
+        }
+
         const slotRef = db.collection(COLLECTIONS.EXPORT_SLOTS).doc();
 
         t.set(slotRef, {
@@ -226,7 +248,6 @@ export async function processExportInvestment(reference: string, amount: number,
         });
 
         // 2. Update Export Window Stats
-        const exportRef = db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId);
         t.update(exportRef, {
             spotsFilled: FieldValue.increment(1),
             fundedAmount: FieldValue.increment(amount),

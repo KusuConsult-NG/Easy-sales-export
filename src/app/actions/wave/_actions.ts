@@ -21,6 +21,7 @@ import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { isAdmin } from "@/lib/role-utils";
 import { checkModuleAccess } from "@/lib/module-access-check";
+import { hashData } from "@/lib/security";
 
 /**
  * WAVE (Women in Agribusiness Ventures & Exports) Actions
@@ -289,7 +290,7 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 .limit(1)
                 .get(),
             db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("nin", "==", applicantNin)
+                .where("nin", "==", hashData(applicantNin))
                 .limit(1)
                 .get(),
         ]);
@@ -348,6 +349,8 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         await db.runTransaction(async (transaction) => {
             transaction.set(db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId), {
                 ...validatedData,
+                bvn: hashData(validatedData.bvn.trim()),
+                nin: hashData(validatedData.nin.trim()),
                 age: calculatedAge,
                 userId: session.user.id,
                 userEmail: session.user.email || validatedData.email,
@@ -377,10 +380,10 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
                 lga: validatedData.lgaOfOrigin,
                 residentialAddress: validatedData.residentialAddress,
                 // Populate KYC
-                bvn: validatedData.bvn.trim(),
-                nin: applicantNin,
-                "kyc.bvn": validatedData.bvn.trim(),
-                "kyc.nin": applicantNin,
+                bvn: hashData(validatedData.bvn.trim()),
+                nin: hashData(applicantNin),
+                "kyc.bvn": hashData(validatedData.bvn.trim()),
+                "kyc.nin": hashData(applicantNin),
                 // Next of Kin
                 nextOfKinName: validatedData.nextOfKinName,
                 nextOfKinPhone: validatedData.nextOfKinPhone,

@@ -195,6 +195,11 @@ export async function confirmWalletFundingAction(reference: string): Promise<Act
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
 
         const newBalance = await db.runTransaction(async (t) => {
+            const freshTxn = await t.get(txnRef);
+            if (!freshTxn.exists || freshTxn.data()?.status !== "pending") {
+                throw new Error("Transaction already processed");
+            }
+
             const walletSnap = await t.get(walletRef);
             const currentBalance = walletSnap.exists ? (walletSnap.data()?.balance || 0) : 0;
             const updatedBalance = currentBalance + amountNGN;

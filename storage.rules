@@ -104,9 +104,7 @@ service firebase.storage {
     
     // Course materials — admin uploads via Admin SDK (bypasses rules)
     match /academy/courses/{courseId}/materials/{fileName} {
-      allow write: if request.auth != null
-                   && request.resource.size <= 2000 * 1024 * 1024; // 2GB limit for videos
-      
+      allow write: if false;
       allow read: if request.auth != null;
     }
     
@@ -149,7 +147,7 @@ service firebase.storage {
     
     // WAVE training resources — admin upload via Admin SDK
     match /wave/training/{fileName} {
-      allow write: if request.auth != null;
+      allow write: if false;
       allow read: if request.auth != null;
     }
     
@@ -173,7 +171,7 @@ service firebase.storage {
     
     // Banners, announcements, site-wide images — admin via Admin SDK
     match /platform/{folder}/{fileName} {
-      allow write: if request.auth != null;
+      allow write: if false;
       allow read: if true;
     }
     
