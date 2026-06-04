@@ -203,71 +203,6 @@ export async function getPostLoginRedirect(email: string) { try {
     }
 }
 
-function getLevenshteinDistance(a: string, b: string): number {
-    const tmp: number[][] = [];
-    for (let i = 0; i <= a.length; i++) {
-        tmp[i] = [i];
-    }
-    for (let j = 0; j <= b.length; j++) {
-        tmp[0][j] = j;
-    }
-    for (let i = 1; i <= a.length; i++) {
-        for (let j = 1; j <= b.length; j++) {
-            tmp[i][j] = Math.min(
-                tmp[i - 1][j] + 1,
-                tmp[i][j - 1] + 1,
-                tmp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
-            );
-        }
-    }
-    return tmp[a.length][b.length];
-}
-
-async function suggestEmailCorrection(enteredEmail: string): Promise<string | null> {
-    try {
-        const emailLower = enteredEmail.toLowerCase().trim();
-        const parts = emailLower.split('@');
-        if (parts.length !== 2) return null;
-        
-        const prefix = parts[0];
-        const domain = parts[1];
-        
-        // Strip trailing digits to find base prefix (e.g. hadizasabo68 -> hadizasabo)
-        const basePrefix = prefix.replace(/\d+$/, '');
-        if (basePrefix.length < 4) return null;
-        
-        // Prefix query in Firestore
-        const snapshot = await db.collection(COLLECTIONS.USERS)
-            .where("email", ">=", basePrefix)
-            .where("email", "<=", basePrefix + "\uf8ff")
-            .limit(20)
-            .get();
-            
-        let bestMatch: string | null = null;
-        let minDistance = 3; // Only accept distance <= 2
-        
-        for (const doc of snapshot.docs) {
-            const data = doc.data();
-            const dbEmail = (data.email || "").toLowerCase().trim();
-            if (!dbEmail || dbEmail === emailLower) continue;
-            
-            const dbParts = dbEmail.split('@');
-            if (dbParts.length !== 2 || dbParts[1] !== domain) continue; // Must be same domain (e.g. gmail.com)
-            
-            const distance = getLevenshteinDistance(prefix, dbParts[0]);
-            if (distance < minDistance) {
-                minDistance = distance;
-                bestMatch = dbEmail;
-            }
-        }
-        
-        return bestMatch;
-    } catch (e) {
-        logger.error("suggestEmailCorrection error:", e);
-        return null;
-    }
-}
-
 export async function preValidateLoginAction(credentials: any): Promise<{ success: boolean; error: string | null }> {
     try {
         const firebaseApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
@@ -312,20 +247,13 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         if (!response.ok) {
             const errorCode = responseData.error?.message || "auth/internal-error";
             
-            // Check if email exists in Firestore to give a typo helper hint
+            // Check if email exists in Firestore to give a precise "Email address not registered" error
             const emailCheck = await db.collection(COLLECTIONS.USERS)
                 .where("email", "==", email)
                 .limit(1)
                 .get();
                 
             if (emailCheck.empty) {
-                const suggestion = await suggestEmailCorrection(email);
-                if (suggestion) {
-                    return { 
-                        success: false, 
-                        error: `Email address not registered. Did you mean ${suggestion}?` 
-                    };
-                }
                 return {
                     success: false,
                     error: "Email address not registered."

@@ -143,7 +143,7 @@ export async function consumeLoginAttempt(
             const minutesRemaining = Math.ceil((reset - now) / 1000 / 60);
             return {
                 allowed: false,
-                error: `Too many failed login attempts. Please try again in ${minutesRemaining} minutes.`,
+                error: `Too many failed login attempts. If you cannot remember your credentials, please contact support at support@easysalesexport.com, or try again in ${minutesRemaining} minutes.`,
             };
         }
     } catch (error) {
@@ -161,7 +161,7 @@ export async function consumeLoginAttempt(
             const minutesRemaining = Math.ceil((fallback.reset - now) / 1000 / 60);
             return {
                 allowed: false,
-                error: `Too many failed login attempts (Redis connection failed). Please try again in ${minutesRemaining} minutes.`,
+                error: `Too many failed login attempts. If you cannot remember your credentials, please contact support at support@easysalesexport.com, or try again in ${minutesRemaining} minutes.`,
             };
         }
     }
