@@ -200,8 +200,8 @@ export async function approveContentAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
-    const { session } = sessionResult;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
@@ -209,50 +209,57 @@ export async function approveContentAction(
         const timestamp = FieldValue.serverTimestamp();
         const adminId = session.user.id;
 
-        switch (type) {
-            case "products": {
-                const docRef = db.collection(COLLECTIONS.PRODUCTS).doc(id);
-                const docSnap = await docRef.get();
-                if (!docSnap.exists) {
-                    return { success: false as const, error: "Product listing not found" , data: null };
+        const result = await db.runTransaction(async (transaction) => {
+            switch (type) {
+                case "products": {
+                    const docRef = db.collection(COLLECTIONS.PRODUCTS).doc(id);
+                    const docSnap = await transaction.get(docRef);
+                    if (!docSnap.exists) {
+                        return { success: false as const, error: "Product listing not found" };
+                    }
+                    transaction.update(docRef, {
+                        status: "active",
+                        approvedAt: timestamp,
+                        approvedBy: adminId,
+                    });
+                    break;
                 }
-                await docRef.update({
-                    status: "active",
-                    approvedAt: timestamp,
-                    approvedBy: adminId,
-                });
-                break;
-            }
-            case "land": {
-                const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
-                const docSnap = await docRef.get();
-                if (!docSnap.exists) {
-                    return { success: false as const, error: "Land listing not found" , data: null };
+                case "land": {
+                    const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
+                    const docSnap = await transaction.get(docRef);
+                    if (!docSnap.exists) {
+                        return { success: false as const, error: "Land listing not found" };
+                    }
+                    transaction.update(docRef, {
+                        status: "verified",
+                        verificationStatus: "verified",
+                        verifiedAt: timestamp,
+                        verifiedBy: adminId,
+                    });
+                    break;
                 }
-                await docRef.update({
-                    status: "verified",
-                    verificationStatus: "verified",
-                    verifiedAt: timestamp,
-                    verifiedBy: adminId,
-                });
-                break;
-            }
-            case "export": {
-                const docRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id);
-                const docSnap = await docRef.get();
-                if (!docSnap.exists) {
-                    return { success: false as const, error: "Export listing not found" , data: null };
+                case "export": {
+                    const docRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id);
+                    const docSnap = await transaction.get(docRef);
+                    if (!docSnap.exists) {
+                        return { success: false as const, error: "Export listing not found" };
+                    }
+                    transaction.update(docRef, {
+                        status: "live",
+                        isActive: true,
+                        approvedAt: timestamp,
+                        approvedBy: adminId,
+                    });
+                    break;
                 }
-                await docRef.update({
-                    status: "live",
-                    isActive: true,
-                    approvedAt: timestamp,
-                    approvedBy: adminId,
-                });
-                break;
+                default:
+                    return { success: false as const, error: "Invalid content type" };
             }
-            default:
-                return { success: false as const, error: "Invalid content type" , data: null };
+            return { success: true as const, error: null };
+        });
+
+        if (!result.success) {
+            return { success: false as const, error: result.error || "Approval failed", data: null };
         }
 
         return { error: null, success: true as const , data: null };
@@ -273,8 +280,8 @@ export async function rejectContentAction(
 > {
     try {
         const sessionResult = await requireSession();
-    if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
-    const { session } = sessionResult;
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
         if (!session?.user?.id || !isAdmin(session.user.roles)) {
             return { success: false as const, error: "Unauthorized" , data: null };
         }
@@ -290,54 +297,61 @@ export async function rejectContentAction(
             return { success: false as const, error: "Rejection reason is too long (max 500 characters)" , data: null };
         }
 
-        switch (type) {
-            case "products": {
-                const docRef = db.collection(COLLECTIONS.PRODUCTS).doc(id);
-                const docSnap = await docRef.get();
-                if (!docSnap.exists) {
-                    return { success: false as const, error: "Product listing not found" , data: null };
+        const result = await db.runTransaction(async (transaction) => {
+            switch (type) {
+                case "products": {
+                    const docRef = db.collection(COLLECTIONS.PRODUCTS).doc(id);
+                    const docSnap = await transaction.get(docRef);
+                    if (!docSnap.exists) {
+                        return { success: false as const, error: "Product listing not found" };
+                    }
+                    transaction.update(docRef, {
+                        status: "rejected",
+                        rejectionReason: reason,
+                        rejectedAt: timestamp,
+                        rejectedBy: adminId,
+                    });
+                    break;
                 }
-                await docRef.update({
-                    status: "rejected",
-                    rejectionReason: reason,
-                    rejectedAt: timestamp,
-                    rejectedBy: adminId,
-                });
-                break;
-            }
-            case "land": {
-                const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
-                const docSnap = await docRef.get();
-                if (!docSnap.exists) {
-                    return { success: false as const, error: "Land listing not found" , data: null };
+                case "land": {
+                    const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
+                    const docSnap = await transaction.get(docRef);
+                    if (!docSnap.exists) {
+                        return { success: false as const, error: "Land listing not found" };
+                    }
+                    transaction.update(docRef, {
+                        status: "rejected",
+                        verificationStatus: "rejected",
+                        verificationNotes: reason,
+                        rejectionReason: reason,
+                        rejectedAt: timestamp,
+                        rejectedBy: adminId,
+                    });
+                    break;
                 }
-                await docRef.update({
-                    status: "rejected",
-                    verificationStatus: "rejected",
-                    verificationNotes: reason,
-                    rejectionReason: reason,
-                    rejectedAt: timestamp,
-                    rejectedBy: adminId,
-                });
-                break;
-            }
-            case "export": {
-                const docRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id);
-                const docSnap = await docRef.get();
-                if (!docSnap.exists) {
-                    return { success: false as const, error: "Export listing not found" , data: null };
+                case "export": {
+                    const docRef = db.collection(COLLECTIONS.EXPORT_CATALOG).doc(id);
+                    const docSnap = await transaction.get(docRef);
+                    if (!docSnap.exists) {
+                        return { success: false as const, error: "Export listing not found" };
+                    }
+                    transaction.update(docRef, {
+                        status: "rejected",
+                        isActive: false,
+                        rejectionReason: reason,
+                        rejectedAt: timestamp,
+                        rejectedBy: adminId,
+                    });
+                    break;
                 }
-                await docRef.update({
-                    status: "rejected",
-                    isActive: false,
-                    rejectionReason: reason,
-                    rejectedAt: timestamp,
-                    rejectedBy: adminId,
-                });
-                break;
+                default:
+                    return { success: false as const, error: "Invalid content type" };
             }
-            default:
-                return { success: false as const, error: "Invalid content type" , data: null };
+            return { success: true as const, error: null };
+        });
+
+        if (!result.success) {
+            return { success: false as const, error: result.error || "Rejection failed", data: null };
         }
 
         return { error: null,  success: true as const , data: null };

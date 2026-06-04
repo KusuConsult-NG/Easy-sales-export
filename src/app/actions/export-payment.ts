@@ -179,7 +179,7 @@ export async function verifyExportOrderPaymentAction(reference: string) { try {
                 PaymentStatusWriteSchema.partial(),
                 {
                     status: "processing",
-                    paymentStatus: "paid",
+                    paymentStatus: "completed",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 },
@@ -416,7 +416,7 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
                 PaymentStatusWriteSchema.partial(),
                 {
                     status: "active",
-                    paymentStatus: "paid",
+                    paymentStatus: "completed",
                     paymentVerifiedAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 },

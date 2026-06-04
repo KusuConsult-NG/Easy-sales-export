@@ -257,7 +257,7 @@ export default function MyLoansPage() {
                                         <div className="space-y-3">
                                             {loan.repaymentSchedule.map((payment: any, index: number) => (
                                                 <div
-                                                    key={index}
+                                                    key={payment.id || `repayment-${index}-${payment.date}`}
                                                     className={`flex items-center justify-between p-4 rounded-lg ${payment.paid
                                                         ? "bg-green-50 border border-green-200"
                                                         : "bg-slate-50 border border-slate-200"

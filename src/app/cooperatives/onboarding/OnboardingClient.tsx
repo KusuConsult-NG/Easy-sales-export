@@ -92,9 +92,18 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         // On dedicated domains, proxy maps / → /cooperatives, so '/cooperatives/dashboard'
         // causes double-rewrite → /cooperatives/cooperatives/dashboard → 404.
         // Use short paths when on dedicated domain.
+        let appHostname = 'easysalesexport.com';
+        if (process.env.NEXT_PUBLIC_APP_URL) {
+            try {
+                appHostname = new URL(process.env.NEXT_PUBLIC_APP_URL).hostname;
+            } catch {
+                appHostname = process.env.NEXT_PUBLIC_APP_URL.replace(/https?:\/\//, '').split('/')[0].split(':')[0];
+            }
+        }
         const isDedicatedDomain = typeof window !== 'undefined' &&
-            !window.location.hostname.includes('easysalesexport.com') &&
+            !window.location.hostname.includes(appHostname) &&
             !window.location.hostname.includes('localhost') &&
+            !window.location.hostname.includes('127.0.0.1') &&
             !window.location.hostname.includes('railway.app');
         const prefix = isDedicatedDomain ? '' : '/cooperatives';
 

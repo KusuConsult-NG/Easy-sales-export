@@ -444,9 +444,9 @@ export default function AddProductPage() {
 
                                 {formData.certifications.length > 0 && (
                                     <div className="flex flex-wrap gap-2">
-                                        {formData.certifications.map((cert, index) => (
+                                        {formData.certifications.map((cert) => (
                                             <div
-                                                key={index}
+                                                key={cert}
                                                 className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg"
                                             >
                                                 <Award className="w-4 h-4" />
@@ -482,7 +482,7 @@ export default function AddProductPage() {
                                         {media.images.length > 0 ? (
                                             <div className="grid grid-cols-3 gap-4 mb-4">
                                                 {media.images.map((img, index) => (
-                                                    <div key={index} className="relative">
+                                                    <div key={`img-${img.name}-${img.size}-${index}`} className="relative">
                                                         <div className="relative w-full h-32 rounded-lg overflow-hidden">
                                                             <Image
                                                                 src={URL.createObjectURL(img)}

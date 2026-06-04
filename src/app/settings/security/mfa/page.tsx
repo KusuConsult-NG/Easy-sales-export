@@ -5,9 +5,11 @@ import { logger } from '@/lib/logger';
 import { Shield, Key, Download, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/contexts/ToastContext";
+import { useRouter } from "next/navigation";
 
 export default function MFASetupPage() {
     const { showToast } = useToast();
+    const router = useRouter();
     const [step, setStep] = useState<"setup" | "verify" | "complete">("setup");
     const [qrCode, setQrCode] = useState<string>("");
     const [secret, setSecret] = useState<string>("");
@@ -305,7 +307,7 @@ export default function MFASetupPage() {
                         </div>
 
                         <button
-                            onClick={() => window.location.href = "/dashboard"}
+                            onClick={() => router.push("/dashboard")}
                             className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-xl transition"
                         >
                             Go to Dashboard
