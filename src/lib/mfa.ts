@@ -28,7 +28,8 @@ export async function sendMFACode(email: string, userId: string): Promise<{ succ
         const otp = generateOTP(6);
 
         // Encrypt OTP before storing
-        const secretKey = process.env.MFA_SECRET_KEY || 'default-secret-key-change-in-production';
+        const secretKey = process.env.MFA_SECRET_KEY;
+        if (!secretKey) throw new Error("MFA_SECRET_KEY is not configured");
         const encryptedOTP = encryptData(otp, secretKey);
 
         // Delete any existing unverified codes for this user
