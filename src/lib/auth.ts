@@ -237,38 +237,46 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
             // Session Refresh / Sync Protocol - ALWAYS synchronize live roles from database/cache
             if (token.id) {
-                 try {
-                     const { getUserProfile } = await import("@/lib/user-cache");
-                     const cachedProfile = await getUserProfile(token.id as string);
-                     if (cachedProfile) {
-                         token.roles = cachedProfile.roles || [];
-                         token.verified = cachedProfile.displayName ? (cachedProfile as any).verified ?? true : true; // default to true if legacy profile structure
-                         token.onboardingCompleted = (cachedProfile as any).onboardingCompleted;
-                         token.sellerVerificationStatus = (cachedProfile as any).sellerVerificationStatus;
-                         token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
-                     } else {
-                         // Cache miss (invalidated by admin approval) and getUserProfile returned null.
-                         // Fall back to a direct Firestore read so the token is never stale
-                         // after an admin grants a new role or approves a service registration.
-                         try {
-                             const { getAdminDb } = await import("@/lib/firebase-admin");
-                             const db = getAdminDb();
-                             const userSnap = await db.collection(COLLECTIONS.USERS).doc(token.id as string).get();
-                             if (userSnap.exists) {
-                                 const userData = userSnap.data()!;
-                                 token.roles = userData.roles || [];
-                                 token.verified = userData.verified ?? true;
-                                 token.onboardingCompleted = userData.onboardingCompleted;
-                                 token.sellerVerificationStatus = userData.sellerVerificationStatus;
-                                 token.serviceRegistrations = userData.serviceRegistrations || {};
-                             }
-                         } catch (fsErr) {
-                             console.error("[NextAuth JWT] Firestore fallback failed after cache miss", fsErr);
-                         }
-                     }
-                 } catch (e) {
-                     console.error("[NextAuth JWT] Failed to sync session from database", e);
-                 }
+                const now = Date.now();
+                const lastSynced = token.lastSyncedAt as number | undefined;
+                const SYNC_INTERVAL = 2 * 60 * 1000; // 2 minutes
+
+                if (trigger === "update" || !lastSynced || (now - lastSynced) > SYNC_INTERVAL) {
+                    try {
+                        const { getUserProfile } = await import("@/lib/user-cache");
+                        const cachedProfile = await getUserProfile(token.id as string);
+                        if (cachedProfile) {
+                            token.roles = cachedProfile.roles || [];
+                            token.verified = cachedProfile.displayName ? (cachedProfile as any).verified ?? true : true; // default to true if legacy profile structure
+                            token.onboardingCompleted = (cachedProfile as any).onboardingCompleted;
+                            token.sellerVerificationStatus = (cachedProfile as any).sellerVerificationStatus;
+                            token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
+                            token.lastSyncedAt = now;
+                        } else {
+                            // Cache miss (invalidated by admin approval) and getUserProfile returned null.
+                            // Fall back to a direct Firestore read so the token is never stale
+                            // after an admin grants a new role or approves a service registration.
+                            try {
+                                const { getAdminDb } = await import("@/lib/firebase-admin");
+                                const db = getAdminDb();
+                                const userSnap = await db.collection(COLLECTIONS.USERS).doc(token.id as string).get();
+                                if (userSnap.exists) {
+                                    const userData = userSnap.data()!;
+                                    token.roles = userData.roles || [];
+                                    token.verified = userData.verified ?? true;
+                                    token.onboardingCompleted = userData.onboardingCompleted;
+                                    token.sellerVerificationStatus = userData.sellerVerificationStatus;
+                                    token.serviceRegistrations = userData.serviceRegistrations || {};
+                                    token.lastSyncedAt = now;
+                                }
+                            } catch (fsErr) {
+                                console.error("[NextAuth JWT] Firestore fallback failed after cache miss", fsErr);
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[NextAuth JWT] Failed to sync session from database", e);
+                    }
+                }
             }
 
             if (user) {
