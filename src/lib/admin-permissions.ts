@@ -220,7 +220,12 @@ export function isAdmin(userRoles: string[] | undefined): boolean {
         role === "admin" ||
         role === "moderator" ||
         role === "support" ||
-        role.endsWith("_admin")
+        role === "wave_admin" ||
+        role === "cooperative_admin" ||
+        role === "marketplace_admin" ||
+        role === "export_admin" ||
+        role === "farm_nation_admin" ||
+        role === "academy_admin"
     );
 }
 

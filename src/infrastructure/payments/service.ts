@@ -251,6 +251,8 @@ export async function processExportInvestment(reference: string, amount: number,
         t.update(exportRef, {
             spotsFilled: FieldValue.increment(1),
             fundedAmount: FieldValue.increment(amount),
+            investorCount: FieldValue.increment(1),
+            currentFunding: FieldValue.increment(amount),
             updatedAt: FieldValue.serverTimestamp()
         });
 

@@ -431,9 +431,9 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
             }
 
             const windowData = windowSnap.data();
-            const currentFunding = windowData?.currentFunding || 0;
-            const fundingGoal = windowData?.fundingGoal || 0; // Assuming fundingGoal exists
-            const investorCount = windowData?.investorCount || 0;
+            const currentFunding = windowData?.fundedAmount || windowData?.currentFunding || 0;
+            const fundingGoal = windowData?.fundingGoal || windowData?.goal || 0;
+            const spotsFilled = windowData?.spotsFilled || windowData?.investorCount || 0;
 
             // 🔒 SECURITY FIX: Prevent Over-funding
             // If fundingGoal is set (greater than 0), ensure we don't exceed it.
@@ -442,9 +442,13 @@ export async function verifyInvestmentPaymentAction(reference: string) { try {
                 // In a real system, we might auto-refund here or mark as "overpaid_pending_refund"
             }
 
-            transaction.update(windowRef, { currentFunding: currentFunding + amountInNaira,
-                investorCount: investorCount + 1,
-                updatedAt: FieldValue.serverTimestamp() });
+            transaction.update(windowRef, { 
+                fundedAmount: currentFunding + amountInNaira,
+                spotsFilled: spotsFilled + 1,
+                currentFunding: currentFunding + amountInNaira,
+                investorCount: spotsFilled + 1,
+                updatedAt: FieldValue.serverTimestamp() 
+            });
 
             // Update or create investor portfolio
             const portfolioId = session.user.id || "";
