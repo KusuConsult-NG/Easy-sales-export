@@ -323,20 +323,24 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
                 if (suggestion) {
                     return { 
                         success: false, 
-                        error: `Invalid email or password. Did you mean ${suggestion}?` 
+                        error: `Email address not registered. Did you mean ${suggestion}?` 
                     };
                 }
+                return {
+                    success: false,
+                    error: "Email address not registered."
+                };
             }
 
             const firebaseErrorMap: Record<string, string> = {
                 "auth/invalid-api-key": "Service configuration error. Please contact support.",
                 "auth/app-not-authorized": "Service configuration error. Please contact support.",
-                "auth/invalid-credential": "Invalid email or password.",
-                "auth/wrong-password": "Invalid email or password.",
-                "auth/user-not-found": "Invalid email or password.",
-                "INVALID_LOGIN_CREDENTIALS": "Invalid email or password.",
-                "INVALID_PASSWORD": "Invalid email or password.",
-                "EMAIL_NOT_FOUND": "Invalid email or password.",
+                "auth/invalid-credential": "Incorrect password.",
+                "auth/wrong-password": "Incorrect password.",
+                "auth/user-not-found": "Email address not registered.",
+                "INVALID_LOGIN_CREDENTIALS": "Incorrect password.",
+                "INVALID_PASSWORD": "Incorrect password.",
+                "EMAIL_NOT_FOUND": "Email address not registered.",
                 "auth/user-disabled": "Your account has been disabled. Please contact support.",
                 "USER_DISABLED": "Your account has been disabled. Please contact support.",
                 "auth/too-many-requests": "Too many attempts. Please try again later.",
@@ -348,7 +352,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
             
             return { 
                 success: false, 
-                error: firebaseErrorMap[errorCode] || firebaseErrorMap[responseData.error?.message] || "Invalid email or password." 
+                error: firebaseErrorMap[errorCode] || firebaseErrorMap[responseData.error?.message] || "Incorrect password." 
             };
         }
 
