@@ -64,9 +64,27 @@ export async function sendResetEmailAction(
         });
 
         // Determine the base URL — in production use the canonical domain
-        const baseUrl = process.env.NEXT_PUBLIC_URL
+        let baseUrl = process.env.NEXT_PUBLIC_URL
             || process.env.NEXTAUTH_URL
-            || 'https://easysalesexport.com';
+            || 'https://www.easysalesexport.com';
+
+        try {
+            const { headers } = await import("next/headers");
+            const headersList = await headers();
+            const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
+            const protocol = headersList.get("x-forwarded-proto") || "https";
+            if (host) {
+                baseUrl = `${protocol}://${host}`;
+            }
+        } catch (e) {
+            // Ignore headers error in environments where next/headers is not available
+        }
+
+        // If the baseUrl is the apex domain, make sure to normalize it to www.
+        if (baseUrl.includes("://easysalesexport.com")) {
+            baseUrl = baseUrl.replace("://easysalesexport.com", "://www.easysalesexport.com");
+        }
+
         const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
 
         // Send email via Resend (using platform's verified domain)
