@@ -88,6 +88,9 @@ RUN npm run build
 # ---- Stage 3: Production runner ----
 FROM node:22-alpine AS runner
 
+# Install fontconfig and standard true-type fonts for server-side SVG text rendering
+RUN apk add --no-cache fontconfig ttf-dejavu ttf-liberation
+
 WORKDIR /app
 
 ENV NODE_ENV=production
