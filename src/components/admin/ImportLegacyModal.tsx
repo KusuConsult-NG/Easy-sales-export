@@ -83,12 +83,12 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
         farmNationCropTypes: "",
         cooperativeAmount: "",
         services: {
-            cooperative: true,
-            academy: true,
+            cooperative: module === "cooperative",
+            academy: module === "academy",
             marketplace: false,
-            export: false,
-            wave: false,
-            farmNation: false,
+            export: module === "export",
+            wave: module === "wave",
+            farmNation: module === "farmNation",
         },
     });
 
@@ -178,12 +178,12 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
             ...(formData.nin ? { nin: formData.nin } : {}),
             ...(formData.bvn ? { bvn: formData.bvn } : {}),
             services: {
-                cooperative: module === "cooperative",
-                academy: module === "academy",
-                marketplace: false,
-                export: module === "export",
-                wave: module === "wave",
-                farmNation: module === "farmNation",
+                cooperative: formData.services.cooperative,
+                academy: formData.services.academy,
+                marketplace: formData.services.marketplace,
+                export: formData.services.export,
+                wave: formData.services.wave,
+                farmNation: formData.services.farmNation,
             },
         };
 
@@ -243,8 +243,12 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
             farmNationFarmSize: "", farmNationCropTypes: "",
             cooperativeAmount: "",
             services: {
-                marketplace: false, export: false, cooperative: false,
-                wave: false, academy: false, farmNation: false,
+                cooperative: module === "cooperative",
+                academy: module === "academy",
+                marketplace: false,
+                export: module === "export",
+                wave: module === "wave",
+                farmNation: module === "farmNation",
             },
         });
         setStep(0);

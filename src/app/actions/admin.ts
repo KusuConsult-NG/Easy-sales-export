@@ -4075,24 +4075,118 @@ async function _onboardLegacyMemberAction(
         const data = validated.data;
         data.email = data.email.toLowerCase(); // Permanent Fix: Force lowercase normalization
 
-        // 1. Resolve Identity and Enforce Uniqueness
+        // 1. Resolve Identity and Enforce Uniqueness (with Auto-Resolution)
         let targetUid: string | null = null;
+        let oldUidToMigrate: string | null = null;
 
         // Check Firebase Auth by email
         let authRecord = await adminAuth.getUserByEmail(data.email).catch(() => null);
-        if (authRecord) targetUid = authRecord.uid;
+        if (authRecord) {
+            targetUid = authRecord.uid;
+        }
 
-        // Check Firestore by email to prevent ghost documents
+        // Check Firestore by email to prevent ghost documents and handle duplicate stubs
         const emailCheck = await db.collection(COLLECTIONS.USERS)
-            .where("email", "==", data.email.toLowerCase())
-            .limit(1)
+            .where("email", "==", data.email)
             .get();
+
         if (!emailCheck.empty) {
-            const firestoreUid = emailCheck.docs[0].id;
-            if (targetUid && targetUid !== firestoreUid) {
-                return { error: "Data conflict: Email exists in Auth but belongs to a different Firestore user.", success: false as const };
+            if (targetUid) {
+                // If Auth user exists, the Firestore document ID MUST match targetUid.
+                const matchingDoc = emailCheck.docs.find(doc => doc.id === targetUid);
+                
+                // If there are other documents with the same email but different UIDs:
+                // These are duplicate stubs/ghost documents.
+                const stubs = emailCheck.docs.filter(doc => doc.id !== targetUid);
+                if (stubs.length > 0) {
+                    if (matchingDoc) {
+                        // The primary document is already aligned. We can safely delete duplicate stubs.
+                        const cleanBatch = db.batch();
+                        stubs.forEach(doc => cleanBatch.delete(doc.ref));
+                        await cleanBatch.commit();
+                        logger.info(`[Legacy Onboarding] Deleted ${stubs.length} duplicate stubs for aligned user ${targetUid}`);
+                    } else {
+                        // Auth user exists (targetUid), but no Firestore document exists with targetUid.
+                        // We choose the first stub/legacy document to serve as the source of data.
+                        const sourceDoc = stubs[0];
+                        oldUidToMigrate = sourceDoc.id;
+                        
+                        logger.info(`[Legacy Onboarding] Firestore data conflict detected for ${data.email}. Migrating doc ${oldUidToMigrate} to match Auth UID ${targetUid}`);
+                        
+                        // Migrate user document to targetUid
+                        const userData = sourceDoc.data();
+                        await db.collection(COLLECTIONS.USERS).doc(targetUid).set({
+                            ...userData,
+                            uid: targetUid,
+                            updatedAt: FieldValue.serverTimestamp()
+                        }, { merge: true });
+
+                        // Clean up all the old stubs matching this email
+                        const cleanBatch = db.batch();
+                        stubs.forEach(doc => cleanBatch.delete(doc.ref));
+                        await cleanBatch.commit();
+                    }
+                }
+            } else {
+                // No Auth user exists yet. We adopt the UID of the first Firestore document.
+                const primaryDoc = emailCheck.docs[0];
+                targetUid = primaryDoc.id;
+                
+                // Delete any additional duplicate stubs matching this email
+                const stubs = emailCheck.docs.filter(doc => doc.id !== targetUid);
+                if (stubs.length > 0) {
+                    const cleanBatch = db.batch();
+                    stubs.forEach(doc => cleanBatch.delete(doc.ref));
+                    await cleanBatch.commit();
+                    logger.info(`[Legacy Onboarding] Deleted ${stubs.length} duplicate stubs for unaligned user ${targetUid}`);
+                }
             }
-            targetUid = firestoreUid;
+        }
+
+        // Migrate associated module documents from oldUidToMigrate to targetUid
+        if (oldUidToMigrate && targetUid) {
+            const migrationBatch = db.batch();
+            
+            // 1. Direct document IDs based on userId
+            const directCollections = [
+                COLLECTIONS.COOPERATIVE_MEMBERS,
+                COLLECTIONS.VENDOR_SETTINGS,
+                COLLECTIONS.ACADEMY_ENROLLMENTS,
+                COLLECTIONS.WAVE_MEMBERS
+            ];
+            for (const col of directCollections) {
+                const docSnap = await db.collection(col).doc(oldUidToMigrate).get();
+                if (docSnap.exists) {
+                    migrationBatch.set(db.collection(col).doc(targetUid), {
+                        ...docSnap.data(),
+                        userId: targetUid,
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    migrationBatch.delete(db.collection(col).doc(oldUidToMigrate));
+                }
+            }
+
+            // 2. Legacy prefixed document IDs (legacy_{userId})
+            const prefixedCollections = [
+                COLLECTIONS.EXPORT_APPLICATIONS,
+                COLLECTIONS.WAVE_APPLICATIONS,
+                COLLECTIONS.FARM_NATION_APPLICATIONS,
+                COLLECTIONS.ACADEMY_APPLICATIONS
+            ];
+            for (const col of prefixedCollections) {
+                const docSnap = await db.collection(col).doc(`legacy_${oldUidToMigrate}`).get();
+                if (docSnap.exists) {
+                    migrationBatch.set(db.collection(col).doc(`legacy_${targetUid}`), {
+                        ...docSnap.data(),
+                        userId: targetUid,
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    migrationBatch.delete(db.collection(col).doc(`legacy_${oldUidToMigrate}`));
+                }
+            }
+            
+            await migrationBatch.commit();
+            logger.info(`[Legacy Onboarding] Successfully migrated child documents from ${oldUidToMigrate} to ${targetUid}`);
         }
 
         // 2. 🔒 DEDUP GUARD: Check Firestore by phone (Fraud Prevention)
@@ -4101,11 +4195,17 @@ async function _onboardLegacyMemberAction(
             .limit(1)
             .get();
         if (!phoneCheck.empty) {
-            const phoneUid = phoneCheck.docs[0].id;
-            if (targetUid && targetUid !== phoneUid) {
-                return { error: "An account with this phone number already exists under a different email.", success: false as const };
+            const phoneDoc = phoneCheck.docs[0];
+            const phoneData = phoneDoc.data();
+            const phoneUid = phoneDoc.id;
+            
+            // Only throw an error if the phone is registered to a DIFFERENT email address.
+            if (phoneData.email?.toLowerCase() !== data.email) {
+                if (targetUid && targetUid !== phoneUid) {
+                    return { error: "An account with this phone number already exists under a different email.", success: false as const };
+                }
+                targetUid = phoneUid;
             }
-            targetUid = phoneUid;
         }
 
         const isNewUser = !targetUid;
