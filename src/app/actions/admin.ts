@@ -4665,6 +4665,15 @@ async function _onboardLegacyMemberAction(
             },
         });
 
+        // 11. Invalidate Redis Cache
+        try {
+            const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(userRecord.uid);
+            logger.info(`[Legacy Onboarding] Invalidated Redis cache for onboarded user: ${userRecord.uid}`);
+        } catch (cacheErr: any) {
+            logger.warn(`[Legacy Onboarding] Failed to invalidate cache for ${userRecord.uid}:`, cacheErr);
+        }
+
         return { 
             error: null, success: true as const, 
             message: isNewUser 

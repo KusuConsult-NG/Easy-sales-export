@@ -120,6 +120,54 @@ async function autoProvisionZereCooperative(userId: string, email: string) {
     }
 }
 
+async function autoProvisionLegacyCooperative(userId: string, userData: any) {
+    if (!userData?.legacyOnboardedBy && userData?.serviceRegistrations?.cooperatives?.paymentStatus !== "completed" && userData?.serviceRegistrations?.cooperative?.paymentStatus !== "completed") {
+        return;
+    }
+    try {
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+        const memberDoc = await memberRef.get();
+        
+        let needsWrite = false;
+        if (!memberDoc.exists) {
+            needsWrite = true;
+        } else {
+            const data = memberDoc.data();
+            if (data?.paymentStatus !== "completed" || data?.membershipStatus !== "approved" || !data?.onboardingCompleted) {
+                needsWrite = true;
+            }
+        }
+        
+        if (needsWrite) {
+            logger.info(`[autoProvisionLegacyCooperative] Auto-provisioning cooperative membership for legacy user ${userData.email}`);
+            const resolvedName = (userData.name || userData.fullName || "").trim();
+            const nameParts = resolvedName.split(/\s+/);
+            const firstName = userData.firstName || nameParts[0] || "Cooperative";
+            const lastName = userData.lastName || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "Member");
+            
+            await memberRef.set({
+                userId,
+                firstName,
+                lastName,
+                fullName: resolvedName || `${firstName} ${lastName}`,
+                email: userData.email || "",
+                phone: userData.phone || "08000000000",
+                membershipTier: "Member",
+                membershipStatus: "active",
+                status: "active",
+                paymentStatus: "completed",
+                onboardingCompleted: true,
+                onboardingCompletedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+    } catch (error) {
+        logger.error("[autoProvisionLegacyCooperative] Failed to auto-provision legacy cooperative:", error);
+    }
+}
+
+
 // ============================================
 // MEMBERSHIP REGISTRATION (PRD Phase 2)
 // =========================================
@@ -697,9 +745,15 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
 
         const userId = session.user.id;
         
+        // Fetch user document to check if legacy
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+
         // Auto-provision bypass
         if (session.user.email === "zeredogo@gmail.com") {
             await autoProvisionZereCooperative(userId, session.user.email);
+        } else if (userData) {
+            await autoProvisionLegacyCooperative(userId, userData);
         }
 
         const snapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
@@ -813,6 +867,10 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                 return 'pending_review';
             }
             return registration.status;
+        }
+
+        if (userData?.legacyOnboardedBy) {
+            return "approved";
         }
 
         // ── FALLBACK: cooperative_members doc predates V2 schema ─────────

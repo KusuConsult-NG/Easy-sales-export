@@ -479,7 +479,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const userData = userDoc.data();
 
-        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed") {
+        if (userData?.serviceRegistrations?.academy?.paymentStatus === "completed" || userData?.legacyOnboardedBy) {
             return { error: null, success: true as const, data: "paid" };
         }
 

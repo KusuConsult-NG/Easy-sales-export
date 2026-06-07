@@ -36,23 +36,33 @@ export default async function CooperativeOnboardingPage(
         paymentStatus = "completed";
     } else {
         try {
-            const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id).get();
-            if (memberDoc.exists) {
-                paymentStatus = memberDoc.data()?.paymentStatus || "pending";
-            }
+            // Check user document service registrations first (primary source of truth for V2 / legacy onboarded)
+            const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+            const userData = userDoc.data();
+            
+            const coopReg = userData?.serviceRegistrations?.cooperatives || userData?.serviceRegistrations?.cooperative;
+            
+            if (coopReg?.paymentStatus === "completed" || userData?.legacyOnboardedBy) {
+                paymentStatus = "completed";
+            } else {
+                const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id).get();
+                if (memberDoc.exists) {
+                    paymentStatus = memberDoc.data()?.paymentStatus || "pending";
+                }
 
-            // ── AUTHORITATIVE OVERRIDE ──────────────────────────────────────
-            // If profile says pending, double check actual payment records
-            if (paymentStatus !== "completed") {
-                const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                    .where("userId", "==", session.user.id)
-                    .where("type", "==", "cooperative_membership_registration")
-                    .where("status", "==", "completed")
-                    .limit(1)
-                    .get();
-                    
-                if (!authPayment.empty) {
-                    paymentStatus = "completed";
+                // ── AUTHORITATIVE OVERRIDE ──────────────────────────────────────
+                // If profile says pending, double check actual payment records
+                if (paymentStatus !== "completed") {
+                    const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
+                        .where("userId", "==", session.user.id)
+                        .where("type", "==", "cooperative_membership_registration")
+                        .where("status", "==", "completed")
+                        .limit(1)
+                        .get();
+                        
+                    if (!authPayment.empty) {
+                        paymentStatus = "completed";
+                    }
                 }
             }
         } catch (e) {

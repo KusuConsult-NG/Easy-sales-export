@@ -113,6 +113,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             image: cachedProfile.photoURL || null,
                             roles: (cachedProfile.roles || []) as UserRole[],
                             verified: true,
+                            serviceRegistrations: cachedProfile.serviceRegistrations || {},
                         };
                     }
 
