@@ -4199,14 +4199,13 @@ async function _onboardLegacyMemberAction(
             const phoneData = phoneDoc.data();
             const phoneUid = phoneDoc.id;
             
-            // If the phone number is registered to a DIFFERENT email address, block to prevent duplicate account fraud.
-            if (phoneData.email?.toLowerCase() !== data.email.toLowerCase()) {
-                return { error: "An account with this phone number already exists under a different email.", success: false as const };
-            }
-            
             // If it belongs to the same email, safely align targetUid.
-            if (!targetUid) {
-                targetUid = phoneUid;
+            if (phoneData.email?.toLowerCase() === data.email.toLowerCase()) {
+                if (!targetUid) {
+                    targetUid = phoneUid;
+                }
+            } else {
+                logger.warn(`[Legacy Onboarding] Duplicate phone number (${data.phone}) detected under a different email: ${phoneData.email}. Proceeding anyway as requested.`);
             }
         }
 

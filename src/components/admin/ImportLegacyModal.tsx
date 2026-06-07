@@ -291,26 +291,26 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
-                        <label className={labelCls}>Full Name {reqStar}</label>
-                        <input type="text" required value={formData.fullName}
+                        <label htmlFor="legacy-fullName" className={labelCls}>Full Name {reqStar}</label>
+                        <input type="text" id="legacy-fullName" name="fullName" autoComplete="name" required value={formData.fullName}
                             onChange={(e) => field("fullName", e.target.value)}
                             className={inputCls} placeholder="e.g. Ada Obi Johnson" />
                     </div>
                     <div>
-                        <label className={labelCls}>Email Address {reqStar}</label>
-                        <input type="email" required value={formData.email}
+                        <label htmlFor="legacy-email" className={labelCls}>Email Address {reqStar}</label>
+                        <input type="email" id="legacy-email" name="email" autoComplete="email" required value={formData.email}
                             onChange={(e) => field("email", e.target.value)}
                             className={inputCls} placeholder="member@example.com" />
                     </div>
                     <div>
-                        <label className={labelCls}>Phone Number {reqStar}</label>
-                        <input type="tel" required value={formData.phone}
+                        <label htmlFor="legacy-phone" className={labelCls}>Phone Number {reqStar}</label>
+                        <input type="tel" id="legacy-phone" name="phone" autoComplete="tel" required value={formData.phone}
                             onChange={(e) => field("phone", e.target.value)}
                             className={inputCls} placeholder="+2348012345678" />
                     </div>
                     <div>
-                        <label className={labelCls}>Gender</label>
-                        <select value={formData.gender}
+                        <label htmlFor="legacy-gender" className={labelCls}>Gender</label>
+                        <select id="legacy-gender" name="gender" value={formData.gender}
                             onChange={(e) => field("gender", e.target.value as "" | "Male" | "Female")}
                             className={inputCls}>
                             <option value="">Select gender</option>
@@ -319,14 +319,14 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                         </select>
                     </div>
                     <div>
-                        <label className={labelCls}>Date of Birth</label>
-                        <input type="date" value={formData.dateOfBirth}
+                        <label htmlFor="legacy-dateOfBirth" className={labelCls}>Date of Birth</label>
+                        <input type="date" id="legacy-dateOfBirth" name="dateOfBirth" value={formData.dateOfBirth}
                             onChange={(e) => field("dateOfBirth", e.target.value)}
                             className={inputCls} />
                     </div>
                     <div>
-                        <label className={labelCls}>Occupation</label>
-                        <input type="text" value={formData.occupation}
+                        <label htmlFor="legacy-occupation" className={labelCls}>Occupation</label>
+                        <input type="text" id="legacy-occupation" name="occupation" value={formData.occupation}
                             onChange={(e) => field("occupation", e.target.value)}
                             className={inputCls} placeholder="e.g. Farmer, Trader" />
                     </div>
@@ -343,8 +343,8 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className={labelCls}>State {reqStar}</label>
-                        <select required value={formData.state}
+                        <label htmlFor="legacy-state" className={labelCls}>State {reqStar}</label>
+                        <select id="legacy-state" name="state" required value={formData.state}
                             onChange={(e) => field("state", e.target.value)}
                             className={inputCls}>
                             <option value="">Select state</option>
@@ -354,20 +354,20 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                         </select>
                     </div>
                     <div>
-                        <label className={labelCls}>LGA {reqStar}</label>
-                        <input type="text" required value={formData.lga}
+                        <label htmlFor="legacy-lga" className={labelCls}>LGA {reqStar}</label>
+                        <input type="text" id="legacy-lga" name="lga" required value={formData.lga}
                             onChange={(e) => field("lga", e.target.value)}
                             className={inputCls} placeholder="e.g. Ikeja" />
                     </div>
                     <div>
-                        <label className={labelCls}>City / Town</label>
-                        <input type="text" value={formData.city}
+                        <label htmlFor="legacy-city" className={labelCls}>City / Town</label>
+                        <input type="text" id="legacy-city" name="city" value={formData.city}
                             onChange={(e) => field("city", e.target.value)}
                             className={inputCls} placeholder="e.g. Lagos Island" />
                     </div>
                     <div className="sm:col-span-2">
-                        <label className={labelCls}>Residential Address {reqStar}</label>
-                        <input type="text" required value={formData.address}
+                        <label htmlFor="legacy-address" className={labelCls}>Residential Address {reqStar}</label>
+                        <input type="text" id="legacy-address" name="address" autoComplete="street-address" required value={formData.address}
                             onChange={(e) => field("address", e.target.value)}
                             className={inputCls} placeholder="e.g. 12 Broad Street, Lagos" />
                     </div>
@@ -386,20 +386,20 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="sm:col-span-2">
-                        <label className={labelCls}>Full Name</label>
-                        <input type="text" value={formData.nextOfKinName}
+                        <label htmlFor="legacy-nextOfKinName" className={labelCls}>Full Name</label>
+                        <input type="text" id="legacy-nextOfKinName" name="nextOfKinName" autoComplete="off" value={formData.nextOfKinName}
                             onChange={(e) => field("nextOfKinName", e.target.value)}
                             className={inputCls} placeholder="e.g. Emeka Obi" />
                     </div>
                     <div>
-                        <label className={labelCls}>Phone Number</label>
-                        <input type="tel" value={formData.nextOfKinPhone}
+                        <label htmlFor="legacy-nextOfKinPhone" className={labelCls}>Phone Number</label>
+                        <input type="tel" id="legacy-nextOfKinPhone" name="nextOfKinPhone" autoComplete="off" value={formData.nextOfKinPhone}
                             onChange={(e) => field("nextOfKinPhone", e.target.value)}
                             className={inputCls} placeholder="+2348012345678" />
                     </div>
                     <div>
-                        <label className={labelCls}>Relationship</label>
-                        <select value={formData.nextOfKinRelationship}
+                        <label htmlFor="legacy-nextOfKinRelationship" className={labelCls}>Relationship</label>
+                        <select id="legacy-nextOfKinRelationship" name="nextOfKinRelationship" value={formData.nextOfKinRelationship}
                             onChange={(e) => field("nextOfKinRelationship", e.target.value)}
                             className={inputCls}>
                             <option value="">Select relationship</option>
@@ -407,8 +407,8 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                         </select>
                     </div>
                     <div className="sm:col-span-2">
-                        <label className={labelCls}>Address</label>
-                        <input type="text" value={formData.nextOfKinAddress}
+                        <label htmlFor="legacy-nextOfKinAddress" className={labelCls}>Address</label>
+                        <input type="text" id="legacy-nextOfKinAddress" name="nextOfKinAddress" autoComplete="off" value={formData.nextOfKinAddress}
                             onChange={(e) => field("nextOfKinAddress", e.target.value)}
                             className={inputCls} placeholder="Next of kin residential address" />
                     </div>
@@ -483,20 +483,20 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className={labelCls}>Bank Name</label>
-                        <input type="text" value={formData.bankName}
+                        <label htmlFor="legacy-bankName" className={labelCls}>Bank Name</label>
+                        <input type="text" id="legacy-bankName" name="bankName" value={formData.bankName}
                             onChange={(e) => field("bankName", e.target.value)}
                             className={inputCls} placeholder="e.g. Zenith Bank" />
                     </div>
                     <div>
-                        <label className={labelCls}>Account Number</label>
-                        <input type="text" maxLength={10} value={formData.accountNumber}
+                        <label htmlFor="legacy-accountNumber" className={labelCls}>Account Number</label>
+                        <input type="text" id="legacy-accountNumber" name="accountNumber" maxLength={10} value={formData.accountNumber}
                             onChange={(e) => field("accountNumber", e.target.value.replace(/\D/g, ""))}
                             className={inputCls} placeholder="10-digit NUBAN" />
                     </div>
                     <div className="sm:col-span-2">
-                        <label className={labelCls}>Account Name</label>
-                        <input type="text" value={formData.accountName}
+                        <label htmlFor="legacy-accountName" className={labelCls}>Account Name</label>
+                        <input type="text" id="legacy-accountName" name="accountName" value={formData.accountName}
                             onChange={(e) => field("accountName", e.target.value)}
                             className={inputCls} placeholder="As it appears on your bank statement" />
                     </div>
@@ -508,14 +508,14 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                         </div>
                     </div>
                     <div>
-                        <label className={labelCls}>NIN</label>
-                        <input type="text" maxLength={11} value={formData.nin}
+                        <label htmlFor="legacy-nin" className={labelCls}>NIN</label>
+                        <input type="text" id="legacy-nin" name="nin" maxLength={11} value={formData.nin}
                             onChange={(e) => field("nin", e.target.value.replace(/\D/g, ""))}
                             className={inputCls} placeholder="11-digit NIN" />
                     </div>
                     <div>
-                        <label className={labelCls}>BVN</label>
-                        <input type="text" maxLength={11} value={formData.bvn}
+                        <label htmlFor="legacy-bvn" className={labelCls}>BVN</label>
+                        <input type="text" id="legacy-bvn" name="bvn" maxLength={11} value={formData.bvn}
                             onChange={(e) => field("bvn", e.target.value.replace(/\D/g, ""))}
                             className={inputCls} placeholder="11-digit BVN" />
                     </div>
