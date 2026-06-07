@@ -1,9 +1,8 @@
 "use server";
 
 import { logger } from '@/lib/logger';
-import { db } from '@/lib/firebase-admin';
+import { db, adminAuth } from '@/lib/firebase-admin';
 import { COLLECTIONS } from "@/lib/types/firestore";
-import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import crypto from 'crypto';
 import { Resend } from 'resend';
@@ -44,7 +43,7 @@ export async function sendResetEmailAction(
         if (!emailRegex.test(email)) { return { success: false as const, error: 'Invalid email format', data: null };
         }
 
-        const auth = getAuth();
+        const auth = adminAuth;
         try { await auth.getUserByEmail(email);
         } catch (error) { // For security, don't reveal if email exists or not
             return { success: true as const, error: null
@@ -175,7 +174,7 @@ export async function resetPasswordAction(
         }
 
         // Update password in Firebase Auth
-        const auth = getAuth();
+        const auth = adminAuth;
         try { // Find user again to be sure (since resetData.email is trusted from DB)
             const user = await auth.getUserByEmail(resetData.email);
             await auth.updateUser(user.uid, {
@@ -187,7 +186,7 @@ export async function resetPasswordAction(
 
         // Also clear requiresPasswordChange if it exists (e.g. for legacy members)
         try {
-            const auth = getAuth();
+            const auth = adminAuth;
             const user = await auth.getUserByEmail(resetData.email);
             await db.collection(COLLECTIONS.USERS).doc(user.uid).update({
                 requiresPasswordChange: FieldValue.delete()
