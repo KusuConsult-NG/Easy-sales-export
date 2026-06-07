@@ -44,9 +44,7 @@ interface User {
 }
 
 const ROLES_LIST = [
-    "general_user", "buyer", "seller", "farmer", "land_owner", "investor",
-    "export_participant", "cooperative_member", "wave_participant", "academy_participant",
-    "field_officer", "admin", "super_admin"
+    "general_user", "field_officer", "admin", "super_admin", "academy_admin"
 ];
 
 // Major Nigerian states
@@ -154,7 +152,14 @@ export default function AdminUsersPage() {
         if (!selectedUserForModal) return;
         setIsUpdatingRoles(true);
 
-        const newRoles = ROLES_LIST.filter(role => formData.get(`role_${role}`) === "on");
+        const selectedAssignableRoles = ROLES_LIST.filter(role => formData.get(`role_${role}`) === "on");
+        
+        // Retain any module participant or other roles that are not in the assignable ROLES_LIST
+        const currentNonAssignableRoles = (selectedUserForModal.roles || []).filter(
+            role => !ROLES_LIST.includes(role)
+        );
+
+        const newRoles = Array.from(new Set([...selectedAssignableRoles, ...currentNonAssignableRoles]));
         const result = await updateUserRolesAction(selectedUserForModal.id, newRoles);
 
         if (result.success) {
