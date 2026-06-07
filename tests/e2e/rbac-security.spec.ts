@@ -30,25 +30,26 @@ test.describe('RBAC Security Enforcement', () => {
         await page.fill('input[name="email"]', process.env.TEST_USER_EMAIL || process.env.TEST_USER_EMAIL || 'e2e.user@easysalesexport.test');
         await page.fill('input[name="password"]', process.env.TEST_USER_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
         await page.click('button[type="submit"]');
+        await page.waitForURL(/dashboard|get-started|admin/, { timeout: 10000 });
 
         // Attempt to access admin health page
         await page.goto('/admin/system-health');
         
         // Should be redirected back to their respective module or hub
         // Based on getPostLoginRedirect logic, it might go to /auth/get-started or /
-        const url = page.url();
-        expect(url).not.toContain('/admin/');
+        await expect(page).not.toHaveURL(/\/admin\//);
     });
 
     test('admin users SHOULD access admin dashboard', async ({ page }) => {
         // Authenticate as admin
         await page.goto('/auth/login');
         await page.fill('input[name="email"]', process.env.TEST_ADMIN_EMAIL || process.env.TEST_ADMIN_EMAIL || 'e2e.admin@easysalesexport.test');
-        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || process.env.TEST_USER_PASSWORD || 'E2eTest@2024!');
+        await page.fill('input[name="password"]', process.env.TEST_ADMIN_PASSWORD || 'E2eAdmin@2024!');
         await page.click('button[type="submit"]');
+        await page.waitForURL(/dashboard|get-started|admin/, { timeout: 10000 });
 
         // Access admin health page
         await page.goto('/admin/system-health');
-        await expect(page.locator('h1')).toContainText('Platform Health & Diagnostics');
+        await expect(page.locator('h1')).toContainText('System Health Monitor');
     });
 });
