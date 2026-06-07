@@ -4210,7 +4210,7 @@ async function _onboardLegacyMemberAction(
             }
         }
 
-        const isNewUser = !targetUid;
+        const isNewUser = !authRecord;
 
         // 3. Generate default numeric PIN (6 digits)
         const tempPassword = Math.floor(100000 + Math.random() * 900000).toString(); 
