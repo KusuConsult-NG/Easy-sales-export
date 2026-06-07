@@ -94,20 +94,14 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
 
             if (isCorrupted) {
 
-                logger.warn(`[CooperativeLayout] Purging corrupted/missing member record for user ${userId}`);
+                logger.warn(`[CooperativeLayout] Flagging corrupted/missing member record for user ${userId} (preserving document details)`);
                 
                 const db = getAdminDb();
                 
-                // 1. Delete corrupted record if it exists
-                if (memberData) {
-                    if (memberData.id) {
-                        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberData.id).delete();
-                    } else {
-                        await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).delete();
-                    }
-                }
+                // 1. DO NOT DELETE THE DOCUMENT (preserves user details like BVN, NOK, address, valid ID documents)
+                // Just mark the central registration status as pending_repair so they can fix their names
 
-                // 2. Reset service registration status in USERS collection so checkCooperativeStatusAction sees them as new
+                // 2. Reset service registration status in USERS collection so checkCooperativeStatusAction sees them as needing repair
                 await db.collection(COLLECTIONS.USERS).doc(userId).set({
                     serviceRegistrations: {
                         cooperative: { status: "pending_repair", repairedAt: new Date() },
@@ -119,7 +113,8 @@ async function CooperativeLayoutContent({ children }: { children: React.ReactNod
                 const { redis, CacheKeys } = await import("@/lib/redis");
                 await redis.del(CacheKeys.userProfile(userId));
 
-                redirectPath = "/cooperatives/onboarding?notice=complete-your-registration";
+                // 4. Redirect them to onboarding with repair notice and edit mode active
+                redirectPath = "/cooperatives/onboarding?notice=complete-your-registration&edit=true";
             } else {
                 userProfile = {
                     firstName: memberData?.firstName || "Zere",

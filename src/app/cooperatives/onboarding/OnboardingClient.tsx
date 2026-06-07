@@ -144,9 +144,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                 setIsCheckingStatus(false);
                 return;
             }
-            if (coopStatus === "pending" || coopStatus === "under_review") {
+            if (coopStatus === "pending" || coopStatus === "under_review" || coopStatus === "pending_repair") {
                 const params = new URLSearchParams(window.location.search);
-                const isEditParam = params.get("edit") === "true";
+                const isEditParam = params.get("edit") === "true" || coopStatus === "pending_repair";
 
                 if (isEditParam) {
                     const result = await getCooperativeApplicationAction();

@@ -121,7 +121,8 @@ async function autoProvisionZereCooperative(userId: string, email: string) {
 }
 
 async function autoProvisionLegacyCooperative(userId: string, userData: any) {
-    if (!userData?.legacyOnboardedBy && userData?.serviceRegistrations?.cooperatives?.paymentStatus !== "completed" && userData?.serviceRegistrations?.cooperative?.paymentStatus !== "completed") {
+    // Restrict strictly to legacy onboarded members only to prevent auto-provisioning normal users
+    if (!userData?.legacyOnboardedBy) {
         return;
     }
     try {
@@ -133,7 +134,8 @@ async function autoProvisionLegacyCooperative(userId: string, userData: any) {
             needsWrite = true;
         } else {
             const data = memberDoc.data();
-            if (data?.paymentStatus !== "completed" || data?.membershipStatus !== "approved" || !data?.onboardingCompleted) {
+            // Do not auto-provision or overwrite if they already completed onboarding
+            if (!data?.onboardingCompleted) {
                 needsWrite = true;
             }
         }
@@ -284,6 +286,11 @@ export async function registerCooperativeMemberAction(
         const expectedVersionStr = formData.get("_version") as string | null;
         const expectedVersion = expectedVersionStr ? parseInt(expectedVersionStr, 10) : undefined;
 
+        // Fetch user doc to check if legacy/paid
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const isUserLegacy = userData?.legacyOnboardedBy || userData?.serviceRegistrations?.cooperatives?.paymentStatus === "completed" || userData?.serviceRegistrations?.cooperative?.paymentStatus === "completed";
+
         // Check for existing partial record with payment
         const existingMemberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
         const existingMember = await existingMemberRef.get();
@@ -304,7 +311,7 @@ export async function registerCooperativeMemberAction(
             }
             isLegacyImport = true;
         } else { // Legacy check
-            if (!existingMember.exists) {
+            if (!existingMember.exists && !isUserLegacy) {
                 return { error: "No membership record found. Please complete payment first.", success: false as const, data: null };
             }
 
@@ -312,7 +319,7 @@ export async function registerCooperativeMemberAction(
             }
 
             // 🔒 Verify Payment Status (Authoritative)
-            isLegacyImport = Boolean(memberData?._importSource);
+            isLegacyImport = Boolean(memberData?._importSource) || isUserLegacy;
             if (!isLegacyImport && memberData?.paymentStatus !== "completed" && session.user.email !== "zeredogo@gmail.com") { // Double check processedPayments collection
                 const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
                     .where("userId", "==", userId)
@@ -365,7 +372,9 @@ export async function registerCooperativeMemberAction(
         }
 
         // Update membership record with profile data
-        const updatedData = { firstName: validatedData.firstName,
+        const updatedData = { 
+            userId: userId,
+            firstName: validatedData.firstName,
             otherName: validatedData.otherName || null,
             lastName: validatedData.lastName,
             fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName]
@@ -404,8 +413,11 @@ export async function registerCooperativeMemberAction(
         if (inviteToken) { Object.assign(updatedData, {
                 paymentStatus: "completed",
                 _importSource: "email_invite",
-                userId: userId,
                 createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp() });
+        } else {
+            Object.assign(updatedData, {
+                createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp()
+            });
         }
 
         // Save to Firestore using a transaction for atomicity
@@ -760,10 +772,26 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
             .where("userId", "==", userId)
             .get();
 
-        if (snapshot.empty) { return { error: "No membership found", success: false as const, data: null };
+        let doc;
+        if (snapshot.empty) {
+            // Fallback to direct document ID check
+            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+                // Heal the document by adding the userId field on-the-fly
+                const docData = docSnap.data()!;
+                if (!docData.userId) {
+                    await docRef.update({ userId });
+                }
+                // Mock a snapshot-like structure
+                doc = docSnap;
+            } else {
+                return { error: "No membership found", success: false as const, data: null };
+            }
+        } else {
+            doc = snapshot.docs[0];
         }
 
-        const doc = snapshot.docs[0];
         const membership = serializeDoc<CooperativeMembership>(doc.id, doc.data());
 
         return { error: null,  success: true as const, data: { membership } };
@@ -1178,18 +1206,33 @@ export async function getCooperativeApplicationAction(): Promise<
         if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
         // Find the member doc by userId
-        const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+        let snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', session.user.id)
             .get();
 
-        if (snap.empty) return { success: false as const, error: 'No application found'};
+        if (snap.empty) {
+            // Fallback to direct document ID check
+            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+                // Heal the document by adding the userId field on-the-fly
+                const docData = docSnap.data()!;
+                if (!docData.userId) {
+                    await docRef.update({ userId: session.user.id });
+                }
+                snap = { empty: false, docs: [docSnap] } as any;
+            } else {
+                return { success: false as const, error: 'No application found'};
+            }
+        }
 
         const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
             const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
             return bTime - aTime;
         });
         const data = serializeValue(sortedDocs[0]);
-        return { error: null, success: true as const, data: data, meta: null };
+        // Wrap data in application key to match frontend expectation (OnboardingClient.tsx result.data?.application)
+        return { error: null, success: true as const, data: { application: data, revisionNote: data.revisionNote || null }, meta: null };
     } catch (error) { logger.error('getCooperativeApplicationAction error:', {
             error: error instanceof Error ? error.message : String(error)
         });
@@ -1214,27 +1257,39 @@ export async function resubmitCooperativeApplicationAction(
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
         const existingStatus = userDoc.data()?.serviceRegistrations?.cooperatives?.status;
 
-        const allowedStatuses = ['pending', 'revision_required'];
+        // Allow 'pending_repair' so users in repair can submit their fixes
+        const allowedStatuses = ['pending', 'revision_required', 'pending_repair'];
         if (!allowedStatuses.includes(existingStatus)) { return { success: false as const, error: 'Your application cannot be resubmitted at this time.'};
         }
 
-        // Find the existing member doc
+        // Find the existing member doc by userId or direct document ID fallback
         const snap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .where('userId', '==', session.user.id)
             .get();
 
-        if (snap.empty) return { success: false as const, error: 'No existing application found'};
-
-        const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
-        const memberRef = sortedDocs[0].ref;
+        let memberRef;
+        if (snap.empty) {
+            const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+                memberRef = docRef;
+            } else {
+                return { success: false as const, error: 'No existing application found'};
+            }
+        } else {
+            const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                return bTime - aTime;
+            });
+            memberRef = sortedDocs[0].ref;
+        }
 
         const first = (formData.get('firstName') as string || '').trim();
         const other = (formData.get('otherName') as string || '').trim();
         const last = (formData.get('lastName') as string || '').trim();
-        const updatePayload: Record<string, any> = { firstName: first,
+        const updatePayload: Record<string, any> = { 
+            userId: session.user.id, // Ensure userId is populated
+            firstName: first,
             otherName: other || null,
             lastName: last,
             fullName: [first, other, last].filter(Boolean).join(' '),
