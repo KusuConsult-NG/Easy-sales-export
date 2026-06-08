@@ -158,8 +158,7 @@ async function autoProvisionLegacyCooperative(userId: string, userData: any) {
                 membershipStatus: "active",
                 status: "active",
                 paymentStatus: "completed",
-                onboardingCompleted: true,
-                onboardingCompletedAt: FieldValue.serverTimestamp(),
+                onboardingCompleted: false,
                 updatedAt: FieldValue.serverTimestamp(),
                 createdAt: memberDoc.exists ? memberDoc.data()?.createdAt : FieldValue.serverTimestamp()
             }, { merge: true });
@@ -356,6 +355,15 @@ export async function registerCooperativeMemberAction(
         }
         if (!nin || !/^\d{11}$/.test(nin)) {
             return { error: "A valid 11-digit NIN is required", success: false as const, data: null };
+        }
+
+        const validIdUrl = (formData.get("validIdUrl") as string || "").trim();
+        const passportPhotoUrl = (formData.get("passportPhotoUrl") as string || "").trim();
+        if (!validIdUrl) {
+            return { error: "A valid ID document upload is required", success: false as const, data: null };
+        }
+        if (!passportPhotoUrl) {
+            return { error: "A passport photo upload is required", success: false as const, data: null };
         }
 
         // 🔒 DEDUP GUARD: Collection-level phone & email check
@@ -1281,11 +1289,13 @@ export async function resubmitCooperativeApplicationAction(
             .get();
 
         let memberRef;
+        let existingMemberData: any = null;
         if (snap.empty) {
             const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id);
             const docSnap = await docRef.get();
             if (docSnap.exists) {
                 memberRef = docRef;
+                existingMemberData = docSnap.data();
             } else {
                 return { success: false as const, error: 'No existing application found'};
             }
@@ -1295,11 +1305,18 @@ export async function resubmitCooperativeApplicationAction(
                 return bTime - aTime;
             });
             memberRef = sortedDocs[0].ref;
+            existingMemberData = sortedDocs[0].data();
         }
 
-        const first = (formData.get('firstName') as string || '').trim();
-        const other = (formData.get('otherName') as string || '').trim();
-        const last = (formData.get('lastName') as string || '').trim();
+        const formDataWithTier = new FormData();
+        for (const [k, v] of formData.entries()) formDataWithTier.append(k, v);
+        formDataWithTier.set("membershipTier", "Member");
+
+        const parsed = parseFormData(cooperativeMembershipSchema, formDataWithTier);
+        if (!parsed.success) {
+            return { success: false as const, error: parsed.error ?? "Validation failed" };
+        }
+        const validatedData = parsed.data;
 
         const bvn = (formData.get("bvn") as string || "").trim();
         const nin = (formData.get("nin") as string || "").trim();
@@ -1310,23 +1327,32 @@ export async function resubmitCooperativeApplicationAction(
             return { success: false as const, error: "A valid 11-digit NIN is required" };
         }
 
+        const validIdUrl = (formData.get("validIdUrl") as string) || existingMemberData?.documents?.validId?.url || "";
+        const passportPhotoUrl = (formData.get("passportPhotoUrl") as string) || existingMemberData?.documents?.passportPhoto?.url || "";
+        if (!validIdUrl) {
+            return { success: false as const, error: "Valid ID document is required" };
+        }
+        if (!passportPhotoUrl) {
+            return { success: false as const, error: "Passport photo is required" };
+        }
+
         const updatePayload: Record<string, any> = { 
             userId: session.user.id, // Ensure userId is populated
-            firstName: first,
-            otherName: other || null,
-            lastName: last,
-            fullName: [first, other, last].filter(Boolean).join(' '),
-            dateOfBirth: formData.get('dateOfBirth') || '',
-            gender: formData.get('gender') || '',
-            email: formData.get('email') || '',
-            phone: formData.get('phone') || '',
-            occupation: formData.get('occupation') || '',
-            stateOfOrigin: formData.get('stateOfOrigin') || '',
-            lga: formData.get('lga') || '',
-            residentialAddress: formData.get('residentialAddress') || '',
-            nextOfKinName: formData.get('nextOfKinName') || '',
-            nextOfKinPhone: formData.get('nextOfKinPhone') || '',
-            nextOfKinAddress: formData.get('nextOfKinAddress') || '',
+            firstName: validatedData.firstName,
+            otherName: validatedData.otherName || null,
+            lastName: validatedData.lastName,
+            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName].filter(Boolean).join(' '),
+            dateOfBirth: validatedData.dateOfBirth,
+            gender: validatedData.gender,
+            email: validatedData.email,
+            phone: validatedData.phone,
+            occupation: validatedData.occupation,
+            stateOfOrigin: validatedData.stateOfOrigin,
+            lga: validatedData.lga,
+            residentialAddress: validatedData.residentialAddress,
+            nextOfKinName: validatedData.nextOfKinName,
+            nextOfKinPhone: validatedData.nextOfKinPhone,
+            nextOfKinAddress: validatedData.nextOfKinAddress,
             bvn: bvn,
             nin: nin,
             ninVerified: true,
@@ -1352,26 +1378,26 @@ export async function resubmitCooperativeApplicationAction(
         batch.update(memberRef, updatePayload);
         batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), { 
             'serviceRegistrations.cooperatives.status': 'pending',
-            firstName: first,
-            lastName: last,
-            otherName: other || null,
-            fullName: [first, other, last].filter(Boolean).join(' ').trim(),
-            phone: updatePayload.phone || null,
-            gender: updatePayload.gender || null,
-            stateOfOrigin: updatePayload.stateOfOrigin || null,
-            lga: updatePayload.lga || null,
-            residentialAddress: updatePayload.residentialAddress || null,
-            'address.state': updatePayload.stateOfOrigin || null,
-            'address.lga': updatePayload.lga || null,
-            'address.street': updatePayload.residentialAddress || null,
+            firstName: validatedData.firstName,
+            lastName: validatedData.lastName,
+            otherName: validatedData.otherName || null,
+            fullName: [validatedData.firstName, validatedData.otherName, validatedData.lastName].filter(Boolean).join(' ').trim(),
+            phone: validatedData.phone || null,
+            gender: validatedData.gender || null,
+            stateOfOrigin: validatedData.stateOfOrigin || null,
+            lga: validatedData.lga || null,
+            residentialAddress: validatedData.residentialAddress || null,
+            'address.state': validatedData.stateOfOrigin || null,
+            'address.lga': validatedData.lga || null,
+            'address.street': validatedData.residentialAddress || null,
             bvn: bvn || null,
             bvnVerified: bvn ? true : false,
             nin: nin || null,
             ninVerified: nin ? true : false,
             nextOfKin: {
-                name: updatePayload.nextOfKinName || null,
-                phone: updatePayload.nextOfKinPhone || null,
-                address: updatePayload.nextOfKinAddress || null,
+                name: validatedData.nextOfKinName || null,
+                phone: validatedData.nextOfKinPhone || null,
+                address: validatedData.nextOfKinAddress || null,
             },
             updatedAt: FieldValue.serverTimestamp() 
         });
@@ -1621,8 +1647,7 @@ export async function updatePassportPhotoAction(
                     membershipStatus: "active",
                     status: "active",
                     paymentStatus: "completed",
-                    onboardingCompleted: true,
-                    onboardingCompletedAt: FieldValue.serverTimestamp(),
+                    onboardingCompleted: false,
                     documents: {
                         passportPhoto: {
                             name: passportName,
