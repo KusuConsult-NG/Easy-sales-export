@@ -744,6 +744,33 @@ export const updatePropertyAction = withFlexibleSafeAction("updatePropertyAction
 /**
  * Submit Farm Nation Onboarding
  */
+const farmNationOnboardingSchema = z.object({
+    role: z.enum(["buyer", "seller", "both"]),
+    profile: z.object({
+        firstName: z.string().min(2, "First name is required"),
+        lastName: z.string().min(2, "Last name is required"),
+        otherName: z.string().optional().nullable().or(z.literal("")),
+        phone: z.string().min(10, "Phone number is required"),
+        businessName: z.string().optional().nullable().or(z.literal("")),
+        state: z.string().min(2, "State is required"),
+        lga: z.string().min(2, "LGA is required"),
+        address: z.string().min(5, "Address is required"),
+    }),
+    interests: z.object({
+        propertyTypes: z.array(z.string()).optional(),
+        budgetRange: z.string().optional(),
+        preferredSize: z.string().optional(),
+        listingTypes: z.array(z.string()).optional(),
+        totalAcreage: z.string().optional(),
+        readyToList: z.boolean().optional(),
+    }).optional().nullable(),
+    terms: z.object({
+        termsAccepted: z.boolean(),
+        privacyAccepted: z.boolean(),
+        feeDisclosureAccepted: z.boolean(),
+    })
+});
+
 export interface FarmNationOnboardingData { role: "buyer" | "seller" | "both";
     profile: {
         firstName: string;
@@ -790,22 +817,19 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
             return { success: false as const, error: "You are already registered for Farm Nation.", data: null, meta: null };
         }
 
-        // Validate required fields
-        if (!data.role || !data.profile || !data.terms) { 
-            return { success: false as const, error: "Missing required onboarding data", data: null, meta: null };
+        // Validate onboarding data with Zod schema
+        const validation = farmNationOnboardingSchema.safeParse(data);
+        if (!validation.success) {
+            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null, meta: null };
         }
-
-        // Validate terms acceptance
-        if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) { 
-            return { success: false as const, error: "You must accept all terms to continue", data: null, meta: null };
-        }
+        const validatedData = validation.data;
 
         // Prepare user roles
         const roles: string[] = [];
-        if (data.role === "buyer" || data.role === "both") { 
+        if (validatedData.role === "buyer" || validatedData.role === "both") { 
             roles.push("investor");
         }
-        if (data.role === "seller" || data.role === "both") { 
+        if (validatedData.role === "seller" || validatedData.role === "both") { 
             roles.push("farmer");
         }
 
@@ -815,44 +839,46 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
             const appRef = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc();
 
             // Prepare names
-            const fullName = [data.profile.firstName, data.profile.otherName, data.profile.lastName]
+            const fullName = [validatedData.profile.firstName, validatedData.profile.otherName, validatedData.profile.lastName]
                 .filter(Boolean).join(" ").trim();
 
             // DISEASE 2 FIX: normalizeUserUpdate mirrors farmNation→farm_nation
             // and phone→phoneNumber so both canonical key variants are always in sync.
             transaction.update(userRef, normalizeUserUpdate({ 
-                "farmNation.role": data.role,
+                "farmNation.role": validatedData.role,
                 "farmNation.profile": {
-                    ...data.profile,
+                    ...validatedData.profile,
                     fullName
                 },
-                "farmNation.interests": data.interests,
+                "farmNation.interests": validatedData.interests,
                 "farmNation.onboardingCompletedAt": new Date().toISOString(),
                 "farmNation.termsAcceptedAt": new Date().toISOString(),
                 roles: FieldValue.arrayUnion(...roles),
                 "serviceRegistrations.farmNation.status": "pending",
+                "serviceRegistrations.farmNation.applicationId": appRef.id,
                 "serviceRegistrations.farmNation.paymentStatus": "completed",
-                "serviceRegistrations.farmNation.role": data.role,
+                "serviceRegistrations.farmNation.role": validatedData.role,
                 "serviceRegistrations.farmNation.completedAt": FieldValue.serverTimestamp(),
                 "serviceRegistrations.farmNation.submittedAt": FieldValue.serverTimestamp(),
-                firstName: data.profile.firstName,
-                lastName: data.profile.lastName,
-                otherName: data.profile.otherName || null,
+                firstName: validatedData.profile.firstName,
+                lastName: validatedData.profile.lastName,
+                otherName: validatedData.profile.otherName || null,
                 fullName,
-                phone: data.profile.phone,
-                stateOfOrigin: data.profile.state,
-                lga: data.profile.lga,
-                residentialAddress: data.profile.address,
+                phone: validatedData.profile.phone,
+                stateOfOrigin: validatedData.profile.state,
+                lga: validatedData.profile.lga,
+                residentialAddress: validatedData.profile.address,
                 updatedAt: FieldValue.serverTimestamp() 
             }));
 
             // Create authoritative record
             transaction.set(appRef, { 
                 userId,
+                applicationId: appRef.id,
                 userEmail: session.user.email,
-                role: data.role,
-                profile: data.profile,
-                interests: data.interests,
+                role: validatedData.role,
+                profile: validatedData.profile,
+                interests: validatedData.interests,
                 status: "pending",
                 submittedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
@@ -892,38 +918,49 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for Farm Nation applications.
         if (status !== "approved") { 
+            let appDoc: any = null;
             let appSnap;
             try {
                 appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                     .where("userId", "==", session.user.id)
-                    .orderBy("submittedAt", "desc")
-                    .limit(1)
                     .get();
             } catch (e: any) {
                 if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.includes("index") || e.message?.includes("INDEX")) {
                     logger.warn("Missing index for checkFarmNationStatusAction, falling back to memory sort");
-                    const rawSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                    appSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
                         .where("userId", "==", session.user.id)
                         .get();
-                    const sortedDocs = [...rawSnap.docs];
-                    sortedDocs.sort((a, b) => {
-                        const aVal = a.data().submittedAt;
-                        const bVal = b.data().submittedAt;
-                        const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
-                        const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
-                        return bTime - aTime;
-                    });
-                    appSnap = {
-                        empty: sortedDocs.length === 0,
-                        docs: sortedDocs.slice(0, 1)
-                    };
                 } else {
                     throw e;
                 }
             }
 
-            if (!appSnap.empty) {
-                const appData = appSnap.docs[0].data();
+            if (appSnap && !appSnap.empty) {
+                const sortedDocs = [...appSnap.docs].sort((a, b) => {
+                    const aVal = a.data().submittedAt || a.data().createdAt;
+                    const bVal = b.data().submittedAt || b.data().createdAt;
+                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+            } else {
+                const appId = userData?.serviceRegistrations?.farmNation?.applicationId;
+                if (appId) {
+                    const directDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(appId).get();
+                    if (directDoc.exists) {
+                        appDoc = directDoc;
+                        // Self-healing: backfill userId on direct application doc if missing
+                        const appData = directDoc.data()!;
+                        if (!appData.userId) {
+                            await directDoc.ref.update({ userId: session.user.id });
+                        }
+                    }
+                }
+            }
+
+            if (appDoc) {
+                const appData = appDoc.data()!;
                 if (appData.status === "approved" || appData.status === "approved_admin") {
                     status = "approved";
                     // Proactively backfill for performance in future logins
@@ -1095,17 +1132,77 @@ async function _getFarmNationApplicationAction(): Promise<ActionResponse<any>> {
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+        const userDoc = await userDocRef.get();
         const userData = userDoc.data();
+        let applicationId = userData?.serviceRegistrations?.farmNation?.applicationId;
 
-        const farmNation = serializeValue(userData?.farmNation);
-        const registration = serializeValue(userData?.serviceRegistrations?.farmNation);
+        let appDoc: any = null;
+        let foundByQuery = false;
 
-        if (!farmNation && !registration) { 
-            return { success: false as const, data: null, error: 'No application found', meta: null };
+        if (applicationId) {
+            const docSnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(applicationId).get();
+            if (docSnap.exists) {
+                appDoc = docSnap;
+            }
         }
 
-        return { error: null, success: true as const, data: { farmNation, registration, rejectionReason: registration?.rejectionReason } };
+        if (!appDoc) {
+            const snap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where('userId', '==', session.user.id)
+                .get();
+
+            if (!snap.empty) {
+                const sortedDocs = snap.docs.sort((a, b) => {
+                    const aVal = a.data().submittedAt || a.data().createdAt;
+                    const bVal = b.data().submittedAt || b.data().createdAt;
+                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+                applicationId = appDoc.id;
+                foundByQuery = true;
+            }
+        }
+
+        const registration = serializeValue(userData?.serviceRegistrations?.farmNation);
+
+        if (!appDoc) { 
+            // Fallback to reading legacy profile if no application document exists yet
+            const farmNation = serializeValue(userData?.farmNation);
+            if (!farmNation && !registration) {
+                return { success: false as const, data: null, error: 'No application found', meta: null };
+            }
+            return { error: null, success: true as const, data: { application: farmNation, registration, rejectionReason: registration?.rejectionReason } };
+        }
+
+        const appData = appDoc.data()!;
+        const serializedApp = serializeValue(appData);
+
+        // Self-healing: backfill missing links
+        const batch = db.batch();
+        let needsCommit = false;
+
+        if (foundByQuery || !userData?.serviceRegistrations?.farmNation?.applicationId) {
+            batch.update(userDocRef, {
+                "serviceRegistrations.farmNation.applicationId": applicationId
+            });
+            needsCommit = true;
+        }
+
+        if (!appData.userId) {
+            batch.update(appDoc.ref, {
+                userId: session.user.id
+            });
+            needsCommit = true;
+        }
+
+        if (needsCommit) {
+            await batch.commit();
+        }
+
+        return { error: null, success: true as const, data: { application: serializedApp, registration, rejectionReason: registration?.rejectionReason || serializedApp.rejectionReason } };
     } catch (error) { 
         logger.error('getFarmNationApplicationAction error:', error);
         return { success: false as const, data: null, error: 'Failed to fetch application', meta: null };
@@ -1129,46 +1226,111 @@ async function _resubmitFarmNationApplicationAction(
 
         const userId = session.user.id;
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
-        const existingStatus = userDoc.data()?.serviceRegistrations?.farmNation?.status;
+        const validation = farmNationOnboardingSchema.safeParse(data);
+        if (!validation.success) {
+            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null, meta: null };
+        }
+        const validatedData = validation.data;
+
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userDocRef.get();
+        const userData = userDoc.data();
+        const existingStatus = userData?.serviceRegistrations?.farmNation?.status;
         const allowedStatuses = ['pending', 'rejected', 'revision_required'];
 
         if (!allowedStatuses.includes(existingStatus || '')) { 
             return { success: false as const, data: null, error: 'Your application cannot be resubmitted at this time.', meta: null };
         }
 
-        if (!data.terms.termsAccepted || !data.terms.privacyAccepted || !data.terms.feeDisclosureAccepted) { 
-            return { success: false as const, data: null, error: 'You must accept all terms to continue', meta: null };
+        let applicationId = userData?.serviceRegistrations?.farmNation?.applicationId;
+        let appRef: any = null;
+
+        if (applicationId) {
+            const directDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(applicationId).get();
+            if (directDoc.exists) {
+                appRef = directDoc.ref;
+            }
         }
 
-        await db.collection(COLLECTIONS.USERS).doc(userId).update(
-            { 
-                "farmNation.role": data.role,
+        if (!appRef) {
+            const snap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where('userId', '==', userId)
+                .get();
+
+            if (!snap.empty) {
+                const sortedDocs = snap.docs.sort((a, b) => {
+                    const aVal = a.data().submittedAt || a.data().createdAt;
+                    const bVal = b.data().submittedAt || b.data().createdAt;
+                    const aTime = aVal?.toDate ? aVal.toDate().getTime() : (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toDate ? bVal.toDate().getTime() : (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                appRef = sortedDocs[0].ref;
+                applicationId = appRef.id;
+            }
+        }
+
+        const fullName = [validatedData.profile.firstName, validatedData.profile.otherName, validatedData.profile.lastName]
+            .filter(Boolean).join(" ").trim();
+
+        await db.runTransaction(async (transaction) => {
+            if (!appRef) {
+                // Legacy case: Create a new document in FARM_NATION_APPLICATIONS
+                const newAppRef = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc();
+                appRef = newAppRef;
+                applicationId = newAppRef.id;
+                transaction.set(newAppRef, {
+                    userId,
+                    applicationId: newAppRef.id,
+                    userEmail: session.user.email || "",
+                    role: validatedData.role,
+                    profile: validatedData.profile,
+                    interests: validatedData.interests,
+                    status: "pending",
+                    submittedAt: FieldValue.serverTimestamp(),
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                transaction.update(appRef, {
+                    role: validatedData.role,
+                    profile: validatedData.profile,
+                    interests: validatedData.interests,
+                    status: "pending",
+                    rejectionReason: null,
+                    resubmittedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // DISEASE 2 FIX: normalizeUserUpdate mirrors farmNation→farm_nation
+            // and phone→phoneNumber so both canonical key variants are always in sync.
+            transaction.update(userDocRef, normalizeUserUpdate({ 
+                "farmNation.role": validatedData.role,
                 "farmNation.profile": {
-                    ...data.profile,
-                    fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
-                        .filter(Boolean).join(" ").trim() 
+                    ...validatedData.profile,
+                    fullName
                 },
-                "farmNation.interests": data.interests,
+                "farmNation.interests": validatedData.interests,
                 "farmNation.resubmittedAt": new Date().toISOString(),
                 "farmNation.termsAcceptedAt": new Date().toISOString(),
+                'serviceRegistrations.farmNation.status': 'pending',
+                'serviceRegistrations.farmNation.applicationId': applicationId,
+                'serviceRegistrations.farmNation.paymentStatus': 'completed',
+                'serviceRegistrations.farmNation.role': validatedData.role,
+                'serviceRegistrations.farmNation.rejectionReason': null,
+                'serviceRegistrations.farmNation.resubmittedAt': FieldValue.serverTimestamp(),
+                // Sync KYC name and profile fields to central user document
+                firstName: validatedData.profile.firstName,
+                lastName: validatedData.profile.lastName,
+                otherName: validatedData.profile.otherName || null,
+                fullName,
+                phone: validatedData.profile.phone,
+                stateOfOrigin: validatedData.profile.state,
+                lga: validatedData.profile.lga,
+                residentialAddress: validatedData.profile.address,
                 updatedAt: FieldValue.serverTimestamp() 
-            }
-        );
-
-        await db.collection(COLLECTIONS.USERS).doc(userId).update({ 
-            'serviceRegistrations.farmNation.status': 'pending',
-            'serviceRegistrations.farmNation.paymentStatus': 'completed',
-            'serviceRegistrations.farmNation.role': data.role,
-            'serviceRegistrations.farmNation.rejectionReason': null,
-            'serviceRegistrations.farmNation.resubmittedAt': FieldValue.serverTimestamp(),
-            // Sync KYC name fields to central user document
-            firstName: data.profile.firstName,
-            lastName: data.profile.lastName,
-            otherName: data.profile.otherName || null,
-            fullName: [data.profile.firstName, data.profile.otherName, data.profile.lastName]
-                .filter(Boolean).join(" ").trim(),
-            updatedAt: FieldValue.serverTimestamp() 
+            }));
         });
 
         try { 

@@ -135,14 +135,34 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
         // If status is not approved, check the source of truth for WAVE applications.
         let status = registration?.status;
         if (status !== "approved") {
+            let appDoc: any = null;
             const appSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
                 .where("userId", "==", session.user.id)
-                .orderBy("applicationDate", "desc")
-                .limit(1)
                 .get();
 
             if (!appSnap.empty) {
-                const appData = appSnap.docs[0].data();
+                const sortedDocs = appSnap.docs.sort((a, b) => {
+                    const aVal = a.data().applicationDate || a.data().createdAt;
+                    const bVal = b.data().applicationDate || b.data().createdAt;
+                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+            } else if (registration?.applicationId) {
+                const directDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(registration.applicationId).get();
+                if (directDoc.exists) {
+                    appDoc = directDoc;
+                    // Self-healing: backfill userId on direct application doc if missing
+                    const appData = directDoc.data()!;
+                    if (!appData.userId) {
+                        await directDoc.ref.update({ userId: session.user.id });
+                    }
+                }
+            }
+
+            if (appDoc) {
+                const appData = appDoc.data()!;
                 if (appData.status === "approved") {
                     status = "approved";
                     // Proactively backfill for performance in future logins
@@ -1370,16 +1390,75 @@ async function _getWaveApplicationAction(): Promise<ActionResponse<any | null>> 
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized', data: null };
 
-        const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const applicationId = userDoc.data()?.serviceRegistrations?.wave?.applicationId;
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+        const userDoc = await userDocRef.get();
+        const userData = userDoc.data();
+        let applicationId = userData?.serviceRegistrations?.wave?.applicationId;
 
-        if (!applicationId) return { success: false as const, error: 'No application found', data: null };
+        let appDoc: any = null;
+        let foundByQuery = false;
 
-        const appDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).get();
-        if (!appDoc.exists) return { success: false as const, error: 'Application not found', data: null };
+        if (applicationId) {
+            const docSnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId).get();
+            if (docSnap.exists) {
+                appDoc = docSnap;
+            }
+        }
 
+        if (!appDoc) {
+            // Fallback to query by userId
+            const snap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where('userId', '==', session.user.id)
+                .get();
+
+            if (!snap.empty) {
+                const sortedDocs = snap.docs.sort((a: any, b: any) => {
+                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+                applicationId = appDoc.id;
+                foundByQuery = true;
+            }
+        }
+
+        if (!appDoc) {
+            return { success: false as const, error: 'No application found', data: null };
+        }
+
+        const appData = appDoc.data()!;
         const { serializeValue } = await import("@/lib/firestore-serialize");
-        return { error: null, success: true as const, data: serializeValue(appDoc.data()) };
+        const data = serializeValue(appData);
+
+        // Self-healing: backfill missing links
+        const batch = db.batch();
+        let needsCommit = false;
+
+        if (foundByQuery || !userData?.serviceRegistrations?.wave?.applicationId) {
+            batch.update(userDocRef, {
+                "serviceRegistrations.wave.applicationId": applicationId
+            });
+            needsCommit = true;
+        }
+
+        if (!appData.userId) {
+            batch.update(appDoc.ref, {
+                userId: session.user.id
+            });
+            needsCommit = true;
+        }
+
+        if (needsCommit) {
+            await batch.commit();
+        }
+
+        return { 
+            error: null, 
+            success: true as const, 
+            data,
+            meta: { revisionNote: appData.revisionNote || null }
+        };
     } catch (error) {
         logger.error('getWaveApplicationAction error:', error);
         return { success: false as const, error: 'Failed to fetch application', data: null };
@@ -1469,6 +1548,8 @@ async function _resubmitWaveApplicationAction(
         }
 
         const validatedData = validation.data;
+        const applicantPhone = validatedData.phone.replace(/\s+/g, '').trim();
+        const applicantNin = validatedData.nin.trim();
 
         await db.runTransaction(async (transaction) => {
             const appRef = db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(applicationId);
@@ -1476,6 +1557,8 @@ async function _resubmitWaveApplicationAction(
 
             transaction.update(appRef, {
                 ...validatedData,
+                bvn: hashData(validatedData.bvn.trim()),
+                nin: hashData(validatedData.nin.trim()),
                 status: 'pending',
                 revisionNote: null,
                 resubmittedAt: FieldValue.serverTimestamp(),
@@ -1484,6 +1567,46 @@ async function _resubmitWaveApplicationAction(
 
             transaction.update(userRef, {
                 'serviceRegistrations.wave.status': 'pending',
+                'serviceRegistrations.wave.paymentStatus': 'completed',
+                'serviceRegistrations.wave.submittedAt': FieldValue.serverTimestamp(),
+                firstName: validatedData.firstName,
+                lastName: validatedData.surname,
+                otherName: validatedData.otherNames || null,
+                fullName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                    .filter(Boolean).join(" ").trim(),
+                phone: applicantPhone,
+                gender: "Female",
+                stateOfOrigin: validatedData.stateOfOrigin,
+                residentialState: validatedData.stateOfResidence,
+                lga: validatedData.lgaOfOrigin,
+                residentialAddress: validatedData.residentialAddress,
+                // Populate KYC
+                bvn: hashData(validatedData.bvn.trim()),
+                nin: hashData(applicantNin),
+                "kyc.bvn": hashData(validatedData.bvn.trim()),
+                "kyc.nin": hashData(applicantNin),
+                // Next of Kin
+                nextOfKinName: validatedData.nextOfKinName,
+                nextOfKinPhone: validatedData.nextOfKinPhone,
+                nextOfKinRelationship: validatedData.nextOfKinRelationship,
+                nextOfKinAddress: "",
+                nextOfKin: {
+                    name: validatedData.nextOfKinName,
+                    phone: validatedData.nextOfKinPhone,
+                    relationship: validatedData.nextOfKinRelationship,
+                    address: ""
+                },
+                // Bank Details
+                bankAccountNumber: validatedData.accountNumber,
+                bankAccountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                    .filter(Boolean).join(" ").trim(),
+                bankDetails: {
+                    accountNumber: validatedData.accountNumber,
+                    bankName: validatedData.bankName,
+                    accountName: [validatedData.firstName, validatedData.otherNames, validatedData.surname]
+                        .filter(Boolean).join(" ").trim(),
+                    bankCode: ""
+                },
                 updatedAt: FieldValue.serverTimestamp()
             });
         });

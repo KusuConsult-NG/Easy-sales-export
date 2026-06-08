@@ -61,18 +61,12 @@ async function autoProvisionZereAcademy(userId: string, email: string) {
 /**
  * Check Academy application status for current user
  */
-async function _checkAcademyStatusAction(): Promise<ActionResponse<any>> {
+async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null>> {
     try {
         const sessionResult = await requireSession();
-        if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized' };
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
-        if (!session?.user) return { success: false as const, data: null, error: 'Unauthorized' };
-
-        // Unified Bypass for zeredogo@gmail.com
-        if (session.user.email === "zeredogo@gmail.com") {
-            await autoProvisionZereAcademy(session.user.id, session.user.email);
-            return { error: null, success: true as const, data: "approved" };
-        }
+        if (!session?.user) return { success: false as const, error: "Unauthorized", data: null };
 
         // ── PRIMARY: Check central user document for service registration ──
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
@@ -83,14 +77,35 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<any>> {
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for applications.
         if (currentStatus !== "approved") {
+            let appDoc: any = null;
             const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
                 .where("userId", "==", session.user.id)
-                .orderBy("submittedAt", "desc")
-                .limit(1)
                 .get();
 
             if (!appSnap.empty) {
-                const appData = appSnap.docs[0].data();
+                const sortedDocs = appSnap.docs.sort((a, b) => {
+                    const aVal = a.data().submittedAt || a.data().createdAt;
+                    const bVal = b.data().submittedAt || b.data().createdAt;
+                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+            } else if (userData?.serviceRegistrations?.academy?.applicationId) {
+                const appId = userData.serviceRegistrations.academy.applicationId;
+                const directDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(appId).get();
+                if (directDoc.exists) {
+                    appDoc = directDoc;
+                    // Self-healing: backfill userId on direct application doc if missing
+                    const appData = directDoc.data()!;
+                    if (!appData.userId) {
+                        await directDoc.ref.update({ userId: session.user.id });
+                    }
+                }
+            }
+
+            if (appDoc) {
+                const appData = appDoc.data()!;
                 if (appData.status === "approved") {
                     currentStatus = "approved";
                     // Proactively backfill for performance in future logins
@@ -1598,18 +1613,67 @@ async function _getAcademyApplicationAction(): Promise<ActionResponse<any>> {
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized', data: null };
 
-        const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-            .where('userId', '==', session.user.id)
-            .get();
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+        const userDoc = await userDocRef.get();
+        const userData = userDoc.data();
+        let applicationId = userData?.serviceRegistrations?.academy?.applicationId;
 
-        if (snap.empty) return { success: false as const, error: 'No application found', data: null };
+        let appDoc: any = null;
+        let foundByQuery = false;
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => {
-            const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
-        const data = serializeValue(sortedDocs[0]);
+        if (applicationId) {
+            const docSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(applicationId).get();
+            if (docSnap.exists) {
+                appDoc = docSnap;
+            }
+        }
+
+        if (!appDoc) {
+            const snap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where('userId', '==', session.user.id)
+                .get();
+
+            if (!snap.empty) {
+                const sortedDocs = snap.docs.sort((a: any, b: any) => {
+                    const aTime = a.data().submittedAt?.toMillis?.() || a.data().submittedAt?.seconds * 1000 || a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().submittedAt?.toMillis?.() || b.data().submittedAt?.seconds * 1000 || b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+                applicationId = appDoc.id;
+                foundByQuery = true;
+            }
+        }
+
+        if (!appDoc) {
+            return { success: false as const, error: 'No application found', data: null };
+        }
+
+        const appData = appDoc.data()!;
+        const data = serializeValue(appData);
+
+        // Self-healing: backfill missing links
+        const batch = db.batch();
+        let needsCommit = false;
+
+        if (foundByQuery || !userData?.serviceRegistrations?.academy?.applicationId) {
+            batch.update(userDocRef, {
+                "serviceRegistrations.academy.applicationId": applicationId
+            });
+            needsCommit = true;
+        }
+
+        if (!appData.userId) {
+            batch.update(appDoc.ref, {
+                userId: session.user.id
+            });
+            needsCommit = true;
+        }
+
+        if (needsCommit) {
+            await batch.commit();
+        }
+
         return { success: true, error: null, data };
     } catch (error) {
         logger.error("getAcademyApplicationAction error:", {
@@ -1775,7 +1839,12 @@ async function _resubmitAcademyApplicationAction(
 ): Promise<ActionResponse<null>> {
     try {
         // Validate input
-        AcademyApplicationInputSchema.parse(data);
+        const validation = AcademyApplicationInputSchema.safeParse(data);
+        if (!validation.success) {
+            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null };
+        }
+
+        const validatedData = validation.data;
 
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, data: null, error: 'Unauthorized' };
@@ -1809,17 +1878,29 @@ async function _resubmitAcademyApplicationAction(
 
             // 1. Update application
             transaction.update(latestDoc.ref, {
-                ...data,
+                ...validatedData,
                 status: 'pending',
                 revisionNote: null,
                 resubmittedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
-            // 2. Update user status
+            // 2. Update user status and synchronize profile details
             const userRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
             transaction.update(userRef, {
                 'serviceRegistrations.academy.status': 'pending',
+                firstName: validatedData.personalInfo.firstName,
+                lastName: validatedData.personalInfo.lastName,
+                otherName: validatedData.personalInfo.otherName || null,
+                fullName: [
+                    validatedData.personalInfo.firstName,
+                    validatedData.personalInfo.otherName,
+                    validatedData.personalInfo.lastName,
+                ].filter(Boolean).join(" ").trim(),
+                phone: validatedData.personalInfo.phone,
+                gender: validatedData.personalInfo.gender,
+                stateOfOrigin: validatedData.personalInfo.state,
+                lga: validatedData.personalInfo.lga,
                 updatedAt: FieldValue.serverTimestamp(),
             });
         });

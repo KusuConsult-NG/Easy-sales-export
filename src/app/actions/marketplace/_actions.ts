@@ -46,14 +46,36 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
         let accountType = userData?.serviceRegistrations?.marketplace?.accountType;
 
         // ── AUTHORITATIVE CHECK: Check real verification record ──────
-        if (status !== "approved") { const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+        if (status !== "approved") {
+            let verDoc: any = null;
+            const verSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
                 .where("userId", "==", session.user.id)
-                .orderBy("createdAt", "desc")
-                .limit(1)
                 .get();
 
             if (!verSnap.empty) {
-                const verData = verSnap.docs[0].data();
+                const sortedDocs = verSnap.docs.sort((a, b) => {
+                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                verDoc = sortedDocs[0];
+            } else {
+                const verId = userData?.serviceRegistrations?.marketplace?.verificationId || userData?.sellerVerificationId;
+                if (verId) {
+                    const directDoc = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verId).get();
+                    if (directDoc.exists) {
+                        verDoc = directDoc;
+                        // Self-healing: backfill userId on direct verification doc if missing
+                        const verData = directDoc.data()!;
+                        if (!verData.userId) {
+                            await directDoc.ref.update({ userId: session.user.id });
+                        }
+                    }
+                }
+            }
+
+            if (verDoc) {
+                const verData = verDoc.data()!;
                 if (verData.status === "approved") {
                     status = "approved";
                     accountType = verData.accountType || "seller";
@@ -64,7 +86,8 @@ async function _checkMarketplaceStatusAction(): Promise<ActionResponse<{ status:
                         "serviceRegistrations.marketplace.syncedAt": new Date().toISOString(),
                         _version: FieldValue.increment(1)
                     });
-                } else if (verData.status) { status = verData.status;
+                } else if (verData.status) {
+                    status = verData.status;
                     accountType = verData.accountType || accountType;
                 }
             }
@@ -332,20 +355,68 @@ async function _getSellerVerificationAction(): Promise<ActionResponse<{ verifica
         const { session } = sessionResult;
 
         const userId = session.user.id;
-        const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", userId)
-            .get();
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userDocRef.get();
+        const userData = userDoc.data();
+        let verificationId = userData?.serviceRegistrations?.marketplace?.verificationId || userData?.sellerVerificationId;
 
-        if (snapshot.empty) { 
+        let verDoc: any = null;
+        let foundByQuery = false;
+
+        if (verificationId) {
+            const docSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId).get();
+            if (docSnap.exists) {
+                verDoc = docSnap;
+            }
+        }
+
+        if (!verDoc) {
+            const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("userId", "==", userId)
+                .get();
+
+            if (!snapshot.empty) {
+                const sortedDocs = snapshot.docs.sort((a, b) => { 
+                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                verDoc = sortedDocs[0];
+                verificationId = verDoc.id;
+                foundByQuery = true;
+            }
+        }
+
+        if (!verDoc) { 
             return { error: null, success: true as const, data: { verification: null } };
         }
 
-        const sortedDocs = snapshot.docs.sort((a, b) => { 
-            const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
-        const verification = serializeDoc<SellerVerification>(sortedDocs[0].id, sortedDocs[0].data());
+        const verData = verDoc.data()!;
+        const verification = serializeDoc<SellerVerification>(verDoc.id, verData);
+
+        // Self-healing: backfill missing links
+        const batch = db.batch();
+        let needsCommit = false;
+
+        if (foundByQuery || !userData?.serviceRegistrations?.marketplace?.verificationId) {
+            batch.update(userDocRef, {
+                "serviceRegistrations.marketplace.verificationId": verificationId,
+                sellerVerificationId: verificationId,
+                _version: FieldValue.increment(1)
+            });
+            needsCommit = true;
+        }
+
+        if (!verData.userId) {
+            batch.update(verDoc.ref, {
+                userId: session.user.id
+            });
+            needsCommit = true;
+        }
+
+        if (needsCommit) {
+            await batch.commit();
+        }
 
         return { error: null, success: true as const, data: { verification } };
     } catch (error) { 
@@ -455,12 +526,20 @@ async function _submitMarketplaceOnboardingAction(
             logger.warn("Failed to parse location JSON, using defaults", { userId }); 
         }
 
+        if (!location?.state || !location?.lga || !location?.address) {
+            return { success: false as const, error: "Location details (State, LGA, Address) are required.", data: null };
+        }
+
         const bankAccountStr = formData.get("bankAccount") as string;
         let bankAccount = { bankName: "", accountNumber: "", accountName: "" };
         try { 
             bankAccount = JSON.parse(bankAccountStr);
         } catch (e) { 
             logger.warn("Failed to parse bankAccount JSON, using defaults", { userId }); 
+        }
+
+        if (!bankAccount?.bankName || !bankAccount?.accountNumber || !bankAccount?.accountName) {
+            return { success: false as const, error: "Bank account details (Bank Name, Account Number, Account Name) are required.", data: null };
         }
 
         const verificationId = `seller_${userId}_${timestamp}`;
@@ -1826,33 +1905,113 @@ async function _resubmitSellerVerificationAction(data: unknown): Promise<ActionR
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
         const { session } = sessionResult;
 
-        // Find the most recent rejected verification for this user
-        const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
-            .where("userId", "==", session.user.id)
-            .orderBy("createdAt", "desc")
-            .limit(1)
-            .get();
+        // Validate payload using Zod schema
+        const validation = SellerVerificationSchema.safeParse(data);
+        if (!validation.success) {
+            return {
+                success: false as const,
+                error: validation.error.issues.map(i => i.message).join(", "),
+                data: null
+            };
+        }
+        const validatedData = validation.data;
 
-        if (snapshot.empty) {
-            return { success: false as const, error: "No verification record found to resubmit.", data: null };
+        const userId = session.user.id;
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(userId);
+        const userDoc = await userDocRef.get();
+        const userData = userDoc.data();
+        let verificationId = userData?.serviceRegistrations?.marketplace?.verificationId || userData?.sellerVerificationId;
+
+        let docRef: any = null;
+        let existing: any = null;
+
+        if (verificationId) {
+            const directDoc = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(verificationId).get();
+            if (directDoc.exists) {
+                docRef = directDoc.ref;
+                existing = directDoc.data();
+            }
         }
 
-        const doc = snapshot.docs[0];
-        const existing = doc.data();
+        if (!docRef) {
+            // Find the most recent rejected verification for this user
+            const snapshot = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("userId", "==", userId)
+                .get();
+
+            if (!snapshot.empty) {
+                const sortedDocs = snapshot.docs.sort((a, b) => {
+                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                docRef = sortedDocs[0].ref;
+                existing = sortedDocs[0].data();
+                verificationId = docRef.id;
+            }
+        }
+
+        if (!docRef) {
+            return { success: false as const, error: "No verification record found to resubmit.", data: null };
+        }
         
         if (existing?.status !== "rejected") {
             return { success: false as const, error: `Can only resubmit rejected verifications (Current: ${existing?.status})`, data: null };
         }
 
-        await doc.ref.update({ 
-            ...(data as any),
-            status: "pending",
-            submittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            rejectionReason: null
+        await db.runTransaction(async (transaction) => {
+            transaction.update(docRef, { 
+                ...validatedData,
+                userId, // Ensure userId is populated
+                status: "pending",
+                submittedAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                rejectionReason: null
+            });
+
+            // Update user record
+            const address = validatedData.address;
+            const bankAccount = validatedData.bankAccount;
+            const cac = validatedData.cac;
+
+            transaction.update(userDocRef, {
+                sellerVerificationStatus: "pending",
+                sellerVerificationId: docRef.id,
+                "serviceRegistrations.marketplace.status": "pending",
+                "serviceRegistrations.marketplace.verificationId": docRef.id,
+                "serviceRegistrations.marketplace.resubmittedAt": FieldValue.serverTimestamp(),
+                
+                // Concurrently replicate onboarding details directly to the parent user
+                ...(validatedData.nin ? { nin: validatedData.nin, ninVerified: true } : {}),
+                ...(validatedData.bvn ? { bvn: validatedData.bvn, bvnVerified: true } : {}),
+                ...(cac ? { cacNumber: cac, cacVerified: true } : {}),
+                ...(bankAccount?.accountNumber ? {
+                    bankDetails: {
+                        accountNumber: bankAccount.accountNumber,
+                        bankName: bankAccount.bankName || "",
+                        accountName: bankAccount.accountName || "",
+                        bankCode: bankAccount.bankCode || ""
+                    }
+                } : {}),
+                ...(address?.street ? {
+                    address: {
+                        street: address.street,
+                        city: address.city || "",
+                        state: address.state || "",
+                        lga: address.lga || "",
+                        country: address.country || "Nigeria"
+                    },
+                    residentialAddress: address.street,
+                    stateOfOrigin: address.state,
+                    lga: address.lga
+                } : {}),
+
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1) 
+            });
         });
 
-        return { error: null, success: true as const, data: { verificationId: doc.id } };
+        return { error: null, success: true as const, data: { verificationId: docRef.id } };
     } catch (error: any) { 
         logger.error("Resubmit verification error:", error);
         return { success: false as const, error: error instanceof Error ? error.message : "Resubmission failed", data: null };

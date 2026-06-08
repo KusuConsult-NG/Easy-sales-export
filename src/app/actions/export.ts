@@ -30,6 +30,33 @@ const exportWindowSchema = z.object({ commodity: z.enum(["yam", "sesame", "hibis
 
 export type ExportWindowFormData = z.infer<typeof exportWindowSchema>;
 
+const exportOnboardingSchema = z.object({
+    profile: z.object({
+        firstName: z.string().min(2, "First name is required"),
+        lastName: z.string().min(2, "Last name is required"),
+        otherName: z.string().optional().nullable().or(z.literal("")),
+        phone: z.string().min(10, "Phone number is required"),
+        email: z.string().email().optional().or(z.literal("")),
+        state: z.string().min(2, "State is required"),
+        lga: z.string().min(2, "LGA is required"),
+        address: z.string().min(5, "Address is required"),
+    }),
+    kycData: z.object({
+        nin: z.string().length(11, "NIN must be 11 digits").optional().or(z.literal("")),
+        bvn: z.string().length(11, "BVN must be 11 digits").optional().or(z.literal("")),
+        cacNumber: z.string().optional().or(z.literal("")),
+    }),
+    bank: z.object({
+        accountNumber: z.string().length(10, "Account number must be 10 digits"),
+        bankName: z.string().min(2, "Bank name is required"),
+        accountName: z.string().min(2, "Account name is required"),
+    }),
+    terms: z.object({
+        termsAccepted: z.boolean(),
+        privacyAccepted: z.boolean(),
+    })
+});
+
 // Type definitions
 
 import type { ExportWindow, ExportOnboardingApplication } from "@/lib/types/firestore";
@@ -446,8 +473,22 @@ export async function submitExportOnboardingAction(
         try { terms = JSON.parse((formData.get("terms") as string | null) ?? "{}"); }
         catch { return { success: false as const, error: "Invalid terms data", meta: null }; }
 
+        // Validate payload using Zod schema
+        const validation = exportOnboardingSchema.safeParse({ profile, kycData, bank, terms });
+        if (!validation.success) {
+            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", meta: null };
+        }
+        const validatedData = validation.data;
+
         const idDocument = formData.get("idDocument");
         const proofOfAddress = formData.get("proofOfAddress");
+
+        if (!idDocument || (idDocument instanceof File && idDocument.size === 0)) {
+            return { success: false as const, error: "ID Document is required", meta: null };
+        }
+        if (!proofOfAddress || (proofOfAddress instanceof File && proofOfAddress.size === 0)) {
+            return { success: false as const, error: "Proof of Address document is required", meta: null };
+        }
 
         // Upload Documents
         const documents: any = {};
@@ -481,13 +522,13 @@ export async function submitExportOnboardingAction(
         const fullApplication = { applicationId,
             userId,
             userEmail: session.user.email,
-            profile,
+            profile: validatedData.profile,
             kyc: {
-                ...kycData,
+                ...validatedData.kycData,
                 documents: documents // Now contains URLs
             },
-            bank,
-            terms,
+            bank: validatedData.bank,
+            terms: validatedData.terms,
             status: "pending_review",
             submittedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
@@ -501,11 +542,11 @@ export async function submitExportOnboardingAction(
         // ALSO mirror PII from the profile object to the root User doc so admin broadcasts,
         // Communication Hub queries, and user listings can find this user's data.
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-        const profileFirstName = profile.firstName || kycData.firstName || "";
-        const profileLastName  = profile.lastName  || kycData.lastName  || "";
-        const profileOtherName = profile.otherName || kycData.otherNames || null;
+        const profileFirstName = validatedData.profile.firstName;
+        const profileLastName  = validatedData.profile.lastName;
+        const profileOtherName = validatedData.profile.otherName || null;
         const computedFullName = [profileFirstName, profileOtherName, profileLastName]
-            .filter(Boolean).join(" ").trim() || profile.fullName || kycData.fullName || "";
+            .filter(Boolean).join(" ").trim();
 
         batch.update(userRef, { "serviceRegistrations.export.status": "pending_approval",
             "serviceRegistrations.export.paymentStatus": "completed",
@@ -516,8 +557,8 @@ export async function submitExportOnboardingAction(
             ...(profileLastName   && { lastName: profileLastName }),
             ...(profileOtherName  !== null && { otherName: profileOtherName }),
             ...(computedFullName  && { fullName: computedFullName }),
-            ...(profile.phone     ? { phone: profile.phone as string }    : {}),
-            ...(profile.state     ? { stateOfOrigin: profile.state as string } : {}),
+            phone: validatedData.profile.phone,
+            stateOfOrigin: validatedData.profile.state,
             updatedAt: FieldValue.serverTimestamp() });
 
         await batch.commit();
@@ -696,14 +737,36 @@ export async function checkExportStatusAction(): Promise<string | null> { try {
 
         // ── AUTHORITATIVE CHECK: Check real application record ──────
         // If status is not approved, check the source of truth for Export applications.
-        if (status !== "approved") { const appSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+        if (status !== "approved") {
+            let appDoc: any = null;
+            const appSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
                 .where("userId", "==", session.user.id)
-                .orderBy("submittedAt", "desc")
-                .limit(1)
                 .get();
 
             if (!appSnap.empty) {
-                const appData = appSnap.docs[0].data();
+                const sortedDocs = appSnap.docs.sort((a, b) => {
+                    const aVal = a.data().submittedAt || a.data().createdAt;
+                    const bVal = b.data().submittedAt || b.data().createdAt;
+                    const aTime = aVal?.toMillis?.() || aVal?.seconds * 1000 || (aVal ? new Date(aVal).getTime() : 0);
+                    const bTime = bVal?.toMillis?.() || bVal?.seconds * 1000 || (bVal ? new Date(bVal).getTime() : 0);
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+            } else if (userData?.serviceRegistrations?.export?.applicationId) {
+                const appId = userData.serviceRegistrations.export.applicationId;
+                const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(appId).get();
+                if (directDoc.exists) {
+                    appDoc = directDoc;
+                    // Self-healing: backfill userId on direct application doc if missing
+                    const appData = directDoc.data()!;
+                    if (!appData.userId) {
+                        await directDoc.ref.update({ userId: session.user.id });
+                    }
+                }
+            }
+
+            if (appDoc) {
+                const appData = appDoc.data()!;
                 if (appData.status === "approved" || appData.status === "approved_admin") {
                     status = "approved";
                     // Proactively backfill for performance in future logins
@@ -999,18 +1062,73 @@ export async function getExportApplicationAction(): Promise<
         const { session } = sessionResult;
         if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
-        const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-            .where('userId', '==', session.user.id)
-            .get();
+        const userDocRef = db.collection(COLLECTIONS.USERS).doc(session.user.id);
+        const userDoc = await userDocRef.get();
+        const userData = userDoc.data();
+        let applicationId = userData?.serviceRegistrations?.export?.applicationId;
 
-        if (snap.empty) return { success: false as const, error: 'No application found'};
+        let appDoc: any = null;
+        let foundByQuery = false;
 
-        const sortedDocs = snap.docs.map(d => d.data()).sort((a: any, b: any) => { const aTime = a.createdAt?.toMillis?.() || a.createdAt?.seconds * 1000 || 0;
-            const bTime = b.createdAt?.toMillis?.() || b.createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
-        const data = serializeValue(sortedDocs[0]);
-        return { error: null, success: true as const, data: data };
+        if (applicationId) {
+            const docSnap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
+            if (docSnap.exists) {
+                appDoc = docSnap;
+            }
+        }
+
+        if (!appDoc) {
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where('userId', '==', session.user.id)
+                .get();
+
+            if (!snap.empty) {
+                const sortedDocs = snap.docs.sort((a, b) => {
+                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                appDoc = sortedDocs[0];
+                applicationId = appDoc.id;
+                foundByQuery = true;
+            }
+        }
+
+        if (!appDoc) return { success: false as const, error: 'No application found'};
+
+        const appData = appDoc.data()!;
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const data = serializeValue(appData);
+
+        // Self-healing: backfill missing links
+        const batch = db.batch();
+        let needsCommit = false;
+
+        if (foundByQuery || !userData?.serviceRegistrations?.export?.applicationId) {
+            batch.update(userDocRef, {
+                "serviceRegistrations.export.applicationId": applicationId
+            });
+            needsCommit = true;
+        }
+
+        if (!appData.userId) {
+            batch.update(appDoc.ref, {
+                userId: session.user.id
+            });
+            needsCommit = true;
+        }
+
+        if (needsCommit) {
+            await batch.commit();
+        }
+
+        return { 
+            error: null, 
+            success: true as const, 
+            ...data,
+            data: data,
+            revisionNote: data.revisionNote || null
+        };
     } catch (error) { logger.error('getExportApplicationAction error:', error);
         return { success: false as const, error: 'Failed to fetch application'};
     }
@@ -1175,30 +1293,100 @@ export async function resubmitExportApplicationAction(
         if (!allowedStatuses.includes(existingStatus || '')) { return { success: false as const, data: null, error: 'Your application cannot be resubmitted at this time.', meta: null };
         }
 
-        const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
-            .where('userId', '==', userId)
-            .get();
+        let applicationId = userDoc.data()?.serviceRegistrations?.export?.applicationId;
+        let appRef: any = null;
+        let oldData: any = null;
+        let foundByQuery = false;
 
-        if (snap.empty) return { success: false as const, data: null, error: 'No existing application found', meta: null };
+        if (applicationId) {
+            const directDoc = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS).doc(applicationId).get();
+            if (directDoc.exists) {
+                appRef = directDoc.ref;
+                oldData = directDoc.data();
+            }
+        }
 
-        const sortedDocs = snap.docs.sort((a, b) => { const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
-            const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
-            return bTime - aTime;
-        });
-        const appRef = sortedDocs[0].ref;
+        if (!appRef) {
+            const snap = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where('userId', '==', userId)
+                .get();
+
+            if (!snap.empty) {
+                const sortedDocs = snap.docs.sort((a, b) => {
+                    const aTime = a.data().createdAt?.toMillis?.() || a.data().createdAt?.seconds * 1000 || 0;
+                    const bTime = b.data().createdAt?.toMillis?.() || b.data().createdAt?.seconds * 1000 || 0;
+                    return bTime - aTime;
+                });
+                appRef = sortedDocs[0].ref;
+                oldData = sortedDocs[0].data();
+                applicationId = appRef.id;
+                foundByQuery = true;
+            }
+        }
+
+        if (!appRef) return { success: false as const, data: null, error: 'No existing application found', meta: null };
+
+        const profile = fields.profile || {};
+        const kycData = fields.kyc || {};
+        const bank = fields.bank || {};
+        const terms = fields.terms || {};
+
+        // Validate payload using Zod schema
+        const validation = exportOnboardingSchema.safeParse({ profile, kycData, bank, terms });
+        if (!validation.success) {
+            return { success: false as const, error: validation.error.issues[0]?.message || "Validation failed", data: null, meta: null };
+        }
+        const validatedData = validation.data;
 
         const batch = db.batch();
-        batch.update(appRef, { ...fields,
+        batch.update(appRef, { 
+            userId, // Ensure userId is populated
+            profile: validatedData.profile,
+            kyc: {
+                ...validatedData.kycData,
+                documents: fields.kyc?.documents || {}
+            },
+            bank: validatedData.bank,
+            terms: validatedData.terms,
             status: 'pending_review',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp() });
+            updatedAt: FieldValue.serverTimestamp() 
+        });
 
-        batch.update(db.collection(COLLECTIONS.USERS).doc(userId), { 'serviceRegistrations.export.status': 'pending_approval',
-            updatedAt: FieldValue.serverTimestamp() });
+        const profileFirstName = validatedData.profile.firstName;
+        const profileLastName  = validatedData.profile.lastName;
+        const profileOtherName = validatedData.profile.otherName || null;
+        const computedFullName = [profileFirstName, profileOtherName, profileLastName]
+            .filter(Boolean).join(" ").trim();
 
-        const oldData = snap.docs[0].data();
-        const oldStatus = oldData.status;
+        batch.update(db.collection(COLLECTIONS.USERS).doc(userId), { 
+            'serviceRegistrations.export.status': 'pending_approval',
+            'serviceRegistrations.export.applicationId': applicationId,
+            // Mirror PII to root
+            ...(profileFirstName  && { firstName: profileFirstName }),
+            ...(profileLastName   && { lastName: profileLastName }),
+            ...(profileOtherName  !== null && { otherName: profileOtherName }),
+            ...(computedFullName  && { fullName: computedFullName }),
+            phone: validatedData.profile.phone,
+            stateOfOrigin: validatedData.profile.state,
+            // Mirror bank details
+            ...(validatedData.bank.accountNumber ? {
+                bankDetails: {
+                    accountNumber: validatedData.bank.accountNumber,
+                    bankName: validatedData.bank.bankName || "",
+                    accountName: validatedData.bank.accountName || "",
+                    bankCode: ""
+                }
+            } : {}),
+            // Mirror KYC details
+            ...(validatedData.kycData.nin ? { nin: validatedData.kycData.nin, ninVerified: true } : {}),
+            ...(validatedData.kycData.bvn ? { bvn: validatedData.kycData.bvn, bvnVerified: true } : {}),
+            ...(validatedData.kycData.cacNumber ? { cacNumber: validatedData.kycData.cacNumber, cacVerified: true } : {}),
+            updatedAt: FieldValue.serverTimestamp() 
+        });
+
+        const oldStatus = oldData?.status;
 
         await batch.commit();
 
