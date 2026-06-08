@@ -91,6 +91,9 @@ export type CooperativeMembershipRecord = {
     // Timestamps
     createdAt: Date;
     updatedAt: Date;
+    bvn?: string;
+    nin?: string;
+    ninVerified?: boolean;
 };
 
 // ============================================

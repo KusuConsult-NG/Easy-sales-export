@@ -19,6 +19,7 @@ interface DocumentUploadStepProps {
         passportPhoto?: { name: string; url: string };
         proofOfAddress?: { name: string; url: string };
         bvn?: string;
+        nin?: string;
     };
     onChange: (data: any) => void;
     onNext: () => void;
@@ -50,6 +51,11 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
         // BVN format check - now required
         if (!data.bvn || !/^\d{11}$/.test(data.bvn)) {
             newErrors.bvn = "A valid 11-digit BVN is required";
+        }
+
+        // NIN format check - now required
+        if (!data.nin || !/^\d{11}$/.test(data.nin)) {
+            newErrors.nin = "A valid 11-digit NIN is required";
         }
 
         if (!torAgreed) {
@@ -135,8 +141,8 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                     description="Utility bill, bank statement, or tenancy agreement"
                 />
 
-                {/* BVN — required via IdInput standardize */}
-                <div className="pt-4 border-t border-slate-100">
+                {/* BVN and NIN inputs side-by-side */}
+                <div className="pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <IdInput
                         label="Bank Verification Number (BVN)"
                         required
@@ -146,9 +152,22 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                         showCount
                         maxLength={11}
                         placeholder="11-digit BVN"
-                        hint="Your 11-digit BVN — used for identity checks during admin review. 📞 Dial *565*0# to retrieve your BVN."
+                        hint="Your 11-digit BVN. 📞 Dial *565*0# to retrieve your BVN."
                         accentColor="purple"
                         error={errors.bvn}
+                    />
+                    <IdInput
+                        label="National Identification Number (NIN)"
+                        required
+                        value={data.nin || ""}
+                        onChange={(v) => onChange({ ...data, nin: v })}
+                        digitsOnly
+                        showCount
+                        maxLength={11}
+                        placeholder="11-digit NIN"
+                        hint="Your 11-digit National Identification Number (NIN)."
+                        accentColor="purple"
+                        error={errors.nin}
                     />
                 </div>
 

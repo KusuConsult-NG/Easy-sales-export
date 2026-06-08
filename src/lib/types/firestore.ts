@@ -165,6 +165,9 @@ export interface CooperativeMember {
         proofOfAddress?: { name: string; url: string };
         bvn?: string;            // Optional — collected, not live-verified
     };
+    bvn?: string;
+    nin?: string;
+    ninVerified?: boolean;
     createdAt?: Date;
     updatedAt?: Date;
 }

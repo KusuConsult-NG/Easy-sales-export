@@ -77,7 +77,8 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         validId: undefined as { name: string; url: string } | undefined,
         passportPhoto: undefined as { name: string; url: string } | undefined,
         proofOfAddress: undefined as { name: string; url: string } | undefined,
-        bvn: ""
+        bvn: "",
+        nin: ""
     });
 
     // ── Status check on mount — replaces server-side Firestore read ────────────
@@ -181,6 +182,16 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         if (d._version !== undefined) {
                             setVersion(d._version);
                         }
+                        if (d.documents || d.bvn || d.nin) {
+                            setDocuments((prev: any) => ({
+                                ...prev,
+                                validId: d.documents?.validId || prev.validId,
+                                passportPhoto: d.documents?.passportPhoto || prev.passportPhoto,
+                                proofOfAddress: d.documents?.proofOfAddress || prev.proofOfAddress,
+                                bvn: d.bvn || prev.bvn,
+                                nin: d.nin || prev.nin
+                            }));
+                        }
                     }
                     setIsEditMode(true);
                     setIsCheckingStatus(false);
@@ -231,6 +242,16 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     }
                     if (d._version !== undefined) {
                         setVersion(d._version);
+                    }
+                    if (d.documents || d.bvn || d.nin) {
+                        setDocuments((prev: any) => ({
+                            ...prev,
+                            validId: d.documents?.validId || prev.validId,
+                            passportPhoto: d.documents?.passportPhoto || prev.passportPhoto,
+                            proofOfAddress: d.documents?.proofOfAddress || prev.proofOfAddress,
+                            bvn: d.bvn || prev.bvn,
+                            nin: d.nin || prev.nin
+                        }));
                     }
                 }
                 if (result.data?.revisionNote) setRevisionNote(result.data.revisionNote);
@@ -375,6 +396,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             !nextOfKin.phone.trim() ||
             !nextOfKin.address.trim();
 
+        const missingDocs =
+            !documents.validId?.url ||
+            !documents.passportPhoto?.url ||
+            !documents.bvn || !/^\d{11}$/.test(documents.bvn) ||
+            !documents.nin || !/^\d{11}$/.test(documents.nin);
+
         if (missingPersonal) {
             showToast("Please complete your personal information before submitting.", "error");
             setCurrentStep(1);
@@ -384,6 +411,12 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         if (missingNok) {
             showToast("Please complete the Next of Kin information before submitting.", "error");
             setCurrentStep(2);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            return;
+        }
+        if (missingDocs) {
+            showToast("Please complete your document uploads and verify your BVN/NIN before submitting.", "error");
+            setCurrentStep(3);
             window.scrollTo({ top: 0, behavior: "smooth" });
             return;
         }
@@ -430,6 +463,9 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             }
             if (documents.bvn) {
                 formData.append("bvn", documents.bvn);
+            }
+            if (documents.nin) {
+                formData.append("nin", documents.nin);
             }
             if (version !== undefined) {
                 formData.append("_version", version.toString());

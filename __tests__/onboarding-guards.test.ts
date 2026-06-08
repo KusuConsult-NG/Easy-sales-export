@@ -16,6 +16,7 @@
 interface CoopData {
     firstName?: string; lastName?: string;
     nextOfKinName?: string; nextOfKinPhone?: string;
+    bvn?: string; nin?: string;
 }
 function cooperativeGuard(d: CoopData): string | null {
     const missingPersonal =
@@ -26,6 +27,10 @@ function cooperativeGuard(d: CoopData): string | null {
         return "Next of kin name is required (Step 2).";
     if (!d.nextOfKinPhone?.trim())
         return "Next of kin phone is required (Step 2).";
+    if (!d.bvn || !/^\d{11}$/.test(d.bvn))
+        return "A valid 11-digit BVN is required.";
+    if (!d.nin || !/^\d{11}$/.test(d.nin))
+        return "A valid 11-digit NIN is required.";
     return null;
 }
 
@@ -124,13 +129,18 @@ describe("Cooperative onboarding guard", () => {
         expect(cooperativeGuard({})).not.toBeNull();
     });
     test("BLOCKS firstName too short", () => {
-        expect(cooperativeGuard({ firstName: "A", lastName: "Doe", nextOfKinName: "Jane Doe", nextOfKinPhone: "08012345678" })).not.toBeNull();
+        expect(cooperativeGuard({ firstName: "A", lastName: "Doe", nextOfKinName: "Jane Doe", nextOfKinPhone: "08012345678", bvn: "12345678901", nin: "98765432109" })).not.toBeNull();
     });
     test("BLOCKS missing next of kin", () => {
-        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi" })).not.toBeNull();
+        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi", bvn: "12345678901", nin: "98765432109" })).not.toBeNull();
+    });
+    test("BLOCKS missing or invalid bvn/nin", () => {
+        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi", nextOfKinName: "Jane Obi", nextOfKinPhone: "08012345678" })).not.toBeNull();
+        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi", nextOfKinName: "Jane Obi", nextOfKinPhone: "08012345678", bvn: "12345678901" })).not.toBeNull();
+        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi", nextOfKinName: "Jane Obi", nextOfKinPhone: "08012345678", bvn: "123", nin: "123" })).not.toBeNull();
     });
     test("PASSES valid data", () => {
-        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi", nextOfKinName: "Jane Obi", nextOfKinPhone: "08012345678" })).toBeNull();
+        expect(cooperativeGuard({ firstName: "Ada", lastName: "Obi", nextOfKinName: "Jane Obi", nextOfKinPhone: "08012345678", bvn: "12345678901", nin: "98765432109" })).toBeNull();
     });
 });
 

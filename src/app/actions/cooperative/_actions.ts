@@ -349,6 +349,15 @@ export async function registerCooperativeMemberAction(
         }
         const validatedData = parsed.data;
 
+        const bvn = (formData.get("bvn") as string || "").trim();
+        const nin = (formData.get("nin") as string || "").trim();
+        if (!bvn || !/^\d{11}$/.test(bvn)) {
+            return { error: "A valid 11-digit BVN is required", success: false as const, data: null };
+        }
+        if (!nin || !/^\d{11}$/.test(nin)) {
+            return { error: "A valid 11-digit NIN is required", success: false as const, data: null };
+        }
+
         // 🔒 DEDUP GUARD: Collection-level phone & email check
         // Catches cross-account duplicates (same phone/email, different account)
         const [coopPhoneExists, coopEmailExists] = await Promise.all([
@@ -398,7 +407,9 @@ export async function registerCooperativeMemberAction(
                     url: formData.get("passportPhotoUrl") as string } : undefined,
                 proofOfAddress: formData.get("proofOfAddressUrl") ? { name: formData.get("proofOfAddressName") as string,
                     url: formData.get("proofOfAddressUrl") as string } : undefined },
-            bvn: formData.get("bvn") as string || undefined,
+            bvn: bvn || undefined,
+            nin: nin || undefined,
+            ninVerified: nin ? true : false,
             // Flat state field for SMS geo-filter broadcast queries
             state: validatedData.stateOfOrigin,
             // Keep status as pending (admin review needed)
@@ -470,6 +481,8 @@ export async function registerCooperativeMemberAction(
                 // Sync onboarding specific details for admin users modal
                 bvn: updatedData.bvn || null,
                 bvnVerified: updatedData.bvn ? true : false,
+                nin: updatedData.nin || null,
+                ninVerified: updatedData.nin ? true : false,
                 nextOfKin: updatedData.nextOfKin || null,
 
                 updatedAt: FieldValue.serverTimestamp() });
@@ -1287,6 +1300,16 @@ export async function resubmitCooperativeApplicationAction(
         const first = (formData.get('firstName') as string || '').trim();
         const other = (formData.get('otherName') as string || '').trim();
         const last = (formData.get('lastName') as string || '').trim();
+
+        const bvn = (formData.get("bvn") as string || "").trim();
+        const nin = (formData.get("nin") as string || "").trim();
+        if (!bvn || !/^\d{11}$/.test(bvn)) {
+            return { success: false as const, error: "A valid 11-digit BVN is required" };
+        }
+        if (!nin || !/^\d{11}$/.test(nin)) {
+            return { success: false as const, error: "A valid 11-digit NIN is required" };
+        }
+
         const updatePayload: Record<string, any> = { 
             userId: session.user.id, // Ensure userId is populated
             firstName: first,
@@ -1304,23 +1327,54 @@ export async function resubmitCooperativeApplicationAction(
             nextOfKinName: formData.get('nextOfKinName') || '',
             nextOfKinPhone: formData.get('nextOfKinPhone') || '',
             nextOfKinAddress: formData.get('nextOfKinAddress') || '',
+            bvn: bvn,
+            nin: nin,
+            ninVerified: true,
             membershipStatus: 'pending',
             revisionNote: null,
             resubmittedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() };
 
-        if (formData.get('validIdUrl')) { updatePayload['documents.validIdUrl'] = formData.get('validIdUrl');
-            updatePayload['documents.validIdName'] = formData.get('validIdName') || '';
+        if (formData.get('validIdUrl')) { 
+            updatePayload['documents.validId.url'] = formData.get('validIdUrl');
+            updatePayload['documents.validId.name'] = formData.get('validIdName') || 'ID Document';
         }
-        if (formData.get('passportPhotoUrl')) { updatePayload['documents.passportPhotoUrl'] = formData.get('passportPhotoUrl');
+        if (formData.get('passportPhotoUrl')) { 
+            updatePayload['documents.passportPhoto.url'] = formData.get('passportPhotoUrl');
+            updatePayload['documents.passportPhoto.name'] = formData.get('passportPhotoName') || 'Passport Photo';
         }
-        if (formData.get('proofOfAddressUrl')) { updatePayload['documents.proofOfAddressUrl'] = formData.get('proofOfAddressUrl');
+        if (formData.get('proofOfAddressUrl')) { 
+            updatePayload['documents.proofOfAddress.url'] = formData.get('proofOfAddressUrl');
+            updatePayload['documents.proofOfAddress.name'] = formData.get('proofOfAddressName') || 'Proof of Address';
         }
 
         const batch = db.batch();
         batch.update(memberRef, updatePayload);
-        batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), { 'serviceRegistrations.cooperatives.status': 'pending',
-            updatedAt: FieldValue.serverTimestamp() });
+        batch.update(db.collection(COLLECTIONS.USERS).doc(session.user.id), { 
+            'serviceRegistrations.cooperatives.status': 'pending',
+            firstName: first,
+            lastName: last,
+            otherName: other || null,
+            fullName: [first, other, last].filter(Boolean).join(' ').trim(),
+            phone: updatePayload.phone || null,
+            gender: updatePayload.gender || null,
+            stateOfOrigin: updatePayload.stateOfOrigin || null,
+            lga: updatePayload.lga || null,
+            residentialAddress: updatePayload.residentialAddress || null,
+            'address.state': updatePayload.stateOfOrigin || null,
+            'address.lga': updatePayload.lga || null,
+            'address.street': updatePayload.residentialAddress || null,
+            bvn: bvn || null,
+            bvnVerified: bvn ? true : false,
+            nin: nin || null,
+            ninVerified: nin ? true : false,
+            nextOfKin: {
+                name: updatePayload.nextOfKinName || null,
+                phone: updatePayload.nextOfKinPhone || null,
+                address: updatePayload.nextOfKinAddress || null,
+            },
+            updatedAt: FieldValue.serverTimestamp() 
+        });
 
         await batch.commit();
 
