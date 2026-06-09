@@ -68,7 +68,13 @@ export function useMembershipStatus(userId: string | undefined, moduleType: stri
             } else {
                 // Fallback 1: Query by email if available
                 if (userEmail && !unsubEmail) {
-                    const emailField = (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) ? "email" : "personalInfo.email";
+                    const emailField = (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS)
+                        ? "email"
+                        : (collectionName === COLLECTIONS.WAVE_APPLICATIONS || 
+                           collectionName === COLLECTIONS.EXPORT_APPLICATIONS || 
+                           collectionName === COLLECTIONS.FARM_NATION_APPLICATIONS)
+                        ? "userEmail"
+                        : "personalInfo.email";
                     const emailQ = query(collection(db, collectionName), where(emailField, "==", userEmail.toLowerCase()));
                     
                     unsubEmail = onSnapshot(emailQ, (emailSnap) => {

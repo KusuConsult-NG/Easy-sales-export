@@ -946,14 +946,39 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
                 appDoc = sortedDocs[0];
             } else {
                 const appId = userData?.serviceRegistrations?.farmNation?.applicationId;
+                let foundDirect = false;
                 if (appId) {
                     const directDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(appId).get();
                     if (directDoc.exists) {
                         appDoc = directDoc;
+                        foundDirect = true;
                         // Self-healing: backfill userId on direct application doc if missing
                         const appData = directDoc.data()!;
                         if (!appData.userId) {
                             await directDoc.ref.update({ userId: session.user.id });
+                        }
+                    }
+                }
+                if (!foundDirect && (session.user.email || userData?.email)) {
+                    const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
+                    if (userEmail) {
+                        let emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                            .where("userEmail", "==", userEmail)
+                            .limit(1)
+                            .get();
+                        if (emailQuery.empty) {
+                            emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                                .where("profile.email", "==", userEmail)
+                                .limit(1)
+                                .get();
+                        }
+                        if (!emailQuery.empty) {
+                            appDoc = emailQuery.docs[0];
+                            // Self-healing: backfill userId on direct application doc if missing
+                            const appData = appDoc.data()!;
+                            if (!appData.userId) {
+                                await appDoc.ref.update({ userId: session.user.id });
+                            }
                         }
                     }
                 }

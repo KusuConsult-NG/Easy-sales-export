@@ -244,6 +244,248 @@ export async function checkModuleAccess(
             }
         }
 
+        // ── Layer 2.8: Direct Collection query/lookup fallback for WAVE ─────────
+        if (app === "wave") {
+            const appQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            let appDocData: any = null;
+            let appRef: any = null;
+
+            if (!appQuery.empty) {
+                appDocData = appQuery.docs[0].data();
+                appRef = appQuery.docs[0].ref;
+            } else if (userData.email) {
+                let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    .where("userEmail", "==", userData.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (emailQuery.empty) {
+                    emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                        .where("email", "==", userData.email.toLowerCase())
+                        .limit(1)
+                        .get();
+                }
+                if (!emailQuery.empty) {
+                    appDocData = emailQuery.docs[0].data();
+                    appRef = emailQuery.docs[0].ref;
+                }
+            }
+
+            if (appDocData) {
+                const status = appDocData.status;
+                if (status === "approved" || status === "active") {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.8 — Direct WAVE application query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                    );
+                    
+                    // Heal the application document with the userId if missing
+                    const updates: any = {};
+                    if (!appDocData.userId) {
+                        updates.userId = userId;
+                    }
+                    if (Object.keys(updates).length > 0 && appRef) {
+                        await appRef.update(updates);
+                        logger.info(`[ModuleAccess] Healed WAVE application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
+                    }
+
+                    // Proactively backfill the USERS doc
+                    const { FieldValue } = await import("firebase-admin/firestore");
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        roles: FieldValue.arrayUnion("wave_participant"),
+                        serviceRegistrations: {
+                            wave: {
+                                status: "approved",
+                                applicationId: appRef.id,
+                                approvedAt: appDocData.approvedAt || FieldValue.serverTimestamp(),
+                            }
+                        },
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    return true;
+                }
+            }
+        }
+
+        // ── Layer 2.9: Direct Collection query/lookup fallback for Export ────────
+        if (app === "export") {
+            const appQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            let appDocData: any = null;
+            let appRef: any = null;
+
+            if (!appQuery.empty) {
+                appDocData = appQuery.docs[0].data();
+                appRef = appQuery.docs[0].ref;
+            } else if (userData.email) {
+                let emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                    .where("userEmail", "==", userData.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (emailQuery.empty) {
+                    emailQuery = await db.collection(COLLECTIONS.EXPORT_APPLICATIONS)
+                        .where("profile.email", "==", userData.email.toLowerCase())
+                        .limit(1)
+                        .get();
+                }
+                if (!emailQuery.empty) {
+                    appDocData = emailQuery.docs[0].data();
+                    appRef = emailQuery.docs[0].ref;
+                }
+            }
+
+            if (appDocData) {
+                const status = appDocData.status;
+                if (status === "approved" || status === "active" || status === "approved_admin") {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.9 — Direct Export application query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                    );
+                    
+                    // Heal the application document with the userId if missing
+                    const updates: any = {};
+                    if (!appDocData.userId) {
+                        updates.userId = userId;
+                    }
+                    if (Object.keys(updates).length > 0 && appRef) {
+                        await appRef.update(updates);
+                        logger.info(`[ModuleAccess] Healed Export application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
+                    }
+
+                    // Proactively backfill the USERS doc
+                    const { FieldValue } = await import("firebase-admin/firestore");
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        roles: FieldValue.arrayUnion("export_participant"),
+                        serviceRegistrations: {
+                            export: {
+                                status: "approved",
+                                applicationId: appRef.id,
+                                approvedAt: appDocData.approvedAt || FieldValue.serverTimestamp(),
+                            }
+                        },
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    return true;
+                }
+            }
+        }
+
+        // ── Layer 2.10: Direct Collection query/lookup fallback for Farm Nation ──
+        if (app === "farm-nation") {
+            const appQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            let appDocData: any = null;
+            let appRef: any = null;
+
+            if (!appQuery.empty) {
+                appDocData = appQuery.docs[0].data();
+                appRef = appQuery.docs[0].ref;
+            } else if (userData.email) {
+                let emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                    .where("userEmail", "==", userData.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (emailQuery.empty) {
+                    emailQuery = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                        .where("profile.email", "==", userData.email.toLowerCase())
+                        .limit(1)
+                        .get();
+                }
+                if (!emailQuery.empty) {
+                    appDocData = emailQuery.docs[0].data();
+                    appRef = emailQuery.docs[0].ref;
+                }
+            }
+
+            if (appDocData) {
+                const status = appDocData.status;
+                if (status === "approved" || status === "active" || status === "approved_admin") {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.10 — Direct Farm Nation application query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                    );
+                    
+                    // Heal the application document with the userId if missing
+                    const updates: any = {};
+                    if (!appDocData.userId) {
+                        updates.userId = userId;
+                    }
+                    if (Object.keys(updates).length > 0 && appRef) {
+                        await appRef.update(updates);
+                        logger.info(`[ModuleAccess] Healed Farm Nation application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
+                    }
+
+                    // Prepare user roles
+                    const roles: string[] = [];
+                    if (appDocData.role === "buyer" || appDocData.role === "both") {
+                        roles.push("investor");
+                    }
+                    if (appDocData.role === "seller" || appDocData.role === "both") {
+                        roles.push("farmer");
+                    }
+
+                    // Proactively backfill the USERS doc
+                    const { FieldValue } = await import("firebase-admin/firestore");
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        roles: FieldValue.arrayUnion(...roles),
+                        serviceRegistrations: {
+                            farmNation: {
+                                status: "approved",
+                                applicationId: appRef.id,
+                                approvedAt: appDocData.approvedAt || FieldValue.serverTimestamp(),
+                            }
+                        },
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    return true;
+                }
+            }
+        }
+
+        // ── Layer 2.11: Direct Collection query/lookup fallback for Marketplace Seller ─
+        if (app === "marketplace") {
+            const verQuery = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            if (!verQuery.empty) {
+                const verDocData = verQuery.docs[0].data();
+                const verRef = verQuery.docs[0].ref;
+                const status = verDocData.status;
+                if (status === "approved") {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.11 — Direct Seller Verification query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                    );
+
+                    // Proactively backfill the USERS doc
+                    const { FieldValue } = await import("firebase-admin/firestore");
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        roles: FieldValue.arrayUnion("seller"),
+                        serviceRegistrations: {
+                            marketplace: {
+                                status: "approved",
+                                applicationId: verRef.id,
+                                approvedAt: verDocData.approvedAt || FieldValue.serverTimestamp(),
+                            }
+                        },
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    return true;
+                }
+            }
+        }
+
         return false;
     } catch (error) {
         logger.error(`[ModuleAccess] Firestore fallback check failed for '${app}':`, error);

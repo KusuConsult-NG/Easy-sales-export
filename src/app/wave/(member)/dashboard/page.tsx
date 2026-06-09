@@ -36,7 +36,7 @@ export default function WaveDashboardPage() {
 
     const { data: sessionData } = useSession();
     const userId = (sessionData?.user as any)?.id;
-    const { status: membershipStatus } = useMembershipStatus(userId, "wave");
+    const { status: membershipStatus } = useMembershipStatus(userId, "wave", sessionData?.user?.email || undefined);
 
     useEffect(() => {
         // Still waiting for session/Firestore — do nothing yet

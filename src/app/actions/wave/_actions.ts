@@ -159,6 +159,28 @@ async function _checkWaveStatusAction(): Promise<ActionResponse<{ status: string
                         await directDoc.ref.update({ userId: session.user.id });
                     }
                 }
+            } else if (session.user.email || userData?.email) {
+                const userEmail = (session.user.email || userData?.email || "").toLowerCase().trim();
+                if (userEmail) {
+                    let emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                        .where("userEmail", "==", userEmail)
+                        .limit(1)
+                        .get();
+                    if (emailQuery.empty) {
+                        emailQuery = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                            .where("email", "==", userEmail)
+                            .limit(1)
+                            .get();
+                    }
+                    if (!emailQuery.empty) {
+                        appDoc = emailQuery.docs[0];
+                        // Self-healing: backfill userId on direct application doc if missing
+                        const appData = appDoc.data()!;
+                        if (!appData.userId) {
+                            await appDoc.ref.update({ userId: session.user.id });
+                        }
+                    }
+                }
             }
 
             if (appDoc) {
