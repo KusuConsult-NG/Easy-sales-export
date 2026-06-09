@@ -167,7 +167,7 @@ export async function getPostLoginRedirect(email: string) { try {
 
             // 1. Check for approved modules
             const approvedModules = Object.entries(serviceRegistrations)
-                .filter(([_, reg]: [string, any]) => reg?.status === 'approved');
+                .filter(([_, reg]: [string, any]) => reg?.status === 'approved' || reg?.status === 'active');
 
             if (approvedModules.length > 0) {
                 // Prefer the first approved module's direct dashboard URL.

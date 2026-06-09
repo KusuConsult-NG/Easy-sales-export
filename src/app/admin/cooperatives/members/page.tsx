@@ -643,6 +643,14 @@ export default function CooperativeMembersPage() {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                                    app.data.paymentStatus === 'completed' ? 'bg-emerald-100 text-emerald-800' :
+                                                    app.data.paymentStatus === 'failed' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {app.data.paymentStatus || 'pending'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${(app.status === 'approved' || app.status === 'active') ? 'bg-green-100 text-green-800' :
                                                         (app.status === 'suspended' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800')
                                                     }`}>

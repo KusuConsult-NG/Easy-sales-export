@@ -8,6 +8,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { FieldValue } from "firebase-admin/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 import { invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
+import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 
 /**
  * API Route: Approve Cooperative Membership Application
@@ -72,14 +73,14 @@ export async function POST(request: NextRequest) {
             });
 
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-            txn.update(userRef, {
+            txn.update(userRef, normalizeUserUpdate({
                 isVerified: true,
                 roles: FieldValue.arrayUnion("cooperative_member"),
                 "serviceRegistrations.cooperatives.status": "active",
                 "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1),
-            });
+            }));
         });
 
         // Bust Redis caches so the admin dashboard refreshes immediately
