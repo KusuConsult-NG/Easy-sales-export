@@ -39,7 +39,7 @@ export default function CooperativeDashboardPage() {
 
     const { data: sessionData } = useSession();
     const userId = (sessionData?.user as any)?.id;
-    const { status: membershipStatus } = useMembershipStatus(userId, "cooperative");
+    const { status: membershipStatus } = useMembershipStatus(userId, "cooperative", sessionData?.user?.email || undefined);
 
     useEffect(() => {
         if (membershipStatus === "approved" || membershipStatus === "active" || membershipStatus === "paid") {
