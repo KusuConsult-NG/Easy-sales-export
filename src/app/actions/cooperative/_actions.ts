@@ -599,6 +599,7 @@ export async function joinCooperativeAction(
 
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");
+        revalidatePath("/cooperatives/dashboard");
 
         return { error: null, success: true as const,
             meta: null
@@ -689,6 +690,7 @@ async function _makeContributionAction(
 
         revalidatePath("/cooperatives");
         revalidatePath("/dashboard/cooperatives");
+        revalidatePath("/cooperatives/dashboard");
         return { error: null, success: true as const, data: { message: "Contribution successful" }, meta: null };
     } catch (error) { logger.error("Contribution failed:", {
             error: error instanceof Error ? error.message : String(error)
@@ -918,9 +920,37 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         // Support both key variants:
         //  - 'cooperatives' (plural) — written by registerCooperativeMemberAction post-V2
         //  - 'cooperative' (singular) — written by the legacy import script
-        const registration =
-            userData?.serviceRegistrations?.cooperative ||
-            userData?.serviceRegistrations?.cooperatives;
+        // We resolve the one that has the more advanced onboarding/membership status.
+        const coopReg = userData?.serviceRegistrations?.cooperatives;
+        const legacyReg = userData?.serviceRegistrations?.cooperative;
+
+        const getProgressScore = (status: string) => {
+            switch (status) {
+                case 'active':
+                case 'approved':
+                    return 4;
+                case 'pending':
+                case 'pending_review':
+                case 'revision_required':
+                    return 3;
+                case 'pending_repair':
+                case 'legacy_pending_onboarding':
+                    return 2;
+                case 'not_started':
+                    return 1;
+                default:
+                    return 0;
+            }
+        };
+
+        let registration = coopReg || legacyReg;
+        if (coopReg && legacyReg) {
+            const scorePlural = getProgressScore(coopReg.status || '');
+            const scoreSingular = getProgressScore(legacyReg.status || '');
+            if (scoreSingular > scorePlural) {
+                registration = legacyReg;
+            }
+        }
 
         if (registration?.status) { // 'legacy_pending_onboarding' is a sentinel set by the import script.
             // Pass it through so OnboardingClient knows to show the form without payment.
@@ -1324,7 +1354,38 @@ export async function resubmitCooperativeApplicationAction(
         if (!session?.user) return { success: false as const, error: 'Unauthorized'};
 
         const userDoc = await db.collection(COLLECTIONS.USERS).doc(session.user.id).get();
-        const existingStatus = userDoc.data()?.serviceRegistrations?.cooperatives?.status;
+        const userData = userDoc.data();
+        const coopReg = userData?.serviceRegistrations?.cooperatives;
+        const legacyReg = userData?.serviceRegistrations?.cooperative;
+
+        const getProgressScore = (status: string) => {
+            switch (status) {
+                case 'active':
+                case 'approved':
+                    return 4;
+                case 'pending':
+                case 'pending_review':
+                case 'revision_required':
+                    return 3;
+                case 'pending_repair':
+                case 'legacy_pending_onboarding':
+                    return 2;
+                case 'not_started':
+                    return 1;
+                default:
+                    return 0;
+            }
+        };
+
+        let registration = coopReg || legacyReg;
+        if (coopReg && legacyReg) {
+            const scorePlural = getProgressScore(coopReg.status || '');
+            const scoreSingular = getProgressScore(legacyReg.status || '');
+            if (scoreSingular > scorePlural) {
+                registration = legacyReg;
+            }
+        }
+        const existingStatus = registration?.status;
 
         // Allow 'pending_repair' so users in repair can submit their fixes
         const allowedStatuses = ['pending', 'revision_required', 'pending_repair'];

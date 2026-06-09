@@ -87,12 +87,70 @@ export async function checkModuleAccess(
             const serviceRegistrations = userData.serviceRegistrations || {};
             let registration = serviceRegistrations[regKey];
             
-            // Legacy fallbacks for keys that changed over time
-            if (!registration && regKey === "cooperatives") {
-                registration = serviceRegistrations["cooperative"];
+            // Legacy fallbacks for keys that changed over time - use advanced progression resolution logic
+            if (regKey === "cooperatives") {
+                const coopReg = serviceRegistrations["cooperatives"];
+                const legacyReg = serviceRegistrations["cooperative"];
+
+                const getProgressScore = (status: string) => {
+                    switch (status) {
+                        case 'active':
+                        case 'approved':
+                            return 4;
+                        case 'pending':
+                        case 'pending_review':
+                        case 'revision_required':
+                            return 3;
+                        case 'pending_repair':
+                        case 'legacy_pending_onboarding':
+                            return 2;
+                        case 'not_started':
+                            return 1;
+                        default:
+                            return 0;
+                    }
+                };
+
+                if (coopReg && legacyReg) {
+                    const scorePlural = getProgressScore(coopReg.status || '');
+                    const scoreSingular = getProgressScore(legacyReg.status || '');
+                    registration = scoreSingular > scorePlural ? legacyReg : coopReg;
+                } else {
+                    registration = coopReg || legacyReg;
+                }
             }
-            if (!registration && regKey === "farmNation") {
-                registration = serviceRegistrations["farm_nation"];
+
+            if (regKey === "farmNation") {
+                const fnReg = serviceRegistrations["farmNation"];
+                const legacyFnReg = serviceRegistrations["farm_nation"];
+
+                const getProgressScore = (status: string) => {
+                    switch (status) {
+                        case 'active':
+                        case 'approved':
+                        case 'verified':
+                            return 4;
+                        case 'pending':
+                        case 'pending_review':
+                        case 'revision_required':
+                            return 3;
+                        case 'pending_repair':
+                        case 'legacy_pending_onboarding':
+                            return 2;
+                        case 'not_started':
+                            return 1;
+                        default:
+                            return 0;
+                    }
+                };
+
+                if (fnReg && legacyFnReg) {
+                    const scorePlural = getProgressScore(fnReg.status || '');
+                    const scoreSingular = getProgressScore(legacyFnReg.status || '');
+                    registration = scoreSingular > scorePlural ? legacyFnReg : fnReg;
+                } else {
+                    registration = fnReg || legacyFnReg;
+                }
             }
 
             // Core statuses that always grant access across all modules

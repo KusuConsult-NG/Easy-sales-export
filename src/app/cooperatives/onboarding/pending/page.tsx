@@ -26,7 +26,7 @@ export default function CooperativePendingPage() {
 
     useEffect(() => {
         if (applicationStatus === "approved" || applicationStatus === "active") {
-            router.replace("/dashboard/cooperatives");
+            router.replace("/cooperatives/dashboard");
         } else if (applicationStatus === "rejected" || applicationStatus === "revision_required") {
             router.replace("/cooperatives/onboarding");
         }
