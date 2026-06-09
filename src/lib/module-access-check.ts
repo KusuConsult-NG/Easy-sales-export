@@ -181,6 +181,69 @@ export async function checkModuleAccess(
             }
         }
 
+        // ── Layer 2.7: Direct Collection query/lookup fallback for Academy ──────
+        // Handles manually approved/assigned academy learners whose user documents
+        // were never updated/backfilled, and whose roles/serviceRegistrations are empty.
+        if (app === "academy") {
+            const appQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            let appDocData: any = null;
+            let appRef: any = null;
+
+            if (!appQuery.empty) {
+                appDocData = appQuery.docs[0].data();
+                appRef = appQuery.docs[0].ref;
+            } else if (userData.email) {
+                const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("personalInfo.email", "==", userData.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (!emailQuery.empty) {
+                    appDocData = emailQuery.docs[0].data();
+                    appRef = emailQuery.docs[0].ref;
+                }
+            }
+
+            if (appDocData) {
+                const status = appDocData.status;
+                if (status === "active" || status === "approved") {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.7 — Direct application query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                    );
+                    
+                    // Heal the application document with the userId if missing
+                    const updates: any = {};
+                    if (!appDocData.userId) {
+                        updates.userId = userId;
+                    }
+                    if (Object.keys(updates).length > 0 && appRef) {
+                        const { FieldValue } = await import("firebase-admin/firestore");
+                        await appRef.update(updates);
+                        logger.info(`[ModuleAccess] Healed application ${appRef.id} with updates: ${JSON.stringify(updates)}`);
+                    }
+
+                    // Proactively backfill the USERS doc so the primary Layer 2 check works in the future
+                    const { FieldValue } = await import("firebase-admin/firestore");
+                    await db.collection(COLLECTIONS.USERS).doc(userId).set({
+                        roles: FieldValue.arrayUnion("academy_participant"),
+                        serviceRegistrations: {
+                            academy: {
+                                status: "approved",
+                                applicationId: appRef.id,
+                                approvedAt: appDocData.approvedAt || FieldValue.serverTimestamp(),
+                            }
+                        },
+                        updatedAt: FieldValue.serverTimestamp()
+                    }, { merge: true });
+
+                    return true;
+                }
+            }
+        }
+
         return false;
     } catch (error) {
         logger.error(`[ModuleAccess] Firestore fallback check failed for '${app}':`, error);

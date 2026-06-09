@@ -48,7 +48,7 @@ export default function AcademyDashboardPage() {
 
     const { data: sessionData, update: updateSession } = useSession();
     const userId = (sessionData?.user as any)?.id;
-    const { status: membershipStatus } = useMembershipStatus(userId, "academy");
+    const { status: membershipStatus } = useMembershipStatus(userId, "academy", sessionData?.user?.email || undefined);
 
     useEffect(() => {
         if (status === "unauthenticated") {

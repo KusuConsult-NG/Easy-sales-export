@@ -483,7 +483,7 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
             return { error: null, success: true as const, data: "paid" };
         }
 
-        // ── AUTHORITATIVE FALLBACK ──────────────────────────────────────
+        // ── AUTHORITATIVE FALLBACK 1: Processed Payments ─────────────────
         const paymentsSnap = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
             .where("userId", "==", session.user.id)
             .where("type", "==", "academy_registration")
@@ -493,6 +493,26 @@ async function _checkAcademyPaymentStatusAction(): Promise<ActionResponse<any>> 
 
         if (!paymentsSnap.empty) {
             return { error: null, success: true as const, data: "paid" };
+        }
+
+        // ── AUTHORITATIVE FALLBACK 2: Application Payment Status ─────────
+        const appSnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+            .where("userId", "==", session.user.id)
+            .get();
+
+        if (!appSnap.empty) {
+            const hasPaidApp = appSnap.docs.some(doc => doc.data().paymentStatus === "completed");
+            if (hasPaidApp) {
+                return { error: null, success: true as const, data: "paid" };
+            }
+        } else if (userData?.email) {
+            const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where("personalInfo.email", "==", userData.email.toLowerCase())
+                .limit(1)
+                .get();
+            if (!emailQuery.empty && emailQuery.docs[0].data().paymentStatus === "completed") {
+                return { error: null, success: true as const, data: "paid" };
+            }
         }
 
         return { error: null, success: true as const, data: "unpaid" };

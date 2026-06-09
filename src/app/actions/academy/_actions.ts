@@ -102,6 +102,19 @@ async function _checkAcademyStatusAction(): Promise<ActionResponse<string | null
                         await directDoc.ref.update({ userId: session.user.id });
                     }
                 }
+            } else if (userData?.email) {
+                const emailQuery = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("personalInfo.email", "==", userData.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (!emailQuery.empty) {
+                    appDoc = emailQuery.docs[0];
+                    // Self-healing: backfill userId on application doc if missing
+                    const appData = appDoc.data()!;
+                    if (!appData.userId) {
+                        await appDoc.ref.update({ userId: session.user.id });
+                    }
+                }
             }
 
             if (appDoc) {
