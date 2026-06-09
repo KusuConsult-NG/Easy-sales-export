@@ -42,7 +42,7 @@ export default async function CooperativeOnboardingPage(
             
             const coopReg = userData?.serviceRegistrations?.cooperatives || userData?.serviceRegistrations?.cooperative;
             
-            if (coopReg?.paymentStatus === "completed" || userData?.legacyOnboardedBy) {
+            if (coopReg?.paymentStatus === "completed" || userData?.legacyOnboardedBy || coopReg?.status === "approved" || coopReg?.status === "active") {
                 paymentStatus = "completed";
             } else {
                 const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id).get();

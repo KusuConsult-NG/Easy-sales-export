@@ -3200,6 +3200,34 @@ async function _editApplicationAction(params: {
 
         if (userId) {
             const syncBatch = db.batch();
+
+            // Resolve actual application document IDs from central user profile
+            let waveAppId = `legacy_${userId}`;
+            let sellerAppId = `legacy_${userId}`;
+            let exportAppId = `legacy_${userId}`;
+            let academyAppId = `legacy_${userId}`;
+            let farmAppId = `legacy_${userId}`;
+            let coopAppId = userId;
+
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const userSnap = await userRef.get();
+            if (userSnap.exists) {
+                const userData = userSnap.data()!;
+                const regs = userData.serviceRegistrations || {};
+                if (regs.wave?.applicationId) waveAppId = regs.wave.applicationId;
+                if (regs.marketplace?.verificationId) sellerAppId = regs.marketplace.verificationId;
+                if (regs.export?.applicationId) exportAppId = regs.export.applicationId;
+                if (regs.academy?.applicationId) academyAppId = regs.academy.applicationId;
+                if (regs.farmNation?.applicationId) farmAppId = regs.farmNation.applicationId;
+            }
+
+            // Override with actual docId for the collection currently being edited
+            if (collectionName === COLLECTIONS.COOPERATIVE_MEMBERS) coopAppId = docId;
+            else if (collectionName === COLLECTIONS.WAVE_APPLICATIONS) waveAppId = docId;
+            else if (collectionName === COLLECTIONS.SELLER_VERIFICATIONS) sellerAppId = docId;
+            else if (collectionName === COLLECTIONS.EXPORT_APPLICATIONS) exportAppId = docId;
+            else if (collectionName === COLLECTIONS.ACADEMY_APPLICATIONS) academyAppId = docId;
+            else if (collectionName === COLLECTIONS.FARM_NATION_APPLICATIONS) farmAppId = docId;
             
             const userUpdate: Record<string, any> = {};
             const coopUpdate: Record<string, any> = {};
@@ -3405,17 +3433,35 @@ async function _editApplicationAction(params: {
                 });
             }
             // 2. Cooperative Members
-            await applyIfDocExists(COLLECTIONS.COOPERATIVE_MEMBERS, userId, coopUpdate);
+            await applyIfDocExists(COLLECTIONS.COOPERATIVE_MEMBERS, coopAppId, coopUpdate);
+            if (coopAppId !== userId) {
+                await applyIfDocExists(COLLECTIONS.COOPERATIVE_MEMBERS, userId, coopUpdate);
+            }
             // 3. Wave Applications
-            await applyIfDocExists(COLLECTIONS.WAVE_APPLICATIONS, `legacy_${userId}`, waveUpdate);
+            await applyIfDocExists(COLLECTIONS.WAVE_APPLICATIONS, waveAppId, waveUpdate);
+            if (waveAppId !== `legacy_${userId}`) {
+                await applyIfDocExists(COLLECTIONS.WAVE_APPLICATIONS, `legacy_${userId}`, waveUpdate);
+            }
             // 4. Seller Verifications
-            await applyIfDocExists(COLLECTIONS.SELLER_VERIFICATIONS, `legacy_${userId}`, sellerUpdate);
+            await applyIfDocExists(COLLECTIONS.SELLER_VERIFICATIONS, sellerAppId, sellerUpdate);
+            if (sellerAppId !== `legacy_${userId}`) {
+                await applyIfDocExists(COLLECTIONS.SELLER_VERIFICATIONS, `legacy_${userId}`, sellerUpdate);
+            }
             // 5. Export Applications
-            await applyIfDocExists(COLLECTIONS.EXPORT_APPLICATIONS, `legacy_${userId}`, exportUpdate);
+            await applyIfDocExists(COLLECTIONS.EXPORT_APPLICATIONS, exportAppId, exportUpdate);
+            if (exportAppId !== `legacy_${userId}`) {
+                await applyIfDocExists(COLLECTIONS.EXPORT_APPLICATIONS, `legacy_${userId}`, exportUpdate);
+            }
             // 6. Academy Applications
-            await applyIfDocExists(COLLECTIONS.ACADEMY_APPLICATIONS, `legacy_${userId}`, academyUpdate);
+            await applyIfDocExists(COLLECTIONS.ACADEMY_APPLICATIONS, academyAppId, academyUpdate);
+            if (academyAppId !== `legacy_${userId}`) {
+                await applyIfDocExists(COLLECTIONS.ACADEMY_APPLICATIONS, `legacy_${userId}`, academyUpdate);
+            }
             // 7. Farm Nation Applications
-            await applyIfDocExists(COLLECTIONS.FARM_NATION_APPLICATIONS, `legacy_${userId}`, farmUpdate);
+            await applyIfDocExists(COLLECTIONS.FARM_NATION_APPLICATIONS, farmAppId, farmUpdate);
+            if (farmAppId !== `legacy_${userId}`) {
+                await applyIfDocExists(COLLECTIONS.FARM_NATION_APPLICATIONS, `legacy_${userId}`, farmUpdate);
+            }
 
             // If we are editing land listing directly or other fields not mapped above, update the docRef
             if (collectionName === COLLECTIONS.LAND_LISTINGS || !ALLOWED_COLLECTIONS.includes(collectionName as any)) {
