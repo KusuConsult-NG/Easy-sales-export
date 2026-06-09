@@ -953,18 +953,12 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             }
         }
 
-        if (registration?.status) { // 'legacy_pending_onboarding' is a sentinel set by the import script.
-            // Pass it through so OnboardingClient knows to show the form without payment.
-            // LOOP FIX: If the user submitted their form but admin hasn't approved yet,
-            // return a distinct "pending_review" sentinel so the client redirects to the
-            // pending page instead of showing the blank form again.
-            if (registration.status === 'pending' && registration.onboardingCompletedAt) {
-                return 'pending_review';
-            }
-            return registration.status;
+        let registrationStatus = registration?.status;
+        if (registrationStatus === 'active' || registrationStatus === 'approved') {
+            return 'approved';
         }
 
-        if (userData?.legacyOnboardedBy) {
+        if (userData?.legacyOnboardedBy && !registrationStatus) {
             return "approved";
         }
 
@@ -1000,16 +994,11 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
         }
 
         if (memberDocData) {
-            // Legacy import members: paymentStatus=completed but onboardingCompleted=false
-            if (memberDocData.paymentStatus === 'completed' && !memberDocData.onboardingCompleted) {
-                return 'legacy_pending_onboarding';
-            }
-            // LOOP FIX: If the user has submitted the form (onboardingCompleted=true)
-            // but is still awaiting admin approval, return a distinct sentinel value.
-            if (memberDocData.onboardingCompleted && (memberDocData.membershipStatus === 'pending' || memberDocData.status === 'pending')) {
-                return 'pending_review';
-            }
             const derivedStatus = memberDocData.membershipStatus ?? memberDocData.status ?? 'pending';
+
+            // Compare progress scores between user doc registration and member doc derivedStatus
+            const scoreUser = getProgressScore(registrationStatus || '');
+            const scoreMember = getProgressScore(derivedStatus);
 
             // Heal the membership document with the userId if missing
             if (!memberDocData.userId && memberRef) {
@@ -1017,18 +1006,38 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
                 logger.info(`[checkCooperativeStatus] Healed membership ${memberRef.id} with userId ${session.user.id}`);
             }
 
-            // Backfill the user doc so future reads hit the fast path
-            await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
-                { 
-                    "serviceRegistrations.cooperatives.status": derivedStatus, 
-                    "serviceRegistrations.cooperatives.syncedFromLegacy": true, 
-                    "serviceRegistrations.cooperatives.syncedAt": new Date().toISOString(),
-                    ...(derivedStatus === 'active' || derivedStatus === 'approved' ? {
-                        roles: FieldValue.arrayUnion("cooperative_member")
-                    } : {})
-                }
-            );
-            logger.info(`[checkCooperativeStatus] Backfilled status '${derivedStatus}' and role for user ${session.user.id}`);
+            // Sync user doc status from member doc if member doc has a more progressed status,
+            // or if the user doc status was missing, or if we need to sync roles.
+            const needsUserDocHeal = scoreMember > scoreUser || 
+                !registrationStatus || 
+                ((derivedStatus === 'active' || derivedStatus === 'approved') && !userData?.roles?.includes('cooperative_member'));
+
+            if (needsUserDocHeal) {
+                // Backfill the user doc so future reads hit the fast path
+                await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
+                    normalizeUserUpdate({ 
+                        "serviceRegistrations.cooperatives.status": derivedStatus, 
+                        "serviceRegistrations.cooperatives.syncedFromLegacy": true, 
+                        "serviceRegistrations.cooperatives.syncedAt": new Date().toISOString(),
+                        ...(derivedStatus === 'active' || derivedStatus === 'approved' ? {
+                            roles: FieldValue.arrayUnion("cooperative_member")
+                        } : {})
+                    })
+                );
+                logger.info(`[checkCooperativeStatus] Healed user ${session.user.id} status to '${derivedStatus}' from membership`);
+                registrationStatus = derivedStatus;
+            }
+
+            // Legacy import members: paymentStatus=completed but onboardingCompleted=false
+            if (memberDocData.paymentStatus === 'completed' && !memberDocData.onboardingCompleted) {
+                return 'legacy_pending_onboarding';
+            }
+            // LOOP FIX: If the user has submitted the form (onboardingCompleted=true)
+            // but is still awaiting admin approval, return a distinct sentinel value.
+            if (memberDocData.onboardingCompleted && (derivedStatus === 'pending' || derivedStatus === 'under_review')) {
+                return 'pending_review';
+            }
+
             return derivedStatus;
         }
 
@@ -1048,7 +1057,7 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             return "legacy_pending_onboarding"; // Allow them to proceed to fill the form
         }
 
-        return null;
+        return registrationStatus || null;
     } catch (error) { logger.error("Error checking cooperative status:", {
             error: error instanceof Error ? error.message : String(error)
         });
