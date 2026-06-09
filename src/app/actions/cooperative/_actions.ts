@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
+import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { logger } from '@/lib/logger';
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
@@ -465,7 +466,7 @@ export async function registerCooperativeMemberAction(
             }
 
             // 3. Update user service registration and sync profile data
-            transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), { "serviceRegistrations.cooperatives.status": "pending",
+            transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({ "serviceRegistrations.cooperatives.status": "pending",
                 "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
                 "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
 
@@ -493,7 +494,7 @@ export async function registerCooperativeMemberAction(
                 ninVerified: updatedData.nin ? true : false,
                 nextOfKin: updatedData.nextOfKin || null,
 
-                updatedAt: FieldValue.serverTimestamp() });
+                updatedAt: FieldValue.serverTimestamp() }));
         });
 
         // 5. Post-Commit Side Effects (Secondary Integrations)

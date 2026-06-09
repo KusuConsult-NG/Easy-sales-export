@@ -23,35 +23,55 @@ async function alignCoopKeys() {
         const singularCoop = serviceRegs.cooperative;
         const pluralCoop = serviceRegs.cooperatives;
 
-        // If singular exists, we need to merge/copy it into plural
-        if (singularCoop) {
-            const mergedCoop = {
-                ...(pluralCoop || {}),
-                ...singularCoop
+        if (singularCoop || pluralCoop) {
+            const getProgressScore = (status: string) => {
+                switch (status) {
+                    case 'active':
+                    case 'approved':
+                        return 4;
+                    case 'pending':
+                    case 'pending_review':
+                    case 'revision_required':
+                        return 3;
+                    case 'pending_repair':
+                    case 'legacy_pending_onboarding':
+                        return 2;
+                    case 'not_started':
+                        return 1;
+                    default:
+                        return 0;
+                }
             };
+            const scorePlural = getProgressScore(pluralCoop?.status || '');
+            const scoreSingular = getProgressScore(singularCoop?.status || '');
 
-            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-            
-            // Update both keys: set plural to the merged value, and delete/unset singular
-            // We can do this in a single update
-            const updatePayload: any = {
-                "serviceRegistrations.cooperatives": mergedCoop,
-                // Optional: We can choose to keep or unset the singular key. Let's merge it and clean it up.
-                // Keeping it is fine for backward compatibility, but standardizing on plural is the target.
-                // To be completely safe and backward-compatible, we can keep the singular key or just write to both.
-                // The prompt says "merge/copy them into serviceRegistrations.cooperatives". 
-                // Let's copy it to plural and keep singular as is for full compatibility.
-            };
+            const mergedCoop = scoreSingular > scorePlural
+                ? { ...(pluralCoop || {}), ...(singularCoop || {}) }
+                : { ...(singularCoop || {}), ...(pluralCoop || {}) };
 
-            batch.update(userRef, updatePayload);
-            count++;
-            migrationCount++;
+            const needsUpdate = 
+                JSON.stringify(pluralCoop) !== JSON.stringify(mergedCoop) ||
+                JSON.stringify(singularCoop) !== JSON.stringify(mergedCoop);
 
-            if (count >= 400) {
-                await batch.commit();
-                batch = db.batch();
-                count = 0;
-                console.log(`Committed batch: ${migrationCount} migrated so far...`);
+            if (needsUpdate) {
+                const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+                const updatePayload = {
+                    "serviceRegistrations.cooperatives": mergedCoop,
+                    "serviceRegistrations.cooperative": mergedCoop
+                };
+
+                batch.update(userRef, updatePayload);
+                count++;
+                migrationCount++;
+
+                if (count >= 400) {
+                    await batch.commit();
+                    batch = db.batch();
+                    count = 0;
+                    console.log(`Committed batch: ${migrationCount} migrated so far...`);
+                }
+            } else {
+                skipCount++;
             }
         } else {
             skipCount++;

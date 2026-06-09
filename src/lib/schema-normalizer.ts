@@ -101,8 +101,31 @@ export function normalizeUserDoc(doc: AnyObject): AnyObject {
         } else if (sr.cooperative && !sr.cooperatives) {
             sr.cooperatives = deepClone(sr.cooperative);
         } else if (sr.cooperative && sr.cooperatives) {
-            // Merge both — prefer the one with more fields
-            const mergedCoop = { ...sr.cooperative, ...sr.cooperatives };
+            const getProgressScore = (status: string) => {
+                switch (status) {
+                    case 'active':
+                    case 'approved':
+                        return 4;
+                    case 'pending':
+                    case 'pending_review':
+                    case 'revision_required':
+                        return 3;
+                    case 'pending_repair':
+                    case 'legacy_pending_onboarding':
+                        return 2;
+                    case 'not_started':
+                        return 1;
+                    default:
+                        return 0;
+                }
+            };
+            const scorePlural = getProgressScore(sr.cooperatives.status || '');
+            const scoreSingular = getProgressScore(sr.cooperative.status || '');
+            
+            const mergedCoop = scoreSingular > scorePlural
+                ? { ...sr.cooperatives, ...sr.cooperative }
+                : { ...sr.cooperative, ...sr.cooperatives };
+
             sr.cooperative = mergedCoop;
             sr.cooperatives = mergedCoop;
         }
@@ -113,7 +136,32 @@ export function normalizeUserDoc(doc: AnyObject): AnyObject {
         } else if (sr.farm_nation && !sr.farmNation) {
             sr.farmNation = deepClone(sr.farm_nation);
         } else if (sr.farmNation && sr.farm_nation) {
-            const mergedFn = { ...sr.farm_nation, ...sr.farmNation };
+            const getProgressScore = (status: string) => {
+                switch (status) {
+                    case 'active':
+                    case 'approved':
+                    case 'verified':
+                        return 4;
+                    case 'pending':
+                    case 'pending_review':
+                    case 'revision_required':
+                        return 3;
+                    case 'pending_repair':
+                    case 'legacy_pending_onboarding':
+                        return 2;
+                    case 'not_started':
+                        return 1;
+                    default:
+                        return 0;
+                }
+            };
+            const scorePlural = getProgressScore(sr.farmNation.status || '');
+            const scoreSingular = getProgressScore(sr.farm_nation.status || '');
+            
+            const mergedFn = scoreSingular > scorePlural
+                ? { ...sr.farmNation, ...sr.farm_nation }
+                : { ...sr.farm_nation, ...sr.farmNation };
+
             sr.farmNation = mergedFn;
             sr.farm_nation = mergedFn;
         }

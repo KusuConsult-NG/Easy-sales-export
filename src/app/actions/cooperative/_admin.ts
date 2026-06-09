@@ -11,6 +11,7 @@ import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
 import { logger } from '@/lib/logger';
 import { db } from "@/lib/firebase-admin";
+import { normalizeUserUpdate } from "@/lib/schema-normalizer";
 import { isAdmin } from "@/lib/admin-permissions";
 import { FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logAuditAction } from "@/lib/audit-log";
@@ -465,14 +466,14 @@ async function _updateMemberStatusAction(
                     };
                 }
 
-                transaction.update(userRef, {
+                transaction.update(userRef, normalizeUserUpdate({
                     isVerified: true,
                     roles: FieldValue.arrayUnion("cooperative_member"),
                     "serviceRegistrations.cooperatives.status": "active",
                     "serviceRegistrations.cooperatives.activatedAt": FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1),
-                });
+                }));
             }
             return { notificationInfo, targetUserId };
         });
@@ -1241,10 +1242,10 @@ export async function requestCooperativeRevisionAction(
             });
 
             if (userId) {
-                t.update(db.collection(COLLECTIONS.USERS).doc(userId), {
+                t.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({
                     'serviceRegistrations.cooperatives.status': 'revision_required',
                     updatedAt: FieldValue.serverTimestamp(),
-                });
+                }));
             }
 
             return {
