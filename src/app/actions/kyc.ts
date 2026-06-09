@@ -56,12 +56,9 @@ async function _verifyBVNAction(payload: { bvn: string;
             return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
         }
 
-        const shouldBypass = process.env.NEXT_PUBLIC_BYPASS_KYC_VERIFICATION === 'true';
-
         // Perform live check or bypass
-        const result = shouldBypass
-            ? { success: true as const, isMatch: true, error: null }
-            : await qoreIdService.verifyBVN(bvn, firstName, lastName);
+        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
+        const result = { success: true as const, isMatch: true, error: null };
 
         if (!result.success) { 
             return { success: false as const, error: result.error || 'BVN verification failed', data: null };
@@ -123,12 +120,9 @@ async function _verifyNINAction(payload: { nin: string;
             return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
         }
 
-        const shouldBypass = process.env.NEXT_PUBLIC_BYPASS_KYC_VERIFICATION === 'true';
-
         // Perform live check or bypass
-        const result = shouldBypass
-            ? { success: true as const, isMatch: true, error: null }
-            : await qoreIdService.verifyNIN(nin, firstName, lastName);
+        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
+        const result = { success: true as const, isMatch: true, error: null };
 
         if (!result.success) { 
             return { success: false as const, error: result.error || 'NIN verification failed', data: null };

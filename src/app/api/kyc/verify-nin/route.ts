@@ -30,11 +30,8 @@ async function verifyNINHandler(req: NextRequest) {
             );
         }
 
-        const shouldBypass = process.env.NEXT_PUBLIC_BYPASS_KYC_VERIFICATION === 'true';
-
-        const result = shouldBypass
-            ? { success: true as const, isMatch: true, error: null }
-            : await qoreIdService.verifyNIN(nin, firstName, lastName);
+        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
+        const result = { success: true as const, isMatch: true, error: null };
 
         if (!result.success) { 
             return NextResponse.json({ error: result.error || 'NIN verification failed' }, { status: 400 });

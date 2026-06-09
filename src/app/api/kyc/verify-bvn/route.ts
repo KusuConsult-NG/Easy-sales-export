@@ -30,11 +30,8 @@ async function verifyBVNHandler(req: NextRequest) {
             );
         }
 
-        const shouldBypass = process.env.NEXT_PUBLIC_BYPASS_KYC_VERIFICATION === 'true';
-
-        const result = shouldBypass
-            ? { success: true as const, isMatch: true, error: null }
-            : await qoreIdService.verifyBVN(bvn, firstName, lastName);
+        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
+        const result = { success: true as const, isMatch: true, error: null };
 
         if (!result.success) { 
             return NextResponse.json({ error: result.error || 'BVN verification failed' }, { status: 400 });
