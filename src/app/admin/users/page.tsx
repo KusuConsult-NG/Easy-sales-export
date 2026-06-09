@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { Users, CheckCircle, XCircle, Loader2, Edit, Shield, FileCheck, FileX, SlidersHorizontal, X, MapPin, Download, Layers, Home, CreditCard } from "lucide-react";
-import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction } from "@/app/actions/admin";
+import { toggleUserVerificationAction, toggleUserKycVerificationAction, updateUserRolesAction, getUsersAction, manualAcademyEnrollmentAction, updateUserGenderAction, editApplicationAction } from "@/app/actions/admin";
 import Modal from "@/components/ui/Modal";
 import { useToast } from "@/contexts/ToastContext";
 import AdminDataTable from "@/components/admin/AdminDataTable";
@@ -73,6 +73,118 @@ export default function AdminUsersPage() {
     // UI state for date filters so they don't apply immediately on first click
     const [tempFromDate, setTempFromDate] = useState("");
     const [tempToDate, setTempToDate] = useState("");
+
+    // Profile Edit States
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editFields, setEditFields] = useState<Record<string, string>>({});
+    const [editNote, setEditNote] = useState("");
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+    const handleStartEdit = () => {
+        if (!selectedUserForModal) return;
+        
+        let fName = selectedUserForModal.name ? selectedUserForModal.name.split(" ")[0] || "" : "";
+        let lName = selectedUserForModal.name ? selectedUserForModal.name.split(" ").slice(1).join(" ") || "" : "";
+        let oName = "";
+
+        const userAny = selectedUserForModal as any;
+        if (userAny.firstName) fName = userAny.firstName;
+        if (userAny.lastName) lName = userAny.lastName;
+        if (userAny.otherName) oName = userAny.otherName;
+
+        setEditFields({
+            firstName: fName,
+            lastName: lName,
+            otherName: oName,
+            email: selectedUserForModal.email || "",
+            phone: selectedUserForModal.phone || "",
+            occupation: userAny.occupation || "",
+            stateOfOrigin: userAny.stateOfOrigin || selectedUserForModal.state || selectedUserForModal.address?.state || "",
+            lga: selectedUserForModal.lga || selectedUserForModal.address?.lga || "",
+            residentialAddress: selectedUserForModal.residentialAddress || selectedUserForModal.address?.street || "",
+            nin: selectedUserForModal.nin || "",
+            bvn: selectedUserForModal.bvn || "",
+            cacNumber: selectedUserForModal.cacNumber || "",
+            "bankDetails.bankName": selectedUserForModal.bankDetails?.bankName || "",
+            "bankDetails.accountNumber": selectedUserForModal.bankDetails?.accountNumber || "",
+            "bankDetails.accountName": selectedUserForModal.bankDetails?.accountName || "",
+            "bankDetails.bankCode": selectedUserForModal.bankDetails?.bankCode || "",
+            "nextOfKin.name": selectedUserForModal.nextOfKin?.name || "",
+            "nextOfKin.phone": selectedUserForModal.nextOfKin?.phone || "",
+            "nextOfKin.relationship": selectedUserForModal.nextOfKin?.relationship || "",
+            "nextOfKin.address": selectedUserForModal.nextOfKin?.address || "",
+        });
+        setEditNote("");
+        setIsEditMode(true);
+    };
+
+    const handleSaveEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedUserForModal) return;
+        if (!editNote || editNote.trim().length < 10) {
+            showToast("Please provide a detailed reason for the edit (minimum 10 characters).", "error");
+            return;
+        }
+
+        setIsSavingEdit(true);
+        try {
+            const res = await editApplicationAction({
+                collection: "users",
+                docId: selectedUserForModal.id,
+                fields: editFields as any,
+                editNote: editNote.trim()
+            });
+
+            if (res.success) {
+                showToast("User profile and all linked modules updated successfully", "success");
+                
+                const computedName = [editFields.firstName, editFields.otherName, editFields.lastName].filter(Boolean).join(" ").trim();
+                const updatedUser: User = {
+                    ...selectedUserForModal,
+                    name: computedName || selectedUserForModal.name,
+                    email: editFields.email,
+                    phone: editFields.phone,
+                    state: editFields.stateOfOrigin,
+                    stateOfOrigin: editFields.stateOfOrigin,
+                    lga: editFields.lga,
+                    residentialAddress: editFields.residentialAddress,
+                    nin: editFields.nin,
+                    bvn: editFields.bvn,
+                    cacNumber: editFields.cacNumber,
+                    bankDetails: {
+                        ...(selectedUserForModal.bankDetails || {}),
+                        bankName: editFields["bankDetails.bankName"],
+                        accountNumber: editFields["bankDetails.accountNumber"],
+                        accountName: editFields["bankDetails.accountName"],
+                        bankCode: editFields["bankDetails.bankCode"],
+                    },
+                    nextOfKin: {
+                        ...(selectedUserForModal.nextOfKin || {}),
+                        name: editFields["nextOfKin.name"],
+                        phone: editFields["nextOfKin.phone"],
+                        relationship: editFields["nextOfKin.relationship"],
+                        address: editFields["nextOfKin.address"],
+                    }
+                };
+                const userAny = updatedUser as any;
+                userAny.firstName = editFields.firstName;
+                userAny.lastName = editFields.lastName;
+                userAny.otherName = editFields.otherName;
+                userAny.occupation = editFields.occupation;
+                
+                setSelectedUserForModal(updatedUser);
+                setData(prev => prev.map(u => u.id === selectedUserForModal.id ? updatedUser : u));
+                setIsEditMode(false);
+                refresh();
+            } else {
+                showToast(res.error || "Failed to update user profile", "error");
+            }
+        } catch (err: any) {
+            showToast(err.message || "An unexpected error occurred", "error");
+        } finally {
+            setIsSavingEdit(false);
+        }
+    };
 
     // Use standardized hook
     const {
@@ -146,6 +258,9 @@ export default function AdminUsersPage() {
     function handleManageUser(user: User) {
         setSelectedUserForModal(user);
         setIsModalOpen(true);
+        setIsEditMode(false);
+        setEditFields({});
+        setEditNote("");
     };
 
     async function handleUpdateRoles(formData: FormData) {
@@ -612,15 +727,302 @@ export default function AdminUsersPage() {
                 }
             />
 
-            {/* Modal remains mostly the same, just keeping it here for completeness if I were doing a full file replace which I am */}
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title="Manage User & Roles"
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setIsEditMode(false);
+                }}
+                title={
+                    <div className="flex items-center gap-4">
+                        <span>Manage User &amp; Roles</span>
+                        {!isEditMode && selectedUserForModal && (
+                            <button
+                                type="button"
+                                onClick={handleStartEdit}
+                                className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 hover:bg-blue-100 text-xs font-semibold rounded-lg transition border border-blue-200"
+                            >
+                                <Edit className="w-3.5 h-3.5" />
+                                Edit Profile
+                            </button>
+                        )}
+                    </div>
+                }
+                maxWidth={isEditMode ? "2xl" : "lg"}
             >
                 {selectedUserForModal && (
                     <div className="space-y-6">
-                        <div>
+                        {isEditMode ? (
+                            <form onSubmit={handleSaveEdit} className="space-y-6 animate-fade-in">
+                                {/* Warning Alert */}
+                                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 shadow-sm">
+                                    <span className="font-semibold block mb-1">⚠️ Administrative Profile Correction</span>
+                                    Editing these details will overwrite user records and propagate the changes to all active modules (`cooperative_members`, `wave_applications`, `seller_verifications`, etc.). Make sure correct information is entered.
+                                </div>
+
+                                {/* Section 1: Personal Info */}
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Personal &amp; Contact Info</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">First Name</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={editFields.firstName || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, firstName: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Other Name</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.otherName || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, otherName: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Last Name</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={editFields.lastName || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, lastName: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="col-span-1 sm:col-span-2">
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Email</label>
+                                            <input
+                                                type="email"
+                                                required
+                                                value={editFields.email || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, email: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Phone</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={editFields.phone || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, phone: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Occupation</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.occupation || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, occupation: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 2: Location & Address */}
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Location &amp; Address</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">State</label>
+                                            <select
+                                                value={editFields.stateOfOrigin || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, stateOfOrigin: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            >
+                                                <option value="">Select State</option>
+                                                {NIGERIAN_STATES.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">LGA</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.lga || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, lga: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                placeholder="LGA"
+                                            />
+                                        </div>
+                                        <div className="col-span-1 sm:col-span-2">
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Street Address</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.residentialAddress || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, residentialAddress: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 3: KYC Details */}
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">KYC Details</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">NIN</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.nin || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, nin: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                maxLength={11}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">BVN</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.bvn || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, bvn: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                maxLength={11}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">CAC Business Number</label>
+                                            <input
+                                                type="text"
+                                                value={editFields.cacNumber || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, cacNumber: e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 4: Bank Account Details */}
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Bank Account Details</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Bank Name</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["bankDetails.bankName"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "bankDetails.bankName": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Account Number</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["bankDetails.accountNumber"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "bankDetails.accountNumber": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                                maxLength={10}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Account Name</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["bankDetails.accountName"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "bankDetails.accountName": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Bank Code</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["bankDetails.bankCode"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "bankDetails.bankCode": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 5: Next of Kin */}
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 pb-1 border-b border-slate-100">Next of Kin Details</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Full Name</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["nextOfKin.name"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "nextOfKin.name": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Relationship</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["nextOfKin.relationship"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "nextOfKin.relationship": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Phone Number</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["nextOfKin.phone"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "nextOfKin.phone": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-mono focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">Address</label>
+                                            <input
+                                                type="text"
+                                                value={editFields["nextOfKin.address"] || ""}
+                                                onChange={(e) => setEditFields(prev => ({ ...prev, "nextOfKin.address": e.target.value }))}
+                                                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Section 6: Audit Note (Reason) */}
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">Reason for Profile Correction (Required)</label>
+                                    <textarea
+                                        required
+                                        rows={3}
+                                        value={editNote}
+                                        onChange={(e) => setEditNote(e.target.value)}
+                                        placeholder="e.g. Corrected spelling of surname due to NIN mismatch"
+                                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                                    />
+                                    <p className="text-[11px] text-slate-500 mt-1">Audit log will record this explanation (minimum 10 characters required).</p>
+                                </div>
+
+                                {/* Form Controls */}
+                                <div className="flex justify-end gap-3 pt-6 border-t border-slate-200">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsEditMode(false)}
+                                        className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-lg transition-colors"
+                                    >
+                                        Back to Details
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingEdit || !editNote || editNote.trim().length < 10}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSavingEdit && <Loader2 className="w-4 h-4 animate-spin" />}
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </form>
+                        ) : (
+                            <>
+                                <div>
                             <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Details</h4>
                             <div className="bg-slate-50 p-4 rounded-xl space-y-2 text-sm text-slate-800">
                                 <p><span className="font-semibold text-slate-600">Name:</span> {selectedUserForModal.name}</p>
@@ -948,7 +1350,8 @@ export default function AdminUsersPage() {
                                 </div>
                             </div>
                         </div>
-
+                            </>
+                        )}
                     </div>
                 )}
             </Modal>
