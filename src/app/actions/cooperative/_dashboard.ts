@@ -27,17 +27,43 @@ export async function getDashboardDataAction() { try {
             .where('userId', '==', userId)
             .get();
 
-        // FALLBACK: If query by field fails, try direct document ID lookup (parity with layout guard)
+        // FALLBACK: If query by field fails, try direct document ID lookup or email query
         if (membershipSnapshot.empty) {
             const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
             const docSnap = await docRef.get();
             if (docSnap.exists) {
                 logger.info(`[getDashboardData] Found membership via DocID fallback for user: ${userId}`);
-                // Mock a snapshot-like structure for the code below
+                // Heal the document by adding the userId field on-the-fly
+                const docData = docSnap.data()!;
+                if (!docData.userId) {
+                    await docRef.update({ userId });
+                }
                 membershipSnapshot = { empty: false,
                     size: 1,
                     docs: [docSnap]
                 } as any;
+            } else {
+                // Fetch email from users collection to query by email
+                const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+                const userEmail = userDoc.exists ? userDoc.data()?.email : null;
+                if (userEmail) {
+                    const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where("email", "==", userEmail.toLowerCase())
+                        .limit(1)
+                        .get();
+                    if (!emailQuery.empty) {
+                        logger.info(`[getDashboardData] Found membership via Email query fallback for user: ${userId}`);
+                        const memberDoc = emailQuery.docs[0];
+                        const docData = memberDoc.data();
+                        if (!docData.userId) {
+                            await memberDoc.ref.update({ userId });
+                        }
+                        membershipSnapshot = { empty: false,
+                            size: 1,
+                            docs: [memberDoc]
+                        } as any;
+                    }
+                }
             }
         }
 

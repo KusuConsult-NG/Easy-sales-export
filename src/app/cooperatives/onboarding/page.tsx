@@ -46,8 +46,39 @@ export default async function CooperativeOnboardingPage(
                 paymentStatus = "completed";
             } else {
                 const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(session.user.id).get();
-                if (memberDoc.exists) {
-                    paymentStatus = memberDoc.data()?.paymentStatus || "pending";
+                let memberDocData = memberDoc.exists ? memberDoc.data() : null;
+                let memberRef = memberDoc.exists ? memberDoc.ref : null;
+
+                if (!memberDocData) {
+                    const querySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where("userId", "==", session.user.id)
+                        .limit(1)
+                        .get();
+                    if (!querySnap.empty) {
+                        memberDocData = querySnap.docs[0].data();
+                        memberRef = querySnap.docs[0].ref;
+                    } else if (userData?.email) {
+                        const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                            .where("email", "==", userData.email.toLowerCase())
+                            .limit(1)
+                            .get();
+                        if (!emailQuery.empty) {
+                            memberDocData = emailQuery.docs[0].data();
+                            memberRef = emailQuery.docs[0].ref;
+                        }
+                    }
+                }
+
+                if (memberDocData) {
+                    paymentStatus = memberDocData.paymentStatus || "pending";
+                    if (memberDocData.membershipStatus === "active" || memberDocData.membershipStatus === "approved" || memberDocData.status === "active" || memberDocData.status === "approved") {
+                        paymentStatus = "completed";
+                    }
+                    // Heal the membership document with the userId if missing
+                    if (!memberDocData.userId && memberRef) {
+                        await memberRef.update({ userId: session.user.id });
+                        logger.info(`[CooperativeOnboardingPage] Healed membership ${memberRef.id} with userId ${session.user.id}`);
+                    }
                 }
 
                 // ── AUTHORITATIVE OVERRIDE ──────────────────────────────────────

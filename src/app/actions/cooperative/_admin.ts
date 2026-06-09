@@ -413,21 +413,49 @@ async function _updateMemberStatusAction(
             }
         }
 
-        const emailData = await db.runTransaction(async (transaction) => {
-            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
-            const memberDoc = await transaction.get(memberRef);
-            if (!memberDoc.exists) throw new Error("Member not found");
+        const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
+        const memberDoc = await memberRef.get();
+        if (!memberDoc.exists) {
+            return { success: false as const, error: "Member not found", data: null };
+        }
+        
+        const memberData = memberDoc.data()!;
+        let targetUserId = memberData.userId;
 
-            transaction.update(memberRef, {
+        if (!targetUserId && memberData.email) {
+            // Find user by email
+            const userSnap = await db.collection(COLLECTIONS.USERS)
+                .where("email", "==", memberData.email.toLowerCase())
+                .limit(1)
+                .get();
+            if (!userSnap.empty) {
+                targetUserId = userSnap.docs[0].id;
+                // Heal the membership document by setting the userId
+                await memberRef.update({ userId: targetUserId });
+                logger.info(`[updateMemberStatus] Healed membership ${memberId} with userId ${targetUserId}`);
+            }
+        }
+
+        if (!targetUserId) {
+            targetUserId = memberId; // fallback
+        }
+
+        const emailData = await db.runTransaction(async (transaction) => {
+            const mRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(memberId);
+            const mDoc = await transaction.get(mRef);
+            if (!mDoc.exists) throw new Error("Member not found");
+
+            transaction.update(mRef, {
                 membershipStatus: status,
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1),
+                userId: targetUserId,
             });
 
             let notificationInfo: { email: string; fullName: string } | null = null;
 
             if (status === "active") {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(memberId);
+                const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
                 const userDoc = await transaction.get(userRef);
                 const userData = userDoc.data();
                 if (userData?.email) {
@@ -446,13 +474,17 @@ async function _updateMemberStatusAction(
                     _version: FieldValue.increment(1),
                 });
             }
-            return notificationInfo;
+            return { notificationInfo, targetUserId };
         });
 
-        if (status === "active" && emailData) {
+        const { notificationInfo } = emailData || {};
+
+        if (status === "active" && notificationInfo && targetUserId) {
             // 4. Invalidate Caches (Kill the "State vs. Truth" bug)
             try {
-                await invalidateCooperativeCache(memberId);
+                await invalidateCooperativeCache(targetUserId);
+                const { invalidateUserCache } = await import('@/lib/cache-invalidation');
+                await invalidateUserCache(targetUserId);
                 await invalidateAdminGlobalStats();
                 // Clear scoped coop stats
                 const adminScope = await getAdminScope(session.user.id, session.user.roles);
@@ -468,7 +500,7 @@ async function _updateMemberStatusAction(
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({
                     from: 'Easy Sales Export <noreply@easysalesexport.com>',
-                    to: emailData.email,
+                    to: notificationInfo.email,
                     subject: '✅ Your Cooperative Membership Has Been Approved!',
                     html: `
                         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
@@ -476,7 +508,7 @@ async function _updateMemberStatusAction(
                                 <h1 style="color:white;margin:0;">Welcome to the Cooperative!</h1>
                             </div>
                             <h2 style="color:#7c3aed;">Membership Approved ✅</h2>
-                            <p>Dear <strong>${emailData.fullName}</strong>,</p>
+                            <p>Dear <strong>${notificationInfo.fullName}</strong>,</p>
                             <p>Congratulations! Your cooperative membership application has been <strong>approved</strong>. You now have full access to cooperative benefits including loans, fixed savings, and member forums.</p>
                             <div style="text-align:center;margin:24px 0;">
                                 <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/cooperatives/dashboard" style="background:#7c3aed;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;">Go to Your Dashboard</a>

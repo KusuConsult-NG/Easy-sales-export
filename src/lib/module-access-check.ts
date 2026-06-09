@@ -133,6 +133,54 @@ export async function checkModuleAccess(
             }
         }
 
+        // ── Layer 2.6: Direct Collection query/lookup fallback ──────────────────
+        // Handles legacy/bulk-imported cooperative members whose user documents
+        // were never updated/backfilled, and whose roles/serviceRegistrations are empty.
+        if (app === "cooperatives") {
+            const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("userId", "==", userId)
+                .limit(1)
+                .get();
+
+            let memberDocData: any = null;
+            let memberRef: any = null;
+
+            if (!memberQuery.empty) {
+                memberDocData = memberQuery.docs[0].data();
+                memberRef = memberQuery.docs[0].ref;
+            } else {
+                const memberDoc = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).get();
+                if (memberDoc.exists) {
+                    memberDocData = memberDoc.data();
+                    memberRef = memberDoc.ref;
+                } else if (userData.email) {
+                    const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                        .where("email", "==", userData.email.toLowerCase())
+                        .limit(1)
+                        .get();
+                    if (!emailQuery.empty) {
+                        memberDocData = emailQuery.docs[0].data();
+                        memberRef = emailQuery.docs[0].ref;
+                    }
+                }
+            }
+
+            if (memberDocData) {
+                const status = memberDocData.membershipStatus || memberDocData.status;
+                if (status === "active" || status === "approved") {
+                    logger.info(
+                        `[ModuleAccess] Layer 2.6 — Direct query confirmed '${app}' access (uid: ${userId}, status: ${status}).`
+                    );
+                    // Heal the membership document with the userId if missing
+                    if (!memberDocData.userId && memberRef) {
+                        await memberRef.update({ userId });
+                        logger.info(`[ModuleAccess] Healed membership ${memberRef.id} with userId ${userId}`);
+                    }
+                    return true;
+                }
+            }
+        }
+
         return false;
     } catch (error) {
         logger.error(`[ModuleAccess] Firestore fallback check failed for '${app}':`, error);

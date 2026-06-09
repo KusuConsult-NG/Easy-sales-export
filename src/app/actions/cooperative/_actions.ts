@@ -795,7 +795,7 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
 
         let doc;
         if (snapshot.empty) {
-            // Fallback to direct document ID check
+            // Fallback 1: direct document ID check
             const docRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId);
             const docSnap = await docRef.get();
             if (docSnap.exists) {
@@ -804,8 +804,23 @@ async function _getMembershipAction(): Promise<GetMembershipState> { try {
                 if (!docData.userId) {
                     await docRef.update({ userId });
                 }
-                // Mock a snapshot-like structure
                 doc = docSnap;
+            } else if (userData?.email) {
+                // Fallback 2: query by email
+                const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("email", "==", userData.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (!emailQuery.empty) {
+                    const emailDocRef = emailQuery.docs[0].ref;
+                    const emailDocData = emailQuery.docs[0].data();
+                    if (!emailDocData.userId) {
+                        await emailDocRef.update({ userId });
+                    }
+                    doc = emailQuery.docs[0];
+                } else {
+                    return { error: "No membership found", success: false as const, data: null };
+                }
             } else {
                 return { error: "No membership found", success: false as const, data: null };
             }
@@ -922,34 +937,67 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             return "approved";
         }
 
-        // ── FALLBACK: cooperative_members doc predates V2 schema ─────────
+        // ── FALLBACK: cooperative_members doc query by userId or docId ─────────
+        let memberDocData: any = null;
+        let memberRef: any = null;
+        
         const memberSnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
             .doc(session.user.id)
             .get();
 
-        if (memberSnap.exists) { const memberData = memberSnap.data()!;
+        if (memberSnap.exists) {
+            memberDocData = memberSnap.data();
+            memberRef = memberSnap.ref;
+        } else {
+            const memberQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("userId", "==", session.user.id)
+                .limit(1)
+                .get();
+            if (!memberQuery.empty) {
+                memberDocData = memberQuery.docs[0].data();
+                memberRef = memberQuery.docs[0].ref;
+            } else if (session.user.email) {
+                const emailQuery = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                    .where("email", "==", session.user.email.toLowerCase())
+                    .limit(1)
+                    .get();
+                if (!emailQuery.empty) {
+                    memberDocData = emailQuery.docs[0].data();
+                    memberRef = emailQuery.docs[0].ref;
+                }
+            }
+        }
+
+        if (memberDocData) {
             // Legacy import members: paymentStatus=completed but onboardingCompleted=false
-            if (memberData.paymentStatus === 'completed' && !memberData.onboardingCompleted) {
+            if (memberDocData.paymentStatus === 'completed' && !memberDocData.onboardingCompleted) {
                 return 'legacy_pending_onboarding';
             }
             // LOOP FIX: If the user has submitted the form (onboardingCompleted=true)
             // but is still awaiting admin approval, return a distinct sentinel value.
-            // Returning plain "pending" caused the client to show the blank form again
-            // instead of redirecting to the pending review page.
-            if (memberData.onboardingCompleted && (memberData.membershipStatus === 'pending' || memberData.status === 'pending')) {
+            if (memberDocData.onboardingCompleted && (memberDocData.membershipStatus === 'pending' || memberDocData.status === 'pending')) {
                 return 'pending_review';
             }
-            const derivedStatus = memberData.membershipStatus ?? memberData.status ?? 'pending';
+            const derivedStatus = memberDocData.membershipStatus ?? memberDocData.status ?? 'pending';
+
+            // Heal the membership document with the userId if missing
+            if (!memberDocData.userId && memberRef) {
+                await memberRef.update({ userId: session.user.id });
+                logger.info(`[checkCooperativeStatus] Healed membership ${memberRef.id} with userId ${session.user.id}`);
+            }
 
             // Backfill the user doc so future reads hit the fast path
             await db.collection(COLLECTIONS.USERS).doc(session.user.id).update(
                 { 
                     "serviceRegistrations.cooperatives.status": derivedStatus, 
                     "serviceRegistrations.cooperatives.syncedFromLegacy": true, 
-                    "serviceRegistrations.cooperatives.syncedAt": new Date().toISOString() 
+                    "serviceRegistrations.cooperatives.syncedAt": new Date().toISOString(),
+                    ...(derivedStatus === 'active' || derivedStatus === 'approved' ? {
+                        roles: FieldValue.arrayUnion("cooperative_member")
+                    } : {})
                 }
             );
-            logger.info(`[checkCooperativeStatus] Backfilled status '${derivedStatus}' for user ${session.user.id}`);
+            logger.info(`[checkCooperativeStatus] Backfilled status '${derivedStatus}' and role for user ${session.user.id}`);
             return derivedStatus;
         }
 
