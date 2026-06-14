@@ -57,6 +57,7 @@ export interface FinancialOverview {
         reference?: string | null;
         timestamp: string | null;
         phone?: string | null;
+        userId?: string | null;
     }>;
     failedTransactions: Array<{
         id: string;
@@ -66,6 +67,7 @@ export interface FinancialOverview {
         gatewayResponse: string | null;
         timestamp: string | null;
         phone?: string | null;
+        userId?: string | null;
     }>;
     totalSuccessfulCount?: number;
     totalAbandonedCount?: number;

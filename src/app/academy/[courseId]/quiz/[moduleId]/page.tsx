@@ -290,7 +290,7 @@ export default function QuizPage(props: QuizPageProps) {
                                     Not Quite There
                                 </h1>
                                 <p className="text-lg text-slate-600 mb-6">
-                                    You need {quiz.passingScore}% to pass. Keep studying!
+                                    You need {quiz.passingScore ?? 95}% to pass. Keep studying!
                                 </p>
                             </>
                         )}
@@ -310,7 +310,7 @@ export default function QuizPage(props: QuizPageProps) {
                                 {score}%
                             </p>
                             <p className="text-xs text-slate-500 mt-1">
-                                Passing score: {quiz.passingScore}%
+                                Passing score: {quiz.passingScore ?? 95}%
                             </p>
                         </div>
 
@@ -373,7 +373,7 @@ export default function QuizPage(props: QuizPageProps) {
                             </h3>
                             <div className="space-y-2 text-sm text-slate-600">
                                 <p>📝 <strong>{quiz.questions.length}</strong> questions</p>
-                                <p>🎯 Passing score: <strong>{quiz.passingScore}%</strong></p>
+                                <p>🎯 Passing score: <strong>{quiz.passingScore ?? 95}%</strong></p>
                                 <p>⏱️ Time limit: <strong>10 minutes</strong> (strictly monitored)</p>
                                 <p>⚠️ Anti-cheat protection active: window focus loss or tab switching will log strikes.</p>
                             </div>

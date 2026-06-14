@@ -36,12 +36,27 @@ export async function GET(request: NextRequest) {
                 : (data.fullName || data.name || data.displayName || data.email || "Unknown");
             
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : "";
+
+            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
+            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+
+            let phone = data.phone || data.phoneNumber || data.kyc?.phoneNumber || data.kyc?.phone || "";
+            if (isPlaceholder(phone) && data.serviceRegistrations) {
+                for (const reg of Object.values(data.serviceRegistrations) as any[]) {
+                    const profile = reg?.profile || reg;
+                    if (profile && profile.phone && !isPlaceholder(profile.phone)) {
+                        phone = profile.phone;
+                        break;
+                    }
+                }
+            }
+            if (isPlaceholder(phone)) phone = "";
             
             const cols = [
                 doc.id,
                 derivedName,
                 data.email || "",
-                data.phone || "",
+                phone,
                 (data.roles || []).join(";"),
                 (data.isVerified ?? data.verified ?? false) ? "Yes" : "No",
                 (data.kyc?.bvn || data.bvn) ? "Provided" : "No",

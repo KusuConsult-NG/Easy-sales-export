@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { logger } from '@/lib/logger';
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
+import { Award, Download, Share2, CheckCircle, Loader2, ArrowLeft, Linkedin } from "lucide-react";
 import Image from "next/image";
 import { getCourseByIdAction, getUserProgressAction, type Course, type UserProgress } from "@/app/actions/academy";
 import { useToast } from "@/contexts/ToastContext";
@@ -70,6 +70,28 @@ export default function CertificatePage() {
         setDownloading(false);
     };
 
+    function handleAddToLinkedIn() {
+        // LinkedIn "Add to Profile" certification URL
+        // https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&...
+        const certName = encodeURIComponent(course?.title || "Export Trade Certificate");
+        const orgName = encodeURIComponent("Easy Sales Export Academy");
+        const issueYear = completionDate.getFullYear();
+        const issueMonth = completionDate.getMonth() + 1; // LinkedIn expects 1-indexed month
+        const certId = encodeURIComponent(`ACAD-${issueYear}-${courseId.substring(0, 6).toUpperCase()}`);
+        const certUrl = encodeURIComponent(`${window.location.origin}/academy/verify/${certId}`);
+
+        const linkedInUrl =
+            `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME` +
+            `&name=${certName}` +
+            `&organizationName=${orgName}` +
+            `&issueYear=${issueYear}` +
+            `&issueMonth=${issueMonth}` +
+            `&certUrl=${certUrl}` +
+            `&certId=${certId}`;
+
+        window.open(linkedInUrl, "_blank", "noopener,noreferrer");
+    };
+
     function handleShare() {
         const shareText = `I just completed ${course?.title} on Easy Sales Export Academy! 🎓`;
         if (navigator.share) {
@@ -133,6 +155,13 @@ export default function CertificatePage() {
                     </button>
 
                     <div className="flex items-center gap-3">
+                        <button
+                            onClick={handleAddToLinkedIn}
+                            className="px-4 py-2 bg-[#0077B5] hover:bg-[#006097] text-white rounded-lg transition flex items-center gap-2 font-semibold"
+                        >
+                            <Linkedin className="w-4 h-4" />
+                            <span>Add to LinkedIn</span>
+                        </button>
                         <button
                             onClick={handleShare}
                             className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-lg transition flex items-center gap-2"

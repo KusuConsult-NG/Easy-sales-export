@@ -172,6 +172,7 @@ export async function getBriefingRegistrationsAction(
             return {
                 ...serializeValue(d),
                 id: doc.id,
+                phoneNumber: d.phoneNumber || d.phone || d.kyc?.phoneNumber || d.kyc?.phone || "",
                 createdAt: d.createdAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
                 updatedAt: d.updatedAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
                 status: d.status || "registered",

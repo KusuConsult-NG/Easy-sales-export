@@ -6,7 +6,7 @@
 
 // User type inlined to avoid cross-package import issues in Docker build environment.
 // This is structurally compatible with @easy-sales/types User.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type User = Record<string, any> & { uid: string; email: string; fullName: string; roles: string[] };
 
 export interface CooperativeMemberMetrics {
@@ -94,6 +94,7 @@ export interface FinancialOverview {
         reference?: string | null;
         timestamp: string | null;
         phone?: string | null;
+        userId?: string | null;
     }>;
     failedTransactions: Array<{
         id: string;
@@ -103,6 +104,7 @@ export interface FinancialOverview {
         gatewayResponse: string | null;
         timestamp: string | null;
         phone?: string | null;
+        userId?: string | null;
     }>;
     totalSuccessfulCount?: number;
     totalAbandonedCount?: number;

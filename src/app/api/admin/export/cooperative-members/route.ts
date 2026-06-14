@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
 
             const fullName = `${derivedFirstName} ${derivedLastName}`.trim();
             const email = data.email || fallbackUser.email || "";
-            const phone = data.phone || fallbackUser.phone || "";
+            const phone = data.phone || fallbackUser.phone || fallbackUser.phoneNumber || data.phoneNumber || data.kyc?.phoneNumber || "";
             const state = data.stateOfOrigin || fallbackUser.address?.state || "";
             const lga = data.lga || fallbackUser.address?.lga || "";
             const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : "";

@@ -40,6 +40,8 @@ const AUDIENCE_LABELS: Record<BroadcastAudience, string> = {
     pending_users: "Pending Users",
     active_users: "Active Users",
     csv_upload: "CSV Upload",
+    active_last_30_days: "🟢 Active Last 30 Days",
+    fully_verified_sellers: "✅ Fully Verified Sellers",
 };
 
 

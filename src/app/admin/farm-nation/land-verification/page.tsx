@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
-import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter } from "lucide-react";
+import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter, ClipboardList, Send, Calendar, User } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction } from "@/app/actions/farm-nation-admin";
@@ -54,6 +54,13 @@ export default function AdminLandVerificationPage() {
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Inspector dispatch state
+    const [inspectorName, setInspectorName] = useState("");
+    const [inspectorDate, setInspectorDate] = useState("");
+    const [inspectorNotes, setInspectorNotes] = useState("");
+    const [isDispatchingInspector, setIsDispatchingInspector] = useState(false);
+    const [activeTab, setActiveTab] = useState<"details" | "inspector">("details");
+
     // Server-side aggregate stats — independent of pagination
     const [serverStats, setServerStats] = useState<{
         total: number; pending: number; verified: number; rejected: number;
@@ -70,7 +77,7 @@ export default function AdminLandVerificationPage() {
     const filteredVerifications = verifications;
 
     async function handleApprove(verificationId: string) {
-        if (!confirm("Approve this land listing?")) return;
+        if (!confirm("Approve this land listing? Ensure the inspector report has been reviewed.")) return;
         setIsProcessing(true);
         try {
             const response = await fetch("/api/admin/farm-nation/approve-land", {
@@ -82,6 +89,7 @@ export default function AdminLandVerificationPage() {
             if (data.success) {
                 showToast("Land listing approved!", "success");
                 setIsDetailsModalOpen(false);
+                loadVerifications();
             } else {
                 showToast(data.message || "Failed to approve", "error");
             }
@@ -91,6 +99,37 @@ export default function AdminLandVerificationPage() {
             setIsProcessing(false);
         }
     };
+
+    async function handleDispatchInspector(verificationId: string) {
+        if (!inspectorName.trim()) { showToast("Please enter inspector name", "error"); return; }
+        if (!inspectorDate) { showToast("Please select inspection date", "error"); return; }
+        setIsDispatchingInspector(true);
+        try {
+            const response = await fetch("/api/admin/farm-nation/dispatch-inspector", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    verificationId,
+                    inspectorName: inspectorName.trim(),
+                    scheduledDate: inspectorDate,
+                    notes: inspectorNotes.trim(),
+                }),
+            });
+            const data = await response.json();
+            if (data.success) {
+                showToast("Inspector dispatched successfully!", "success");
+                setInspectorName(""); setInspectorDate(""); setInspectorNotes("");
+                setActiveTab("details");
+                loadVerifications();
+            } else {
+                showToast(data.message || "Failed to dispatch inspector", "error");
+            }
+        } catch {
+            showToast("An error occurred dispatching inspector", "error");
+        } finally {
+            setIsDispatchingInspector(false);
+        }
+    }
 
     async function handleReject(verificationId: string) {
         const reason = prompt("Enter rejection reason:");
@@ -106,6 +145,7 @@ export default function AdminLandVerificationPage() {
             if (data.success) {
                 showToast("Land listing rejected", "success");
                 setIsDetailsModalOpen(false);
+                loadVerifications();
             } else {
                 showToast(data.message || "Failed to reject", "error");
             }
@@ -135,12 +175,12 @@ export default function AdminLandVerificationPage() {
             const exportData = result.data;
             
             const headers = [
-                "Owner Name", "Title", "Category", "State", "LGA",
+                "Owner Name", "Phone", "Title", "Category", "State", "LGA",
                 "Size", "Unit", "Total Price (₦)", "GPS Lat", "GPS Lng",
                 "Verification Status", "Submitted Date"
             ];
             const rows = exportData.map(v => [
-                v.ownerName || "", v.title || "", v.category || "",
+                v.ownerName || "", v.owner?.phone || v.phone || "", v.title || "", v.category || "",
                 v.state || "", v.lga || "",
                 v.size, v.unit || "", v.totalPrice,
                 v.gpsCoordinates?.latitude || "", v.gpsCoordinates?.longitude || "",
@@ -342,43 +382,123 @@ export default function AdminLandVerificationPage() {
                     </div>
                 )}
 
-                {/* Details Modal */}
                 {isDetailsModalOpen && selectedVerification && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
                         <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
                             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
                                 <h2 className="text-2xl font-bold text-slate-900">Land Verification Details</h2>
-                                <button onClick={() => setIsDetailsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <button onClick={() => { setIsDetailsModalOpen(false); setActiveTab("details"); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                                     <X className="w-6 h-6" />
                                 </button>
                             </div>
-                            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                                <section>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                        <MapPin className="w-5 h-5" /> Land Information
-                                    </h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold">{selectedVerification.title}</p></div>
-                                        <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold">{selectedVerification.category}</p></div>
-                                        <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold">{selectedVerification.state}, {selectedVerification.lga}</p></div>
-                                        <div><p className="text-sm text-slate-600">Size & Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{selectedVerification.totalPrice.toLocaleString()}</p></div>
-                                        {selectedVerification.gpsCoordinates && (
-                                            <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
+
+                            {/* Tab Navigation */}
+                            <div className="flex border-b border-slate-200">
+                                {(["details", "inspector"] as const).map(tab => (
+                                    <button key={tab} onClick={() => setActiveTab(tab)}
+                                        className={`flex-1 px-6 py-3 text-sm font-semibold transition capitalize flex items-center justify-center gap-2 ${
+                                            activeTab === tab
+                                                ? "border-b-2 border-blue-600 text-blue-700 bg-blue-50"
+                                                : "text-slate-500 hover:text-slate-800"
+                                        }`}>
+                                        {tab === "details" ? <MapPin className="w-4 h-4" /> : <ClipboardList className="w-4 h-4" />}
+                                        {tab === "details" ? "Property Details" : "Inspector Dispatch"}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+                                {activeTab === "details" && (
+                                    <>
+                                        <section>
+                                            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                                <MapPin className="w-5 h-5" /> Land Information
+                                            </h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold">{selectedVerification.title}</p></div>
+                                                <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold">{selectedVerification.category}</p></div>
+                                                <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold">{selectedVerification.state}, {selectedVerification.lga}</p></div>
+                                                <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{selectedVerification.totalPrice.toLocaleString()}</p></div>
+                                                {selectedVerification.gpsCoordinates && (
+                                                    <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
+                                                )}
+                                            </div>
+                                        </section>
+                                        <section>
+                                            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                                <FileText className="w-5 h-5" /> Legal Documents
+                                            </h3>
+                                            <div className="space-y-2">
+                                                {selectedVerification.documents.landTitle && (
+                                                    <a href={selectedVerification.documents.landTitle} target="_blank" rel="noopener noreferrer"
+                                                        className="flex items-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition group">
+                                                        <FileText className="w-5 h-5 text-blue-600" />
+                                                        <span className="text-sm font-semibold text-blue-700 group-hover:underline">Land Title Document</span>
+                                                    </a>
+                                                )}
+                                                {selectedVerification.documents.surveyPlan && (
+                                                    <a href={selectedVerification.documents.surveyPlan} target="_blank" rel="noopener noreferrer"
+                                                        className="flex items-center gap-2 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition group">
+                                                        <FileText className="w-5 h-5 text-green-600" />
+                                                        <span className="text-sm font-semibold text-green-700 group-hover:underline">Survey Plan Document</span>
+                                                    </a>
+                                                )}
+                                                {selectedVerification.documents.taxClearance && (
+                                                    <a href={selectedVerification.documents.taxClearance} target="_blank" rel="noopener noreferrer"
+                                                        className="flex items-center gap-2 p-3 bg-amber-50 hover:bg-amber-100 rounded-lg transition group">
+                                                        <FileText className="w-5 h-5 text-amber-600" />
+                                                        <span className="text-sm font-semibold text-amber-700 group-hover:underline">Tax Clearance Document</span>
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </section>
+                                        {selectedVerification.verificationNotes && (
+                                            <section className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                                <h3 className="text-sm font-bold text-blue-800 mb-1">Inspector / Verification Notes</h3>
+                                                <p className="text-sm text-blue-700 whitespace-pre-line">{selectedVerification.verificationNotes}</p>
+                                            </section>
                                         )}
+                                    </>
+                                )}
+
+                                {activeTab === "inspector" && (
+                                    <div className="space-y-5">
+                                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                            <p className="text-sm font-semibold text-amber-800">🔍 Inspector Dispatch</p>
+                                            <p className="text-xs text-amber-700 mt-1">Assign a field inspector to visit and confirm the GPS coordinates, land boundaries, and document authenticity before final approval.</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                                                <User className="w-4 h-4 inline mr-1" />Inspector Name <span className="text-red-500">*</span>
+                                            </label>
+                                            <input type="text" value={inspectorName} onChange={e => setInspectorName(e.target.value)}
+                                                placeholder="e.g. Adeola Bello" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                                                <Calendar className="w-4 h-4 inline mr-1" />Scheduled Inspection Date <span className="text-red-500">*</span>
+                                            </label>
+                                            <input type="date" value={inspectorDate} onChange={e => setInspectorDate(e.target.value)}
+                                                min={new Date().toISOString().split("T")[0]}
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-slate-900 mb-1.5">Dispatch Notes (optional)</label>
+                                            <textarea value={inspectorNotes} onChange={e => setInspectorNotes(e.target.value)}
+                                                placeholder="Any specific instructions for the inspector..." rows={3}
+                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                                        </div>
+                                        <button
+                                            onClick={() => handleDispatchInspector(selectedVerification.id)}
+                                            disabled={isDispatchingInspector}
+                                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/20"
+                                        >
+                                            {isDispatchingInspector ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                            {isDispatchingInspector ? "Dispatching…" : "Dispatch Inspector"}
+                                        </button>
+                                        <p className="text-xs text-slate-500 text-center">An email notification will be sent to the inspector with the property location and document links.</p>
                                     </div>
-                                </section>
-                                <section>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                        <FileText className="w-5 h-5" /> Legal Documents
-                                    </h3>
-                                    <div className="space-y-2">
-                                        <div className="p-3 bg-slate-50 rounded-lg"><p className="text-sm font-semibold">Land Title: {selectedVerification.documents.landTitle}</p></div>
-                                        <div className="p-3 bg-slate-50 rounded-lg"><p className="text-sm font-semibold">Survey Plan: {selectedVerification.documents.surveyPlan}</p></div>
-                                        {selectedVerification.documents.taxClearance && (
-                                            <div className="p-3 bg-slate-50 rounded-lg"><p className="text-sm font-semibold">Tax Clearance: {selectedVerification.documents.taxClearance}</p></div>
-                                        )}
-                                    </div>
-                                </section>
+                                )}
                             </div>
                             {selectedVerification.verificationStatus === "pending" && (
                                 <div className="p-6 border-t border-slate-200 flex gap-4">

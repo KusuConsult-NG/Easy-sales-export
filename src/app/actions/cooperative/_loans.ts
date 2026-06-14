@@ -454,7 +454,7 @@ export async function getAdminLoanApplicationsExportAction(options: {
 
             return {
                 ...loan,
-                phone: user.phone || "",
+                phone: user.phone || user.phoneNumber || user.kyc?.phoneNumber || user.kyc?.phone || "",
                 state: user.address?.state || user.stateOfOrigin || "",
                 lga: user.address?.lga || user.lga || "",
                 bankName: bankDetails?.bankName || "",

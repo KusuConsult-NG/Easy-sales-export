@@ -30,7 +30,7 @@ export function normalizeAggressive(
     const lastName = cleanVal(uData.lastName) || cleanVal(wData?.surname) || fullName.split(" ").slice(1).join(" ") || "";
 
     const email = cleanVal(uData.email) || cleanVal(wData?.userEmail) || cleanVal(sData?.email) || "";
-    const phone = cleanVal(uData.phone) || cleanVal(sData?.phone) || cleanVal(wData?.phone) || cleanVal(uData.phoneNumber) || "";
+    const phone = cleanVal(uData.phone) || cleanVal(sData?.phone) || cleanVal(wData?.phone) || cleanVal(uData.phoneNumber) || cleanVal(uData.kyc?.phoneNumber) || cleanVal(uData.kyc?.phone) || cleanVal(sData?.phoneNumber) || cleanVal(sData?.kyc?.phoneNumber) || cleanVal(sData?.kyc?.phone) || cleanVal(wData?.phoneNumber) || cleanVal(wData?.kyc?.phoneNumber) || cleanVal(wData?.kyc?.phone) || "";
     const gender = cleanVal(uData.gender) || cleanVal(wData?.gender) || "other";
     const dob = cleanVal(uData.dateOfBirth) || cleanVal(wData?.dateOfBirth) || cleanVal(cData?.personalInfo?.dateOfBirth) || "";
 
@@ -142,7 +142,7 @@ export function extractCanonicalUser(uData: any, appData: any = null) {
     return {
         name,
         email: uData?.email || appData?.email || appData?.userEmail || "",
-        phone: uData?.phone || uData?.phoneNumber || appData?.phone || "",
+        phone: uData?.phone || uData?.phoneNumber || uData?.kyc?.phoneNumber || uData?.kyc?.phone || appData?.phone || appData?.phoneNumber || appData?.kyc?.phoneNumber || appData?.kyc?.phone || "",
         dateOfBirth: uData?.dateOfBirth || appData?.dateOfBirth || "",
         bankDetails,
         address,

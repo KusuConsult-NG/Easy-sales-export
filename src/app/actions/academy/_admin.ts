@@ -860,7 +860,7 @@ async function _getStandardAcademyApplicationsAction(options: {
                 ...uData,
                 ...app,
                 // Flatten fields for UI consistency
-                phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || null,
+                phone: app.phone || pi.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                 email: app.email || pi.email || uData.email || null,
                 gender: app.gender || pi.gender || uData.gender || null,
                 dateOfBirth: app.dateOfBirth || pi.dateOfBirth || uData.dob || null,

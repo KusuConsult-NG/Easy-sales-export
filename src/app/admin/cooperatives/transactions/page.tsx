@@ -37,6 +37,11 @@ interface Transaction {
     description?: string;
     reference?: string;
     metadata?: Record<string, unknown>;
+    user?: {
+        phone?: string;
+        email?: string;
+        name?: string;
+    } | null;
 }
 
 export default function AdminTransactionsPage() {
@@ -156,10 +161,11 @@ export default function AdminTransactionsPage() {
 
     function exportCsv() {
         if (!filteredTransactions.length) return;
-        const headers = ["Date", "User", "Type", "Amount", "Status", "Description", "Reference"];
+        const headers = ["Date", "User", "Phone", "Type", "Amount", "Status", "Description", "Reference"];
         const rows = filteredTransactions.map((t) => [
             new Date(t.date).toLocaleDateString("en-NG"),
             t.userName,
+            t.user?.phone || "",
             t.type.replace(/_/g, " "),
             t.amount.toString(),
             t.status,

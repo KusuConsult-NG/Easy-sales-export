@@ -1,5 +1,5 @@
 import { getAdminDb } from "@/lib/firebase-admin";
-import { AggregateField } from "firebase-admin/firestore";
+import { AggregateField, FieldPath } from "firebase-admin/firestore";
 import { unstable_cache } from "next/cache";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
@@ -593,6 +593,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     reference: d.reference ?? d.paymentReference ?? null,
                     timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
                     phone: d.phone ?? d.userPhone ?? d.customerPhone ?? d.metadata?.phone ?? d.customer?.phone ?? null,
+                    userId: d.userId ?? d.metadata?.userId ?? null,
                 };
             };
 
@@ -634,6 +635,7 @@ export class AnalyticsService implements AnalyticsServiceContract {
                     gatewayResponse: d.gatewayResponse ?? null,
                     timestamp: ts?.toDate ? ts.toDate().toISOString() : (ts ? new Date(ts).toISOString() : null),
                     phone: d.phone ?? d.userPhone ?? d.customerPhone ?? d.metadata?.phone ?? d.customer?.phone ?? null,
+                    userId: d.userId ?? d.metadata?.userId ?? null,
                 });
             });
             failedTransactions.sort((a, b) => {
@@ -643,6 +645,81 @@ export class AnalyticsService implements AnalyticsServiceContract {
             });
         } catch (_e) {
             // Silently skip
+        }
+
+        // Hydrate phone numbers for transactions where phone is missing/placeholder
+        try {
+            const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
+            const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+
+            const userIdsToFetch = new Set<string>();
+
+            recentTransactions.forEach(tx => {
+                if (isPlaceholder(tx.phone)) {
+                    if (tx.userId) userIdsToFetch.add(tx.userId);
+                }
+            });
+
+            failedTransactions.forEach(tx => {
+                if (isPlaceholder(tx.phone)) {
+                    if (tx.userId) userIdsToFetch.add(tx.userId);
+                }
+            });
+
+            const userMapByUid = new Map<string, any>();
+            const uids = Array.from(userIdsToFetch).filter(Boolean);
+
+            if (uids.length > 0) {
+                const chunks = [];
+                for (let i = 0; i < uids.length; i += 30) {
+                    chunks.push(uids.slice(i, i + 30));
+                }
+                const userSnaps = await Promise.all(
+                    chunks.map(chunk => 
+                        db.collection(COLLECTIONS.USERS).where(FieldPath.documentId(), "in", chunk).get()
+                    )
+                );
+                userSnaps.forEach(snap => {
+                    snap.forEach(doc => {
+                        userMapByUid.set(doc.id, doc.data());
+                    });
+                });
+            }
+
+            const getPhoneFromUser = (uData: any) => {
+                if (!uData) return "";
+                let p = uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || "";
+                if (isPlaceholder(p) && uData.serviceRegistrations) {
+                    for (const reg of Object.values(uData.serviceRegistrations) as any[]) {
+                        const profile = reg?.profile || reg;
+                        if (profile && profile.phone && !isPlaceholder(profile.phone)) {
+                            p = profile.phone;
+                            break;
+                        }
+                    }
+                }
+                return isPlaceholder(p) ? "" : p;
+            };
+
+            recentTransactions.forEach(tx => {
+                if (isPlaceholder(tx.phone) && tx.userId) {
+                    const uData = userMapByUid.get(tx.userId);
+                    const phone = getPhoneFromUser(uData);
+                    if (phone) tx.phone = phone;
+                }
+                if (isPlaceholder(tx.phone)) tx.phone = "";
+            });
+
+            failedTransactions.forEach(tx => {
+                if (isPlaceholder(tx.phone) && tx.userId) {
+                    const uData = userMapByUid.get(tx.userId);
+                    const phone = getPhoneFromUser(uData);
+                    if (phone) tx.phone = phone;
+                }
+                if (isPlaceholder(tx.phone)) tx.phone = "";
+            });
+        } catch (err: any) {
+            console.error("[FINANCE SERVICE] Failed to hydrate phone numbers:", err.message);
         }
 
         return {

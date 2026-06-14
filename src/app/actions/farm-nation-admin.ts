@@ -246,7 +246,7 @@ async function _getStandardFarmNationRegistrantsAction(options: {
                 ...uData,
                 ...app,
                 // Flatten profile fields to top-level for UI consistency
-                phone: app.phone || profile.phone || uData.phone || null,
+                phone: app.phone || profile.phone || uData.phone || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                 email: app.email || profile.email || uData.email || null,
                 stateOfOrigin: profile.state || uData.stateOfOrigin || null,
                 lga: profile.lga || uData.lga || null,
@@ -496,7 +496,7 @@ async function _getAdminLandVerificationsAction(options: {
                     ownerMap[doc.id] = {
                         name: data.name || data.fullName || "Unknown",
                         email: data.email || "",
-                        phone: data.phone || "",
+                        phone: data.phone || data.phoneNumber || data.kyc?.phoneNumber || data.kyc?.phone || "",
                         bankDetails: data.bankDetails || {
                             bankName: data.bankName || data.bankAccount?.bankName || "N/A",
                             accountNumber: data.bankAccountNumber || data.bankAccount?.accountNumber || "N/A",

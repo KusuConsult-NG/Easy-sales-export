@@ -116,6 +116,8 @@ export default function BuyerOrderDetailPage() {
     const canReview =
         (order.status === "delivered" || order.status === "completed") &&
         !order.reviewSubmitted;
+    const canDispute = ["processing", "shipped", "delivered"].includes(order.status) &&
+        order.status !== "disputed" && order.status !== "completed" && order.status !== "cancelled";
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -317,6 +319,16 @@ export default function BuyerOrderDetailPage() {
                         >
                             <Package className="w-5 h-5" />
                             Browse Marketplace
+                        </Link>
+                    )}
+
+                    {canDispute && (
+                        <Link
+                            href={`/dashboard/disputes/new?orderId=${id}`}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 border-2 border-red-400 text-red-600 rounded-xl font-bold hover:bg-red-50 transition-all"
+                        >
+                            <AlertCircle className="w-5 h-5" />
+                            Raise Dispute
                         </Link>
                     )}
                 </div>

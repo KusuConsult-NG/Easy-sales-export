@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Package, Loader2, ServerCrash, RefreshCw } from "lucide-react";
 import CountdownTimer from "@/components/CountdownTimer";
-import BookingModal from "@/components/modals/BookingModal";
+import BookingWizard from "@/components/modals/BookingWizard";
 import QuoteRequestModal from "@/components/modals/QuoteRequestModal";
 import { getActiveExportWindowsAction } from "@/app/actions/export-aggregation";
 import type { ExportWindow } from "@/app/actions/export-aggregation";
@@ -185,8 +185,8 @@ export default function ExportWindowsPage() {
                     </div>
                 )}
 
-                {/* Booking Modal */}
-                <BookingModal
+                {/* Booking Wizard */}
+                <BookingWizard
                     isOpen={isModalOpen}
                     onClose={() => {
                         setIsModalOpen(false);

@@ -748,7 +748,7 @@ async function _submitQuizScoreAction(
 
                 if (!progress.completedModules) progress.completedModules = [];
 
-                if (courseModule?.quiz && score >= courseModule.quiz.passingScore) {
+                if (courseModule?.quiz && score >= (courseModule.quiz.passingScore ?? 95)) {
                     if (!progress.completedModules.includes(moduleId)) {
                         progress.completedModules.push(moduleId);
                     }

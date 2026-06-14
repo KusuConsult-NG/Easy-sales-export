@@ -1546,6 +1546,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
                 // per-module status badges and detect multi-module enrolments.
                 serviceRegistrations: data.serviceRegistrations || {},
                 gender: data.gender,
+                identityDocument: data.identityDocument || "",
             };
         });
 
@@ -2325,7 +2326,7 @@ async function _getStandardExportApplicationsAction(options: {
             // shows all personal fields regardless of which path data came through
             const mergedData = {
                 ...app,
-                phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || null,
+                phone:              app.phone              || profile?.phone              || uData.phone       || uData.phoneNumber || uData.kyc?.phoneNumber || uData.kyc?.phone || null,
                 gender:             app.gender             || profile?.gender             || uData.gender      || null,
                 dateOfBirth:        app.dateOfBirth        || profile?.dateOfBirth        || uData.dob         || null,
                 occupation:         app.occupation         || profile?.occupation         || uData.occupation  || null,
@@ -4093,7 +4094,21 @@ async function _getMarketplaceUsersAction(options: {
                 id: doc.id,
                 name: data.fullName || data.name || (data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : "Unknown"),
                 email: data.email,
-                phone: data.phone || data.phoneNumber || "",
+                phone: (() => {
+                    const PLACEHOLDER_NAMES = new Set(["user", "unknown", "unknown user", "n/a", ""]);
+                    const isPlaceholder = (v: any) => !v || PLACEHOLDER_NAMES.has(String(v).toLowerCase().trim());
+                    let p = data.phone || data.phoneNumber || data.kyc?.phoneNumber || data.kyc?.phone || "";
+                    if (isPlaceholder(p) && data.serviceRegistrations) {
+                        for (const reg of Object.values(data.serviceRegistrations) as any[]) {
+                            const profile = reg?.profile || reg;
+                            if (profile && profile.phone && !isPlaceholder(profile.phone)) {
+                                p = profile.phone;
+                                break;
+                            }
+                        }
+                    }
+                    return isPlaceholder(p) ? "" : p;
+                })(),
                 state: data.address?.state || data.stateOfOrigin || "",
                 lga: data.address?.lga || data.lga || "",
                 roles: data.roles || [],

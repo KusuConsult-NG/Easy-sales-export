@@ -155,7 +155,7 @@ export default function AdminSellersPage() {
             ];
             const rows = exportData.map(v => [
                 v.data.businessName || "", v.data.businessType || "",
-                v.user.name || "", v.user.email || "", v.data.phone || "",
+                v.user.name || "", v.user.email || "", v.data.phone || v.user.phone || "",
                 v.data.state || "", v.data.lga || "", v.data.address || "",
                 v.data.bankDetails?.bankName || "", v.data.bankDetails?.accountNumber || "", v.data.bankDetails?.accountName || "",
                 v.status, formatLocalDate(v.data.createdAt || Date.now())

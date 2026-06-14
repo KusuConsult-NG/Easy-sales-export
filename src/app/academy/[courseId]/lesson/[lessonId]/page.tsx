@@ -45,8 +45,11 @@ export default function LessonPage(props: LessonPageProps) {
     const [loading, setLoading] = useState(true);
     const [completing, setCompleting] = useState(false);
 
-    // NEW: Track initial video progress
+    // Track initial video progress
     const [initialVideoProgress, setInitialVideoProgress] = useState(0);
+    // Watch-time gate: track current video watch progress (0–100)
+    const [videoWatchPercent, setVideoWatchPercent] = useState(0);
+    const WATCH_THRESHOLD = 80; // must watch 80% to unlock Mark Complete
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -153,11 +156,13 @@ export default function LessonPage(props: LessonPageProps) {
         }
     }, [courseId, lessonId, session]);
 
-    // NEW: Handle Video Progress Update
     const handleVideoProgress = useCallback(async (progress: number, timeWatched: number) => {
         if (!currentLesson || !courseId) return;
 
-        // This is called by VideoPlayer every 10s
+        // Update live watch-time gate
+        setVideoWatchPercent(prev => Math.max(prev, progress));
+
+        // Persist to server every ~10s (called by VideoPlayer)
         await updateLessonProgress({
             courseId,
             lessonId: currentLesson.id,
@@ -432,37 +437,61 @@ export default function LessonPage(props: LessonPageProps) {
                 )}
 
                 {/* Mark Complete Button */}
-                {!isCompleted && (
-                    <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="font-semibold text-slate-900 mb-1">
-                                    Finished this lesson?
-                                </h3>
-                                <p className="text-sm text-slate-600">
-                                    Mark it as complete to track your progress
-                                </p>
+                {!isCompleted && (() => {
+                    const hasVideo = !!currentLesson.videoUrl;
+                    const watchedEnough = !hasVideo || videoWatchPercent >= WATCH_THRESHOLD || initialVideoProgress >= WATCH_THRESHOLD;
+                    return (
+                        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className="font-semibold text-slate-900 mb-1">
+                                        Finished this lesson?
+                                    </h3>
+                                    {hasVideo && !watchedEnough ? (
+                                        <div className="space-y-1">
+                                            <p className="text-sm text-amber-600 font-medium">
+                                                Watch at least {WATCH_THRESHOLD}% of the video to unlock completion
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-amber-400 transition-all duration-500 rounded-full"
+                                                        style={{ width: `${Math.max(videoWatchPercent, initialVideoProgress)}%` }}
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-slate-500 font-mono shrink-0">
+                                                    {Math.round(Math.max(videoWatchPercent, initialVideoProgress))}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-slate-600">
+                                            Mark it as complete to track your progress
+                                        </p>
+                                    )}
+                                </div>
+                                <button
+                                    onClick={handleMarkComplete}
+                                    disabled={completing || !watchedEnough}
+                                    title={!watchedEnough ? `Watch at least ${WATCH_THRESHOLD}% of the video first` : ""}
+                                    className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition flex items-center gap-2"
+                                >
+                                    {completing ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            <span>Marking...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle className="w-5 h-5" />
+                                            <span>Mark as Complete</span>
+                                        </>
+                                    )}
+                                </button>
                             </div>
-                            <button
-                                onClick={handleMarkComplete}
-                                disabled={completing}
-                                className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold rounded-xl transition flex items-center gap-2"
-                            >
-                                {completing ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                        <span>Marking...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle className="w-5 h-5" />
-                                        <span>Mark as Complete</span>
-                                    </>
-                                )}
-                            </button>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Navigation */}
                 <div className="flex items-center justify-between gap-4">

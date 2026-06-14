@@ -136,7 +136,7 @@ export default function FarmNationApplicationsPage() {
                 return [
                     a.user.name || "",
                     a.user.email || "",
-                    a.data.farmNation?.profile?.phone || a.data.phone || "",
+                    a.user.phone || a.data.phone || a.data.farmNation?.profile?.phone || "",
                     a.data.farmNation?.profile?.state ? `${a.data.farmNation.profile.state}${a.data.farmNation.profile.lga ? `, ${a.data.farmNation.profile.lga}` : ""}` : "",
                     a.status,
                     dateStr

@@ -55,7 +55,9 @@ export type BroadcastAudience =
     | "pending_users"
     | "active_users"
     | "ghost_users"
-    | "all_except_approved_coop";
+    | "all_except_approved_coop"
+    | "active_last_30_days"
+    | "fully_verified_sellers";
 
 export interface BroadcastFilters {
     audience: BroadcastAudience;
@@ -681,6 +683,43 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
             return getCollectionBroadcastList(COLLECTIONS.ACADEMY_APPLICATIONS, filters, "status");
         }
 
+        // --- ACTIVE LAST 30 DAYS ---
+        if (filters?.audience === "active_last_30_days") {
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            // Fall through to main query with updatedAt filter applied in-memory below
+            // (Firestore inequality on updatedAt conflicts with other where clauses)
+            // so we tag this audience and filter after fetch
+        }
+
+        // --- FULLY VERIFIED SELLERS ---
+        if (filters?.audience === "fully_verified_sellers") {
+            // Reuse seller list, then cross-check KYC status from USERS collection
+            const sellerResult = await getSellerBroadcastList({ ...filters, moduleStatus: "approved" });
+            if (!sellerResult.success) return sellerResult;
+            // Filter to users whose kyc.status is 'verified'
+            const verifiedUIDs = new Set<string>();
+            if (sellerResult.data.recipients.length > 0) {
+                const uids = sellerResult.data.recipients.map(r => r.uid).filter(Boolean);
+                const CHUNK = 30;
+                for (let i = 0; i < uids.length; i += CHUNK) {
+                    const chunk = uids.slice(i, i + CHUNK);
+                    const docs = await db.getAll(...chunk.map(uid => db.collection(COLLECTIONS.USERS).doc(uid)));
+                    docs.forEach(doc => {
+                        if (!doc.exists) return;
+                        const d = doc.data() as any;
+                        const kycStatus = d?.kyc?.status || d?.kycStatus;
+                        if (kycStatus === "verified" || kycStatus === "approved") verifiedUIDs.add(doc.id);
+                    });
+                }
+            }
+            const filteredRecipients = sellerResult.data.recipients.filter(r => verifiedUIDs.has(r.uid));
+            return {
+                success: true as const, error: null,
+                data: { recipients: filteredRecipients, count: filteredRecipients.length, originalDocCount: sellerResult.data.originalDocCount, moduleStats: sellerResult.data.moduleStats },
+            };
+        }
+
         // Targeted projection to minimize bandwidth
         const query = db.collection(COLLECTIONS.USERS)
             .select(
@@ -758,6 +797,15 @@ async function getCleanBroadcastListInternal(filters?: BroadcastFilters) {
                         if (excludeIds.has(doc.id)) {
                             return; // Skip this user
                         }
+                        matchesAudience = true;
+                    } else if (filters?.audience === "active_last_30_days") {
+                        // Match users whose updatedAt or lastLoginAt is within last 30 days
+                        const thirtyDaysAgo = new Date();
+                        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                        const lastActiveRaw = data.updatedAt || data.lastLoginAt || data.createdAt;
+                        if (!lastActiveRaw) return;
+                        const lastActive = lastActiveRaw.toDate ? lastActiveRaw.toDate() : new Date(lastActiveRaw);
+                        if (isNaN(lastActive.getTime()) || lastActive < thirtyDaysAgo) return;
                         matchesAudience = true;
                     } else if (!filters || filters.audience === "all") {
                         matchesAudience = true;

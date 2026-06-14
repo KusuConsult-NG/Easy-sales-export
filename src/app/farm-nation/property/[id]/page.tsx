@@ -342,13 +342,28 @@ export default function PropertyDetailsPage() {
                             </div>
 
                             {property.status === "verified" ? (
-                                <button
-                                    onClick={handleContactSeller}
-                                    className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2"
-                                >
-                                    <Mail className="w-5 h-5" />
-                                    Contact Seller
-                                </button>
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={() => {
+                                            if (status === "unauthenticated") {
+                                                router.push(`/auth/login?callbackUrl=/farm-nation/property/${propertyId}`);
+                                                return;
+                                            }
+                                            router.push(`/farm-nation/checkout?propertyId=${propertyId}`);
+                                        }}
+                                        className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
+                                    >
+                                        <Lock className="w-5 h-5" />
+                                        Lock Land Reservation
+                                    </button>
+                                    <button
+                                        onClick={handleContactSeller}
+                                        className="w-full px-6 py-4 border-2 border-green-600 text-green-700 font-bold rounded-xl hover:bg-green-50 transition flex items-center justify-center gap-2"
+                                    >
+                                        <Mail className="w-5 h-5" />
+                                        Contact Seller
+                                    </button>
+                                </div>
                             ) : (
                                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
                                     <p className="text-sm font-semibold text-yellow-800 capitalize">
