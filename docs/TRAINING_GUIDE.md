@@ -15,6 +15,26 @@ Think of this app as a **big, friendly digital marketplace and farm club**.
 
 ---
 
+### 📖 The Easy Sales Export Glossary (Simple Words for Big Concepts)
+
+Before we start using the app, let's learn some of the special words we use:
+
+1. **The Wallet:** This is your digital piggy bank inside the app. You put real money into it so you can buy items or save.
+2. **Escrow (The Safe Referee):** This is a safety lockbox. When a buyer pays, the money doesn't go straight to the seller. The app holds it safely. When the crops arrive in good condition, the app hands the money to the seller. This protects both sides!
+3. **KYC (Identity Check):** This stands for "Know Your Customer". It's like showing your passport to a security guard to prove you are a real, honest person.
+4. **QoreID:** This is the security guard software that checks your NIN or BVN to make sure you are who you say you are.
+5. **NIN and BVN:** Your National Identification Number and Bank Verification Number. They are like your official government badges.
+6. **CAC Certificate:** Corporate Affairs Commission document. It is a certificate that proves your business is real and registered with the government.
+7. **Moisture Content:** How wet or dry your crops are. If crops are too wet when shipped on a boat, they will grow mold and rot.
+8. **MOQ (Minimum Order Quantity):** The smallest amount of crops a seller is willing to sell. For example, "MOQ: 10 Bags" means you cannot buy just 1 bag; you must buy at least 10.
+9. **FOB (Free on Board):** A shipping rule where the seller puts the crops on the ship, and after that, the buyer is responsible for them.
+10. **CIF (Cost, Insurance, and Freight):** A shipping rule where the seller pays to transport and insure the crops all the way to the buyer's country.
+11. **Bill of Lading:** A shipping receipt from the boat captain that lists all the crops loaded onto the vessel.
+12. **Phytosanitary Certificate:** A health report card for your crops, proving they do not have plant bugs or diseases.
+13. **Kill-Switch (Feature Toggle):** A giant red switch for Admins. If a part of the app is broken (like bank payments), the Admin can flip this switch to turn off that feature instantly.
+
+---
+
 ## 🚜 PART 2: The User Handbook (For Buyers, Sellers & Farmers)
 
 This section shows you how to use the app to buy, sell, save, learn, and export!
@@ -24,57 +44,80 @@ This section shows you how to use the app to buy, sell, save, learn, and export!
 ### 🔑 Step 1: Getting Inside and Getting Your ID Card
 
 #### 1. How to Sign Up (Join the Club)
-1. Open the app and click the green button that says **"Register"** or **"Sign Up"**.
-2. Type in your real name, email, and phone number. 
-   > ⚠️ **Real Names Only!** The system checks your name to make sure it's not a computer nickname (like "SuperFarmer99" or random letters like "asdfgh"). Use your official name.
-3. Choose a strong password.
-4. Click **"Submit"**.
+1. Open your web browser and go to the Easy Sales Export page.
+2. Click the green button that says **"Register"** or **"Sign Up"**.
+3. Fill out the form fields:
+   * **Full Name:** Type your real name.
+     > ⚠️ **Error Check:** The system uses smart filters. If you type numbers, random keyboard smashes (like "asdfgh"), or fake names, you will see a red error message: *"Please enter a valid real name."*
+   * **Email Address:** Type your active email address. 
+     > ⚠️ **Error Check:** If you try to use an email that is already registered, you will see: *"Email address is already in use."*
+   * **Phone Number:** Type your Nigerian phone number starting with `0` or `+234`.
+     > ⚠️ **Error Check:** If the format is wrong, you will see: *"Please enter a valid phone number."*
+   * **Password:** Choose a password that is hard to guess.
+4. Click the checkbox that says **"I agree to the Terms of Service"**.
+5. Click **"Submit"**.
 
 #### 2. Your ID Card (The ESE Number)
-Once you are logged in, look at the top corner of your screen. You will see a special number that looks like this: **`ESE-2026-12345`**. 
+Once you log in, look at the top corner of your screen. You will see a special number that looks like this: **`ESE-2026-12345`**. 
 * This is your **special membership number**. Whenever you buy land, save money, or export crops, the system uses this ID card to know it is you!
 
 ---
 
 ### 🛡️ Step 2: Proving Who You Are (KYC Verification)
 
-To make sure everyone on the app is safe, you must pass a check called **KYC** (which stands for *"Know Your Customer"*). Think of this like showing your passport to a friendly guard before entering a playground.
+To make sure everyone on the app is safe, you must pass the KYC check.
 
-#### How to verify your account:
-1. Go to your **Profile Dashboard** and click **"Verify Identity"**.
-2. You will see a security helper called **QoreID**.
-3. Type in your **NIN** (National Identification Number) or **BVN** (Bank Verification Number).
-4. Upload a clean, clear photo of your government-issued ID card. Make sure the words are readable!
-5. Click **"Submit for Review"**.
-6. The system status will change to **"Pending Review"** (Yellow badge). Once the admin checks it, it will turn into a green **"Active"** or **"Verified"** badge!
+#### Step-by-Step Verification:
+1. Go to your **Profile Dashboard** (click your name at the top right).
+2. Click the button labeled **"Verify Identity"**.
+3. You will see the **QoreID Identity Verification Box**.
+4. Choose your ID type: **NIN** or **BVN**.
+5. Type your ID number in the field.
+   > ℹ️ **Why BVN?** This checks your registered bank name against the name you typed. It **cannot** touch your money.
+6. Upload a clean, clear photo of your ID card. 
+   * Click **"Upload File"**, select the photo from your device, and wait for the upload bar to turn green.
+7. Click **"Submit for Review"**.
+8. Look at the status badge next to your name. It will change to a yellow box saying **"Pending Review"**.
+9. Once the Admin checks and confirms your documents, it will turn into a green box saying **"Active"** or **"Verified"**.
+
+#### 🔧 Troubleshooting Verification Problems:
+* **"Name Mismatch" Error:** Make sure the name on your signup form matches the name on your NIN or bank account exactly. If your NIN says "Chinedu Okechukwu" but you signed up as "Chinny O.", the check will fail.
+* **"Image Blurry" Error:** If your ID photo is dark or fuzzy, the Admin will reject it. Take a new photo in a bright room and upload again.
 
 ---
 
-### 💰 Step 3: Your Digital Wallet (The Piggy Bank)
+### 💰 Step 3: The Digital Wallet (Your Piggy Bank)
 
-The app has a built-in money box called the **Wallet** where you keep your money for buying products or saving.
+The app has a built-in money box called the **Wallet** where you keep your funds.
 
 #### 1. Checking Your Balance
-1. Click the **Wallet** link on your home screen (it looks like a little pocketbook icon 💳).
+1. Click the **Wallet** link on your home screen (it looks like a little credit card icon 💳).
 2. The large numbers display your **Wallet Balance** in Naira (₦).
 
-#### 2. Funding Your Wallet (Adding Coins)
+#### 2. Funding Your Wallet (Adding Cash)
 1. Click the green button labeled **"Deposit Funds"**.
-2. Type the amount of money you want to add.
-3. Click **"Proceed to Payment"**. A safe window from **Paystack** will pop up.
-4. Choose how you want to pay (using your card, bank transfer, or USSD code).
-5. Once paid, the window closes, and your new balance will appear instantly!
+2. Type the amount of money you want to add (e.g., `50000`).
+3. Click **"Proceed to Payment"**. A safe checkout window from **Paystack** will pop up.
+4. Choose your payment method:
+   * **Pay with Card:** Type your card number, expiry date, and CVV code. Type your PIN when prompted.
+   * **Pay with Bank Transfer:** Paystack will display a temporary bank account number. Copy it, open your bank app, and transfer the exact amount to that account. Go back to the checkout window and click *"I have sent the money"*.
+   * **Pay with USSD:** Select your bank and dial the displayed code on your phone.
+5. Once Paystack confirms the payment, the window will automatically close.
+6. Your wallet page will refresh, and your new balance will appear!
+
+#### 🔧 What if my money was debited but my balance didn't change?
+* Don't panic! Click the small icon labeled **"Verify Transaction Status"** next to your balance. The app will check the Paystack server and manually update your wallet balance instantly.
 
 ---
 
 ### 🛍️ Step 4: The Digital Marketplace (The Giant Shop)
 
-This is the marketplace where people buy and sell agricultural commodities. We focus on three high-grade items: **Yam Tubers**, **Sesame Seeds**, and **Dried Hibiscus**.
+This is the marketplace where people buy and sell agricultural commodities: **Yam Tubers**, **Sesame Seeds**, and **Dried Hibiscus**.
 
 ```
-[ Marketplace ]
- ├── Buyer: Browse Catalogs → Choose Pricing Tier → Secure Escrow Payment
- └── Seller: 5-Stage KYC → List Commodities → Track 8-Stage Order Lifecycle
+[ Marketplace Activity Flow ]
+ ├── BUYER: Search/Filter → Select Quantity (Tier Price) → Pay via Escrow → Confirm Delivery / Raise Dispute
+ └── SELLER: Complete 5 KYC Stages → Create Product Listing → Manage Order States (8 stages) → Withdraw Funds
 ```
 
 ---
@@ -82,195 +125,232 @@ This is the marketplace where people buy and sell agricultural commodities. We f
 #### 🛒 A. How to Buy Things (For Buyers)
 
 ##### 1. Browsing and Filtering
-* Go to the **Marketplace** page.
-* Use the search bar at the top to type what you want (e.g., "Hibiscus").
-* Use the **Dropdown Filters** to choose the location (like "Kano State") or the seller's rating.
+1. Go to the **Marketplace** page.
+2. Type what you are looking for in the **Search Bar** (e.g., "Sesame").
+3. Use the **Dropdown Filters**:
+   * **State of Origin:** Filter to show crops from a specific state (e.g., "Kano").
+   * **Vendor Rating:** Show only sellers with 4 stars or more.
 
 ##### 2. Dynamic Pricing Tiers (Buying More Saves Money!)
-* Look at the product card. You will see different prices based on how much you buy:
-  * **Retail Tier:** If you buy just a little (lowest volume), you pay the standard price.
-  * **Bulk Tier:** If you buy a medium box, the price per kilogram drops!
-  * **Export Tier:** If you buy a whole truckload (tonnage), you get the cheapest wholesale price.
-* Choose your quantity, and the system automatically calculates your discount in real time!
+When you click on a product, you will see a box showing the **Tiered Pricing Table**:
+* **Retail Tier (Small Quantity):** If you buy between 1 and 9 bags, you pay ₦20,000 per bag.
+* **Bulk Tier (Medium Quantity):** If you buy between 10 and 99 bags, the price drops to ₦18,000 per bag!
+* **Export Tier (Large Quantity):** If you buy 100 bags or more, the price drops to ₦15,000 per bag!
+* **How to use it:** Type your desired amount in the **Quantity Box**. Watch the price per unit change dynamically before you add it to your basket!
 
 ##### 3. Adding to Cart & Checking Out
 1. Click the yellow button that says **"Add to Basket"**.
-2. Click the cart icon at the top of the page.
-3. Click **"Proceed to Checkout"**.
-4. Type your shipping address.
-5. Click **"Pay Now"**.
+2. Click the shopping cart icon at the top right of your screen.
+3. Review your items, then click **"Proceed to Checkout"**.
+4. Fill out the shipping address fields:
+   * **Delivery Address:** Type the street name, building number, and city.
+   * **Contact Phone:** The number the delivery driver should call.
+5. Select **"Pay with Wallet Balance"** or **"Pay via Card Checkout"**.
+6. Click **"Confirm & Pay"**.
 
-##### 4. Escrow Protection (The Safe Referee)
-* **What is Escrow?** When you click pay, your money does *not* go straight to the seller. Instead, the app acts like a friendly referee and holds your money in a safe lockbox. 
-* Only when the crops arrive at your door and you verify they are in good condition, the money is released to the seller. This keeps your money 100% safe!
+##### 4. Escrow Protection (How Your Money is Protected)
+* Once you pay, your money is sent to a secure **Escrow Ledger**. 
+* The seller is notified that the money is secured.
+* The seller ships the crops.
+* When the truck arrives at your warehouse, inspect the crops.
+* If everything is perfect, log in, go to your **Orders** page, and click the green button labeled **"Confirm Delivery & Release Funds"**. The money is now sent to the seller's wallet.
 
-##### 5. Raising a Dispute (Calling for Help)
-* If your yams arrive spoiled, or if the shipment is lost, go to your **Orders** page.
-* Find the order and click the red button labeled **"Raise Dispute"**.
-* This locks the escrow money so the seller cannot cash out, and alerts an Admin to step in, talk to both of you, and resolve the problem.
+##### 5. Raising a Dispute (If Something is Wrong)
+* If your crops arrive spoiled, damaged, or if they do not arrive at all:
+1. Go to your **Orders** page.
+2. Select the specific order.
+3. Click the red button labeled **"Raise Dispute"**.
+4. Type a detailed explanation of the issue (e.g., *"The sesame seeds arrived wet and moldy"*).
+5. Upload photos of the damaged items.
+6. Click **"Submit Dispute"**.
+7. This locks the escrow funds completely. An Admin will contact you and the seller to resolve the issue.
 
 ---
 
 #### 🧑‍🌾 B. How to Sell Things (For Sellers)
 
-To list items in the store, you must become a **Verified Seller**.
+To list items in the shop, you must first register as a vendor.
 
-##### 1. The 5-Stage Seller Setup
-1. **Basic Check:** Complete your profile details.
-2. **Business Registration:** Upload your Corporate Affairs Commission (CAC) papers.
-3. **Identity Verification:** Run your NIN/BVN check via QoreID.
-4. **Admin Approval:** Wait for the Admin team to verify your documents.
-5. **Storefront Launch:** Create your public farm stand!
+##### 1. The 5-Stage Seller KYC Onboarding
+1. Go to the **Seller Dashboard**.
+2. **Stage 1 (Profile check):** Complete your contact details.
+3. **Stage 2 (Business registration):** Type your CAC business registration number and upload a scan of your Corporate Affairs Commission certificate.
+4. **Stage 3 (Identity verification):** Link your BVN or NIN via the QoreID interface.
+5. **Stage 4 (Admin manual review):** An Admin checks your documents. This takes 24-48 hours.
+6. **Stage 5 (Storefront setup):** Enter your store name, description, and profile picture. Click **"Launch Store"**!
 
 ##### 2. How to List a Product
-1. Go to your **Seller Dashboard** and click **"Create Listing"** (a blue button).
-2. Upload high-quality photos of your crops.
-3. Fill out the form fields:
-   * **Commodity Type:** Select Yam, Sesame, or Hibiscus.
-   * **Moisture Content (%):** Type the percentage (important for export quality).
-   * **Minimum Order Quantity (MOQ):** The smallest amount a buyer must order.
-   * **Origin State:** Where the crops were grown (e.g., "Benue").
-   * **Packaging Type:** (e.g., "Jute Bags" or "Wood Crates").
-4. Click **"Publish Listing"**. Your product is now visible in the public shop!
+1. Go to your **Seller Dashboard** and click the green button labeled **"Create Listing"**.
+2. **Product Photos:** Drag and drop high-quality photos of your crops.
+3. Fill out the details form:
+   * **Commodity:** Select Yam, Sesame, or Hibiscus.
+   * **Product Title:** (e.g., "Premium Cleaned Sesame Seeds").
+   * **Description:** Add details about quality, packaging, and sorting.
+   * **Moisture Content (%):** Type the moisture level (e.g., `6%`). 
+     > ⚠️ **Quality Check:** Export-grade sesame seeds must have a moisture level under 8%.
+   * **Minimum Order Quantity (MOQ):** Type the minimum bags a buyer must purchase.
+   * **Origin State:** Select the state where the crops were harvested (e.g., "Benue").
+   * **Packaging Type:** Choose Jute Bags, Bags, or Wooden Crates.
+4. Set up the **Price Tiers**:
+   * Type the price for Retail, Bulk, and Export volumes.
+5. Click **"Publish Listing"**.
 
-##### 3. Tracking Your Orders (The 8-Stage Lifecycle)
-When a buyer purchases your item, the order progresses through these stages. You must update the status in your dashboard:
-1. `pending_payment`: Waiting for the buyer to pay.
-2. `payment_secured`: The buyer paid! The money is safe in Escrow. You can now package the items.
-3. `processing`: You are sorting, cleaning, and packing the crops.
-4. `in_transit`: The items have been picked up and are traveling to the buyer.
-5. `delivered`: The items arrived at the buyer's destination.
-6. `completed`: The buyer clicked "Confirm Delivery", and the Escrow money is sent to your wallet.
-7. `disputed` / `cancelled`: Something went wrong, and an Admin is reviewing.
+##### 3. Managing Your Orders (The 8-Stage Lifecycle)
+When a buyer places an order, you will see it in your dashboard under **"Active Orders"**. You must update the status as you fulfill the order:
+1. `pending_payment`: The buyer is checking out. Do not package yet.
+2. `payment_secured`: The buyer paid into Escrow. You can now package the crops!
+3. `processing`: You are sorting, cleaning, and packing the crops into jute bags.
+4. `in_transit`: The courier has picked up the crops. Type the tracking number or driver's phone number, then click **"Ship Order"**.
+5. `delivered`: The crops have arrived at the buyer's address.
+6. `completed`: The buyer clicked "Confirm Delivery", and the funds have cleared into your wallet!
+7. `disputed`: The buyer raised a complaint. The escrow funds are locked. Wait for the Admin mediator to call.
+8. `cancelled`: The transaction was stopped.
 
 ---
 
 ### 🤝 Step 5: Cooperatives (Savings & Loans Club)
 
-The Cooperative is a club where members pool savings to support one another.
+The Cooperative is a savings and credit club.
 
-#### 1. Joining the Cooperative
-Go to the **Cooperatives** page:
-* **Cooperative Registration (₦10,000 one-time fee):** 
-  * You pay a one-time membership registration fee of **₦10,000** to join the savings and loans club.
-  * Once joined, you earn the **Member** status.
-* **Savings Contributions (₦5,000 minimum and above):**
-  * You can start saving and making contributions of **₦5,000 and above** at any time.
-  * Allows you to borrow up to **3 times (3x)** the total amount you save.
-  * Earns a monthly interest rate of **2%** on your savings.
-  * Unlocks the ability to buy and lease agricultural land in **Farm Nation**.
-* Click **"Pay & Join"** to pay the ₦10,000 fee. Once verified, your membership will be active and you will get the `cooperative_member` role!
+#### 1. How to Join
+1. Go to the **Cooperatives** page.
+2. Review the Cooperative guidelines and regulations.
+3. You will see the **One-Time Membership Registration Fee** set to **₦10,000**.
+4. Click the purple button labeled **"Pay Registration Fee"**.
+5. Pay the ₦10,000 via Paystack.
+6. Once payment is confirmed, your status changes to **"Member"**, and you unlock access to the Cooperative Dashboard!
 
+#### 2. Savings Contributions (Adding to Your Savings)
+To request loans or build credit, you must add money to your savings.
+* Contributions must be **₦5,000 and above** per deposit.
+1. On your Cooperative dashboard, click **"Add Contribution"**.
+2. Type the amount you want to save (e.g., `25000`).
+3. Click **"Contribute Now"**. This transfers the money from your Digital Wallet into your Cooperative Savings ledger.
 
-#### 2. Saving Money & Making Goals
-* **Savings Goal Buckets:** You can create separate folders to save for specific things (like "Buy a Tractor" or "Buy Fertilizer"). Click **"Create Savings Goal"**, type a name, choose how much you want to save, and save!
-* **Locked Savings (Piggy Bank Lock):** 
-  * When you save, you choose a lock duration (1, 3, 6, or 12 months).
-  * ⚠️ **Warning:** If you try to withdraw your money early before the lock timer ends, you will pay an early-out penalty fee.
-  * If you wait until the end of the timer, the system rewards you with a **10% bonus payout**!
+#### 3. Creating Savings Goals (Target Folders)
+You can set up separate savings folders for different business needs:
+1. Click **"Create Savings Goal"**.
+2. Name your goal (e.g., "New Irrigation Pump").
+3. Set your target amount (e.g., `₦200,000`).
+4. Select a duration lock: **1, 3, 6, or 12 months**.
+5. Click **"Launch Goal"**.
+6. **Locked Savings Warning:** The goal money is locked until the selected time expires. If you withdraw the money early, a **penalty fee** will be deducted from your savings. If you wait until the end date, you will receive a **10% interest reward** on your savings!
 
-#### 3. Borrowing Money (Taking Loans)
-1. Go to the Cooperatives dashboard and click **"Apply for Loan"**.
-2. **How much can you borrow?** The app calculates your maximum loan automatically:
-   $$\text{Max Loan} = (\text{Total Saved} \times \text{Membership Tier Multiplier}) - \text{Any unpaid debts}$$
-   *Example:* If you have saved ₦50,000 and are a Cooperative Member (3x limit), you can borrow up to ₦150,000!
-3. Fill out the application and click **"Submit Loan Request"**.
-4. Once approved, the cash is deposited into your wallet, and a repayment tracker will show your weekly/monthly schedule.
+#### 4. Borrowing Money (Taking Loans)
+1. Go to the **Loans** panel and click **"Apply for Loan"**.
+2. **Understand Your Borrowing Limit:** The app calculates your maximum loan automatically:
+   $$\text{Maximum Loan Amount} = \text{Your Total Savings} \times 3$$
+   *Example:* If you have saved ₦50,000, you can borrow up to ₦150,000. If you try to request ₦160,000, the system will block the form and say: *"Requested amount exceeds your maximum limit."*
+3. Fill out the application form:
+   * **Amount Requested:** Type the loan amount.
+   * **Repayment Duration:** Select the number of months (up to 12).
+   * **Purpose of Loan:** (e.g., "Purchasing fertilizer").
+4. Click **"Submit Application"**.
+5. Once approved by the Admin, the money will appear in your Digital Wallet instantly. You will see a monthly repayment calendar with the principal and 2% monthly interest breakdown.
 
-#### 4. Buying with Cooperative Credit
-* When you are checking out in the Marketplace, you can select **"Cooperative Credit"** as your payment method. 
-* This allows you to purchase farm inputs instantly using your cooperative balance without needing external bank transfers!
-
----
-
-### 🎓 Step 6: Easy Sales Academy (The Farmers' School)
-
-Want to learn how to ship crops to Europe or America? Welcome to the Academy!
-
-```
-[ Academy LMS Flow ]
- Watch Video Lessons → Take Timed Quizzes → Auto-Grade Pass (95%) → Download Certificate & LinkedIn Share
-```
-
-1. **Course Dashboard:** Go to **Academy**. You will see a list of courses. Click **"Start Course"**.
-2. **Step-by-Step Lessons:** Click the first video chapter.
-   * ⚠️ **No Skipping!** You must watch each lesson fully and read the textbook section before the next chapter unlocks. The system watches your progress to keep you honest.
-3. **Assessment Time (Quizzes):** At the end of the course, click **"Take Final Quiz"**.
-   * **The Quiz Timer:** Look at the timer clock on your screen. If you leave the screen, refresh the page, or run out of time, the quiz automatically submits itself to prevent cheating!
-   * **Question Types:** You will see single choice, multiple checkboxes, true/false, or write-in questions.
-4. **Getting Your Certificate:** 
-   * If you pass with a high score (95% for excellence), click the gold button labeled **"Download Certificate"**. The page will generate a high-quality PDF in your browser.
-   * **The Verification QR Code:** Every certificate has a unique ID and a QR code. Anyone (like an international buyer or a bank officer) can scan that code to open `/academy/verify/[id]` and prove your certificate is real.
-   * **Add to LinkedIn:** Click the **"Add to LinkedIn"** button, and the app will automatically fill out your certification form on your LinkedIn profile!
+#### 5. Paying with Cooperative Credit
+* When buying items (like seeds or tools) in the Marketplace, you can select **"Cooperative Credit"** as your payment method at checkout.
+* This allows you to checkout instantly using your cooperative balance!
 
 ---
 
-### 🗺️ Step 7: Farm Nation (Land Discovery)
+### 🎓 Step 6: Easy Sales Export Academy (The LMS)
 
-If you are an active Cooperative Member, you can search for and secure agricultural land.
+The Academy is a school that teaches you how to export commodities.
 
-1. **Browse Plots:** Go to the **Farm Nation** page.
-2. **Filters:** Search by State (e.g., "Oyo State"), acreage size, or **Crop Viability** (e.g., search for land specifically suitable for growing cocoa or cassava).
-3. **Initiating Purchase:** 
-   * When you find a plot, click **"Initiate Purchase"**.
-   * You will be prompted to read and check the box for the **Land Use and Zoning Agreement**.
-   * Once you click **"Reserve Land"**, the money is put into Escrow.
-   * An Admin inspector will visit the land to verify the boundaries. Once confirmed, the title deed is signed over to you, and payment clears!
+1. **Enrolling in a Program:**
+   * Go to **Academy**. Select a learning program (Foundation, Standard, or Elite) and enroll.
+2. **Watching Lesson Videos:**
+   * Click **"Resume Learning"** to open the course player.
+   * You will see the video player on the left and the textbook notes on the right.
+   * ⚠️ **Anti-Cheat Lock:** You cannot click to watch Lesson 2 until you have watched Lesson 1 to the end. The "Next Lesson" button will remain grayed out until the video finishes.
+3. **Taking Course Quizzes:**
+   * At the end of each module, you must complete a quiz. Click **"Start Assessment"**.
+   * **The Assessment Timer:** A countdown clock will appear at the top. If the timer reaches `00:00`, your quiz is automatically submitted.
+   * **Proximity Guard:** Do not leave the quiz tab or open other browser pages. Doing so may trigger the anti-cheat system and auto-submit your quiz with a failing grade.
+4. **Getting Your Export Certificate:**
+   * If you pass the final exam with a score of **95% or higher**, click the button labeled **"Download Certificate"**.
+   * The page will generate a high-quality PDF containing your certificate.
+   * **Public Verification Page:** Every certificate features a custom verification code and a QR code. A customs officer or bank manager can scan this QR code to view your verified student page at `/academy/verify/[certificateId]`.
+   * **Sharing to LinkedIn:** Click **"Add to LinkedIn Profile"** to link your certification to your LinkedIn page!
 
 ---
 
-### 🌊 Step 8: WAVE Program (Women Agro-processors Venture Empowerment)
+### 🗺️ Step 7: Farm Nation (Real Estate & Agrarian Land)
 
-This is a special area dedicated to supporting female agro-processors.
+Farm Nation helps cooperative members buy or lease verified farm land.
 
-1. **Gate Guard:** Only users registered as "Female" can enter the `/wave` section. If a male profile attempts to access this page, a screen displaying **"Access Denied"** will appear.
-2. **Announcements Dashboard:** Check this page to view empowerment news, training seminars, and funding opportunities.
-3. **Resource Library:** Click **"Resource Library"**. You will find downloads for SME guides, startup business templates, and grants application forms. Click **"Download PDF"** to save them to your device.
+1. Go to the **Farm Nation** page.
+2. **Filter Plots:** 
+   * Filter by State (e.g., "Oyo State"), Size (e.g., "5 Acres"), and **Crop Viability** (e.g., land best suited for "Loamy Soil - Root Crops").
+3. **Reserving Land:**
+   * Click on a land listing. The seller's phone number is hidden for security.
+   * Click **"Initiate Purchase"**.
+   * Read the **Zoning and Land Use Agreement** checkbox. Check the box to agree (this states you will only use the land for agriculture).
+   * Click **"Lock Land Reservation"**. The down payment is secured in Escrow.
+   * An Admin inspector will visit the plot to check boundaries. Once verified, the deal is completed and the title deed is signed over to you.
+
+---
+
+### 🌊 Step 8: WAVE Program (Women's Agro-processors Venture Empowerment)
+
+WAVE is an empowerment program for female agro-processors.
+
+1. **Access Gate:** Only users registered with a profile gender of **Female** can enter this portal. Male accounts will see a lock screen saying *"Access Restricted to WAVE Participants."*
+2. **Announcements Board:** View upcoming grant details, processing workshop locations, and regional events.
+3. **Resource Library:** Click **"Resource Library"** to download guides for starting a processing plant, SME loan applications, and export checklists.
 
 ---
 
 ### 🚢 Step 9: Export Logistics Engine
 
-Once you have harvested your crops and are ready to sell them to foreign buyers, you book an export slot!
+When you are ready to ship your commodities out of Nigeria, book an export slot!
 
 1. Go to the **Export Dashboard** and click **"Book Export Slot"**.
-2. **The 5-Step Stepper Flow:**
-   * **Step 1 (Commodity):** Select Yam, Sesame, or Hibiscus.
-   * **Step 2 (Specs):** Enter your crop measurements, moisture percentage, and check the box indicating you have a Phytosanitary Certificate.
-   * **Step 3 (Shipping):** Choose your shipping terms (**FOB** - Free on Board or **CIF** - Cost, Insurance, and Freight), Port of Origin (e.g. "Lagos Port"), and choose your cargo vessel.
-   * **Step 4 (Documents):** Upload photo copies of your *Bill of Lading* and *Certificate of Origin*.
-   * **Step 5 (Tax Settlement):** Review computed port duties and taxes, and click **"Pay Taxes & Book Slot"**.
-3. **Export Calendar:** The dashboard renders an **Export Calendar** showing your departure date, port blackout congestion days, and cargo drop-off windows.
+2. **Follow the 5-Stage Booking Wizard:**
+   * **Stage 1 (Commodity):** Select Yam, Sesame, or Hibiscus and enter your total weight in metric tons.
+   * **Stage 2 (Specs):** Enter your crop specifications: moisture percentage, foreign matter percentage, and confirm that you have a Phytosanitary Certificate.
+   * **Stage 3 (Logistics):** Select your shipping terms (FOB or CIF), choose your Port of Origin (e.g., "Lagos Apapa Port"), and select your Cargo Vessel.
+   * **Stage 4 (Documents):** Upload photos of your *Bill of Lading* and *Certificate of Origin*.
+   * **Stage 5 (Tax Settlement):** The engine will calculate your port duties and export taxes. Click **"Pay and Confirm Slot"**.
+3. **The Export Calendar:** Your dashboard will now render a calendar showing your cargo drop-off date, ship loading days, and vessel departure date.
 
 ---
 
 ## 🎛️ PART 3: The Administrator Playbook (For Admins & Super Admins)
 
-Welcome to the command room! As an Admin, your dashboard is located at `/admin`. This is a strict **Zero-Trust** environment where every click is logged for safety.
+Welcome to the command room! As an Admin, you manage the platform at `/admin`. This is a strict **Zero-Trust** environment where every action is logged.
+
+```
+[ Admin Dashboard Overview ]
+ ├── Sidebar Navigation (Analytics, Finance, Communications, User Directory, Withdrawals, Toggles)
+ ├── Analytics Telemetry: Real-Time Server-Side count() Aggregations (Recharts API)
+ ├── Finance Desk: Withdrawal approvals & loan underwriting evaluations
+ └── Comm Center: Priority announcements, live previews, and cohort segmentation
+```
 
 ---
 
 ### 🧭 1. Navigation & Access Control
-When you log in with an Administrator profile, a dark sidebar will appear on the left side of the screen containing your tools:
-* 📊 **Analytics** (General health)
-* 💳 **Finance & Ledgers** (Cash checks)
-* 📣 **Communications** (Loudspeaker broadcasts)
-* 👥 **User Directory** (The member list)
-* 🎓 **Academy** / 🤝 **Cooperatives** / 🚜 **Farm Nation** / 🌊 **WAVE** (Specific module panels)
-* ⚙️ **Feature Toggles** (Global app controls)
+Once you log in as an Admin, a dark sidebar will appear on the left side of your screen:
+* 📊 **Analytics:** Main dashboard displaying system charts.
+* 👥 **User Directory:** List of all registered members.
+* 💳 **Finance:** Payouts and loan ledger controls.
+* 📣 **Communications:** Banner announcements and targeted broadcasts.
+* ⚙️ **Feature Toggles:** Feature switches to disable parts of the app during emergencies.
 
 ---
 
 ### 📊 2. The Analytics & Telemetry Room (`/admin/analytics`)
 
-Use this page to check how the platform is performing.
+Use this page to check the platform's performance.
 
-* **Core KPI Metric Cards:** Look at the top numbers. These count active users, active savings, escrow volumes, and pending files. 
-  * ⚠️ **True Database Counts:** These numbers are calculated directly on the server database. While they load, a small spinner icon 🔄 will spin. Once loaded, they show the exact totals across the entire platform.
-* **Understanding the Charts:**
-  * **Revenue Trend (Line Chart):** Displays cash flows over the last 6 months. Hover your mouse over any point to see the exact Naira value.
-  * **Sign-Up Growth (Bar Chart):** Shows how many new members joined each month.
-  * **Module Breakdown (Pie Chart):** Shows which modules are used the most (e.g., 40% Marketplace, 30% Cooperatives, 30% Academy).
+* **Core KPI Metric Cards:** Display active users, total savings, active loan volumes, and pending approvals.
+  * 🔄 **Live Server Counting:** These numbers use Firestore `count()` aggregations to scan the database. While loading, you will see a spinner. Once loaded, they show the exact totals across the entire platform.
+* **Telemetry Charts:**
+  * **Revenue Trend (Line Chart):** Maps platform commission earnings over the last 6 months.
+  * **User Registrations (Bar Chart):** Shows the sign-up velocity of new users per month.
+  * **Module Breakdown (Pie Chart):** Displays which module has the highest traffic.
 
 ---
 
@@ -278,21 +358,24 @@ Use this page to check how the platform is performing.
 
 Admins act as security guards for all financial transactions.
 
-#### 1. Approving Withdrawal Requests
-1. Go to the **Withdrawals** panel.
-2. You will see a list of users requesting to transfer money from their wallets to their real bank accounts.
-3. Click on a request. Look at the user's KYC verification status. 
-4. If they are verified and have enough balance, click the green **"Approve Payout"** button. The system will dispatch the transfer.
-5. If the request looks suspicious or if the user is unverified, click the red **"Reject Payout"** button.
+#### 1. Approving Wallet Withdrawals
+1. Go to the **Withdrawals** page.
+2. Review the pending payout requests.
+3. Click on a request to check details:
+   * Confirm the user's KYC status is **Verified** (Green badge).
+   * Confirm the bank account name matches the user's KYC name.
+4. If correct, click **"Approve Payout"**. The system will process the Paystack transfer.
+5. If there is a name mismatch, click the red **"Reject Payout"** button, select the reason from the dropdown, and click confirm.
 
 #### 2. Underwriting Cooperative Loans
 1. Go to the **Cooperative Loans** page.
-2. Click on a pending loan application.
-3. Review the underwriting data sheet:
-   * **Savings Balance:** How much they have saved.
-   * **Current Debts:** Any unpaid loans.
-   * **Calculated Multiplier Limit:** The maximum amount they are allowed to borrow based on their tier.
-4. Click **"Approve Loan"** to deposit the funds into their wallet, or click **"Deny Loan"** to reject the application.
+2. Select a pending loan application.
+3. Review the loan underwriting report card:
+   * **Total Saved:** The user's active savings contribution.
+   * **Requested Amount:** The loan amount they want to borrow.
+   * **Debt Ratio:** Checks if they have outstanding unpaid loans.
+   * **Multiplier Check:** Confirms the request does not exceed 3x their savings.
+4. Click **"Approve Loan Application"** to deposit the funds into their wallet, or click **"Deny Loan"** to reject the request.
 
 ---
 
@@ -301,7 +384,7 @@ Admins act as security guards for all financial transactions.
 Use this suite to broadcast news and alerts to users.
 
 #### 1. Segment Targeting (Choosing Your Audience)
-Before broadcasting, choose who will receive your message in the dropdown list:
+Before sending a message, choose your audience in the dropdown list:
 * **All Users:** Sends the message to every account.
 * **Active Last 30 Days:** Targets only frequent users.
 * **Fully Verified Sellers:** Targets only merchants.
@@ -309,14 +392,14 @@ Before broadcasting, choose who will receive your message in the dropdown list:
 * **CSV Cohort Upload:** Drag and drop a CSV file containing user emails to target a specific custom list.
 
 #### 2. Creating Global Dashboard Banners
-1. Type your message in the **Announcement Text Box**.
-2. As you type, look at the **Live Preview Box** on the right side of the screen. This displays exactly what the banner will look like on the user's screen!
+1. Type your announcement in the text field.
+2. As you type, look at the **Live Preview Box** on the right. This shows exactly what the banner will look like on the user's screen!
 3. Select a **Priority Level** (Color Theme):
    * 🟦 **Information (Blue):** For general news.
    * 🟩 **Success (Green):** For positive announcements.
    * 🟨 **Warning (Yellow):** For scheduled maintenance alerts.
-   * 🟥 **Critical (Red):** For urgent alerts (e.g. "Lagos Port closed today").
-4. Click the blue **"Publish Announcement"** button. It will instantly appear at the top of all user dashboards!
+   * 🟥 **Critical (Red):** For urgent alerts.
+4. Click **"Publish Announcement"**. It will instantly appear at the top of all user dashboards!
 
 ---
 
@@ -324,29 +407,24 @@ Before broadcasting, choose who will receive your message in the dropdown list:
 
 This page displays the list of all registered members.
 
-#### 1. Infinite Scroll & Filtering
+#### 1. Cursor-Based Infinite Scroll
 * Scroll down the page; more users will load automatically.
-* Use the filter dropdowns to show only specific groups (e.g., click **"Role: Seller"** and **"Status: Pending"** to find sellers waiting to be approved).
+* The directory uses cursor-based pagination. This means that even if new users register while you are scrolling, you will not see duplicate records or skip anyone.
 
 #### 2. High-Velocity Bulk Actions
-1. Click the checkboxes on the left side of multiple user rows to select them.
-2. As soon as you select more than one user, a floating **Bulk Actions Bar** will slide up from the bottom of your screen!
-3. Click **"Approve KYC"** on the floating bar. The system will run an asynchronous loop, verifying all selected accounts at once!
+1. Select multiple users by checking the boxes on the left.
+2. A floating **Bulk Actions Bar** will slide up from the bottom of your screen!
+3. Click **"Approve KYC"** on the floating bar. The system will process all selected accounts at once, saving you time!
 
-#### 3. Exporting Data
-* If you want to download your current list of users, click the white **"Export CSV"** button. 
-* The system will instantly compile your filtered list and download a `.csv` spreadsheet file to your computer.
+#### 3. Exporting Datasets
+* To download your current list of users, click the **"Export CSV"** button. 
+* The system will download a `.csv` spreadsheet file to your computer containing the names, emails, phone numbers, and roles of the selected users.
 
 ---
 
 ### 🛑 6. The Rejection Modal (The Red Card)
 
 Whenever you reject an application (like a loan, a seller profile, or land booking), you must use the **Rejection Modal**.
-
-```
-[ Admin Rejection Flow ]
- Click Reject → Rejection Modal Opens → Write Justification (10-500 chars) → Confirm Double-Submit Locked
-```
 
 1. Click the **"Reject"** button on an application.
 2. A modal window will pop up.
