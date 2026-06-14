@@ -41,7 +41,7 @@ This section shows you how to use the app to buy, sell, save, learn, and export!
 
 ---
 
-### 🔑 Step 1: Getting Inside and Getting Your ID Card
+### 🔑 Step 1: Getting Inside and Your Profile ID Number
 
 #### 1. How to Sign Up (Join the Club)
 1. Open your web browser and go to the Easy Sales Export page.
@@ -57,9 +57,9 @@ This section shows you how to use the app to buy, sell, save, learn, and export!
 4. Click the checkbox that says **"I agree to the Terms of Service"**.
 5. Click **"Submit"**.
 
-#### 2. Your ID Card (The ESE Number)
-Once you log in, look at the top corner of your screen. You will see a special number that looks like this: **`ESE-2026-12345`**. 
-* This is your **special membership number**. Whenever you buy land, save money, or export crops, the system uses this ID card to know it is you!
+#### 2. Your Profile ID Number (The ESE Number)
+Once you log in, look at your profile dashboard. You will see a unique registration number that looks like this: **`ESE-2026-12345`**. 
+* This is your **account identifier**. Whenever you apply for programs, track shipments, or contact support, the system uses this ID number to find your record. (Note: This is different from the physical Cooperative Membership Card, which is only unlocked after joining the Cooperative).
 
 ---
 
@@ -251,6 +251,14 @@ You can set up separate savings folders for different business needs:
 #### 5. Paying with Cooperative Credit
 * When buying items (like seeds or tools) in the Marketplace, you can select **"Cooperative Credit"** as your payment method at checkout.
 * This allows you to checkout instantly using your cooperative balance!
+
+#### 6. The Cooperative Membership ID Card (Cooperative Members Only)
+* **What is it?** This is your official Cooperative Member badge. It is **only** for users who have completed the Cooperative registration and paid their ₦10,000 membership fee.
+* **How to get it:**
+  1. Go to your **Cooperative Dashboard**.
+  2. Click on the **"ID Card"** menu tab.
+  3. The system will automatically generate a digital membership ID card showing your name, photo, member status, and unique `ESE-YYYY-XXXXX` ID number.
+  4. Click **"Download ID Card"** to save or print it for physical use!
 
 ---
 
