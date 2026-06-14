@@ -3,6 +3,162 @@
 
 ---
 
+## 🌐 SECTION 0: The Landing Page — Your Gateway (easysalesexport.com)
+
+Every journey on this platform begins at **easysalesexport.com**. This is the public homepage — anyone can visit it without logging in. Think of it as the main gate to a large market. Before you step inside, you look around, read the signs, and decide if you want to enter. This page is designed to show you exactly what Easy Sales Export is about and guide you to either **log in** (if you already have an account) or **register** (if you are new).
+
+---
+
+### 1. The Navigation Bar (The Top Menu)
+
+The navigation bar is the strip of links fixed at the very top of the page. It stays on screen even when you scroll down. Here is what every button does:
+
+| Button/Link | What It Does |
+|---|---|
+| **Easy Sales Export** (logo/brand name, top-left) | Clicking it always brings you back to the home page from anywhere on the site. |
+| **About Easy Sales Export** | Opens a page that tells the full story of the company — who they are, what they do, and their mission. |
+| **Ecosystem** (dropdown menu) | Hover or click this to reveal a list of all the platform modules: **Cooperatives**, **Marketplace**, **Export Windows**, **Farm Nation**, and **Academy**. Clicking any of these takes you directly into that section. |
+| **WAVE Program** | Takes you to the landing page of the Women Agro Value Expansion (WAVE) program. |
+| **Export** | Takes you straight to the Export Windows module. |
+| **Contact** | Opens the contact page where you can send a message to the Easy Sales Export team. |
+| **Log In** (top-right) | Click this if you **already have an account**. It will take you to the login page where you enter your email and password. |
+| **Get Started** (green button, top-right) | Click this if you are **new**. It takes you to the registration page to create a fresh account. |
+
+> 📱 **On a Mobile Phone:** The full menu is hidden to save space. Instead, you will see a **hamburger icon** (three horizontal lines ☰) at the top-right. Tap it to open the mobile menu. All the same links will appear in a list. Tap the **✕** icon to close the menu again.
+
+---
+
+### 2. The Hero Section (The Big Welcome Screen)
+
+Directly below the navigation bar is the **Hero Section** — the large, eye-catching area that fills most of your screen when you first arrive. Here is what you will see:
+
+- **A rotating background slideshow:** The background automatically cycles through real photographs every 8 seconds, showing Nigerian farms, commodities, and agricultural activities. You do not need to do anything — it changes on its own.
+- **The Company Logo:** A circular logo in the centre of the hero area.
+- **The Main Title:** Large bold text that reads **"Easy Sales Export"**.
+- **The Tagline:** Smaller text below the title that reads *"Powering Nigeria's Agro Trade, Export & Farm Investment"* — this tells you in one sentence what the platform does.
+- **Two big action buttons:**
+  - 🟢 **"Start Trading Agro Products"** — Clicking this takes you directly to the Marketplace where you can browse products for sale. You can browse the Marketplace even **without logging in**, but to buy or sell, you must create an account.
+  - ⬜ **"Learn Export and Agro Business"** — Clicking this takes you to the Academy module where you can see the available training courses.
+
+---
+
+### 3. The WAVE Briefing Announcement Banner
+
+Just below the Hero Section, you will see a special **green announcement card**. This is a prominent notice about the **WAVE National Awareness Briefing** — a free live event where participants learn how to access government-backed agricultural funding.
+
+- **"🎯 Free Registration • Limited Seats"** badge at the top — This tells you the event is free but spaces are limited.
+- The card text explains what you will gain: access to **₦1M capital**, **₦20M+ growth in 5 years**, and national food security contracts.
+- **"Reserve Your Seat →"** (dark green button on the right) — Clicking this takes you to the WAVE Briefing registration page where you can sign up for the event.
+
+> This banner is clickable. You can click anywhere on the card — not just the button — to open the briefing page.
+
+---
+
+### 4. Platform Statistics (The Trust Numbers)
+
+Below the announcement banner, the platform displays a row of live statistics. These numbers are pulled directly from the database to give visitors an honest picture of the platform's scale:
+
+| Statistic | What It Means |
+|---|---|
+| **15,420+ Registered Users** | The number of people who have created an account on the platform. |
+| **₦2.5B+ Total Exports** | The total value of agricultural commodities exported through the platform. |
+| **24 States Covered** | The number of Nigerian states where the platform is actively operating. |
+| **98% Success Rate** | The percentage of completed export and trade transactions with no disputes. |
+
+These numbers give new visitors confidence that the platform is legitimate and widely used.
+
+---
+
+### 5. Explore Our Platform (The 6 Module Cards)
+
+Scrolling further down, you will see a grid of **6 colourful cards** under the heading **"Explore Our Platform"**. Each card represents one of the platform's core modules. Think of these as six different departments inside one big company. Clicking a card takes you into that module.
+
+| Module Card | What It Is For |
+|---|---|
+| 🌸 **WAVE Program** | Empowers Nigerian women in agriculture through training, funding, and market access. Government-backed program. |
+| 💜 **Cooperatives** | A savings and loans club. Members save together and can borrow up to 3× their savings. |
+| 🟠 **Marketplace** | An online shop for buying and selling Yam Tubers, Sesame Seeds, Dried Hibiscus, and other agricultural commodities. |
+| 🔵 **Export Windows** | A booking system for shipping Nigerian agricultural products to international buyers abroad. |
+| 🟢 **Farm Nation** | Browse and purchase or lease verified agricultural land plots across Nigeria. |
+| 🟣 **Academy** | An online school with certified training courses on export business and modern farming. |
+
+Each card also shows a live stat (e.g., *"3,856 Products Listed"* on the Marketplace card or *"8,932 Courses Completed"* on the Academy card) so visitors know how active each module is.
+
+---
+
+### 6. About Us Section
+
+Further down the page is the **About Us** section — a block of text on the left side and four stat boxes on the right side.
+
+- **The text** explains that Easy Sales Export Nigeria Limited is a strategic agro-export and trade infrastructure company that connects African producers to global markets. It mentions their role in the WAVE Program and ends with a powerful statement:
+  > *"We don't just export products. We build the systems that turn production into predictable wealth, empower communities, and position Africa as a global trade force."*
+
+- **"Get Started Free →"** (green button below the text) — This takes you to the registration page to create a free account.
+
+- **The four stat boxes** on the right mirror the platform statistics from earlier: 15,420+ Registered Users, ₦2.5B+ Total Exports, 24 States Covered, and 98% Success Rate.
+
+---
+
+### 7. Call-to-Action Section (The Final Push to Join)
+
+Below the About Us section is a full-width **dark green banner** with the heading *"Ready to Transform Your Agricultural Business?"*
+
+This section has two buttons:
+- **"Get Started →"** (white button) — Takes you to the **Get Started** page, which asks you to choose whether you are registering as an individual or a business before going to the full registration form.
+- **"Explore Marketplace"** (outlined button) — Takes you directly into the Marketplace to browse products.
+
+---
+
+### 8. Our Trusted Partners
+
+Below the CTA section is a section showing the logos of companies and organisations that partner with Easy Sales Export. These logos scroll into view and are purely for display — they build trust by showing the platform works with well-known institutions.
+
+---
+
+### 9. The Footer (Bottom of the Page)
+
+The footer is the dark grey strip at the very bottom of every page. It is divided into four columns:
+
+| Footer Column | What It Contains |
+|---|---|
+| **Easy Sales Export** | Company tagline and the CAC registration number (**RC: 763845**). |
+| **Platform** | Quick links to Marketplace, Export Windows, and Cooperatives. |
+| **Programs** | Quick links to WAVE Program, Farm Nation, and Academy. |
+| **Legal** | Links to the **Terms & Conditions** and **Privacy Policy** pages. |
+
+At the very bottom of the footer is the copyright notice: *"© 2024 Easy Sales Export. All rights reserved."*
+
+---
+
+### 10. How to Register (Creating Your Account)
+
+When a new user is ready to join, they click **"Get Started"** from the navigation bar or any of the CTA buttons. Here is the registration flow:
+
+1. **You arrive at the Registration Page** (`/auth/register`).
+2. Fill in your details:
+   - **Full Name**
+   - **Email Address**
+   - **Phone Number**
+   - **Password** (must be strong — mix of letters and numbers)
+3. Click **"Create Account"**.
+4. You will receive a **verification email**. Open it and click the confirmation link.
+5. Once confirmed, log in with your email and password.
+6. You will be taken to your **User Hub Dashboard** — your personal control room.
+
+---
+
+### 11. How to Log In (Returning Users)
+
+If you already have an account:
+
+1. Click **"Log In"** from the navigation bar.
+2. Enter your **Email Address** and **Password**.
+3. Click **"Sign In"**.
+4. You will land directly on your **User Hub Dashboard**.
+5. If you are already logged in when you visit the landing page, the **"Log In"** and **"Get Started"** buttons are replaced with a green **"Dashboard"** button and a **"Logout"** link — so you can jump straight back to your account.
+
+---
+
 ## 🌟 SECTION 1: The User Hub (Your Home Base)
 
 The **User Hub** is the very first screen you see after logging in. Think of it as your personal farm office. It acts as the central control room for your entire account.
