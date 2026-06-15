@@ -57,21 +57,29 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
  * Invalidate cooperative member cache
  * Call after membership status changes
  */
-export async function invalidateCooperativeCache(userId: string): Promise<void> {
+export async function invalidateCooperativeCache(userId: string, cooperativeId?: string): Promise<void> {
     try {
-        await Promise.all([
-            deleteCache(`cooperative:member:${userId}`),
-            deleteCache(CacheKeys.userProfile(userId)),
-        ]);
+        const keysToDelete: string[] = [
+            `cooperative:member:${userId}`,
+            CacheKeys.userProfile(userId),
+            "admin:coop-stats:global",
+            "admin:coop-reports:global",
+        ];
+        if (cooperativeId) {
+            keysToDelete.push(`admin:coop-stats:${cooperativeId}`);
+            keysToDelete.push(`admin:coop-reports:${cooperativeId}`);
+        }
+        await Promise.all(keysToDelete.map(k => deleteCache(k)));
 
         revalidatePath("/admin/cooperatives", "page");
         revalidatePath("/", "layout");
 
-        console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}`);
+        console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}${cooperativeId ? ` (coop: ${cooperativeId})` : ""}`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing cooperative cache:`, error);
     }
 }
+
 
 /**
  * Invalidate service access cache

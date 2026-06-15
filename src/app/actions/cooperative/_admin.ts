@@ -199,7 +199,7 @@ async function _getCooperativeStatsAction(): Promise<ActionResponse<any>> {
             error: null, success: true as const,
             data: {
                 stats: {
-                    totalMembers: Math.max(totalMembersCount, paidMembersCount),
+                    totalMembers: totalMembersCount,
                     paidMembers: paidMembersCount,
                     unpaidMembers,
                     activeMembers,

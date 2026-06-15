@@ -85,8 +85,9 @@ export async function POST(request: NextRequest) {
 
         // Bust Redis caches so the admin dashboard refreshes immediately
         try {
+            const cooperativeId = memberData?.cooperativeId;
             await Promise.allSettled([
-                invalidateCooperativeCache(userId),
+                invalidateCooperativeCache(userId, cooperativeId),
                 invalidateAdminGlobalStats(),
             ]);
         } catch (cacheErr) {
