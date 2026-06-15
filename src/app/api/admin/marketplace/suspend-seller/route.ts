@@ -66,6 +66,17 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
+        // Invalidate cache
+        if (verificationData.userId) {
+            try {
+                const { invalidateSellerCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+                await invalidateSellerCache(verificationData.userId);
+                await invalidateAdminGlobalStats();
+            } catch (cacheError) {
+                logger.error('[Suspend Seller Route Cache] Cache clear error:', cacheError);
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: "Seller suspended successfully"

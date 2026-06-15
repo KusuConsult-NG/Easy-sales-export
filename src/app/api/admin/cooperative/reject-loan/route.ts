@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const appData = applicationDoc.data();
+        const userId = appData?.userId;
+
         // Update application status
         await applicationRef.update({
             status: "rejected",
@@ -57,6 +60,16 @@ export async function POST(request: NextRequest) {
             rejectedBy: session.user.id,
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        if (userId) {
+            try {
+                const { invalidateCooperativeCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+                await invalidateCooperativeCache(userId);
+                await invalidateAdminGlobalStats();
+            } catch (cacheError) {
+                logger.error('[Reject Loan Route Cache] Cache clear error:', cacheError);
+            }
+        }
 
         return NextResponse.json({
             success: true,

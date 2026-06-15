@@ -127,6 +127,17 @@ export async function POST(request: NextRequest) {
             logger.error("Failed to send seller approval email:", emailError);
         }
 
+        // Invalidate cache
+        if (verificationData.userId) {
+            try {
+                const { invalidateSellerCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+                await invalidateSellerCache(verificationData.userId);
+                await invalidateAdminGlobalStats();
+            } catch (cacheError) {
+                logger.error('[Approve Seller Route Cache] Cache clear error:', cacheError);
+            }
+        }
+
         return NextResponse.json({
             success: true,
             message: "Seller approved successfully"

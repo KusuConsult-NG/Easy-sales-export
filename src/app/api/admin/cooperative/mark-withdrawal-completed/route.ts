@@ -47,6 +47,8 @@ export async function PATCH(request: NextRequest) {
             );
         }
 
+        const userId = data?.userId;
+
         await ref.update({
             status: "completed",
             completedBy: session.user.id,
@@ -54,6 +56,16 @@ export async function PATCH(request: NextRequest) {
             ...(transactionReference ? { transactionReference } : {}),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        if (userId) {
+            try {
+                const { invalidateCooperativeCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+                await invalidateCooperativeCache(userId);
+                await invalidateAdminGlobalStats();
+            } catch (cacheError) {
+                logger.error('[Mark Withdrawal Completed Route Cache] Cache clear error:', cacheError);
+            }
+        }
 
         logger.info(`Cooperative withdrawal ${withdrawalId} marked completed by admin ${session.user.id}`);
         return NextResponse.json({ success: true, message: "Withdrawal marked as completed" });

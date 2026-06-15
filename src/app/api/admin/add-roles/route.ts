@@ -100,6 +100,15 @@ export async function POST(req: NextRequest) {
 
         logger.info(`[add-roles] User ${userId} granted roles [${roles.join(", ")}] by ${session?.user?.email}`);
 
+        // Invalidate cache
+        try {
+            const { invalidateUserCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Add Roles Route Cache] Cache clear error:', cacheError);
+        }
+
         return NextResponse.json({
             success: true,
             message: `Roles [${roles.join(", ")}] granted to user ${userId}`,
@@ -170,6 +179,15 @@ export async function DELETE(req: NextRequest) {
         }
 
         logger.info(`[add-roles] Roles [${roles.join(", ")}] revoked from ${userId} by ${session?.user?.email}`);
+
+        // Invalidate cache
+        try {
+            const { invalidateUserCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Revoke Roles Route Cache] Cache clear error:', cacheError);
+        }
 
         return NextResponse.json({
             success: true,

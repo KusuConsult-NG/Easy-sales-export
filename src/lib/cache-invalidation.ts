@@ -46,6 +46,7 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
 
         revalidatePath("/admin/marketplace", "page");
         revalidatePath("/", "layout");
+        revalidateTag("module-registration-stats-service", "page");
 
         console.log(`[Cache Invalidation] Cleared seller cache for: ${userId}`);
     } catch (error) {
@@ -73,6 +74,7 @@ export async function invalidateCooperativeCache(userId: string, cooperativeId?:
 
         revalidatePath("/admin/cooperatives", "page");
         revalidatePath("/", "layout");
+        revalidateTag("module-registration-stats-service", "page");
 
         console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}${cooperativeId ? ` (coop: ${cooperativeId})` : ""}`);
     } catch (error) {
@@ -93,7 +95,7 @@ export async function invalidateServiceCache(userId: string, service?: string): 
         revalidatePath("/", "layout");
         if (service) {
             revalidatePath(`/admin/${service}`, "page");
-            revalidateTag(`module-${service}-stats`, "page");
+            revalidateTag("module-registration-stats-service", "page");
         }
 
         console.log(`[Cache Invalidation] Cleared ${service || 'service'} cache for: ${userId}`);
@@ -115,7 +117,7 @@ export async function invalidateAdminGlobalStats(): Promise<void> {
             deleteCache("admin:coop-reports:global"),
         ]);
         // Also trigger Next.js tag and path revalidation
-        revalidateTag("module-registration-stats", "page");
+        revalidateTag("module-registration-stats-service", "page");
         revalidatePath("/admin", "layout");
         revalidatePath("/admin/dashboard", "page");
         console.log(`[Cache Invalidation] Cleared global admin stats and tags`);

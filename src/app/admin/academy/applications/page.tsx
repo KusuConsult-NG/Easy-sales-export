@@ -5,7 +5,7 @@ import {
     FileText, CheckCircle, XCircle, Loader2, Filter,
     Search, Eye, BookOpen, GraduationCap, DollarSign,
     X, User, Phone, Mail, MapPin, Briefcase, Calendar,
-    Target, Award, Download, Users
+    Target, Award, Download, Users, SlidersHorizontal
 } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import {
@@ -61,6 +61,7 @@ interface AcademyApplication {
     stateOfOrigin?: string;
     lga?: string;
     residentialAddress?: string;
+    isLegacy?: boolean;
     _raw?: any; // full merged data object
 }
 
@@ -155,9 +156,16 @@ function ApplicationDetailModal({
                         </div>
                         <div>
                             <h2 className="text-lg font-bold text-slate-900">{app.personalInfo.fullName}</h2>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
-                                {app.status.replace("_", " ")}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
+                                    {app.status.replace("_", " ")}
+                                </span>
+                                {app.isLegacy && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                        Legacy
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition">
@@ -366,6 +374,8 @@ export default function AdminAcademyApplicationsPage() {
     const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "all">("all");
     const [paymentFilter, setPaymentFilter] = useState<"all" | "completed" | "pending">("all");
     const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+    const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
+    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first">("date-desc");
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
     const [selectedApp, setSelectedApp] = useState<AcademyApplication | null>(null);
@@ -440,6 +450,7 @@ export default function AdminAcademyApplicationsPage() {
                         stateOfOrigin: d.stateOfOrigin,
                         lga: d.lga,
                         residentialAddress: d.residentialAddress,
+                        isLegacy: stdApp.isLegacy,
                         _raw: d, // keep full merged object for the detail modal
                     } as AcademyApplication;
                 });
@@ -520,9 +531,45 @@ export default function AdminAcademyApplicationsPage() {
     }
 
     const filtered = applications.filter(a => {
-        if (paymentFilter === "all") return true;
-        if (paymentFilter === "completed") return a.paymentStatus === "completed" || a.paymentStatus === "paid";
-        return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
+        let matchesPayment = true;
+        if (paymentFilter === "completed") matchesPayment = a.paymentStatus === "completed" || a.paymentStatus === "paid";
+        else if (paymentFilter === "pending") matchesPayment = a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
+
+        let matchesRegistry = true;
+        if (registryFilter === "legacy") matchesRegistry = !!a.isLegacy;
+        else if (registryFilter === "regular") matchesRegistry = !a.isLegacy;
+
+        return matchesPayment && matchesRegistry;
+    });
+
+    const sortedFiltered = [...filtered].sort((a, b) => {
+        if (sortBy === "date-desc") {
+            const da = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+            const db = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+            return db - da;
+        }
+        if (sortBy === "date-asc") {
+            const da = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+            const db = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+            return da - db;
+        }
+        if (sortBy === "name-asc") {
+            return (a.personalInfo.fullName || "").localeCompare(b.personalInfo.fullName || "");
+        }
+        if (sortBy === "name-desc") {
+            return (b.personalInfo.fullName || "").localeCompare(a.personalInfo.fullName || "");
+        }
+        if (sortBy === "legacy-first") {
+            const la = a.isLegacy ? 1 : 0;
+            const lb = b.isLegacy ? 1 : 0;
+            return lb - la;
+        }
+        if (sortBy === "regular-first") {
+            const la = a.isLegacy ? 1 : 0;
+            const lb = b.isLegacy ? 1 : 0;
+            return la - lb;
+        }
+        return 0;
     });
 
     const counts = stats ? {
@@ -577,6 +624,7 @@ export default function AdminAcademyApplicationsPage() {
                     plan: d.plan,
                     stateOfOrigin: d.stateOfOrigin,
                     lga: d.lga,
+                    isLegacy: stdApp.isLegacy,
                 };
             });
 
@@ -587,9 +635,16 @@ export default function AdminAcademyApplicationsPage() {
                 return a.paymentStatus !== "completed" && a.paymentStatus !== "paid";
             });
 
+            // Apply registry filter just like the UI
+            exportApps = exportApps.filter((a: any) => {
+                if (registryFilter === "all") return true;
+                if (registryFilter === "legacy") return !!a.isLegacy;
+                return !a.isLegacy;
+            });
+
             const headers = [
                 "Application ID", "Full Name", "Email", "Phone",
-                "Status", "Payment Status", "Amount Paid", "Plan",
+                "Registry Type", "Status", "Payment Status", "Amount Paid", "Plan",
                 "State", "LGA", "Submitted At"
             ];
             const rows = exportApps.map((app: any) => [
@@ -597,6 +652,7 @@ export default function AdminAcademyApplicationsPage() {
                 app.personalInfo.fullName || "",
                 app.personalInfo.email || "",
                 app.personalInfo.phone || "",
+                app.isLegacy ? "Legacy" : "Regular",
                 app.status,
                 app.paymentStatus || "unpaid",
                 app.paymentAmount || 0,
@@ -725,14 +781,35 @@ export default function AdminAcademyApplicationsPage() {
                     </select>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-slate-500" />
+                    <Filter className="w-4 h-4 text-slate-500" />
                     <select
-                        value={sortOrder}
-                        onChange={e => setSortOrder(e.target.value as any)}
-                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm"
+                        value={registryFilter}
+                        onChange={e => setRegistryFilter(e.target.value as any)}
+                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                        <option value="desc">Newest First</option>
-                        <option value="asc">Oldest First</option>
+                        <option value="all">All Registry Types</option>
+                        <option value="legacy">Legacy Only</option>
+                        <option value="regular">Regular Only</option>
+                    </select>
+                </div>
+                <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-slate-500" />
+                    <select
+                        value={sortBy}
+                        onChange={e => {
+                            const val = e.target.value as any;
+                            setSortBy(val);
+                            if (val === "date-asc") setSortOrder("asc");
+                            else setSortOrder("desc");
+                        }}
+                        className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                        <option value="date-desc">Newest First</option>
+                        <option value="date-asc">Oldest First</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="legacy-first">Legacy First</option>
+                        <option value="regular-first">Regular First</option>
                     </select>
                 </div>
                 <DateRangeFilter
@@ -764,7 +841,7 @@ export default function AdminAcademyApplicationsPage() {
             {/* Application Cards */}
             {!isLoading && applications.length > 0 && (
                 <div className="space-y-3">
-                    {filtered.map(app => (
+                    {sortedFiltered.map(app => (
                         <div key={app.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 hover:border-blue-200 hover:shadow-md transition">
                             <div className="flex items-start justify-between flex-wrap gap-3">
                                 <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -774,6 +851,11 @@ export default function AdminAcademyApplicationsPage() {
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
                                             <h3 className="text-base font-bold text-slate-900">{app.personalInfo.fullName}</h3>
+                                            {app.isLegacy && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                    Legacy
+                                                </span>
+                                            )}
                                             {planBadge(app.plan)}
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold capitalize ${statusColor(app.status)}`}>
                                                 {app.status.replace("_", " ")}

@@ -895,7 +895,8 @@ async function _getStandardAcademyApplicationsAction(options: {
                 },
                 status: app.status || "pending",
                 data: mergedData,
-                submittedAt: app.submittedAt
+                submittedAt: app.submittedAt,
+                isLegacy: !!(app._isLegacy || uData.legacyOnboardedBy || uData.isLegacy || app.isLegacy)
             };
         });
 

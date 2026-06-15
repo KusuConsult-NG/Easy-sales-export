@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isValidState, isValidLGA, normalizeLocation } from "@/lib/locations";
-import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { serializeDoc, serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 import { normalizeUserUpdate } from "@/lib/schema-normalizer";
@@ -194,6 +194,13 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             }
         });
 
+        try {
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Farm Nation approval:", err);
+        }
+
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
         logger.error("Approve seller error:", error);
@@ -247,6 +254,13 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
                 });
             }
         });
+
+        try {
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (err) {
+            logger.error("Failed to invalidate cache after Farm Nation rejection:", err);
+        }
 
         return { error: null, success: true as const, data: null, meta: null };
     } catch (error: any) { 
@@ -888,6 +902,7 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
 
         try { 
             await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
         } catch (err) { 
             logger.error("Failed to invalidate cache after Farm Nation onboarding:", err);
         }
@@ -1360,6 +1375,7 @@ async function _resubmitFarmNationApplicationAction(
 
         try { 
             await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
         } catch (err) { 
             logger.error("Failed to invalidate cache after Farm Nation resubmission:", err);
         }

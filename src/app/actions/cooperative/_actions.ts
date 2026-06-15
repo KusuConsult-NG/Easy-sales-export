@@ -9,7 +9,7 @@ import { getBaseUrl } from "@/lib/server-utils";
 import { initializePaystackPayment, nairaToKobo } from "@/lib/paystack-server";
 import { requireSession } from "@/lib/session-guard";
 import { logAuditAction } from "@/app/actions/audit";
-import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { invalidateUserCache, invalidateCooperativeCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
 import { NIGERIAN_LOCATIONS } from "@/lib/locations";
@@ -1151,6 +1151,13 @@ async function _applyForLoanAction(
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp() });
         });
+
+        try {
+            await invalidateCooperativeCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Loan Apply Cache] Cache clear error:', cacheError);
+        }
 
         return { error: null, success: true as const,
             meta: null

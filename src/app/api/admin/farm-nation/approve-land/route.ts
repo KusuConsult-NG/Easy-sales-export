@@ -57,6 +57,16 @@ export async function POST(request: NextRequest) {
             updatedAt: FieldValue.serverTimestamp(),
         });
 
+        // Invalidate cache
+        try {
+            const { invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+            await invalidateAdminGlobalStats();
+            const { revalidateTag } = await import("next/cache");
+            revalidateTag("land-listings", "page");
+        } catch (cacheError) {
+            logger.error('[Approve Land Route Cache] Cache clear error:', cacheError);
+        }
+
         return NextResponse.json({
             success: true,
             message: "Land listing approved successfully"

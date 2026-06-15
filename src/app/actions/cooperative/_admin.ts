@@ -478,25 +478,27 @@ async function _updateMemberStatusAction(
             return { notificationInfo, targetUserId };
         });
 
-        const { notificationInfo } = emailData || {};
-
-        if (status === "active" && notificationInfo && targetUserId) {
-            // 4. Invalidate Caches (Kill the "State vs. Truth" bug)
-            try {
+        // 4. Invalidate Caches (Kill the "State vs. Truth" bug)
+        try {
+            if (targetUserId) {
                 await invalidateCooperativeCache(targetUserId);
                 const { invalidateUserCache } = await import('@/lib/cache-invalidation');
                 await invalidateUserCache(targetUserId);
                 await invalidateAdminGlobalStats();
                 // Clear scoped coop stats
-                const adminScope = await getAdminScope(session.user.id, session.user.roles);
+                const adminScope = await getAdminScope(sessionResult.session.user.id, sessionResult.session.user.roles);
                 if (adminScope) {
                     await deleteCache(`admin:coop-stats:${adminScope}`);
                     await deleteCache(`admin:coop-reports:${adminScope}`);
                 }
-            } catch (cacheErr) {
-                logger.error("Cache invalidation failed after member approval", cacheErr);
             }
+        } catch (cacheErr) {
+            logger.error("Cache invalidation failed after member status update", cacheErr);
+        }
 
+        const { notificationInfo } = emailData || {};
+
+        if (status === "active" && notificationInfo && targetUserId) {
             try {
                 const resend = new Resend(process.env.RESEND_API_KEY);
                 const { error } = await resend.emails.send({

@@ -54,6 +54,7 @@ export default function CooperativeMembersPage() {
     const [lgaFilter, setLgaFilter] = useState("");
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
     const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
+    const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name-asc" | "name-desc" | "legacy-first" | "regular-first">("date-desc");
 
     const {
         data: applications,
@@ -142,6 +143,40 @@ export default function CooperativeMembersPage() {
     } else if (registryFilter === "regular") {
         filteredApplications = filteredApplications.filter(a => a.data?.isLegacy !== true);
     }
+    // Sort applications
+    filteredApplications = [...filteredApplications].sort((a, b) => {
+        if (sortBy === "date-desc") {
+            const da = a.data?.createdAt ? new Date(a.data.createdAt).getTime() : 0;
+            const db = b.data?.createdAt ? new Date(b.data.createdAt).getTime() : 0;
+            return db - da;
+        }
+        if (sortBy === "date-asc") {
+            const da = a.data?.createdAt ? new Date(a.data.createdAt).getTime() : 0;
+            const db = b.data?.createdAt ? new Date(b.data.createdAt).getTime() : 0;
+            return da - db;
+        }
+        if (sortBy === "name-asc") {
+            const nameA = a.user?.name || `${a.data?.firstName || ''} ${a.data?.lastName || ''}`.trim() || "";
+            const nameB = b.user?.name || `${b.data?.firstName || ''} ${b.data?.lastName || ''}`.trim() || "";
+            return nameA.localeCompare(nameB);
+        }
+        if (sortBy === "name-desc") {
+            const nameA = a.user?.name || `${a.data?.firstName || ''} ${a.data?.lastName || ''}`.trim() || "";
+            const nameB = b.user?.name || `${b.data?.firstName || ''} ${b.data?.lastName || ''}`.trim() || "";
+            return nameB.localeCompare(nameA);
+        }
+        if (sortBy === "legacy-first") {
+            const la = a.data?.isLegacy ? 1 : 0;
+            const lb = b.data?.isLegacy ? 1 : 0;
+            return lb - la;
+        }
+        if (sortBy === "regular-first") {
+            const la = a.data?.isLegacy ? 1 : 0;
+            const lb = b.data?.isLegacy ? 1 : 0;
+            return la - lb;
+        }
+        return 0;
+    });
     // Date filtering is now handled server-side via dateRange state
 
     // Load Global Stats (only when no date range is active)
@@ -383,7 +418,7 @@ export default function CooperativeMembersPage() {
                 </div>
 
                 {/* Second row of filters */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     {/* Payment Status Filter */}
                     <div className="relative">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -409,6 +444,23 @@ export default function CooperativeMembersPage() {
                             <option value="all">All Registry Types</option>
                             <option value="legacy">Legacy Members Only</option>
                             <option value="regular">Regular Members Only</option>
+                        </select>
+                    </div>
+
+                    {/* Sort By Filter */}
+                    <div className="relative">
+                        <SlidersHorizontal className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                            <option value="date-desc">Newest First</option>
+                            <option value="date-asc">Oldest First</option>
+                            <option value="name-asc">Name (A-Z)</option>
+                            <option value="name-desc">Name (Z-A)</option>
+                            <option value="legacy-first">Legacy First</option>
+                            <option value="regular-first">Regular First</option>
                         </select>
                     </div>
                 </div>

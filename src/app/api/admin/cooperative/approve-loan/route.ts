@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        let userId: string | null = null;
+
         // 🔒 Use a transaction for atomic loan approval + balance update
         await db.runTransaction(async (transaction) => {
             const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
@@ -49,6 +51,7 @@ export async function POST(request: NextRequest) {
             }
 
             const appData = applicationDoc.data()!;
+            userId = appData.userId;
 
             if (appData.status !== "pending") {
                 throw new Error(`Application is already ${appData.status}`);
@@ -73,6 +76,16 @@ export async function POST(request: NextRequest) {
                 updatedAt: FieldValue.serverTimestamp(),
             });
         });
+
+        if (userId) {
+            try {
+                const { invalidateCooperativeCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+                await invalidateCooperativeCache(userId);
+                await invalidateAdminGlobalStats();
+            } catch (cacheError) {
+                logger.error('[Approve Loan Route Cache] Cache clear error:', cacheError);
+            }
+        }
 
         return NextResponse.json({
             success: true,

@@ -215,6 +215,12 @@ async function _processWithdrawalAction(
             metadata: { notes: reasoning },
         });
 
+        try {
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Process Withdrawal Stats] Cache clear error:', cacheError);
+        }
+
         return {
             error: null,
             success: true as const,
@@ -270,7 +276,8 @@ async function _toggleUserVerificationAction(
         try {
             const { invalidateUserCache } = await import('@/lib/cache-invalidation');
             await invalidateUserCache(userId);
-            logger.info(`[User Verification] Cache cleared for user: ${userId}`);
+            await invalidateAdminGlobalStats();
+            logger.info(`[User Verification] Cache cleared for user: ${userId} and global stats invalidated`);
         } catch (cacheError) {
             logger.error('[User Verification] Cache clear error:', cacheError);
         }
@@ -365,7 +372,8 @@ async function _toggleUserKycVerificationAction(
         try {
             const { invalidateUserCache } = await import('@/lib/cache-invalidation');
             await invalidateUserCache(userId);
-            logger.info(`[User KYC Verification] Cache cleared for user: ${userId}`);
+            await invalidateAdminGlobalStats();
+            logger.info(`[User KYC Verification] Cache cleared for user: ${userId} and global stats invalidated`);
         } catch (cacheError) {
             logger.error('[User KYC Verification] Cache clear error:', cacheError);
         }
@@ -711,6 +719,14 @@ async function _verifyLandListing(
             targetType: "land_listing",
             metadata: { reason: decision === "rejected" ? reason : null },
         });
+
+        // Clear cache
+        try {
+            await invalidateAdminGlobalStats();
+            revalidateTag("land-listings", "page");
+        } catch (cacheError) {
+            logger.error('[Land Verification Stats] Cache clear error:', cacheError);
+        }
 
         return {
             error: null,
@@ -1127,6 +1143,15 @@ async function _approveLoanApplication(
             metadata: { amount: loanData.amount, role: "Checker/Final", disbursed: !!disbursementTransferCode },
         });
 
+        // Clear cache
+        try {
+            const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
+            await invalidateCooperativeCache(loanData.userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Loan Approval Cache] Cache clear error:', cacheError);
+        }
+
         return {
             error: null,
             success: true as const,
@@ -1214,6 +1239,15 @@ async function _rejectLoanApplication(
             targetType: "application",
             metadata: { reason },
         });
+
+        // Clear cache
+        try {
+            const { invalidateCooperativeCache } = await import('@/lib/cache-invalidation');
+            await invalidateCooperativeCache(loanData.userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Loan Rejection Cache] Cache clear error:', cacheError);
+        }
 
         return { error: null, success: true as const, message: "Loan application rejected" };
     } catch (error: any) {
@@ -1844,7 +1878,8 @@ async function _approveSellerVerificationAction(
         try {
             const { invalidateSellerCache } = await import('@/lib/cache-invalidation');
             await invalidateSellerCache(userId);
-            logger.info(`[Seller Approval] Cache cleared for user: ${userId}`);
+            await invalidateAdminGlobalStats();
+            logger.info(`[Seller Approval] Cache cleared for user: ${userId} and global stats invalidated`);
         } catch (cacheError) {
             logger.error('[Seller Approval] Cache clear error:', cacheError);
         }
@@ -2009,7 +2044,8 @@ async function _approveExportOnboardingAction(
         try {
             const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'export');
-            logger.info(`[Export Approval] Cache cleared for user: ${userId}`);
+            await invalidateAdminGlobalStats();
+            logger.info(`[Export Approval] Cache cleared for user: ${userId} and global stats invalidated`);
         } catch (cacheError) {
             logger.error('[Export Approval] Cache clear error:', cacheError);
         }
@@ -2179,6 +2215,14 @@ async function _requestExportApplicationRevisionAction(
         logger.info(`[Export Revision] Application ${applicationId} marked revision_required by admin ${session.user.id}`);
         // FAST STATS UPDATER (Non-blocking fallback safe)
         updateExportStatsAtomic('pending', null);
+
+        // Clear cache
+        try {
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Export Revision Cache] Cache clear error:', cacheError);
+        }
+
         return { error: null, success: true as const, message: "Revision note sent to applicant" };
     } catch (error: any) {
         logger.error("Request export revision error:", error);
@@ -2511,7 +2555,8 @@ async function _rejectExportApplicationAction(
         try {
             const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
             await invalidateServiceCache(userId, 'export');
-            logger.info(`[Export Rejection] Cache cleared for user: ${userId}`);
+            await invalidateAdminGlobalStats();
+            logger.info(`[Export Rejection] Cache cleared for user: ${userId} and global stats invalidated`);
         } catch (cacheError) {
             logger.error('[Export Rejection] Cache clear error:', cacheError);
         }
@@ -2927,6 +2972,17 @@ async function _rejectAcademyApplicationAction(
         revalidatePath("/academy", "page");
         revalidatePath("/dashboard", "page");
         if (userId) revalidateTag(`user-status-${userId}`, "page");
+
+        // Clear cache
+        try {
+            if (userId) {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache(userId, 'academy');
+            }
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Academy Rejection Cache] Cache clear error:', cacheError);
+        }
 
         return {
             error: null,
@@ -4903,7 +4959,8 @@ async function _onboardLegacyMemberAction(
         try {
             const { invalidateUserCache } = await import("@/lib/cache-invalidation");
             await invalidateUserCache(userRecord.uid);
-            logger.info(`[Legacy Onboarding] Invalidated Redis cache for onboarded user: ${userRecord.uid}`);
+            await invalidateAdminGlobalStats();
+            logger.info(`[Legacy Onboarding] Invalidated Redis cache and global stats for onboarded user: ${userRecord.uid}`);
         } catch (cacheErr: any) {
             logger.warn(`[Legacy Onboarding] Failed to invalidate cache for ${userRecord.uid}:`, cacheErr);
         }
@@ -4945,6 +5002,15 @@ async function _approveMarketplaceUserAction(userId: string): Promise<ActionResp
         });
 
         revalidatePath("/admin/marketplace/buyers");
+
+        try {
+            const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Approve Marketplace User Cache] Cache clear error:', cacheError);
+        }
+
         return { success: true as const, error: null, data: null };
     } catch (error: any) {
         logger.error("Approve marketplace user error:", error);
@@ -4977,6 +5043,15 @@ async function _rejectMarketplaceUserAction(options: { userId: string; reason: s
         });
 
         revalidatePath("/admin/marketplace/buyers");
+
+        try {
+            const { invalidateUserCache } = await import("@/lib/cache-invalidation");
+            await invalidateUserCache(options.userId);
+            await invalidateAdminGlobalStats();
+        } catch (cacheError) {
+            logger.error('[Reject Marketplace User Cache] Cache clear error:', cacheError);
+        }
+
         return { success: true as const, error: null, data: null };
     } catch (error: any) {
         logger.error("Reject marketplace user error:", error);

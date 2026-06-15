@@ -15,7 +15,7 @@ import { COLLECTIONS } from "@/lib/types/firestore";
 import { hasAdminPermission, isSuperAdmin } from "@/lib/admin-permissions";
 import { logAuditAction } from "@/lib/audit-log";
 import { redis } from "@/lib/redis";
-import { invalidateUserCache } from "@/lib/cache-invalidation";
+import { invalidateUserCache, invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
 import { ActionResponse } from "@/lib/safe-action";
 
 /**
@@ -92,6 +92,7 @@ export async function bulkSuspendUsersAction(
                     redis.setex(`user:suspended:${userId}`, ttlSeconds, "true"),
                     invalidateUserCache(userId)
                 ]),
+                invalidateAdminGlobalStats(),
                 logAuditAction(
                     "user_suspend",
                     "bulk_operation",
@@ -174,6 +175,7 @@ export async function bulkActivateUsersAction(
                     redis.del(`user:suspended:${userId}`),
                     invalidateUserCache(userId)
                 ]),
+                invalidateAdminGlobalStats(),
                 logAuditAction(
                     "user_activate",
                     "bulk_operation",
@@ -255,6 +257,16 @@ export async function bulkAssignRolesAction(
         }
 
         await batch.commit();
+
+        try {
+            const successfulIds = userIds.filter(id => !failedIds.includes(id));
+            await Promise.allSettled([
+                ...successfulIds.map(userId => invalidateUserCache(userId)),
+                invalidateAdminGlobalStats()
+            ]);
+        } catch (sideEffectError) {
+            logger.error("[bulkAssignRolesAction] Post-commit cache invalidation failed:", sideEffectError);
+        }
 
         await logAuditAction(
             "user_role_change",
@@ -350,6 +362,7 @@ export async function bulkDeleteUsersAction(
                     redis.setex(`user:suspended:${userId}`, 30 * 24 * 60 * 60, "true"),
                     invalidateUserCache(userId)
                 ]),
+                invalidateAdminGlobalStats(),
                 logAuditAction(
                     "user_delete",
                     "bulk_operation",

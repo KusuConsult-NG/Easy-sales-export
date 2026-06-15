@@ -56,6 +56,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        const memberData = memberDoc.data();
+        const userId = memberData?.userId || memberId;
+
         await memberRef.update({
             membershipStatus: "rejected",
             rejectionReason: reason,
@@ -63,6 +66,16 @@ export async function POST(request: NextRequest) {
             rejectedAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
+
+        if (userId) {
+            try {
+                const { invalidateCooperativeCache, invalidateAdminGlobalStats } = await import("@/lib/cache-invalidation");
+                await invalidateCooperativeCache(userId);
+                await invalidateAdminGlobalStats();
+            } catch (cacheError) {
+                logger.error('[Reject Member Route Cache] Cache clear error:', cacheError);
+            }
+        }
 
         // Log audit entry
         try {
@@ -75,7 +88,6 @@ export async function POST(request: NextRequest) {
         } catch { /* non-blocking */ }
 
         // Send rejection email notification
-        const memberData = memberDoc.data();
         const memberName = `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member';
         try {
             const { sendMembershipRejectionEmail } = await import('@/lib/email-notifications');
