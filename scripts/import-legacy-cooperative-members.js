@@ -84,7 +84,7 @@ function log(emoji, msg) {
 }
 
 function registrationFeeForTier(tier) {
-    return tier === 'premium' ? 20000 : 10000;
+    return 10000;
 }
 
 /** Generate a cryptographically secure temporary password */
@@ -101,9 +101,9 @@ function generateResetToken() {
 
 async function importMember(member, index) {
     const label = `[${index + 1}] ${member.email}`;
-    const fee = member.registrationFee ?? registrationFeeForTier(member.membershipTier ?? 'basic');
-    const tier = (member.membershipTier === 'premium' ? 'premium' : 'basic');
-    const cooperativeTier = tier === 'premium' ? 'tier2' : 'tier1';
+    const fee = 10000;
+    const tier = 'Member';
+    const cooperativeTier = 'Member';
 
     // ── Step 1: Find or create Firebase Auth account ──────────────────────────
     let uid;
