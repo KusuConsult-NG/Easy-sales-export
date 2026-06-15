@@ -28,6 +28,7 @@ type MembershipApplication = {
     membershipStatus: "pending" | "approved" | "suspended";
     paymentStatus: "pending" | "completed" | "failed";
     onboardingCompleted?: boolean;
+    isLegacy?: boolean;
     createdAt: Date;
     // Full details
     middleName?: string;
@@ -52,6 +53,7 @@ export default function CooperativeMembersPage() {
     const [stateFilter, setStateFilter] = useState("");
     const [lgaFilter, setLgaFilter] = useState("");
     const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
+    const [registryFilter, setRegistryFilter] = useState<"all" | "legacy" | "regular">("all");
 
     const {
         data: applications,
@@ -134,6 +136,11 @@ export default function CooperativeMembersPage() {
     }
     if (lgaFilter) {
         filteredApplications = filteredApplications.filter(a => a.data.lga?.toLowerCase().includes(lgaFilter.toLowerCase()));
+    }
+    if (registryFilter === "legacy") {
+        filteredApplications = filteredApplications.filter(a => a.data?.isLegacy === true);
+    } else if (registryFilter === "regular") {
+        filteredApplications = filteredApplications.filter(a => a.data?.isLegacy !== true);
     }
     // Date filtering is now handled server-side via dateRange state
 
@@ -390,26 +397,40 @@ export default function CooperativeMembersPage() {
                             <option value="unpaid">Unpaid Only</option>
                         </select>
                     </div>
+
+                    {/* Registry Type Filter */}
+                    <div className="relative">
+                        <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                        <select
+                            value={registryFilter}
+                            onChange={(e) => setRegistryFilter(e.target.value as "all" | "legacy" | "regular")}
+                            className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                            <option value="all">All Registry Types</option>
+                            <option value="legacy">Legacy Members Only</option>
+                            <option value="regular">Regular Members Only</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* Advanced Filter Toggle */}
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setShowAdvancedFilters(v => !v)}
-                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition ${showAdvancedFilters || stateFilter || lgaFilter || dateRange.from || dateRange.to
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition ${showAdvancedFilters || stateFilter || lgaFilter || dateRange.from || dateRange.to || registryFilter !== "all"
                             ? "bg-blue-600 text-white border-blue-600"
                             : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                             }`}
                     >
                         <SlidersHorizontal className="w-4 h-4" />
                         Advanced Filters
-                        {(stateFilter || lgaFilter || dateRange.from || dateRange.to) && (
+                        {(stateFilter || lgaFilter || dateRange.from || dateRange.to || registryFilter !== "all") && (
                             <span className="bg-white text-blue-600 text-xs font-bold px-1.5 py-0.5 rounded-full">ON</span>
                         )}
                     </button>
-                    {(stateFilter || lgaFilter || dateRange.from || dateRange.to) && (
+                    {(stateFilter || lgaFilter || dateRange.from || dateRange.to || registryFilter !== "all") && (
                         <button
-                            onClick={() => { setStateFilter(""); setLgaFilter(""); setDateRange({ from: "", to: "" }); }}
+                            onClick={() => { setStateFilter(""); setLgaFilter(""); setDateRange({ from: "", to: "" }); setRegistryFilter("all"); }}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition"
                         >
                             <X className="w-3.5 h-3.5" /> Clear
@@ -562,8 +583,13 @@ export default function CooperativeMembersPage() {
                                 <div key={app.id} className="p-4 space-y-3">
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
-                                            <p className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                                            <p className="font-semibold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
                                                 {app.user.name || <span className="text-amber-600 italic text-xs">Incomplete</span>}
+                                                {app.data.isLegacy && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                        Legacy
+                                                    </span>
+                                                )}
                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                                     {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
                                                 </span>
@@ -634,8 +660,13 @@ export default function CooperativeMembersPage() {
                                                         <Users className="w-5 h-5 text-slate-400" />
                                                     </div>
                                                     <div>
-                                                        <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                                                        <div className="text-sm font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
                                                             {app.user.name}
+                                                            {app.data.isLegacy && (
+                                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                                                    Legacy
+                                                                </span>
+                                                            )}
                                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
                                                                 {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
                                                             </span>
@@ -817,6 +848,14 @@ export default function CooperativeMembersPage() {
                                     {selectedApplication.data.membershipTier || "Member"}
                                 </span>
                             </div>
+                            {selectedApplication.data.isLegacy && (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-slate-500 font-medium">Registry:</span>
+                                    <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                        Legacy
+                                    </span>
+                                </div>
+                            )}
                             <div className="ml-auto text-xs text-slate-500">
                                 Fee: <span className="font-bold text-slate-700">₦{(selectedApplication.data.registrationFee || 0).toLocaleString()}</span>
                             </div>

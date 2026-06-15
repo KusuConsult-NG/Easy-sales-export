@@ -4661,6 +4661,7 @@ async function _onboardLegacyMemberAction(
                 totalContributions: 0,
                 membershipStatus: "active",
                 paymentStatus: "completed",
+                isLegacy: true,
                 tier: "tier1",
                 onboardingCompleted: true,
                 bankAccountNumber: data.accountNumber,
