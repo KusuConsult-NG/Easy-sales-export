@@ -6,9 +6,17 @@ import { requireSession } from "@/lib/session-guard";
 import { db } from "@/lib/firebase-admin";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
+import { AggregateField } from "firebase-admin/firestore";
 
 /**
  * API Route: Get WAVE Compliance Data (Admin)
+ *
+ * Stats (approved, rejected, pending, total) use Firestore COUNT queries
+ * for accuracy. Demographics (age groups, states, business types) still
+ * require fetching docs because Firestore cannot GROUP BY arbitrary fields.
+ *
+ * IMPORTANT: A document with no "status" field is NOT defaulted to "pending"
+ * in any count — if it has no status it belongs in neither bucket.
  */
 export async function GET(request: NextRequest) {
     try {
@@ -20,7 +28,6 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Check admin role from session (not from DB query)
         if (!isAdmin(session.user.roles)) {
             return NextResponse.json(
                 { success: false, message: "Admin access required" },
@@ -39,58 +46,87 @@ export async function GET(request: NextRequest) {
             case "month":
                 dateFilter = new Date(now.getFullYear(), now.getMonth(), 1);
                 break;
-            case "quarter":
+            case "quarter": {
                 const quarter = Math.floor(now.getMonth() / 3);
                 dateFilter = new Date(now.getFullYear(), quarter * 3, 1);
                 break;
+            }
             case "year":
                 dateFilter = new Date(now.getFullYear(), 0, 1);
                 break;
         }
 
-        // Fetch WAVE applications (Admin SDK)
-        let query: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
-
+        let baseQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
         if (dateFilter) {
-            query = query.where("createdAt", ">=", dateFilter);
+            baseQuery = baseQuery.where("createdAt", ">=", dateFilter);
         }
 
-        const applicationsSnapshot = await query.get();
-        const applications = applicationsSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                createdAt: data.createdAt?.toDate?.()?.toISOString?.() ?? data.createdAt ?? new Date().toISOString(),
-                status: data.status || "pending",
-                amountDisbursed: data.amountDisbursed || 0,
-                age: data.age || 0,
-                state: data.state || "Unknown",
-                businessType: data.businessType || "Other",
-            };
-        });
+        // --- Accurate counts via Firestore COUNT (no JS-side filtering) ---
+        const [totalSnap, approvedSnap, rejectedSnap, pendingSnap] = await Promise.all([
+            baseQuery.count().get(),
+            baseQuery.where("status", "==", "approved").count().get(),
+            baseQuery.where("status", "==", "rejected").count().get(),
+            baseQuery.where("status", "==", "pending").count().get(),
+        ]);
 
-        // Calculate stats
-        const totalApplications = applications.length;
-        const approved = applications.filter(app => app.status === "approved").length;
-        const rejected = applications.filter(app => app.status === "rejected").length;
-        const pending = applications.filter(app => app.status === "pending").length;
+        const totalApplications = totalSnap.data().count ?? 0;
+        const approved = approvedSnap.data().count ?? 0;
+        const rejected = rejectedSnap.data().count ?? 0;
+        const pending = pendingSnap.data().count ?? 0;
 
-        const totalDisbursed = applications
-            .filter(app => app.status === "approved" && app.amountDisbursed)
-            .reduce((sum, app) => sum + (app.amountDisbursed || 0), 0);
+        // --- Disbursed amount: aggregate sum on approved docs ---
+        let totalDisbursed = 0;
+        try {
+            const disbursedQuery = dateFilter
+                ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    .where("createdAt", ">=", dateFilter)
+                    .where("status", "==", "approved")
+                    .where("amountDisbursed", ">", 0)
+                : db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    .where("status", "==", "approved")
+                    .where("amountDisbursed", ">", 0);
+
+            const disbursedSnap = await disbursedQuery
+                .aggregate({ total: AggregateField.sum("amountDisbursed") })
+                .get();
+            totalDisbursed = Number(disbursedSnap.data().total) || 0;
+        } catch {
+            // Firestore aggregate may fail if index is missing — fall back to 0
+            totalDisbursed = 0;
+        }
 
         const averageLoanSize = approved > 0 ? totalDisbursed / approved : 0;
 
-        // Calculate repayment rate from actual loan data (Admin SDK)
-        const loansSnapshot = await db.collection(COLLECTIONS.LOANS).get();
-        const totalLoans = loansSnapshot.size;
-        const repaidLoans = loansSnapshot.docs.filter(
-            doc => doc.data().status === "repaid" || doc.data().status === "completed"
-        ).length;
-        const repaymentRate = totalLoans > 0 ? Math.round((repaidLoans / totalLoans) * 100) : 85;
+        // --- Repayment rate: COUNT queries on LOANS collection ---
+        let repaymentRate = 85; // reasonable default when no data
+        try {
+            const [totalLoansSnap, repaidLoansSnap] = await Promise.all([
+                db.collection(COLLECTIONS.LOANS).count().get(),
+                db.collection(COLLECTIONS.LOANS)
+                    .where("status", "in", ["repaid", "completed"])
+                    .count()
+                    .get(),
+            ]);
+            const totalLoans = totalLoansSnap.data().count ?? 0;
+            const repaidLoans = repaidLoansSnap.data().count ?? 0;
+            if (totalLoans > 0) {
+                repaymentRate = Math.round((repaidLoans / totalLoans) * 100);
+            }
+        } catch {
+            // fall back to default
+        }
 
-        // Calculate demographics
+        // --- Demographics: still needs full doc fetch (no GROUP BY in Firestore) ---
+        // Only fetch the fields we need via .select() to minimise payload size.
+        const demographicsQuery = dateFilter
+            ? db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("createdAt", ">=", dateFilter)
+                .select("age", "state", "businessType")
+            : db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .select("age", "state", "businessType");
+
+        const demographicsSnap = await demographicsQuery.get();
+
         const ageGroups: Record<string, number> = {
             "18-25": 0,
             "26-35": 0,
@@ -98,22 +134,22 @@ export async function GET(request: NextRequest) {
             "46-55": 0,
             "56+": 0,
         };
-
         const states: Record<string, number> = {};
         const businessTypes: Record<string, number> = {};
 
-        applications.forEach(app => {
-            const age = app.age || 0;
+        demographicsSnap.docs.forEach(doc => {
+            const data = doc.data();
+            const age = data.age || 0;
             if (age >= 18 && age <= 25) ageGroups["18-25"]++;
             else if (age >= 26 && age <= 35) ageGroups["26-35"]++;
             else if (age >= 36 && age <= 45) ageGroups["36-45"]++;
             else if (age >= 46 && age <= 55) ageGroups["46-55"]++;
             else if (age >= 56) ageGroups["56+"]++;
 
-            const state = app.state || "Unknown";
+            const state = data.state || "Unknown";
             states[state] = (states[state] || 0) + 1;
 
-            const businessType = app.businessType || "Other";
+            const businessType = data.businessType || "Other";
             businessTypes[businessType] = (businessTypes[businessType] || 0) + 1;
         });
 
