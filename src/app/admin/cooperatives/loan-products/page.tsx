@@ -50,7 +50,7 @@ export default function LoanProductsPage() {
         description: "",
         minAmount: 50000,
         maxAmount: 500000,
-        interestRate: 5,
+        interestRate: 10,
         durationMonths: 12,
         isActive: true
     });
@@ -74,7 +74,7 @@ export default function LoanProductsPage() {
                 description: "",
                 minAmount: 50000,
                 maxAmount: 500000,
-                interestRate: 5,
+                interestRate: 10,
                 durationMonths: 12,
                 isActive: true
             });

@@ -981,6 +981,18 @@ export async function approveWithdrawalAction(
                 throw new Error(`Request is already ${withdrawalData?.status}`);
             }
 
+            const requestTime = withdrawalData?.requestedAt || withdrawalData?.createdAt;
+            const requestDate = requestTime && typeof (requestTime as any).toDate === "function"
+                ? (requestTime as any).toDate()
+                : (requestTime ? new Date(requestTime) : new Date());
+
+            const durationMs = Date.now() - requestDate.getTime();
+            const durationHours = durationMs / (1000 * 60 * 60);
+
+            if (durationHours < 24) {
+                throw new Error(`Withdrawals require a 24-hour pending hold. Please wait ${Math.ceil(24 - durationHours)} more hours.`);
+            }
+
             const userId = withdrawalData.userId;
             const amount = withdrawalData.amount;
 
@@ -1412,6 +1424,7 @@ export async function getStandardCooperativeMembersAction(
                 occupation:          app.occupation          || uData.occupation         || null,
                 stateOfOrigin:       app.stateOfOrigin       || uData.stateOfOrigin      || (typeof uData.address === 'object' ? uData.address?.state : null) || null,
                 lga:                 app.lga                 || uData.lga                || (typeof uData.address === 'object' ? uData.address?.lga   : null) || null,
+                ward:                app.ward                || uData.ward               || (typeof uData.address === 'object' ? uData.address?.ward  : null) || null,
                 residentialAddress:  app.residentialAddress  || (typeof uData.address === 'object' ? uData.address?.street : uData.address) || null,
                 // Name fields
                 firstName:           app.firstName           || uData.firstName          || null,
@@ -1446,6 +1459,7 @@ export async function getStandardCooperativeMembersAction(
                     address: mergedData.residentialAddress || "",
                     state: mergedData.stateOfOrigin || "",
                     lga: mergedData.lga || "",
+                    ward: mergedData.ward || "",
                     bankDetails
                 },
                 status: app.membershipStatus || "pending",
@@ -1459,7 +1473,11 @@ export async function getStandardCooperativeMembersAction(
         if (search) {
             const s = search.toLowerCase().trim();
             standardForms = standardForms.filter((f: any) => {
+                const shortId = `ese-coop-${f.id.slice(-4).toLowerCase()}`;
                 const searchString = [
+                    f.id,
+                    f.user?.id,
+                    shortId,
                     f.user?.name,
                     f.user?.email,
                     f.user?.phone,

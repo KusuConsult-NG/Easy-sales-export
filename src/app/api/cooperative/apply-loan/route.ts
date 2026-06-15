@@ -24,12 +24,12 @@ async function applyLoanHandler(request: NextRequest) {
 
         const userId = session.user.id;
         const body = await request.json();
-        const { productId, amount, purpose } = body;
+        const { productId, amount, purpose, guarantorName, guarantorPhone, guarantorEmail, guarantorRelationship } = body;
 
         // Validate inputs
-        if (!productId || !amount || !purpose) {
+        if (!productId || !amount || !purpose || !guarantorName || !guarantorPhone) {
             return NextResponse.json(
-                { success: false, message: "Missing required fields" },
+                { success: false, message: "Missing required fields (including guarantor name and phone)" },
                 { status: 400 }
             );
         }
@@ -136,6 +136,11 @@ async function applyLoanHandler(request: NextRequest) {
             durationMonths: product.durationMonths,
             monthlyPayment: Math.round(monthlyPayment),
             status: "pending",
+            guarantorName: guarantorName.trim(),
+            guarantorPhone: guarantorPhone.trim(),
+            guarantorEmail: guarantorEmail?.trim() || "",
+            guarantorRelationship: guarantorRelationship || "",
+            guarantorVerified: false,
             appliedAt: FieldValue.serverTimestamp(),
             createdAt: FieldValue.serverTimestamp(),
         };

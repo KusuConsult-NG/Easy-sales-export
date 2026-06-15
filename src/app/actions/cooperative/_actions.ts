@@ -12,6 +12,7 @@ import { logAuditAction } from "@/app/actions/audit";
 import { invalidateUserCache } from "@/lib/cache-invalidation";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { COOPERATIVE_CONFIG } from "@/lib/constants";
+import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 import { contributionSchema,
     cooperativeMembershipSchema,
     loanApplicationSchema,
@@ -311,27 +312,9 @@ export async function registerCooperativeMemberAction(
             }
             isLegacyImport = true;
         } else { // Legacy check
-            if (!existingMember.exists && !isUserLegacy) {
-                return { error: "No membership record found. Please complete payment first.", success: false as const, data: null };
-            }
-
             if (memberData?.onboardingCompleted) { return { error: "You have already completed onboarding. Profile updates require admin approval.", success: false as const, data: null };
             }
-
-            // 🔒 Verify Payment Status (Authoritative)
             isLegacyImport = Boolean(memberData?._importSource) || isUserLegacy;
-            if (!isLegacyImport && memberData?.paymentStatus !== "completed" && session.user.email !== "zeredogo@gmail.com") { // Double check processedPayments collection
-                const authPayment = await db.collection(COLLECTIONS.PROCESSED_PAYMENTS)
-                    .where("userId", "==", userId)
-                    .where("type", "==", "cooperative_membership_registration")
-                    .where("status", "==", "completed")
-                    .limit(1)
-                    .get();
-
-                if (authPayment.empty) {
-                    return { error: "Payment not verified. Please ensure you have completed the payment step.", success: false as const, data: null };
-                }
-            }
         }
 
         // DISEASE 6 FIX: parseFormData validates FormData directly against the Zod
@@ -403,6 +386,7 @@ export async function registerCooperativeMemberAction(
             phone: validatedData.phone,
             stateOfOrigin: validatedData.stateOfOrigin,
             lga: validatedData.lga,
+            ward: validatedData.ward,
             residentialAddress: validatedData.residentialAddress,
             occupation: validatedData.occupation,
             nextOfKin: {
@@ -436,6 +420,7 @@ export async function registerCooperativeMemberAction(
                 createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp() });
         } else {
             Object.assign(updatedData, {
+                paymentStatus: (memberData?.paymentStatus === "completed" || userData?.serviceRegistrations?.cooperatives?.paymentStatus === "completed" || userData?.serviceRegistrations?.cooperative?.paymentStatus === "completed") ? "completed" : "pending",
                 createdAt: existingMember.exists ? memberData?.createdAt : FieldValue.serverTimestamp()
             });
         }
@@ -482,9 +467,11 @@ export async function registerCooperativeMemberAction(
                 gender: validatedData.gender,
                 stateOfOrigin: validatedData.stateOfOrigin,
                 lga: validatedData.lga,
+                ward: validatedData.ward,
                 residentialAddress: validatedData.residentialAddress,
                 "address.state": validatedData.stateOfOrigin,
                 "address.lga": validatedData.lga,
+                "address.ward": validatedData.ward,
                 "address.street": validatedData.residentialAddress,
 
                 // Sync onboarding specific details for admin users modal
@@ -1032,6 +1019,12 @@ async function _checkCooperativeStatusAction(): Promise<string | null> { try {
             if (memberDocData.paymentStatus === 'completed' && !memberDocData.onboardingCompleted) {
                 return 'legacy_pending_onboarding';
             }
+            // If the user has submitted the form (onboardingCompleted=true)
+            // but has NOT completed the payment yet, return payment_required.
+            if (memberDocData.onboardingCompleted && memberDocData.paymentStatus !== 'completed' && session.user.email !== "zeredogo@gmail.com") {
+                return 'payment_required';
+            }
+
             // LOOP FIX: If the user has submitted the form (onboardingCompleted=true)
             // but is still awaiting admin approval, return a distinct sentinel value.
             if (memberDocData.onboardingCompleted && (derivedStatus === 'pending' || derivedStatus === 'under_review')) {
@@ -1229,7 +1222,7 @@ async function _createFixedSavingsAction(
                 durationMonths,
                 startDate: FieldValue.serverTimestamp(),
                 status: "active",
-                interestRate: 10, // Example: 10% p.a.
+                interestRate: 14, // 14% p.a.
                 createdAt: FieldValue.serverTimestamp() });
         });
 
@@ -1468,6 +1461,7 @@ export async function resubmitCooperativeApplicationAction(
             occupation: validatedData.occupation,
             stateOfOrigin: validatedData.stateOfOrigin,
             lga: validatedData.lga,
+            ward: validatedData.ward,
             residentialAddress: validatedData.residentialAddress,
             nextOfKinName: validatedData.nextOfKinName,
             nextOfKinPhone: validatedData.nextOfKinPhone,
@@ -1505,9 +1499,11 @@ export async function resubmitCooperativeApplicationAction(
             gender: validatedData.gender || null,
             stateOfOrigin: validatedData.stateOfOrigin || null,
             lga: validatedData.lga || null,
+            ward: validatedData.ward || null,
             residentialAddress: validatedData.residentialAddress || null,
             'address.state': validatedData.stateOfOrigin || null,
             'address.lga': validatedData.lga || null,
+            'address.ward': validatedData.ward || null,
             'address.street': validatedData.residentialAddress || null,
             bvn: bvn || null,
             bvnVerified: bvn ? true : false,
@@ -1829,3 +1825,108 @@ export async function validateCooperativeInviteAction(
         return { success: false as const, error: "Failed to validate invitation link. Please try again.", data: null };
     }
 }
+
+/**
+ * Update gender and stateOfOrigin for existing/synthesized cooperative members
+ */
+export async function updateMemberProfileDetailsAction(
+    gender: string,
+    stateOfOrigin: string
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Not authenticated", data: null };
+        const { session } = sessionResult;
+
+        const userId = session.user.id;
+
+        // Clean & Validate Gender
+        const normalizedGender = gender.trim().charAt(0).toUpperCase() + gender.trim().slice(1).toLowerCase();
+        if (normalizedGender !== "Male" && normalizedGender !== "Female") {
+            return { success: false as const, error: "Invalid gender selection. Please choose Male or Female.", data: null };
+        }
+
+        // Clean & Validate State of Origin
+        const normalizedState = stateOfOrigin.trim();
+        const validStates = Object.keys(NIGERIAN_LOCATIONS);
+        if (!validStates.includes(normalizedState)) {
+            return { success: false as const, error: `Invalid state of origin: ${normalizedState}`, data: null };
+        }
+
+        // Update Central User Profile Doc (updates both nested and dot-notation keys)
+        await db.collection(COLLECTIONS.USERS).doc(userId).update(normalizeUserUpdate({
+            gender: normalizedGender,
+            stateOfOrigin: normalizedState,
+            state: normalizedState,
+            updatedAt: FieldValue.serverTimestamp()
+        }));
+
+        // Fetch central user profile to handle premium subscribers who have synthesized profiles
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        const userPlan = (userData?.serviceRegistrations?.academy?.plan || "free").toLowerCase();
+        const isPremiumSubscriber = ["elite", "standard", "foundation", "advanced"].includes(userPlan);
+
+        // Fetch Cooperative Member record
+        const memberSnapshot = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+            .where("userId", "==", userId)
+            .limit(5)
+            .get();
+
+        const sortedDocs = memberSnapshot.docs.sort((a, b) => {
+            const aTs = a.data().createdAt?.toMillis?.() ?? 0;
+            const bTs = b.data().createdAt?.toMillis?.() ?? 0;
+            return bTs - aTs;
+        });
+
+        if (sortedDocs.length === 0) {
+            if (isPremiumSubscriber) {
+                // Synthesize member record if premium subscriber but no doc exists
+                const resolvedName = (userData?.name || userData?.fullName || session.user.name || "").trim();
+                const firstName = userData?.firstName || resolvedName.split(" ")[0] || "Cooperative";
+                const lastName = userData?.lastName || resolvedName.split(" ").slice(1).join(" ") || "Member";
+
+                await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(userId).set({
+                    userId,
+                    firstName,
+                    lastName,
+                    fullName: resolvedName || `${firstName} ${lastName}`,
+                    email: session.user.email || userData?.email || "",
+                    phone: userData?.phone || userData?.phoneNumber || "08000000000",
+                    membershipTier: userPlan.charAt(0).toUpperCase() + userPlan.slice(1),
+                    membershipStatus: "active",
+                    status: "active",
+                    paymentStatus: "completed",
+                    onboardingCompleted: false,
+                    gender: normalizedGender,
+                    stateOfOrigin: normalizedState,
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                return { success: false as const, error: "No cooperative membership found. Please register first.", data: null };
+            }
+        } else {
+            // Update the existing member doc
+            const memberDoc = sortedDocs[0];
+            await memberDoc.ref.update({
+                gender: normalizedGender,
+                stateOfOrigin: normalizedState,
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        }
+
+        // Invalidate cache and revalidate paths
+        await invalidateUserCache(userId);
+        revalidatePath("/cooperatives/id-card");
+
+        return { error: null, success: true as const, data: { message: "Profile details updated successfully" }, meta: null };
+    } catch (error) {
+        logger.error("updateMemberProfileDetailsAction error:", error);
+        return { success: false as const, error: "Failed to update profile details. Please try again.", data: null };
+    }
+}
+

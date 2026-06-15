@@ -42,7 +42,7 @@ export default function CooperativeDashboardPage() {
     const { status: membershipStatus } = useMembershipStatus(userId, "cooperative", sessionData?.user?.email || undefined);
 
     useEffect(() => {
-        if (membershipStatus === "approved" || membershipStatus === "active" || membershipStatus === "paid") {
+        if (membershipStatus === "approved" || membershipStatus === "active") {
             loadData();
         } else if (membershipStatus !== "loading") {
             setMembership(null);
@@ -147,7 +147,7 @@ export default function CooperativeDashboardPage() {
                 <div className="flex items-start justify-between mb-4">
                     <div>
                         <p className="text-purple-100 mb-1">Membership ID</p>
-                        <p className="text-2xl font-bold truncate max-w-[200px]">{membership.id}</p>
+                        <p className="text-2xl font-bold truncate max-w-[200px]">{`ESE-COOP-${membership.id.slice(-4).toUpperCase()}`}</p>
                     </div>
                     <div className="px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full">
                         <span className="font-semibold capitalize">{membership.membershipTier}</span>

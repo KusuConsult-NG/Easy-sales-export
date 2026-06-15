@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { NIGERIAN_LOCATIONS, STATES } from "@/lib/locations";
+import { NIGERIAN_LOCATIONS, STATES, getWards } from "@/lib/locations";
 import { useToast } from "@/contexts/ToastContext";
 import { FormInput, FormSelect, FormField } from "@/components/ui/FormField";
 
@@ -17,6 +17,7 @@ interface PersonalInfoData {
     address: {
         state: string;
         lga: string;
+        ward: string;
         street: string;
     };
 }
@@ -40,10 +41,11 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
         const email = data?.email || "";
         const gender = data?.gender || "";
         const occupation = data?.occupation || "";
-        const address = data?.address || { state: "", lga: "", street: "" };
+        const address = data?.address || { state: "", lga: "", ward: "", street: "" };
         const street = address.street || "";
         const state = address.state || "";
         const lga = address.lga || "";
+        const ward = address.ward || "";
 
         if (!firstName.trim()) newErrors.firstName = "First name is required";
         else if (firstName.trim().length < 2) newErrors.firstName = "First name must be at least 2 characters";
@@ -56,6 +58,7 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
         else if (occupation.trim().length < 2) newErrors.occupation = "Occupation must be at least 2 characters";
         if (!state) newErrors.state = "State is required";
         if (!lga) newErrors.lga = "LGA is required";
+        if (!ward) newErrors.ward = "Ward is required";
         if (!street.trim()) newErrors.street = "Street address is required";
 
         setErrors(newErrors);
@@ -182,14 +185,14 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                     />
                 </div>
 
-                {/* State + LGA */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* State + LGA + Ward */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormSelect
                         label="State"
                        
                         required
                         value={data?.address?.state || ""}
-                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), state: e.target.value, lga: "" } as any })}
+                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), state: e.target.value, lga: "", ward: "" } as any })}
                         error={errors.state}
                     >
                         <option value="">Select state</option>
@@ -200,13 +203,27 @@ export default function PersonalInfoStep({ data, onChange, onNext, onBack }: Per
                        
                         required
                         value={data?.address?.lga || ""}
-                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), lga: e.target.value } as any })}
+                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), lga: e.target.value, ward: "" } as any })}
                         disabled={!data?.address?.state}
                         error={errors.lga}
                     >
                         <option value="">Select LGA</option>
                         {data?.address?.state && NIGERIAN_LOCATIONS[data.address.state]?.map((lga) => (
                             <option key={lga} value={lga}>{lga}</option>
+                        ))}
+                    </FormSelect>
+                    <FormSelect
+                        label="Ward"
+                       
+                        required
+                        value={data?.address?.ward || ""}
+                        onChange={(e) => onChange({ ...data, address: { ...(data?.address || {}), ward: e.target.value } as any })}
+                        disabled={!data?.address?.lga}
+                        error={errors.ward}
+                    >
+                        <option value="">Select Ward</option>
+                        {data?.address?.lga && getWards(data.address.lga).map((ward) => (
+                            <option key={ward} value={ward}>{ward}</option>
                         ))}
                     </FormSelect>
                 </div>

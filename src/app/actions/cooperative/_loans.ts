@@ -27,6 +27,13 @@ export interface LoanApplication {
     totalRepayment: number;
     monthlyPayment: number;
     documents?: string[];
+    guarantorName?: string;
+    guarantorPhone?: string;
+    guarantorEmail?: string;
+    guarantorRelationship?: string;
+    guarantorVerified?: boolean;
+    guarantorVerifiedAt?: FieldValue | Timestamp;
+    guarantorVerifiedBy?: string;
     appliedAt: FieldValue | Timestamp;
     reviewedAt?: FieldValue | Timestamp;
     reviewedBy?: string;
@@ -46,11 +53,18 @@ export async function submitLoanApplicationAction(formData: {
     durationMonths: number;
     contributionAmount: number;
     tier: "Member";
+    guarantorName: string;
+    guarantorPhone: string;
+    guarantorEmail?: string;
+    guarantorRelationship?: string;
 }): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
 > {
     try {
+        if (!formData.guarantorName?.trim() || !formData.guarantorPhone?.trim()) {
+            return { success: false as const, error: "Guarantor name and phone number are required", data: null };
+        }
         const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null as any };
     const { session } = sessionResult;
@@ -129,6 +143,11 @@ export async function submitLoanApplicationAction(formData: {
             interestRate,
             totalRepayment,
             monthlyPayment,
+            guarantorName: formData.guarantorName.trim(),
+            guarantorPhone: formData.guarantorPhone.trim(),
+            guarantorEmail: formData.guarantorEmail?.trim() || "",
+            guarantorRelationship: formData.guarantorRelationship || "",
+            guarantorVerified: false,
             appliedAt: FieldValue.serverTimestamp(),
         };
 
@@ -545,6 +564,10 @@ export async function approveLoanAction(
             }
 
             const appData = appDoc.data() as LoanApplication;
+
+            if (!appData.guarantorVerified) {
+                throw new Error("Guarantor verification required before loan approval.");
+            }
 
             if (appData.status !== "pending" && appData.status !== "partially_approved") {
                 throw new Error("Application is not pending or partially approved");

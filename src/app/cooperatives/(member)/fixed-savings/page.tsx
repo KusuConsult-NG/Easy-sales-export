@@ -37,7 +37,7 @@ export default function FixedSavingsPage() {
     // Calculator state
     const [amount, setAmount] = useState(50000);
     const [duration, setDuration] = useState(12);
-    const [interestRate] = useState(10); // 10% annual interest for fixed savings
+    const [interestRate] = useState(14); // 14% annual interest for fixed savings
 
     useEffect(() => {
         checkMembership();
@@ -151,7 +151,7 @@ export default function FixedSavingsPage() {
 
                     <OnboardingGuide
                         title="Fixed Savings Plans"
-                        description="Lock your savings for 1-12 months and earn guaranteed 10% annual returns. To access this feature, you must first become an approved cooperative member."
+                        description="Lock your savings for 1-12 months and earn guaranteed 14% annual returns. To access this feature, you must first become an approved cooperative member."
                         icon={<TrendingUp className="w-8 h-8 text-white" />}
                         steps={[
                             {

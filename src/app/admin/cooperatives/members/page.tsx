@@ -35,6 +35,7 @@ type MembershipApplication = {
     gender?: "male" | "female" | "";
     stateOfOrigin?: string;
     lga?: string;
+    ward?: string;
     residentialAddress?: string;
     occupation?: string;
     nextOfKin?: {
@@ -250,6 +251,7 @@ export default function CooperativeMembersPage() {
             email: selectedApplication.data.email || "",
             stateOfOrigin: selectedApplication.data.stateOfOrigin || "",
             lga: selectedApplication.data.lga || "",
+            ward: selectedApplication.data.ward || "",
             residentialAddress: selectedApplication.data.residentialAddress || "",
             occupation: selectedApplication.data.occupation || "",
             "nextOfKin.name": selectedApplication.data.nextOfKin?.name || "",
@@ -283,6 +285,7 @@ export default function CooperativeMembersPage() {
                     email: editFields.email ?? prev.data.email,
                     stateOfOrigin: editFields.stateOfOrigin ?? prev.data.stateOfOrigin,
                     lga: editFields.lga ?? prev.data.lga,
+                    ward: editFields.ward ?? prev.data.ward,
                     residentialAddress: editFields.residentialAddress ?? prev.data.residentialAddress,
                     occupation: editFields.occupation ?? prev.data.occupation,
                     nextOfKin: {
@@ -350,7 +353,7 @@ export default function CooperativeMembersPage() {
                             type="text"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Search by name, email, or phone..."
+                            placeholder="Search by name, email, phone, or member ID..."
                             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                         />
                     </div>
@@ -559,8 +562,11 @@ export default function CooperativeMembersPage() {
                                 <div key={app.id} className="p-4 space-y-3">
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
-                                            <p className="font-semibold text-slate-900 text-sm">
+                                            <p className="font-semibold text-slate-900 text-sm flex items-center gap-2">
                                                 {app.user.name || <span className="text-amber-600 italic text-xs">Incomplete</span>}
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                                    {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
+                                                </span>
                                             </p>
                                             <p className="text-xs text-slate-500 mt-0.5">{app.user.email || "—"}</p>
                                         </div>
@@ -628,7 +634,12 @@ export default function CooperativeMembersPage() {
                                                         <Users className="w-5 h-5 text-slate-400" />
                                                     </div>
                                                     <div>
-                                                        <div className="text-sm font-semibold text-slate-900">{app.user.name}</div>
+                                                        <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                                                            {app.user.name}
+                                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                                                {`ESE-COOP-${app.id.slice(-4).toUpperCase()}`}
+                                                            </span>
+                                                        </div>
                                                         <div className="text-sm text-slate-500">{app.user.email}</div>
                                                     </div>
                                                 </div>
@@ -832,6 +843,10 @@ export default function CooperativeMembersPage() {
                                             <p className="font-semibold text-slate-900">{selectedApplication.data.phone || "—"}</p>
                                         </div>
                                         <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Member Number</p>
+                                            <p className="font-semibold text-slate-900">{`ESE-COOP-${selectedApplication.id.slice(-4).toUpperCase()}`}</p>
+                                        </div>
+                                        <div>
                                             <p className="text-xs text-slate-400 mb-0.5">Date of Birth</p>
                                             <p className="font-semibold text-slate-900">{selectedApplication.data.dateOfBirth || "—"}</p>
                                         </div>
@@ -850,6 +865,10 @@ export default function CooperativeMembersPage() {
                                         <div>
                                             <p className="text-xs text-slate-400 mb-0.5">LGA</p>
                                             <p className="font-semibold text-slate-900">{selectedApplication.data.lga || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400 mb-0.5">Ward</p>
+                                            <p className="font-semibold text-slate-900">{selectedApplication.data.ward || "—"}</p>
                                         </div>
                                         <div className="col-span-2">
                                             <p className="text-xs text-slate-400 mb-0.5">Residential Address</p>
@@ -893,6 +912,7 @@ export default function CooperativeMembersPage() {
                                         { key: "dateOfBirth", label: "Date of Birth" },
                                         { key: "stateOfOrigin", label: "State of Origin" },
                                         { key: "lga", label: "LGA" },
+                                        { key: "ward", label: "Ward" },
                                         { key: "occupation", label: "Occupation" },
                                         { key: "residentialAddress", label: "Residential Address" },
                                         { key: "nextOfKin.name", label: "Next of Kin Name" },
@@ -989,6 +1009,8 @@ export default function CooperativeMembersPage() {
                     onClose={() => setIsRawDetailOpen(false)}
                     data={selectedApplication.data}
                     title={`Raw Details: ${selectedApplication.user.name}`}
+                    collectionName="cooperative_onboarding_applications"
+                    onVerified={() => loadApplications()}
                 />
             )}
         </div>

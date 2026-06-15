@@ -574,6 +574,8 @@ export default function AdminWaveApplicationsPage() {
                     onClose={() => { setIsDetailModalOpen(false); setDetailApp(null); }}
                     title={`Application Detail: ${detailApp.surname || ''} ${detailApp.firstName || ''}`}
                     data={detailApp}
+                    collectionName="wave_applications"
+                    onVerified={() => fetchData()}
                 />
             )}
         </div>

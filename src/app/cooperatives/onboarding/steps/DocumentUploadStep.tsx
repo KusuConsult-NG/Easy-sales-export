@@ -119,16 +119,35 @@ export default function DocumentUploadStep({ data, onChange, onNext, onBack }: D
                 />
 
                 {/* Passport Photo */}
-                <MasterUploader 
-                    label="Passport Photo"
-                    folder="cooperative/documents"
-                    moduleId="cooperative"
-                    required
-                    accept="image/*"
-                    maxSize={5}
-                    onComplete={(res) => onChange({ ...data, passportPhoto: { name: "Passport Photo", url: res.url } })}
-                    description="Recent passport-sized photograph"
-                />
+                <div className="flex flex-col md:flex-row gap-6 items-start">
+                    <div className="flex-1 w-full">
+                        <MasterUploader 
+                            label="Passport Photo"
+                            folder="cooperative/documents"
+                            moduleId="cooperative"
+                            required
+                            accept="image/*"
+                            maxSize={5}
+                            onComplete={(res) => onChange({ ...data, passportPhoto: { name: "Passport Photo", url: res.url } })}
+                            description="Recent passport-sized photograph"
+                        />
+                    </div>
+                    {data.passportPhoto?.url && (
+                        <div className="w-full md:w-36 flex flex-col items-center md:items-start shrink-0">
+                            <label className="block text-sm font-bold text-slate-900 mb-2 invisible md:visible h-5 md:h-auto">
+                                Photo Preview
+                            </label>
+                            <div className="relative w-32 h-32 rounded-2xl border border-slate-200 overflow-hidden bg-slate-50 shadow-md flex items-center justify-center">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                    src={data.passportPhoto.url}
+                                    alt="Passport Preview"
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 {/* Proof of Address (Optional) */}
                 <MasterUploader 

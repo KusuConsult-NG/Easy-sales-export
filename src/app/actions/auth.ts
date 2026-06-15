@@ -398,18 +398,24 @@ export async function registerAction(prevState: any, formData: FormData) { const
 
         // CRITICAL: Check the host header to see if the user registered on a specific module domain.
         // If they did, redirect them directly to that module's onboarding instead of the hub selector.
+        const callbackUrl = formData.get("callbackUrl") as string;
         let redirectUrl = "/auth/get-started";
-        try { const { headers } = await import("next/headers");
-            const headersList = await headers();
-            const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
-            const normalizedHost = host.replace(/^www\./, "");
-            if (normalizedHost.includes("easysalesexportacademy.com")) redirectUrl = "/academy/setup";
-            else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
-            else if (normalizedHost.includes("marketplace.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
-            else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
-            else if (normalizedHost.includes("easysalescooperative.com")) redirectUrl = "/cooperatives/onboarding";
-            else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";
-        } catch (e) { logger.warn("Could not determine host for post-registration redirect:", { error: e instanceof Error ? e.message : String(e) });
+        
+        if (callbackUrl && callbackUrl !== "/dashboard" && callbackUrl.startsWith("/")) {
+            redirectUrl = callbackUrl;
+        } else {
+            try { const { headers } = await import("next/headers");
+                const headersList = await headers();
+                const host = headersList.get("x-forwarded-host") || headersList.get("host") || "";
+                const normalizedHost = host.replace(/^www\./, "");
+                if (normalizedHost.includes("easysalesexportacademy.com")) redirectUrl = "/academy/setup";
+                else if (normalizedHost.includes("farmnation.ng")) redirectUrl = "/farm-nation/onboarding";
+                else if (normalizedHost.includes("marketplace.easysalesexport.com")) redirectUrl = "/marketplace/onboarding";
+                else if (normalizedHost.includes("waveprogramme.com")) redirectUrl = "/wave/application";
+                else if (normalizedHost.includes("easysalescooperative.com")) redirectUrl = "/cooperatives/onboarding";
+                else if (normalizedHost.includes("easysalesexportng.com")) redirectUrl = "/export/onboarding";
+            } catch (e) { logger.warn("Could not determine host for post-registration redirect:", { error: e instanceof Error ? e.message : String(e) });
+            }
         }
 
         // REGISTRATION ONLY - AUTHENTICATION IS HANDLED ON CLIENT

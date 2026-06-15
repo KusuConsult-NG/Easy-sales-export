@@ -112,7 +112,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             const requiresPayment = mod.id === 'academy' || mod.id === 'cooperatives';
             status = (!requiresPayment || paymentStatus === 'completed' || registrationStatus === 'active') ? 'approved' : 'payment_required';
         }
-        else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review' || registrationStatus === 'paid' || registrationStatus === 'pending_approval') {
+        else if (registrationStatus === 'pending' || registrationStatus === 'under_review' || registrationStatus === 'pending_review' || registrationStatus === 'paid' || registrationStatus === 'pending_approval' || registrationStatus === 'legacy_pending_onboarding') {
             status = 'pending';
         }
 

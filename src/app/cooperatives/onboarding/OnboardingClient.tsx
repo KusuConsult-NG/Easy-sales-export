@@ -62,6 +62,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         address: {
             state: "",
             lga: "",
+            ward: "",
             street: ""
         }
     });
@@ -167,6 +168,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                                 address: {
                                     state: d.stateOfOrigin || prev.address?.state || "",
                                     lga: d.lga || prev.address?.lga || "",
+                                    ward: d.ward || prev.address?.ward || "",
                                     street: d.residentialAddress || prev.address?.street || ""
                                 }
                             }));
@@ -202,6 +204,55 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     return;
                 }
             }
+            if (coopStatus === "payment_required") {
+                const result = await getCooperativeApplicationAction();
+                if (result.success && result.data?.application) {
+                    const d = result.data.application;
+                    if (d.firstName || d.fullName) {
+                        setPersonalInfo((prev: any) => ({
+                            ...prev,
+                            firstName: d.firstName || (d.fullName ? d.fullName.split(' ')[0] : '') || prev.firstName,
+                            lastName: d.lastName || (d.fullName ? d.fullName.split(' ').slice(1).join(' ') : '') || prev.lastName,
+                            fullName: d.fullName || `${d.firstName || ''} ${d.lastName || ''}`.trim(),
+                            phone: d.phone || prev.phone,
+                            email: d.email || prev.email,
+                            dateOfBirth: d.dateOfBirth || prev.dateOfBirth,
+                            gender: d.gender || prev.gender,
+                            occupation: d.occupation || prev.occupation,
+                            address: {
+                                state: d.stateOfOrigin || prev.address?.state || "",
+                                lga: d.lga || prev.address?.lga || "",
+                                ward: d.ward || prev.address?.ward || "",
+                                street: d.residentialAddress || prev.address?.street || ""
+                            }
+                        }));
+                    }
+                    if (d.nextOfKinName) {
+                        setNextOfKin((prev: any) => ({
+                            ...prev,
+                            fullName: d.nextOfKinName || prev.fullName,
+                            phone: d.nextOfKinPhone || prev.phone,
+                            address: d.nextOfKinAddress || prev.address,
+                        }));
+                    }
+                    if (d._version !== undefined) {
+                        setVersion(d._version);
+                    }
+                    if (d.documents || d.bvn || d.nin) {
+                        setDocuments((prev: any) => ({
+                            ...prev,
+                            validId: d.documents?.validId || prev.validId,
+                            passportPhoto: d.documents?.passportPhoto || prev.passportPhoto,
+                            proofOfAddress: d.documents?.proofOfAddress || prev.proofOfAddress,
+                            bvn: d.bvn || prev.bvn,
+                            nin: d.nin || prev.nin
+                        }));
+                    }
+                }
+                setCurrentStep(4);
+                setIsCheckingStatus(false);
+                return;
+            }
             // LOOP FIX: "pending_review" means form was already submitted and is awaiting
             // admin approval. Redirect to the waiting page immediately — do NOT show the
             // blank form again, which caused users to get stuck in an infinite submit loop.
@@ -228,6 +279,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             address: {
                                 state: d.stateOfOrigin || prev.address?.state || "",
                                 lga: d.lga || prev.address?.lga || "",
+                                ward: d.ward || prev.address?.ward || "",
                                 street: d.residentialAddress || prev.address?.street || ""
                             }
                         }));
@@ -289,6 +341,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         address: {
                             state: parsed.address?.state || prev.address?.state || "",
                             lga: parsed.address?.lga || prev.address?.lga || "",
+                            ward: parsed.address?.ward || prev.address?.ward || "",
                             street: parsed.address?.street || prev.address?.street || ""
                         }
                     }));
@@ -353,34 +406,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
         { number: 3, name: "Documents" },
         { number: 4, name: isLegacyImport ? "Review & Submit" : "Payment" },
     ];
-
-    async function handlePayNow() {
-        setIsPaymentLoading(true);
-        try {
-            const result = await initiateCooperativePaymentAction("Member");
-            if (result.success && result.data?.redirectTo) {
-                // Already paid — refresh the page so paymentStatus prop is re-read
-                showToast("Payment already confirmed. Loading your application...", "info");
-                window.location.reload();
-                return;
-            }
-            if (result.success && result.data?.paymentUrl) {
-                window.location.href = result.data.paymentUrl;
-            } else {
-                showToast(result.error || "Failed to initiate payment", "error");
-                setIsPaymentLoading(false);
-            }
-        } catch (error) {
-            showToast("An unexpected error occurred", "error");
-            setIsPaymentLoading(false);
-        }
-    };
-
-    async function handleComplete() {
-        // ── Pre-submission validation guard ───────────────────────────────────
-        // Runs BEFORE the server action so users on Step 4 (who skipped Steps 1–3
-        // after a Paystack redirect with empty localStorage) get a clear error
-        // and are taken back to the correct step to fix it.
+    async function saveApplicationData() {
         const missingPersonal =
             !personalInfo.firstName.trim() || personalInfo.firstName.trim().length < 2 ||
             !personalInfo.lastName.trim() || personalInfo.lastName.trim().length < 2 ||
@@ -389,6 +415,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             !personalInfo.gender ||
             !personalInfo.occupation.trim() ||
             !personalInfo.address.state ||
+            !personalInfo.address.ward ||
             !personalInfo.address.street.trim();
 
         const missingNok =
@@ -403,103 +430,142 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             !documents.nin || !/^\d{11}$/.test(documents.nin);
 
         if (missingPersonal) {
-            showToast("Please complete your personal information before submitting.", "error");
+            showToast("Please complete your personal information before proceeding.", "error");
             setCurrentStep(1);
             window.scrollTo({ top: 0, behavior: "smooth" });
-            return;
+            return { success: false, error: null };
         }
         if (missingNok) {
-            showToast("Please complete the Next of Kin information before submitting.", "error");
+            showToast("Please complete the Next of Kin information before proceeding.", "error");
             setCurrentStep(2);
             window.scrollTo({ top: 0, behavior: "smooth" });
-            return;
+            return { success: false, error: null };
         }
         if (missingDocs) {
-            showToast("Please complete your document uploads and verify your BVN/NIN before submitting.", "error");
+            showToast("Please complete your document uploads and verify your BVN/NIN before proceeding.", "error");
             setCurrentStep(3);
             window.scrollTo({ top: 0, behavior: "smooth" });
-            return;
+            return { success: false, error: null };
         }
-        // ─────────────────────────────────────────────────────────────────────
 
-        setIsSubmitting(true);
+        const formData = new FormData();
+        formData.append("membershipTier", tier);
+        if (validInviteToken) {
+             formData.append("inviteToken", validInviteToken);
+        }
+        formData.append("firstName", personalInfo.firstName.trim());
+        formData.append("lastName", personalInfo.lastName.trim());
+        if (personalInfo.otherName?.trim()) formData.append("otherName", personalInfo.otherName.trim());
+        formData.append("fullName", [personalInfo.firstName, personalInfo.otherName, personalInfo.lastName]
+            .filter(Boolean).map(s => s?.trim()).join(" ").trim());
+        formData.append("dateOfBirth", personalInfo.dateOfBirth);
+        formData.append("gender", personalInfo.gender);
+        formData.append("email", personalInfo.email);
+        formData.append("phone", personalInfo.phone);
+        formData.append("occupation", personalInfo.occupation);
+        formData.append("stateOfOrigin", personalInfo.address.state);
+        formData.append("lga", personalInfo.address.lga || "N/A");
+        formData.append("ward", personalInfo.address.ward || "");
+        formData.append("residentialAddress", personalInfo.address.street);
+        formData.append("nextOfKinName", nextOfKin.fullName);
+        formData.append("nextOfKinPhone", nextOfKin.phone);
+        formData.append("nextOfKinAddress", nextOfKin.address);
+
+        if (documents.validId?.url) {
+            formData.append("validIdUrl", documents.validId.url);
+            formData.append("validIdName", documents.validId.name);
+        }
+        if (documents.passportPhoto?.url) {
+            formData.append("passportPhotoUrl", documents.passportPhoto.url);
+            formData.append("passportPhotoName", documents.passportPhoto.name);
+        }
+        if (documents.proofOfAddress?.url) {
+            formData.append("proofOfAddressUrl", documents.proofOfAddress.url);
+            formData.append("proofOfAddressName", documents.proofOfAddress.name);
+        }
+        if (documents.bvn) {
+            formData.append("bvn", documents.bvn);
+        }
+        if (documents.nin) {
+            formData.append("nin", documents.nin);
+        }
+        if (version !== undefined) {
+            formData.append("_version", version.toString());
+        }
+
+        const result = (isRevisionMode || isEditMode)
+            ? await resubmitCooperativeApplicationAction(formData)
+            : await registerCooperativeMemberAction(formData);
+
+        return result;
+    }
+
+    async function handlePayNow() {
+        setIsPaymentLoading(true);
         try {
-            const formData = new FormData();
-
-            formData.append("membershipTier", tier);
-            
-            if (validInviteToken) {
-                 formData.append("inviteToken", validInviteToken);
+            // Save form details first
+            const saveResult = await saveApplicationData();
+            if (!saveResult.success) {
+                setIsPaymentLoading(false);
+                if (saveResult.error) {
+                    showToast(saveResult.error, "error");
+                }
+                return;
             }
 
-            formData.append("firstName", personalInfo.firstName.trim());
-            formData.append("lastName", personalInfo.lastName.trim());
-            if (personalInfo.otherName?.trim()) formData.append("otherName", personalInfo.otherName.trim());
-            formData.append("fullName", [personalInfo.firstName, personalInfo.otherName, personalInfo.lastName]
-                .filter(Boolean).map(s => s?.trim()).join(" ").trim());
-            formData.append("dateOfBirth", personalInfo.dateOfBirth);
-            formData.append("gender", personalInfo.gender);
-            formData.append("email", personalInfo.email);
-            formData.append("phone", personalInfo.phone);
-            formData.append("occupation", personalInfo.occupation);
-            formData.append("stateOfOrigin", personalInfo.address.state);
-            formData.append("lga", personalInfo.address.lga || "N/A");
-            formData.append("residentialAddress", personalInfo.address.street);
-            formData.append("nextOfKinName", nextOfKin.fullName);
-            formData.append("nextOfKinPhone", nextOfKin.phone);
-            formData.append("nextOfKinAddress", nextOfKin.address);
-
-            if (documents.validId?.url) {
-                formData.append("validIdUrl", documents.validId.url);
-                formData.append("validIdName", documents.validId.name);
-            }
-            if (documents.passportPhoto?.url) {
-                formData.append("passportPhotoUrl", documents.passportPhoto.url);
-                formData.append("passportPhotoName", documents.passportPhoto.name);
-            }
-            if (documents.proofOfAddress?.url) {
-                formData.append("proofOfAddressUrl", documents.proofOfAddress.url);
-                formData.append("proofOfAddressName", documents.proofOfAddress.name);
-            }
-            if (documents.bvn) {
-                formData.append("bvn", documents.bvn);
-            }
-            if (documents.nin) {
-                formData.append("nin", documents.nin);
-            }
-            if (version !== undefined) {
-                formData.append("_version", version.toString());
-            }
-
-            // Route to correct action based on mode
-            const result = (isRevisionMode || isEditMode)
-                ? await resubmitCooperativeApplicationAction(formData)
-                : await registerCooperativeMemberAction(formData);
-
-            if (result.success) {
-                // Clear user-scoped local storage upon successful submission
+            // Initiate payment
+            const result = await initiateCooperativePaymentAction("Member");
+            if (result.success && result.data?.redirectTo) {
+                // Already paid — since we saved form data first, they are now fully pending review
+                showToast("Payment confirmed and application submitted!", "success");
                 if (userId) {
                     ['personal', 'nok', 'docs'].forEach(s => {
                         try { localStorage.removeItem(`coop_onboarding_${userId}_${s}`); } catch { /* non-blocking */ }
                     });
                 }
+                const isDed = typeof window !== 'undefined' &&
+                    !window.location.hostname.includes('easysalesexport.com') &&
+                    !window.location.hostname.includes('localhost') &&
+                    !window.location.hostname.includes('railway.app');
+                router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
+                return;
+            }
+            if (result.success && result.data?.paymentUrl) {
+                window.location.href = result.data.paymentUrl;
+            } else {
+                showToast(result.error || "Failed to initiate payment", "error");
+                setIsPaymentLoading(false);
+            }
+        } catch (error) {
+            showToast("An unexpected error occurred", "error");
+            setIsPaymentLoading(false);
+        }
+    }
 
+    async function handleComplete() {
+        setIsSubmitting(true);
+        try {
+            const result = await saveApplicationData();
+            if (result.success) {
+                if (userId) {
+                    ['personal', 'nok', 'docs'].forEach(s => {
+                        try { localStorage.removeItem(`coop_onboarding_${userId}_${s}`); } catch { /* non-blocking */ }
+                    });
+                }
                 showToast(
                     (isRevisionMode || isEditMode) ? "Application resubmitted for review!" : "Application submitted successfully!",
                     "success"
                 );
-                // STUCK BUTTON FIX: Reset isSubmitting BEFORE navigating so the button
-                // is never permanently disabled. If router.push() is slow or fails,
-                // the user can retry rather than being stuck with a disabled button.
                 setIsSubmitting(false);
-                // Use short path on dedicated domain to avoid double-rewrite
                 const isDed = typeof window !== 'undefined' &&
                     !window.location.hostname.includes('easysalesexport.com') &&
                     !window.location.hostname.includes('localhost') &&
                     !window.location.hostname.includes('railway.app');
                 router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
             } else {
-                showToast(result.error || "Registration failed. Please try again.", "error");
+                if (result.error) {
+                    showToast(result.error, "error");
+                }
                 setIsSubmitting(false);
             }
         } catch (error) {
@@ -507,8 +573,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
             showToast("An unexpected error occurred.", "error");
             setIsSubmitting(false);
         }
-    };
-
+    }
     // Show spinner while checking status to avoid flash of incorrect step
     if (isCheckingStatus) {
         return (

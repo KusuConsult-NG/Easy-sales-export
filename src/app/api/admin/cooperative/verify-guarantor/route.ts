@@ -9,8 +9,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { isAdmin } from "@/lib/admin-permissions";
 
 /**
- * API Route: Approve Loan Application (Admin Only)
- * Uses a Firestore transaction for atomic status + balance update
+ * API Route: Verify Guarantor (Admin Only)
  */
 export async function POST(request: NextRequest) {
     try {
@@ -39,47 +38,38 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // 🔒 Use a transaction for atomic loan approval + balance update
-        await db.runTransaction(async (transaction) => {
-            const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
-            const applicationDoc = await transaction.get(applicationRef);
+        const applicationRef = db.collection(COLLECTIONS.LOAN_APPLICATIONS).doc(applicationId);
+        const applicationDoc = await applicationRef.get();
 
-            if (!applicationDoc.exists) {
-                throw new Error("Application not found");
-            }
+        if (!applicationDoc.exists) {
+            return NextResponse.json(
+                { success: false, message: "Application not found" },
+                { status: 404 }
+            );
+        }
 
-            const appData = applicationDoc.data()!;
+        const appData = applicationDoc.data()!;
 
-            if (appData.status !== "pending") {
-                throw new Error(`Application is already ${appData.status}`);
-            }
+        if (appData.status !== "pending") {
+            return NextResponse.json(
+                { success: false, message: "Application is not pending" },
+                { status: 400 }
+            );
+        }
 
-            if (!appData.guarantorVerified) {
-                throw new Error("Guarantor verification required before loan approval.");
-            }
-
-            // Update application status
-            transaction.update(applicationRef, {
-                status: "approved",
-                approvedAt: FieldValue.serverTimestamp(),
-                approvedBy: session.user.id,
-                updatedAt: FieldValue.serverTimestamp(),
-            });
-
-            // Update member's loan balance
-            const memberRef = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS).doc(appData.userId);
-            transaction.update(memberRef, {
-                loanBalance: FieldValue.increment(appData.amount),
-                updatedAt: FieldValue.serverTimestamp(),
-            });
+        await applicationRef.update({
+            guarantorVerified: true,
+            guarantorVerifiedAt: FieldValue.serverTimestamp(),
+            guarantorVerifiedBy: session.user.id,
+            updatedAt: FieldValue.serverTimestamp(),
         });
 
         return NextResponse.json({
             success: true,
-            message: "Loan application approved successfully"
+            message: "Guarantor verified successfully"
         });
     } catch (error: any) {
-        logger.error("Failed to approve loan:", error);
+        logger.error("Failed to verify guarantor:", error);
 
         if (error instanceof Error) {
             return NextResponse.json(

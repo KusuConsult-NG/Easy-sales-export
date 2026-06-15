@@ -24,13 +24,6 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 async function _submitWithdrawalRequestAction(
     data: WithdrawalRequestData
 ): Promise<ActionResponse> {
-    return {
-        success: false as const,
-        error: "Withdrawals are currently disabled for maintenance. Please try again later.",
-        data: null
-    };
-
-    /*
     let sessionResult;
     try {
         sessionResult = await requireSession();
@@ -114,7 +107,6 @@ async function _submitWithdrawalRequestAction(
         return {
             error: null,
             success: true as const,
-            message: `Withdrawal request for ₦${validatedData.amount.toLocaleString()} submitted successfully`,
             data: { amount: validatedData.amount }
         };
     } catch (error: any) { logger.error('Withdrawal request error:', {
@@ -122,6 +114,6 @@ async function _submitWithdrawalRequestAction(
             error: error instanceof Error ? error.message : String(error)
         });
         return { error: error.message || 'Failed to submit withdrawal request', success: false as const, data: null };
-    */
+    }
 }
 export const submitWithdrawalRequestAction = withFlexibleSafeAction("submitWithdrawalRequestAction", _submitWithdrawalRequestAction);

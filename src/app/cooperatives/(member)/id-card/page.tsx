@@ -6,11 +6,12 @@ import Link from "next/link";
 import Image from "next/image";
 import {
     ArrowLeft, Download, Loader2, Lock, Clock, CreditCard,
-    CheckCircle, IdCard, Shield, Camera, Upload, RefreshCw,
+    CheckCircle, IdCard, Shield, Camera, Upload, RefreshCw, AlertTriangle,
 } from "lucide-react";
-import { getCooperativeMemberIdCardAction, updatePassportPhotoAction, type MemberIdCardData } from "@/app/actions/cooperative";
+import { getCooperativeMemberIdCardAction, updatePassportPhotoAction, updateMemberProfileDetailsAction, type MemberIdCardData } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
 import { COOPERATIVE_CONFIG, CURRENCY_CONFIG } from "@/lib/constants";
+import { NIGERIAN_LOCATIONS } from "@/lib/locations";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -340,15 +341,51 @@ export default function CooperativeIdCardPage() {
     const [downloading, setDownloading] = useState(false);
     const [result, setResult] = useState<Awaited<ReturnType<typeof getCooperativeMemberIdCardAction>> | null>(null);
 
+    const [isEditing, setIsEditing] = useState(false);
+    const [editGender, setEditGender] = useState("");
+    const [editState, setEditState] = useState("");
+    const [saving, setSaving] = useState(false);
+
     const fetchData = () => {
         setLoading(true);
         getCooperativeMemberIdCardAction().then((res) => {
             setResult(res);
+            if (res.success && res.data) {
+                setEditGender(res.data.gender || "");
+                setEditState(res.data.stateOfOrigin || "");
+                if (!res.data.gender || !res.data.stateOfOrigin) {
+                    setIsEditing(true);
+                }
+            }
             setLoading(false);
         });
     };
 
     useEffect(() => { fetchData(); }, []);
+
+    async function handleSaveDetails() {
+        if (!editGender || !editState) {
+            showToast("Please fill in both Gender and State of Origin.", "error");
+            return;
+        }
+
+        setSaving(true);
+        try {
+            const res = await updateMemberProfileDetailsAction(editGender, editState);
+            if (res.success) {
+                showToast("Profile details updated successfully!", "success");
+                setIsEditing(false);
+                fetchData();
+            } else {
+                showToast(res.error || "Failed to update details.", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            showToast("An unexpected error occurred.", "error");
+        } finally {
+            setSaving(false);
+        }
+    }
 
     // Called after a successful passport upload — refresh card data
     function handlePhotoUploaded(_url: string, _name: string) {
@@ -442,6 +479,19 @@ export default function CooperativeIdCardPage() {
                             </div>
                         </div>
 
+                        {/* Missing details banner */}
+                        {(!result.data.gender || !result.data.stateOfOrigin) && (
+                            <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-semibold text-amber-800">Missing ID Card Details</p>
+                                    <p className="text-sm text-amber-700">
+                                        Your ID card is missing key details (Gender, State of Origin). Please select them in the form below and click <strong>Save Details</strong> to complete your ID card.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Passport upload prompt if missing */}
                         {!result.data.passportPhotoUrl && (
                             <PassportUploadWidget onUploaded={handlePhotoUploaded} />
@@ -509,24 +559,118 @@ export default function CooperativeIdCardPage() {
 
                         {/* Member details table */}
                         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                            <h2 className="font-bold text-slate-900 mb-4 text-lg">Member Details</h2>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
-                                {[
-                                    ["Full Name", result.data.fullName],
-                                    ["Member No.", result.data.memberNumber],
-                                    ["Tier", result.data.membershipTier || "Member"],
-                                    ["Gender", result.data.gender || "—"],
-                                    ["State of Origin", result.data.stateOfOrigin],
-                                    ["Issue Date", fmt(result.data.joinedAt)],
-                                    ["Valid Until", fmt(result.data.validUntil)],
-                                    ["Status", "Active ✅"],
-                                ].map(([label, value]) => (
-                                    <div key={label}>
-                                        <p className="text-slate-500 text-xs uppercase tracking-wide">{label}</p>
-                                        <p className="font-semibold text-slate-900 capitalize">{value}</p>
-                                    </div>
-                                ))}
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="font-bold text-slate-900 text-lg">Member Details</h2>
+                                {!isEditing && (
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="text-sm font-semibold text-purple-600 hover:text-purple-800 transition"
+                                    >
+                                        Edit Details
+                                    </button>
+                                )}
                             </div>
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                                <div>
+                                    <p className="text-slate-500 text-xs uppercase tracking-wide">Full Name</p>
+                                    <p className="font-semibold text-slate-900 capitalize">{result.data.fullName}</p>
+                                </div>
+                                <div>
+                                    <p className="text-slate-500 text-xs uppercase tracking-wide">Member No.</p>
+                                    <p className="font-semibold text-slate-900 uppercase">{result.data.memberNumber}</p>
+                                </div>
+                                <div>
+                                    <p className="text-slate-500 text-xs uppercase tracking-wide">Tier</p>
+                                    <p className="font-semibold text-slate-900 capitalize">{result.data.membershipTier || "Member"}</p>
+                                </div>
+
+                                {isEditing ? (
+                                    <>
+                                        <div>
+                                            <label htmlFor="edit-gender" className="text-slate-500 text-xs uppercase tracking-wide block mb-1">Gender *</label>
+                                            <select
+                                                id="edit-gender"
+                                                value={editGender}
+                                                onChange={(e) => setEditGender(e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                            >
+                                                <option value="">Select Gender</option>
+                                                <option value="Male">Male</option>
+                                                <option value="Female">Female</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="edit-state" className="text-slate-500 text-xs uppercase tracking-wide block mb-1">State of Origin *</label>
+                                            <select
+                                                id="edit-state"
+                                                value={editState}
+                                                onChange={(e) => setEditState(e.target.value)}
+                                                className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                                            >
+                                                <option value="">Select State</option>
+                                                {Object.keys(NIGERIAN_LOCATIONS).sort().map((state) => (
+                                                    <option key={state} value={state}>{state}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div>
+                                            <p className="text-slate-500 text-xs uppercase tracking-wide">Gender</p>
+                                            <p className="font-semibold text-slate-900 capitalize">{result.data.gender || "—"}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 text-xs uppercase tracking-wide">State of Origin</p>
+                                            <p className="font-semibold text-slate-900 capitalize">{result.data.stateOfOrigin || "—"}</p>
+                                        </div>
+                                    </>
+                                )}
+
+                                <div>
+                                    <p className="text-slate-500 text-xs uppercase tracking-wide">Issue Date</p>
+                                    <p className="font-semibold text-slate-900">{fmt(result.data.joinedAt)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-slate-500 text-xs uppercase tracking-wide">Valid Until</p>
+                                    <p className="font-semibold text-slate-900">{fmt(result.data.validUntil)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-slate-500 text-xs uppercase tracking-wide">Status</p>
+                                    <p className="font-semibold text-slate-900">Active ✅</p>
+                                </div>
+                            </div>
+
+                            {isEditing && (
+                                <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                                    {(result.data.gender && result.data.stateOfOrigin) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditGender(result.data.gender || "");
+                                                setEditState(result.data.stateOfOrigin || "");
+                                                setIsEditing(false);
+                                            }}
+                                            disabled={saving}
+                                            className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold rounded-xl text-sm transition disabled:opacity-50"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveDetails}
+                                        disabled={saving}
+                                        className="inline-flex items-center gap-1.5 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl text-sm transition disabled:opacity-75 disabled:cursor-not-allowed"
+                                    >
+                                        {saving ? (
+                                            <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                                        ) : (
+                                            "Save Details"
+                                        )}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

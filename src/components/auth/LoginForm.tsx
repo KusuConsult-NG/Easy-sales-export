@@ -363,7 +363,7 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                         <p className="text-slate-600">
                             New to the platform?{" "}
                             <Link
-                                href="/auth/register"
+                                href={"/auth/register" + (callbackUrl !== "/dashboard" ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "")}
                                 className="text-blue-600 font-bold hover:text-blue-700 hover:underline transition-all"
                             >
                                 Create Account

@@ -30,9 +30,14 @@ export default function LoanApplicationWizard({
         amount: 0,
         purpose: "",
         durationMonths: 3,
+        guarantorName: "",
+        guarantorPhone: "",
+        guarantorEmail: "",
+        guarantorRelationship: "",
     });
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [wizardErrors, setWizardErrors] = useState<Record<string, string>>({});
 
     const tierInfo = COOPERATIVE_TIERS[tier];
     const maxLoan = contributionAmount * tierInfo.maxLoanMultiplier;
@@ -41,7 +46,21 @@ export default function LoanApplicationWizard({
         : null;
 
     function handleNext() {
-        if (step < 4) setStep(step + 1);
+        if (step === 3) {
+            const errs: Record<string, string> = {};
+            if (!formData.guarantorName.trim()) {
+                errs.guarantorName = "Guarantor full name is required";
+            }
+            if (!formData.guarantorPhone.trim()) {
+                errs.guarantorPhone = "Guarantor phone number is required";
+            }
+            if (Object.keys(errs).length > 0) {
+                setWizardErrors(errs);
+                return;
+            }
+            setWizardErrors({});
+        }
+        if (step < 5) setStep(step + 1);
     };
 
     function handlePrevious() {
@@ -62,6 +81,10 @@ export default function LoanApplicationWizard({
                 durationMonths: formData.durationMonths,
                 contributionAmount,
                 tier: "Member",
+                guarantorName: formData.guarantorName,
+                guarantorPhone: formData.guarantorPhone,
+                guarantorEmail: formData.guarantorEmail || undefined,
+                guarantorRelationship: formData.guarantorRelationship || undefined,
             });
             if (res.success) {
                 onComplete();
@@ -81,7 +104,7 @@ export default function LoanApplicationWizard({
             <div className="h-2 bg-slate-200">
                 <div
                     className="h-full bg-linear-to-r from-blue-500 to-emerald-500 transition-all duration-300"
-                    style={{ width: `${(step / 4) * 100}%` }}
+                    style={{ width: `${(step / 5) * 100}%` }}
                 />
             </div>
 
@@ -89,12 +112,13 @@ export default function LoanApplicationWizard({
             <div className="px-8 py-6 border-b border-slate-200">
                 <div className="flex items-center justify-between">
                     <div>
-                        <p className="text-sm text-slate-500">Step {step} of 4</p>
+                        <p className="text-sm text-slate-500">Step {step} of 5</p>
                         <h2 className="text-2xl font-bold text-slate-900">
                             {step === 1 && "Loan Amount"}
                             {step === 2 && "Loan Purpose"}
-                            {step === 3 && "Review & Calculate"}
-                            {step === 4 && "Supporting Documents"}
+                            {step === 3 && "Guarantor Details"}
+                            {step === 4 && "Review & Calculate"}
+                            {step === 5 && "Supporting Documents"}
                         </h2>
                     </div>
                     <div className={`px-4 py-2 rounded-lg ${tierInfo.color === "blue" ? "bg-blue-100 text-blue-800" : "bg-emerald-100 text-emerald-800"} font-semibold`}>
@@ -181,8 +205,80 @@ export default function LoanApplicationWizard({
                     </div>
                 )}
 
-                {/* Step 3: Review */}
-                {step === 3 && loanCost && (
+                {/* Step 3: Guarantor Details */}
+                {step === 3 && (
+                    <div className="space-y-6">
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-4">
+                            <p className="text-sm text-slate-600 leading-relaxed">
+                                Please provide details of a guarantor who can verify your identity and financial capability. Easy Sales admins will contact the guarantor before approving the loan.
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Guarantor Full Name <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.guarantorName}
+                                    onChange={(e) => setFormData({ ...formData, guarantorName: e.target.value })}
+                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${wizardErrors.guarantorName ? 'border-red-500' : 'border-slate-300'}`}
+                                    placeholder="Enter guarantor's full name"
+                                />
+                                {wizardErrors.guarantorName && <p className="text-xs text-red-500 mt-1">{wizardErrors.guarantorName}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Guarantor Phone Number <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={formData.guarantorPhone}
+                                    onChange={(e) => setFormData({ ...formData, guarantorPhone: e.target.value })}
+                                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 ${wizardErrors.guarantorPhone ? 'border-red-500' : 'border-slate-300'}`}
+                                    placeholder="e.g. 08012345678"
+                                />
+                                {wizardErrors.guarantorPhone && <p className="text-xs text-red-500 mt-1">{wizardErrors.guarantorPhone}</p>}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Guarantor Email Address (Optional)
+                                </label>
+                                <input
+                                    type="email"
+                                    value={formData.guarantorEmail}
+                                    onChange={(e) => setFormData({ ...formData, guarantorEmail: e.target.value })}
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                    placeholder="guarantor@example.com"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-900 mb-2">
+                                    Relationship to Applicant (Optional)
+                                </label>
+                                <select
+                                    value={formData.guarantorRelationship}
+                                    onChange={(e) => setFormData({ ...formData, guarantorRelationship: e.target.value })}
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="">Select Relationship</option>
+                                    <option value="Employer">Employer</option>
+                                    <option value="Business Partner">Business Partner</option>
+                                    <option value="Colleague">Colleague</option>
+                                    <option value="Family Member">Family Member</option>
+                                    <option value="Spouse">Spouse</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 4: Review */}
+                {step === 4 && loanCost && (
                     <div className="space-y-6">
                         <div className="bg-linear-to-br from-blue-600 to-indigo-600 text-white rounded-lg p-6">
                             <div className="flex items-center space-x-3 mb-4">
@@ -223,15 +319,24 @@ export default function LoanApplicationWizard({
                             </p>
                         </div>
 
-                        <div className="bg-slate-50 rounded-lg p-6">
-                            <h3 className="font-semibold text-slate-900 mb-3">Loan Purpose</h3>
-                            <p className="text-slate-600">{formData.purpose}</p>
+                        <div className="bg-slate-50 rounded-lg p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1">Loan Purpose</h3>
+                                <p className="text-slate-600 text-sm">{formData.purpose}</p>
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-900 mb-1">Guarantor</h3>
+                                <p className="text-slate-600 text-sm">
+                                    <strong>Name:</strong> {formData.guarantorName}<br />
+                                    <strong>Phone:</strong> {formData.guarantorPhone}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* Step 4: Documents */}
-                {step === 4 && (
+                {/* Step 5: Documents */}
+                {step === 5 && (
                     <div className="space-y-6">
                         <div className="text-center">
                             <Upload className="w-16 h-16 text-blue-600 mx-auto mb-4" />
@@ -280,14 +385,14 @@ export default function LoanApplicationWizard({
                 </button>
 
                 <button
-                    onClick={step === 4 ? handleSubmit : handleNext}
+                    onClick={step === 5 ? handleSubmit : handleNext}
                     disabled={submitting || (step === 1 && (formData.amount === 0 || formData.amount > maxLoan))}
                     className="flex items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <span>
-                        {step === 4 ? (submitting ? "Submitting..." : "Submit Application") : "Next"}
+                        {step === 5 ? (submitting ? "Submitting..." : "Submit Application") : "Next"}
                     </span>
-                    {step === 4 ? (
+                    {step === 5 ? (
                         submitting ? (
                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         ) : (

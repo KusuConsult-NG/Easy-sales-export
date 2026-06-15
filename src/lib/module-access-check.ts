@@ -160,8 +160,6 @@ export async function checkModuleAccess(
             //   "paid"      — Cooperatives: payment confirmed, membership activated
             const EXTENDED_VALID_STATUSES: Partial<Record<string, string[]>> = {
                 "farmNation": ["verified"],
-                "cooperative": ["paid"],
-                "cooperatives": ["paid"],
             };
 
             const extendedStatuses = EXTENDED_VALID_STATUSES[regKey] || [];

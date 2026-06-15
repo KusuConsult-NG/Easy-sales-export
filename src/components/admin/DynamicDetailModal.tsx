@@ -1,8 +1,7 @@
-
 "use client";
 
-import React from "react";
-import { X, FileText, User, MapPin, CreditCard, Calendar, Activity, CheckCircle2, AlertCircle, Info } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { X, FileText, User, MapPin, CreditCard, Calendar, Activity, CheckCircle2, AlertCircle, Info, Loader2 } from "lucide-react";
 
 interface DynamicDetailModalProps {
     isOpen: boolean;
@@ -10,6 +9,8 @@ interface DynamicDetailModalProps {
     title: string;
     data: Record<string, any>;
     excludeKeys?: string[];
+    collectionName?: string;
+    onVerified?: (field: "bvn" | "nin", verificationData: any) => void;
 }
 
 const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
@@ -17,14 +18,25 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
     onClose,
     title,
     data,
-    excludeKeys = []
+    excludeKeys = [],
+    collectionName,
+    onVerified
 }) => {
+    const [localData, setLocalData] = useState(data);
+    const [verifyingField, setVerifyingField] = useState<"bvn" | "nin" | null>(null);
+
+    useEffect(() => {
+        setLocalData(data);
+    }, [data]);
+
     if (!isOpen) return null;
 
     const defaultExclude = [
         "id", "userId", "updatedAt", "_version", "applicationDate", 
         "reviewedAt", "reviewedBy", "approvedAt", "approvedBy", 
-        "rejectionReason", "status", "userEmail", "fullName"
+        "rejectionReason", "status", "userEmail", "fullName",
+        "bvnVerified", "bvnStatus", "bvnVerificationDetails",
+        "ninVerified", "ninStatus", "ninVerificationDetails"
     ];
     
     const allExcluded = [...defaultExclude, ...excludeKeys];
@@ -91,6 +103,76 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
         return String(value);
     };
 
+    const getApplicantNames = (d: Record<string, any>) => {
+        let firstName = d.firstName || d.firstname || "";
+        let lastName = d.surname || d.lastName || d.lastname || "";
+        
+        if (!firstName && d.fullName) {
+            const parts = d.fullName.trim().split(/\s+/);
+            if (parts.length > 0) {
+                firstName = parts[0];
+                lastName = parts.slice(1).join(" ");
+            }
+        }
+        return { firstName, lastName };
+    };
+
+    const updateLocalVerification = (field: "bvn" | "nin", isMatch: boolean, details: any) => {
+        setLocalData(prev => ({
+            ...prev,
+            [`${field}Verified`]: isMatch,
+            [`${field}Status`]: isMatch ? "verified" : "failed",
+            [`${field}VerificationDetails`]: details
+        }));
+    };
+
+    const handleLiveVerify = async (field: "bvn" | "nin", value: string) => {
+        if (!collectionName) {
+            alert("Verification not supported for this view (missing collectionName).");
+            return;
+        }
+
+        const { firstName, lastName } = getApplicantNames(localData);
+        if (!firstName || !lastName) {
+            alert("Applicant first name and last name/surname are required to verify with QoreID.");
+            return;
+        }
+
+        setVerifyingField(field);
+        try {
+            const response = await fetch("/api/admin/kyc/verify-qoreid", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    collectionName,
+                    docId: localData.id,
+                    field,
+                    value,
+                    firstName,
+                    lastName
+                })
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                if (result.isMatch) {
+                    updateLocalVerification(field, true, result.details);
+                    if (onVerified) onVerified(field, result.details);
+                    alert(result.message || `${field.toUpperCase()} verified successfully!`);
+                } else {
+                    updateLocalVerification(field, false, result.details);
+                    alert(result.message || `${field.toUpperCase()} name check mismatch.`);
+                }
+            } else {
+                alert(result.message || `Verification failed: ${response.statusText}`);
+            }
+        } catch (error: any) {
+            alert(error.message || "An error occurred during verification.");
+        } finally {
+            setVerifyingField(null);
+        }
+    };
+
     // Grouping logic (Basic heuristic)
     const groups: Record<string, { label: string; icon: any; fields: [string, any][] }> = {
         personal: { label: "Personal Information", icon: User, fields: [] },
@@ -100,7 +182,7 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
         other: { label: "Supplemental Data", icon: Info, fields: [] },
     };
 
-    Object.entries(data).forEach(([key, value]) => {
+    Object.entries(localData).forEach(([key, value]) => {
         if (allExcluded.includes(key)) return;
 
         const k = key.toLowerCase();
@@ -153,16 +235,50 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
-                                    {group.fields.map(([key, value]) => (
-                                        <div key={key} className="space-y-1.5 group">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">
-                                                {formatLabel(key)}
-                                            </label>
-                                            <div className="text-sm font-semibold text-slate-800 break-words leading-relaxed">
-                                                {formatValue(value)}
+                                    {group.fields.map(([key, value]) => {
+                                        const isBvnNin = key === "bvn" || key === "nin";
+                                        const isVerified = localData[`${key}Verified`] === true || localData.kyc?.[`${key}Verified`] === true;
+                                        const status = localData[`${key}Status`] || localData.kyc?.[`${key}Status`] || (isVerified ? "verified" : undefined);
+                                        const displayVal = formatValue(value);
+
+                                        return (
+                                            <div key={key} className="space-y-1.5 group">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-primary transition-colors">
+                                                    {formatLabel(key)}
+                                                </label>
+                                                <div className="text-sm font-semibold text-slate-800 break-words leading-relaxed flex flex-wrap items-center gap-2">
+                                                    <span>{displayVal}</span>
+                                                    {isBvnNin && value && String(value).trim().length > 0 && (
+                                                        <div className="flex items-center gap-1.5 ml-1">
+                                                            {isVerified ? (
+                                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                                                                    <CheckCircle2 className="w-3 h-3 text-green-600" /> Verified
+                                                                </span>
+                                                            ) : status === "failed" ? (
+                                                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                                                                    <AlertCircle className="w-3 h-3 text-red-600" /> Mismatch
+                                                                </span>
+                                                            ) : null}
+
+                                                            {collectionName && (!isVerified || status === "failed") && (
+                                                                <button
+                                                                    onClick={() => handleLiveVerify(key as "bvn" | "nin", String(value))}
+                                                                    disabled={verifyingField !== null}
+                                                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 disabled:opacity-50 text-[10px] font-bold rounded-lg border border-indigo-200 transition-all cursor-pointer"
+                                                                >
+                                                                    {verifyingField === key ? (
+                                                                        <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                                                                    ) : (
+                                                                        "Verify via QoreID"
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </section>
                         )
@@ -172,24 +288,24 @@ const DynamicDetailModal: React.FC<DynamicDetailModalProps> = ({
                     <div className="mt-12 pt-8 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div className="bg-slate-50 p-4 rounded-2xl">
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">ID</p>
-                            <p className="text-xs font-mono font-bold text-slate-600 truncate">{data.id}</p>
+                            <p className="text-xs font-mono font-bold text-slate-600 truncate">{localData.id}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-2xl">
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Status</p>
                             <p className={`text-xs font-bold capitalize ${
-                                data.status === 'approved' ? 'text-emerald-600' : 
-                                data.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
-                            }`}>{data.status || 'Pending'}</p>
+                                localData.status === 'approved' ? 'text-emerald-600' : 
+                                localData.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+                            }`}>{localData.status || 'Pending'}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-2xl">
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Submitted</p>
                             <p className="text-xs font-bold text-slate-600">
-                                {data.createdAt ? formatValue(data.createdAt) : 'Unknown'}
+                                {localData.createdAt ? formatValue(localData.createdAt) : 'Unknown'}
                             </p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-2xl">
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Version</p>
-                            <p className="text-xs font-bold text-slate-600">v{data._version || 1}.0</p>
+                            <p className="text-xs font-bold text-slate-600">v{localData._version || 1}.0</p>
                         </div>
                     </div>
                 </div>

@@ -21,7 +21,7 @@ export const COOPERATIVE_TIERS: Record<CooperativeTier, TierRequirements> = {
         benefits: [
             "Access to cooperative loans",
             "3x contribution loan limit",
-            "Monthly interest rate: 2%",
+            "Monthly interest rate: 0.83% (10% APR)",
             "12-month maximum repayment period",
             "Priority loan processing",
             "Group savings benefits",
@@ -154,7 +154,7 @@ export function calculateLoanCost(
  * Get tier interest rate
  */
 export function getTierInterestRate(tier: CooperativeTier): number {
-    return 2.0;
+    return 10 / 12;
 }
 
 /**

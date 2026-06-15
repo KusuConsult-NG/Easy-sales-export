@@ -77,14 +77,6 @@ export async function getWalletAction(): Promise<ActionResponse<Wallet>> {
 // ---------------------------------------------------------------------------
 
 export async function fundWalletViaPaystackAction(amountNGN: number): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> {
-    // Wallet operations are currently disabled
-    return { 
-        success: false as const, 
-        error: "Wallet deposits are currently disabled for maintenance. Please try again later." , 
-        data: null 
-    };
-
-    /*
     try {
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN) || amountNGN < 100) {
             return { success: false as const, error: "Minimum wallet funding amount is ₦100" , data: null };
@@ -154,7 +146,6 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<Ac
         logger.error("fundWalletViaPaystackAction error:", err);
         return { success: false as const, error: err.message || "Failed to initiate wallet funding", data: null };
     }
-    */
 }
 
 // ---------------------------------------------------------------------------
@@ -339,24 +330,18 @@ export async function withdrawFromWalletAction(
     amountNGN: number,
     bankDetails: { accountNumber: string; bankCode: string; accountName: string; bankName: string }
 ): Promise<ActionResponse<{ withdrawalId: string }>> {
-    // Wallet operations are currently disabled
-    return { 
-        success: false as const, 
-        error: "Wallet withdrawals are currently disabled for maintenance. Please try again later.", 
-        data: null 
-    };
-
-    /*
     try {
 
         if (typeof amountNGN !== 'number' || !Number.isFinite(amountNGN)) {
-            return { success: false as const, error: "Invalid withdrawal amount" };
+            return { success: false as const, error: "Invalid withdrawal amount", data: null };
         }
 
         if (amountNGN < MIN_WITHDRAWAL) {
             return {
                 success: false as const,
-                error: `Minimum withdrawal amount is ₦${MIN_WITHDRAWAL.toLocaleString()}`};
+                error: `Minimum withdrawal amount is ₦${MIN_WITHDRAWAL.toLocaleString()}`,
+                data: null
+            };
         }
 
         const sessionResult = await requireSession();
@@ -428,12 +413,11 @@ export async function withdrawFromWalletAction(
             logger.error("Withdrawal admin notification failed:", notifErr);
         }
 
-        return { error: null, success: true as const, withdrawalId: result.withdrawalId , data: null };
+        return { error: null, success: true as const, data: { withdrawalId: result.withdrawalId } };
     } catch (err: any) {
         logger.error("withdrawFromWalletAction error:", err);
-        return { success: false as const, error: err.message || "Withdrawal request failed" };
+        return { success: false as const, error: err.message || "Withdrawal request failed", data: null };
     }
-    */
 }
 
 // ---------------------------------------------------------------------------
@@ -501,6 +485,20 @@ export async function processWalletWithdrawalAction(
         const txnData = txnSnap.data()!;
         if (txnData.status !== "pending") {
             return { success: false as const, error: "Transaction is no longer pending", data: null };
+        }
+
+        if (action === "approve") {
+            const requestTime = txnData.createdAt;
+            const requestDate = requestTime && typeof (requestTime as any).toDate === "function"
+                ? (requestTime as any).toDate()
+                : (requestTime ? new Date(requestTime) : new Date());
+
+            const durationMs = Date.now() - requestDate.getTime();
+            const durationHours = durationMs / (1000 * 60 * 60);
+
+            if (durationHours < 24) {
+                return { success: false as const, error: `Withdrawals require a 24-hour pending hold. Please wait ${Math.ceil(24 - durationHours)} more hours.`, data: null };
+            }
         }
 
         if (action === "reject") {

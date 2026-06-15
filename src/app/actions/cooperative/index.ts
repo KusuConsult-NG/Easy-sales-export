@@ -39,6 +39,7 @@ export {
     resubmitCooperativeApplicationAction,
     getCooperativeMemberIdCardAction,
     updatePassportPhotoAction,
+    updateMemberProfileDetailsAction,
     validateCooperativeInviteAction,
 } from "./_actions";
 

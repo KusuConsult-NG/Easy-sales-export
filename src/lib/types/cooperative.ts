@@ -41,6 +41,7 @@ export const cooperativeMembershipSchema = z.object({
     phone: strictPhoneSchema,
     stateOfOrigin: z.string().min(1, "State of origin is required"),
     lga: z.string().min(1, "LGA is required"),
+    ward: z.string().min(1, "Ward is required"),
     residentialAddress: z.string().min(10, "Complete address is required"),
     occupation: z.string().min(2, "Occupation is required"),
 
@@ -70,6 +71,7 @@ export type CooperativeMembershipRecord = {
     phone: string;
     stateOfOrigin: string;
     lga: string;
+    ward: string;
     residentialAddress: string;
     occupation: string;
     // Next of kin

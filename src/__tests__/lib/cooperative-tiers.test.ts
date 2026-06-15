@@ -21,9 +21,9 @@ describe('Cooperative Tier System', () => {
     });
 
     describe('getTierInterestRate', () => {
-        it('should return 2.0% monthly rate for Member tier', () => {
+        it('should return 10/12% monthly rate (10% APR) for Member tier', () => {
             const rate = getTierInterestRate('Member');
-            expect(rate).toBe(2.0);
+            expect(rate).toBeCloseTo(10 / 12, 5);
         });
     });
 

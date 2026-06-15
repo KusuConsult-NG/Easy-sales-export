@@ -631,6 +631,8 @@ export default function AdminExportApplicationsPage() {
                     onClose={() => setIsRawDetailOpen(false)}
                     data={selectedApp.data}
                     title={`Raw Details: ${getDisplayName(selectedApp)}`}
+                    collectionName="export_onboarding_applications"
+                    onVerified={() => fetchData()}
                 />
             )}
 

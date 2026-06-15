@@ -34,6 +34,13 @@ type LoanApplication = {
     bankName?: string;
     accountNumber?: string;
     accountName?: string;
+    guarantorName?: string;
+    guarantorPhone?: string;
+    guarantorEmail?: string;
+    guarantorRelationship?: string;
+    guarantorVerified?: boolean;
+    guarantorVerifiedAt?: Date;
+    guarantorVerifiedBy?: string;
 };
 
 type FilterType = "all" | "pending" | "approved" | "rejected";
@@ -141,6 +148,37 @@ export default function AdminLoansPage() {
             setIsProcessing(false);
         }
     };
+
+    async function handleVerifyGuarantor(applicationId: string) {
+        if (!confirm("Confirm that you have verified the guarantor details?")) return;
+
+        setIsProcessing(true);
+        try {
+            const response = await fetch("/api/admin/cooperative/verify-guarantor", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ applicationId }),
+            });
+            const data = await response.json();
+            if (data.success) {
+                showToast("Guarantor verified successfully!", "success");
+                if (selectedApplication && selectedApplication.id === applicationId) {
+                    setSelectedApplication({
+                        ...selectedApplication,
+                        guarantorVerified: true,
+                        guarantorVerifiedAt: new Date()
+                    });
+                }
+                loadApplications();
+            } else {
+                showToast(data.message || "Failed to verify guarantor", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setIsProcessing(false);
+        }
+    }
 
     async function handleDisburse(applicationId: string) {
         if (!confirm("Disburse funds for this loan? This cannot be undone.")) return;
@@ -436,6 +474,39 @@ export default function AdminLoansPage() {
                                 </div>
                             )}
 
+                            {selectedApplication.guarantorName && (
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                    <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+                                        <FileText className="w-4 h-4 text-indigo-600" /> Guarantor Details
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><p className="text-xs text-slate-500">Guarantor Name</p><p className="font-semibold text-sm">{selectedApplication.guarantorName}</p></div>
+                                        <div><p className="text-xs text-slate-500">Guarantor Phone</p><p className="font-semibold text-sm font-mono">{selectedApplication.guarantorPhone}</p></div>
+                                        <div><p className="text-xs text-slate-500">Guarantor Email</p><p className="font-semibold text-sm">{selectedApplication.guarantorEmail || "N/A"}</p></div>
+                                        <div><p className="text-xs text-slate-500">Relationship</p><p className="font-semibold text-sm">{selectedApplication.guarantorRelationship || "N/A"}</p></div>
+                                        <div className="col-span-2">
+                                            <p className="text-xs text-slate-500">Verification Status</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                {selectedApplication.guarantorVerified ? (
+                                                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-100 px-2.5 py-0.5 rounded-full">
+                                                        <CheckCircle className="w-3 h-3" /> Verified
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-yellow-700 bg-yellow-100 px-2.5 py-0.5 rounded-full">
+                                                        <Clock className="w-3 h-3" /> Pending Verification
+                                                    </span>
+                                                )}
+                                                {selectedApplication.guarantorVerifiedAt && (
+                                                    <span className="text-xs text-slate-500">
+                                                        Verified on {formatLocalDate(selectedApplication.guarantorVerifiedAt)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div>
                                 <h3 className="font-bold text-slate-900 mb-2">Purpose</h3>
                                 <p className="text-slate-600">{selectedApplication.purpose}</p>
@@ -457,13 +528,27 @@ export default function AdminLoansPage() {
                         <div className="p-6 border-t border-slate-200 flex gap-4">
                             {selectedApplication.status === "pending" && (
                                 <>
-                                    <button onClick={() => handleApprove(selectedApplication.id)} disabled={isProcessing}
-                                        className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
-                                        <CheckCircle className="w-5 h-5 inline mr-2" />Approve Loan
-                                    </button>
+                                    {!selectedApplication.guarantorVerified && (
+                                        <button onClick={() => handleVerifyGuarantor(selectedApplication.id)} disabled={isProcessing}
+                                            className="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center">
+                                            <CheckCircle className="w-5 h-5 mr-2" />Verify Guarantor
+                                        </button>
+                                    )}
+                                    {selectedApplication.guarantorVerified ? (
+                                        <button onClick={() => handleApprove(selectedApplication.id)} disabled={isProcessing}
+                                            className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center">
+                                            <CheckCircle className="w-5 h-5 mr-2" />Approve Loan
+                                        </button>
+                                    ) : (
+                                        <button disabled
+                                            className="flex-1 px-6 py-3 bg-slate-300 text-slate-500 font-bold rounded-xl cursor-not-allowed flex items-center justify-center"
+                                            title="Verify guarantor before approval">
+                                            Approve Loan (Verify Guarantor First)
+                                        </button>
+                                    )}
                                     <button onClick={() => handleReject(selectedApplication.id)} disabled={isProcessing}
-                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50">
-                                        <XCircle className="w-5 h-5 inline mr-2" />Reject
+                                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center">
+                                        <XCircle className="w-5 h-5 mr-2" />Reject
                                     </button>
                                 </>
                             )}

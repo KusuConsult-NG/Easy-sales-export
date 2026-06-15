@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Calculate interest and maturity
-        const interestRate = 10; // 10% annual interest for fixed savings
+        const interestRate = 14; // 14% annual interest for fixed savings
         const projectedProfit = (amount * interestRate * (durationMonths / 12)) / 100;
 
         // 🔒 SECURITY FIX: Use Admin SDK Transaction for Atomic Balance Deduction & Plan Creation
