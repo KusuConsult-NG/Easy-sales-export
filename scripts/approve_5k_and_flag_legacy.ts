@@ -7,10 +7,10 @@ import * as path from "path";
 
 async function main() {
     console.log("="?.repeat(60));
-    console.log("APPROVING 5K ERROR PAYMENTS & FLAGGING LEGACY MEMBERS");
+    console.log("APPROVING 5K ERROR PAYMENTS & RESTORING LEGACY ADMIN ONBOARDED MEMBERS");
     console.log("="?.repeat(60));
 
-    // 1. Read CSV to map legacy user IDs
+    // 1. Read CSV to map legacy user IDs from ground-truth CSV
     const csvPath = path.join(process.cwd(), "cooperative_member_reconciliation.csv");
     if (!fs.existsSync(csvPath)) {
         console.error("❌ CSV file not found at:", csvPath);
@@ -51,7 +51,6 @@ async function main() {
     paymentsSnap.docs.forEach(doc => {
         const d = doc.data();
         const amt = d.amount || 0;
-        // Paystack stores in kobo/cents sometimes, so 500000 = 5000. Or 5000 directly.
         if (amt === 5000 || amt === 500000) {
             if (d.userId) usersWith5k.add(d.userId);
         }
@@ -62,6 +61,7 @@ async function main() {
     console.log("\nFetching cooperative_members paginated...");
     
     let approved5kCount = 0;
+    let restoredLegacyAdminCount = 0;
     let flaggedLegacyCount = 0;
     let totalChecked = 0;
 
@@ -98,13 +98,19 @@ async function main() {
             const data = doc.data();
             const userId = data.userId || doc.id;
             
-            let shouldApprove = false;
+            let shouldApprove5k = false;
+            let shouldRestoreLegacyAdmin = false;
             
             // Check if they paid 5k in document metadata
             const fee = data.registrationFee || 0;
             const amt = data.amountPaid || 0;
             if (fee === 5000 || amt === 5000 || usersWith5k.has(userId)) {
-                shouldApprove = true;
+                shouldApprove5k = true;
+            }
+
+            // Check if they were onboarded by admin as legacy member
+            if (legacyOnboardedUserIds.has(userId)) {
+                shouldRestoreLegacyAdmin = true;
             }
 
             const isLegacy = legacyUserIds.has(userId) || 
@@ -115,16 +121,26 @@ async function main() {
             const updates: any = {};
             let needsUpdate = false;
 
-            // Apply Approval for 5k users
-            if (shouldApprove && data.membershipStatus !== "active" && data.membershipStatus !== "approved") {
-                console.log(`  Approving 5k user: ${userId} (${data.email || ""})`);
+            // Apply Approval / Restoration
+            const currentStatus = data.membershipStatus || data.status || "";
+            const isCurrentlyActive = (currentStatus === "active" || currentStatus === "approved");
+
+            if ((shouldApprove5k || shouldRestoreLegacyAdmin) && !isCurrentlyActive) {
+                if (shouldApprove5k) {
+                    console.log(`  Approving 5k user: ${userId} (${data.email || ""})`);
+                    updates.approvedBy = "SYSTEM_RECONCILE_5K";
+                    approved5kCount++;
+                } else {
+                    console.log(`  Restoring admin-onboarded legacy member: ${userId} (${data.email || ""})`);
+                    updates.approvedBy = "SYSTEM_RESTORE_LEGACY_ADMIN";
+                    restoredLegacyAdminCount++;
+                }
+
                 updates.membershipStatus = "active";
                 updates.status = "active";
                 updates.registrationFee = 10000; // Enforce standard flat fee display
-                updates.approvedBy = "SYSTEM_RECONCILE_5K";
                 updates.approvedAt = new Date();
                 needsUpdate = true;
-                approved5kCount++;
 
                 // Also update corresponding user document
                 const userRef = db.collection("users").doc(userId);
@@ -170,6 +186,7 @@ async function main() {
     console.log("RECONCILIATION SUMMARY");
     console.log(`- Total cooperative members processed: ${totalChecked}`);
     console.log(`- 5k members approved: ${approved5kCount}`);
+    console.log(`- Legacy admin-onboarded members restored: ${restoredLegacyAdminCount}`);
     console.log(`- Legacy members flagged: ${flaggedLegacyCount}`);
     console.log("="?.repeat(60));
 }
