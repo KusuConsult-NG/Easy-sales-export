@@ -94,8 +94,7 @@ export default function FarmNationOnboardingPage() {
                             setIsEditMode(true);
                             setIsLoading(false);
                         } else {
-                            // Stay on page — do NOT auto-redirect pending users
-                            setIsLoading(false);
+                            router.replace("/farm-nation/onboarding/pending");
                         }
                     } else if (status === "approved" || status === "active") {
                         const hasAccessResult = await checkFarmNationAccessAction();
@@ -271,7 +270,7 @@ export default function FarmNationOnboardingPage() {
                 if (result.success) {
                     showToast(isEditMode ? "Application updated successfully!" : "Application resubmitted for review!", "success");
                     setIsSubmitting(false);
-                    router.push("/farm-nation/onboarding/pending");
+                    router.push("/farm-nation/dashboard");
                 } else {
                     showToast(result.error || "Failed to submit updates", "error");
                     setIsSubmitting(false);
@@ -286,11 +285,7 @@ export default function FarmNationOnboardingPage() {
                 if (userId) { try { localStorage.removeItem(`farmnation_draft_${userId}`); } catch { /* non-blocking */ } }
                 showToast("Onboarding completed successfully!", "success");
                 setIsSubmitting(false);
-                if (finalData.role === "seller" || finalData.role === "both") {
-                    router.push("/farm-nation/list-land");
-                } else {
-                    router.push("/farm-nation/properties");
-                }
+                router.push("/farm-nation/dashboard");
             } else {
                 showToast(result.error || "Failed to complete onboarding", "error");
                 setIsSubmitting(false);

@@ -485,7 +485,7 @@ export default function AcademyApplicationPage() {
             if (response.success) {
                 // Clear draft
                 try { localStorage.removeItem(`academy_draft_${session?.user?.id}`); } catch (e) {}
-                router.push("/academy/application/pending");
+                router.push("/academy/dashboard");
             } else {
                 setErrors({ submit: response.error || "Failed to submit application" });
             }

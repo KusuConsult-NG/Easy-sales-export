@@ -117,8 +117,7 @@ export default function MarketplaceOnboarding() {
                         }
                         setIsEditMode(true);
                     } else {
-                        // Stay on page — do NOT auto-redirect pending users
-                        // No-op: form stays as-is
+                        router.replace("/marketplace/onboarding/pending");
                     }
                 } else if (marketplaceStatus === "approved" || marketplaceStatus === "active") {
                     const hasAccessResult = await checkMarketplaceAccessAction();
@@ -301,7 +300,7 @@ export default function MarketplaceOnboarding() {
                     if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                     toast.success("Resubmitted successfully!");
                     setIsSubmitting(false);
-                    router.push("/marketplace/onboarding/pending");
+                    router.push("/marketplace/dashboard");
                 } else {
                     logger.error("Resubmission failed:", result.error);
                     toast.error(result.error || "Resubmission failed");
@@ -342,11 +341,7 @@ export default function MarketplaceOnboarding() {
                 if (DRAFT_KEY) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* non-blocking */ } }
                 toast.success("Onboarding completed!");
                 setIsSubmitting(false);
-                if (isSeller) {
-                    router.push("/marketplace/onboarding/pending");
-                } else {
-                    router.push("/marketplace/buyer/dashboard");
-                }
+                router.push("/marketplace/dashboard");
             } else {
                 logger.error("Submission failed:", result.error);
                 toast.error(result.error || "Submission failed");

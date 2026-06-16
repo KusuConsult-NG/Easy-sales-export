@@ -289,7 +289,7 @@ export default function ExportOnboardingPage() {
                     // STUCK BUTTON FIX: reset before navigating so button is never
                     // permanently disabled if navigation is slow or fails.
                     setIsSubmitting(false);
-                    router.replace("/export/onboarding/pending");
+                    router.replace("/export/dashboard");
                 } else {
                     showToast(`Failed to resubmit: ${result.error}`, "error");
                     setIsSubmitting(false);
@@ -360,7 +360,7 @@ export default function ExportOnboardingPage() {
                 // STUCK BUTTON FIX: reset before navigating so button is never
                 // permanently disabled if navigation is slow or fails.
                 setIsSubmitting(false);
-                router.replace("/export/onboarding/pending");
+                router.replace("/export/dashboard");
             } else {
                 logger.error("Onboarding submission failed:", result.error);
                 showToast(`Failed to submit: ${result.error}`, "error");
