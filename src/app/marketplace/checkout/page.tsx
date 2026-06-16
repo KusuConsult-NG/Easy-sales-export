@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
@@ -76,6 +77,166 @@ export default function CheckoutPage() {
     const [isCalculatingFee, setIsCalculatingFee] = useState(true);
     const [isClient, setIsClient] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const [mapsLoaded, setMapsLoaded] = useState(false);
+    const [productCoords, setProductCoords] = useState<Record<string, { lat: number; lng: number }>>({});
+    const [destinationCoords, setDestinationCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+    const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+        const R = 6371; // Radius of the Earth in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const d = R * c;
+        return Math.round(d * 10) / 10; // Round to 1 decimal place
+    };
+
+    // Geocode product locations when maps script loads and cart changes
+    useEffect(() => {
+        if (!isClient || !mapsLoaded || !(window as any).google || cart.length === 0) return;
+
+        const geocoder = new (window as any).google.maps.Geocoder();
+        const newCoords = { ...productCoords };
+        let updated = false;
+
+        const geocodePromises = cart.map((item) => {
+            const locKey = `${item.location?.lga || ""}, ${item.location?.state || ""}`.trim();
+            if (!locKey || productCoords[item.id]) return Promise.resolve();
+
+            const addressStr = `${item.location?.lga ? item.location.lga + ", " : ""}${item.location?.state || ""}, Nigeria`;
+            
+            return new Promise<void>((resolve) => {
+                geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                    if (status === "OK" && results && results[0] && results[0].geometry) {
+                        const loc = results[0].geometry.location;
+                        newCoords[item.id] = { lat: loc.lat(), lng: loc.lng() };
+                        updated = true;
+                    } else {
+                        console.error(`Geocoding failed for product ${item.id} (${addressStr}):`, status);
+                    }
+                    resolve();
+                });
+            });
+        });
+
+        Promise.all(geocodePromises).then(() => {
+            if (updated) {
+                setProductCoords(newCoords);
+            }
+        });
+    }, [mapsLoaded, cart, isClient, productCoords]);
+
+    // Initialize Google Places Autocomplete
+    useEffect(() => {
+        if (!mapsLoaded || !(window as any).google) return;
+
+        const inputEl = document.getElementById("delivery-street-input") as HTMLInputElement;
+        if (!inputEl) return;
+
+        const autocomplete = new (window as any).google.maps.places.Autocomplete(inputEl, {
+            componentRestrictions: { country: "ng" },
+            fields: ["address_components", "geometry"],
+        });
+
+        autocomplete.addListener("place_changed", () => {
+            const place = autocomplete.getPlace();
+            if (!place.geometry || !place.geometry.location) {
+                showToast("No geometry details available for the selected place.", "warning");
+                return;
+            }
+
+            const lat = place.geometry.location.lat();
+            const lng = place.geometry.location.lng();
+            setDestinationCoords({ lat, lng });
+            
+            // Extract address components
+            let street = "";
+            let city = "";
+            let state = "";
+            let lga = "";
+
+            const components = place.address_components || [];
+            
+            components.forEach((c: any) => {
+                const types = c.types;
+                if (types.includes("street_number")) {
+                    street = c.long_name + " " + street;
+                } else if (types.includes("route")) {
+                    street = street + c.long_name;
+                } else if (types.includes("locality") || types.includes("sublocality")) {
+                    city = c.long_name;
+                } else if (types.includes("administrative_area_level_1")) {
+                    state = c.long_name.replace(/\s*state$/i, "").trim();
+                } else if (types.includes("administrative_area_level_2")) {
+                    lga = c.long_name;
+                }
+            });
+
+            if (!street) {
+                street = inputEl.value.split(",")[0] || "";
+            }
+
+            setDeliveryAddress({
+                street: street.trim(),
+                city: city || lga || "",
+                state: state,
+                lga: lga,
+            });
+        });
+    }, [mapsLoaded, showToast]);
+
+    // Recalculate distance when destination or product coordinates change
+    useEffect(() => {
+        if (!destinationCoords || cart.length === 0) return;
+
+        let maxDistance = 0;
+        let validCalculations = 0;
+
+        cart.forEach((item) => {
+            const coords = productCoords[item.id];
+            if (coords) {
+                const dist = calculateHaversineDistance(coords.lat, coords.lng, destinationCoords.lat, destinationCoords.lng);
+                if (dist > maxDistance) {
+                    maxDistance = dist;
+                }
+                validCalculations++;
+            }
+        });
+
+        if (validCalculations > 0) {
+            const finalDistance = Math.max(1, Math.round(maxDistance));
+            setDistance(finalDistance);
+        }
+    }, [destinationCoords, productCoords, cart]);
+
+    const handleUseSavedAddress = () => {
+        if (!savedAddress) return;
+        setDeliveryAddress({
+            street: savedAddress.street,
+            city: savedAddress.city,
+            state: savedAddress.state,
+            lga: savedAddress.lga,
+        });
+
+        // Geocode the saved address
+        const fullAddressStr = `${savedAddress.street}, ${savedAddress.city || ""}, ${savedAddress.state}, Nigeria`;
+        if ((window as any).google && mapsLoaded) {
+            const geocoder = new (window as any).google.maps.Geocoder();
+            geocoder.geocode({ address: fullAddressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                if (status === "OK" && results && results[0] && results[0].geometry) {
+                    const loc = results[0].geometry.location;
+                    setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+                } else {
+                    console.error("Geocoding failed for saved address:", status);
+                }
+            });
+        }
+        showToast("Address populated from your profile!", "success");
+    };
 
     useEffect(() => {
         setIsClient(true);
@@ -447,15 +608,7 @@ export default function CheckoutPage() {
                                     {savedAddress && (
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setDeliveryAddress({
-                                                    street: savedAddress.street,
-                                                    city: savedAddress.city,
-                                                    state: savedAddress.state,
-                                                    lga: savedAddress.lga,
-                                                });
-                                                showToast("Address populated from your profile!", "success");
-                                            }}
+                                            onClick={handleUseSavedAddress}
                                             className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-lg border border-primary/20 transition"
                                         >
                                             📋 Use saved profile address
@@ -482,6 +635,7 @@ export default function CheckoutPage() {
                                         </label>
                                         <input
                                             type="text"
+                                            id="delivery-street-input"
                                             value={deliveryAddress.street}
                                             onChange={(e) => setDeliveryAddress({ ...deliveryAddress, street: e.target.value })}
                                             placeholder="e.g. 123 Main Street"
@@ -555,26 +709,25 @@ export default function CheckoutPage() {
                                 </p>
                                 
                                 <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    {/* Distance slider */}
+                                    {/* Calculated Delivery Distance Info Card */}
                                     <div>
                                         <div className="flex justify-between items-center mb-2">
-                                            <label className="text-sm font-semibold text-slate-900">
-                                                Estimated Delivery Distance: <span className="text-primary font-bold">{distance} KM</span>
-                                            </label>
-                                            <span className="text-xs text-slate-600">(10KM included in flat rate)</span>
+                                            <span className="text-sm font-semibold text-slate-900">
+                                                Calculated Delivery Distance
+                                            </span>
+                                            <span className="text-sm font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
+                                                {distance} KM
+                                            </span>
                                         </div>
-                                        <input
-                                            type="range"
-                                            min="1"
-                                            max="100"
-                                            value={distance}
-                                            onChange={(e) => setDistance(Number(e.target.value))}
-                                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                                        />
-                                        <div className="flex justify-between text-xs text-slate-600 mt-1">
-                                            <span>1 KM</span>
-                                            <span>50 KM</span>
-                                            <span>100 KM</span>
+                                        <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-600 shadow-sm">
+                                            <p className="font-semibold text-slate-700 mb-1">
+                                                {distance <= 10 
+                                                    ? "Within base delivery distance (10KM included in flat rate)." 
+                                                    : `Additional ${(distance - 10)} KM calculated automatically based on product and delivery locations.`}
+                                            </p>
+                                            <p>
+                                                This distance is computed using the exact coordinates of the sellers' warehouses and your delivery address.
+                                            </p>
                                         </div>
                                     </div>
 
@@ -697,6 +850,11 @@ export default function CheckoutPage() {
                         </div>
                     </div>
                 </div>
+                <Script
+                    src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}&libraries=places`}
+                    onLoad={() => setMapsLoaded(true)}
+                    strategy="afterInteractive"
+                />
             </div>
         </MarketplaceErrorBoundary>
     );

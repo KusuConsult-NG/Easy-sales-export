@@ -47,10 +47,10 @@ async function _writeNotification(data: {
 
 async function _getAdminUserIds(): Promise<string[]> {
     try {
-        // Query users whose roles array contains 'admin' or 'super_admin'
+        // Query users whose roles array contains 'marketplace_admin' or 'super_admin'
         const [adminSnap, superSnap] = await Promise.all([
             db.collection(COLLECTIONS.USERS)
-                .where("roles", "array-contains", "admin")
+                .where("roles", "array-contains", "marketplace_admin")
                 .select() // fetch only doc IDs — no field data needed
                 .get(),
             db.collection(COLLECTIONS.USERS)

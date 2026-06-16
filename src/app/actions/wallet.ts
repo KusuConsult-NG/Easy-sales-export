@@ -388,11 +388,21 @@ export async function withdrawFromWalletAction(
 
         // Notify admins of the pending withdrawal (Non-blocking post-commit)
         try {
-            const adminSnap = await db.collection(COLLECTIONS.USERS)
-                .where("roles", "array-contains", "admin")
-                .select()
-                .get();
-            const adminIds = adminSnap.docs.map((d) => d.id);
+            const [coopSnap, superSnap] = await Promise.all([
+                db.collection(COLLECTIONS.USERS)
+                    .where("roles", "array-contains", "cooperative_admin")
+                    .select()
+                    .get(),
+                db.collection(COLLECTIONS.USERS)
+                    .where("roles", "array-contains", "super_admin")
+                    .select()
+                    .get(),
+            ]);
+
+            const ids = new Set<string>();
+            coopSnap.docs.forEach((d) => ids.add(d.id));
+            superSnap.docs.forEach((d) => ids.add(d.id));
+            const adminIds = Array.from(ids);
 
             const notifBatch = db.batch();
             adminIds.forEach((adminId) => {
