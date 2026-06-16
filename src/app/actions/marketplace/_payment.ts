@@ -49,7 +49,14 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
         }
 
         const productData = productDoc.data();
-        const dbPrice = productData?.price || 0;
+        
+        // Find correct price from database pricing tiers based on client selectedTier
+        const selectedTierType = item.selectedTier || "retail";
+        const matchedTier = productData?.pricingTiers?.find((t: any) => t.type === selectedTierType);
+        const dbPrice = matchedTier?.price 
+            || productData?.pricingTiers?.[0]?.price 
+            || productData?.price 
+            || 0;
 
         // Force DB price for security
         const effectivePrice = dbPrice;
