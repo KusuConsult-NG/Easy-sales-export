@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
 import { logger } from '@/lib/logger';
-import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2, Wallet, Zap } from "lucide-react";
+import { Package, DollarSign, ShoppingCart, TrendingUp, AlertCircle, Eye, Clock, CheckCircle, Loader2, Wallet, Zap, ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { getSellerAnalyticsAction, getSellerOrdersAction, getSellerProductsAction } from "@/app/actions/marketplace";
 import { getFeatureTogglesAction } from "@/app/actions/health";
@@ -108,13 +108,22 @@ export default function SellerDashboard() {
                 {/* Header */}
                 <div className="bg-white border-b border-slate-200">
                     <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                                Seller Dashboard
-                            </h1>
-                            <p className="text-slate-600">
-                                Manage your products, orders, and track your sales performance
-                            </p>
+                        <div className="flex flex-col gap-2">
+                            <Link
+                                href="/dashboard"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                                Back to Hub
+                            </Link>
+                            <div>
+                                <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                                    Seller Dashboard
+                                </h1>
+                                <p className="text-slate-600">
+                                    Manage your products, orders, and track your sales performance
+                                </p>
+                            </div>
                         </div>
                         <Link
                             href="/marketplace/buyer/dashboard"

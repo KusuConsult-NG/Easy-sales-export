@@ -637,6 +637,7 @@ async function _verifyLandListing(
         const ownerId = listingDoc.exists ? listingDoc.data()?.ownerId : null;
 
         await listingRef.update({
+            status: decision === "approved" ? "verified" : "rejected",
             verificationStatus: decision,
             verified: decision === "approved",
             verifiedBy: session.user.id,

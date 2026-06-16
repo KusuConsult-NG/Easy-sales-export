@@ -182,6 +182,31 @@ export async function notifyPaymentReceived(params: {
             linkText: "View Order",
         }),
     ]);
+
+    // Send external notifications (SMS and Push) to the seller
+    try {
+        const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+        const sellerPhone = sellerDoc.exists ? (sellerDoc.data()?.phone || sellerDoc.data()?.phoneNumber) : null;
+        
+        const smsPromises = [];
+        if (sellerPhone) {
+            const { sendSMS } = await import("@/lib/africastalking");
+            const smsMessage = `EasySales: Escrow is funded with ${formatted} for order #${orderNumber}. Please deliver the products. Log in for details.`;
+            smsPromises.push(sendSMS(sellerPhone, smsMessage));
+        }
+
+        const { sendPushNotification } = await import("@/lib/fcm");
+        const pushPromise = sendPushNotification(
+            sellerId,
+            "Escrow Funded 💰",
+            `Escrow is funded with ${formatted} for order #${orderNumber}. Please deliver the products.`,
+            `/marketplace/seller/orders/${orderId}`
+        );
+
+        await Promise.allSettled([...smsPromises, pushPromise]);
+    } catch (err) {
+        logger.error("[marketplace-notifications] Failed to send external notification to seller:", err);
+    }
 }
 
 /**

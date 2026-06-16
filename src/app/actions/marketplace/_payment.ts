@@ -234,6 +234,32 @@ async function _initializeOrderPaymentAction(
             sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
         });
 
+        // Fetch seller emails
+        const sellerDocs = await Promise.all(
+            uniqueSellers.map(id => db.collection(COLLECTIONS.USERS).doc(id).get())
+        );
+        const sellerEmails: Record<string, string> = {};
+        sellerDocs.forEach((doc, idx) => {
+            if (doc.exists) {
+                sellerEmails[uniqueSellers[idx]] = doc.data()?.email || "";
+            }
+        });
+        
+        // Fetch product descriptions
+        const productIds = Array.from(new Set(validatedItems.map(item => item.productId)));
+        const productDocs = await Promise.all(
+            productIds.map(id => db.collection(COLLECTIONS.PRODUCTS).doc(id).get())
+        );
+        const productDetails: Record<string, { title: string; description: string }> = {};
+        productDocs.forEach((doc, idx) => {
+            if (doc.exists) {
+                productDetails[productIds[idx]] = {
+                    title: doc.data()?.title || "Unnamed Item",
+                    description: doc.data()?.description || ""
+                };
+            }
+        });
+
         for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
             const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
@@ -241,15 +267,28 @@ async function _initializeOrderPaymentAction(
             const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
             const netAmount = grossAmount - platformFee;
 
+            const pNames = validatedItems
+                .filter(item => item.sellerId === sellerId)
+                .map(item => productDetails[item.productId]?.title || item.productTitle || "Unnamed Item");
+            const pDescriptions = validatedItems
+                .filter(item => item.sellerId === sellerId)
+                .map(item => productDetails[item.productId]?.description || "")
+                .filter(Boolean);
+
             await escrowRef.set({ 
                 id: escrowId,
                 orderId: orderId,
                 buyerId: userId,
+                buyerEmail: buyerEmail,
                 sellerId: sellerId,
+                sellerEmail: sellerEmails[sellerId] || "",
                 participants: [userId, sellerId],
+                amount: grossAmount,
                 grossAmount: grossAmount,
                 platformFee: platformFee,
                 netAmount: netAmount,
+                productName: pNames.join(", ") || "Unnamed Item",
+                productDescription: pDescriptions.join("; ") || "",
                 status: "pending",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
@@ -360,6 +399,19 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
         const orderDoc = orderQuery.docs[0];
         const orderData = orderDoc.data();
 
+        // Fetch buyer and seller emails first (outside transaction, to satisfy read-before-write)
+        const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const buyerEmail = buyerDoc.exists ? buyerDoc.data()?.email || "" : (orderData.buyerEmail || "");
+
+        const uniqueSellers = Array.from(new Set(orderData.items?.map((i: any) => i.sellerId) || [])) as string[];
+        const sellerEmails: Record<string, string> = {};
+        await Promise.all(
+            uniqueSellers.map(async (sellerId) => {
+                const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+                sellerEmails[sellerId] = sellerDoc.exists ? sellerDoc.data()?.email || "" : "";
+            })
+        );
+
         await db.runTransaction(async (transaction) => { 
             const items = orderData.items || [];
 
@@ -369,6 +421,13 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
                 const doc = await transaction.get(productRef);
                 productSnapshots.push({ ref: productRef, doc, item });
+            }
+
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(userId);
+            const walletSnap = await transaction.get(walletRef);
+            let currentBalance = 0;
+            if (walletSnap.exists) {
+                currentBalance = walletSnap.data()?.balance || 0;
             }
 
             // 2. Update order status -> escrow_held
@@ -409,7 +468,6 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
 
             // 5. Calculate Financial Split
             const sellerTotals: Record<string, number> = {};
-            const uniqueSellers = Array.from(new Set(items.map((i: any) => i.sellerId))) as string[];
             const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length;
 
             items.forEach((item: any) => { 
@@ -432,15 +490,28 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
 
                 const originalCreatedAt = orderData.createdAt || FieldValue.serverTimestamp();
 
+                const pNames = productSnapshots
+                    .filter(p => p.item.sellerId === sellerId)
+                    .map(p => p.doc.data()?.title || p.item.productTitle || "Unnamed Item");
+                const pDescriptions = productSnapshots
+                    .filter(p => p.item.sellerId === sellerId)
+                    .map(p => p.doc.data()?.description || "")
+                    .filter(Boolean);
+
                 transaction.set(escrowRef, { 
                     id: escrowId,
                     orderId: orderData.orderId,
                     buyerId: userId,
+                    buyerEmail: buyerEmail,
                     sellerId: sellerId,
+                    sellerEmail: sellerEmails[sellerId] || "",
                     participants: [userId, sellerId],
+                    amount: grossAmount,
                     grossAmount: grossAmount,
                     platformFee: platformFee,
                     netAmount: netAmount,
+                    productName: pNames.join(", ") || "Unnamed Item",
+                    productDescription: pDescriptions.join("; ") || "",
                     status: "funded",
                     createdAt: originalCreatedAt,
                     updatedAt: FieldValue.serverTimestamp(),
@@ -449,7 +520,75 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 });
             }
 
-            // 6. Global Ledger Record
+            // 6. Log the direct Paystack payment in the payments collection
+            const paymentId = `PAY-${orderData.orderId || orderDoc.id}`;
+            const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentId);
+            transaction.set(paymentRef, {
+                id: paymentId,
+                userId: userId,
+                userEmail: buyerEmail,
+                amount: amountInNaira,
+                currency: "NGN",
+                paymentReference: reference,
+                status: "success",
+                paymentMethod: "paystack",
+                purpose: "escrow_payment",
+                relatedId: orderData.orderId || orderDoc.id,
+                initiatedAt: orderData.createdAt || FieldValue.serverTimestamp(),
+                completedAt: FieldValue.serverTimestamp()
+            });
+
+            // 7. Log a balanced pair of transactions in wallet_transactions
+            if (!walletSnap.exists) {
+                transaction.set(walletRef, {
+                    userId,
+                    balance: 0,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                transaction.update(walletRef, {
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            const fundingTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            const purchaseTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+
+            // Funding txn (credit)
+            transaction.set(fundingTxnRef, {
+                id: fundingTxnRef.id,
+                walletId: userId,
+                userId,
+                type: "funding",
+                amount: amountInNaira,
+                balanceBefore: currentBalance,
+                balanceAfter: currentBalance + amountInNaira,
+                reference: reference,
+                description: `Wallet funded via Paystack (Direct Order Payment)`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // Purchase txn (debit)
+            transaction.set(purchaseTxnRef, {
+                id: purchaseTxnRef.id,
+                walletId: userId,
+                userId,
+                type: "purchase",
+                amount: -amountInNaira,
+                balanceBefore: currentBalance + amountInNaira,
+                balanceAfter: currentBalance,
+                orderId: orderData.orderId || orderDoc.id,
+                description: `Marketplace purchase — Order`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // 8. Global Ledger Record
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
             transaction.set(globalTxRef, {
                 id: reference,

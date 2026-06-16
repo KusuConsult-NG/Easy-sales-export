@@ -215,14 +215,19 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
         }
 
 
-        const result = await onboardLegacyMemberAction(payload);
-        setIsLoading(false);
+        try {
+            const result = await onboardLegacyMemberAction(payload);
+            setIsLoading(false);
 
-        if (result.success) {
-            setIsSuccess(true);
-            onSuccess();
-        } else {
-            setError(result.error || "Failed to onboard member.");
+            if (result.success) {
+                setIsSuccess(true);
+                onSuccess();
+            } else {
+                setError(result.error || "Failed to onboard member.");
+            }
+        } catch (e: any) {
+            setIsLoading(false);
+            setError(e?.message || "An unexpected error occurred during onboarding.");
         }
     }
 

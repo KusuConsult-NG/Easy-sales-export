@@ -393,6 +393,7 @@ async function _releaseEscrowFunds(
             // 3. Credit Seller's Wallet directly
             const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
             const walletSnap = await tx.get(walletRef);
+            let balanceBefore = 0;
             if (!walletSnap.exists) {
                 tx.set(walletRef, {
                     userId: data.sellerId,
@@ -402,11 +403,29 @@ async function _releaseEscrowFunds(
                     updatedAt: FieldValue.serverTimestamp()
                 });
             } else {
+                balanceBefore = walletSnap.data()?.balance || 0;
                 tx.update(walletRef, {
                     balance: FieldValue.increment(data.amount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
+
+            // Record transaction in seller's wallet_transactions history
+            const sellerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            tx.set(sellerTxnRef, {
+                id: sellerTxnRef.id,
+                walletId: data.sellerId,
+                userId: data.sellerId,
+                type: "funding",
+                amount: data.amount,
+                balanceBefore,
+                balanceAfter: balanceBefore + data.amount,
+                reference: transactionId,
+                description: `Payout for order #${data.orderId} (Escrow released)`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
 
             // 4. Record in Global Ledger
             const txId = `ESCROW-RELEASE-${transactionId}`;

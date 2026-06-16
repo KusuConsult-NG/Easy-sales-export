@@ -279,7 +279,19 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
         if (data.sellerId !== session.user.id && !isAdmin) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
-        const order = serializeDoc<Order>(orderDoc.id, orderDoc.data());
+        const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("orderId", "==", orderId)
+            .get();
+
+        const order = serializeDoc<Order>(orderDoc.id, orderDoc.data()) as any;
+
+        if (!escrowQuery.empty) {
+            order.escrowTransactionId = escrowQuery.docs[0].id;
+            order.escrowReleased = escrowQuery.docs.every(doc => doc.data().status === "released");
+        } else {
+            order.escrowTransactionId = null;
+            order.escrowReleased = false;
+        }
 
         return { error: null, success: true as const, data: { order } };
     } catch (error) { logger.error("Get order details error:", { 

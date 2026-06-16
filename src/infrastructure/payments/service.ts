@@ -35,6 +35,38 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         }
     }
 
+    // Fetch buyer and seller emails first (outside transaction, to satisfy read-before-write)
+    const buyerDoc = await db.collection(COLLECTIONS.USERS).doc(orderData.buyerId).get();
+    const buyerEmail = buyerDoc.exists ? buyerDoc.data()?.email || "" : (orderData.buyerEmail || "");
+
+    const items = orderData.items || [];
+    const uniqueSellers = Array.from(new Set(items.map((i: any) => i.sellerId))) as string[];
+    const sellerEmails: Record<string, string> = {};
+    await Promise.all(
+        uniqueSellers.map(async (sellerId) => {
+            const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(sellerId).get();
+            sellerEmails[sellerId] = sellerDoc.exists ? sellerDoc.data()?.email || "" : "";
+        })
+    );
+
+    // Fetch product details
+    const productIds = Array.from(new Set(items.map((item: any) => item.productId))) as string[];
+    const productDocs = await Promise.all(
+        productIds.map(id => db.collection(COLLECTIONS.PRODUCTS).doc(id).get())
+    );
+    const productDetails: Record<string, { title: string; description: string }> = {};
+    productDocs.forEach((doc, idx) => {
+        if (doc.exists) {
+            productDetails[productIds[idx]] = {
+                title: doc.data()?.title || "Unnamed Item",
+                description: doc.data()?.description || ""
+            };
+        }
+    });
+
+    const { getPlatformFees } = await import("@/lib/system-settings");
+    const fees = await getPlatformFees();
+
     const result = await db.runTransaction(async (transaction) => {
         const processedSnapTrans = await transaction.get(processedRef);
 
@@ -44,6 +76,14 @@ export async function processMarketplaceOrder(reference: string, amount: number,
                 logger.info(`[Paystack Fulfillment] Marketplace Order ${reference} already processed.`);
                 return { alreadyProcessed: true };
             }
+        }
+
+        const buyerId = userId || orderData.buyerId;
+        const walletRef = db.collection(COLLECTIONS.WALLETS).doc(buyerId);
+        const walletSnap = await transaction.get(walletRef);
+        let currentBalance = 0;
+        if (walletSnap.exists) {
+            currentBalance = walletSnap.data()?.balance || 0;
         }
 
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
@@ -61,7 +101,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         // 2. Set Outbox Document Status to completed
         transaction.set(processedRef, {
             processedAt: FieldValue.serverTimestamp(),
-            userId: userId || orderData.buyerId,
+            userId: buyerId,
             amount: amount,
             type: "marketplace_order",
             reference,
@@ -73,7 +113,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         // 2b. Write to Unified Ledger
         transaction.set(db.collection(COLLECTIONS.TRANSACTIONS).doc(reference), {
             id: reference,
-            userId: userId || orderData.buyerId,
+            userId: buyerId,
             type: "marketplace_order",
             module: "marketplace",
             amount: amount,
@@ -85,8 +125,8 @@ export async function processMarketplaceOrder(reference: string, amount: number,
         });
 
         // 3. Create Escrow Transactions
-        const items = orderData.items || [];
         const sellerTotals: Record<string, number> = {};
+        const deliveryFeePerSeller = (orderData.deliveryFee || 0) / uniqueSellers.length;
 
         items.forEach((item: any) => {
             const sellerId = item.sellerId;
@@ -97,21 +137,112 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             sellerTotals[sellerId] += itemTotal;
         });
 
+        uniqueSellers.forEach(sellerId => {
+            sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
+        });
+
         Object.entries(sellerTotals).forEach(([sellerId, totalAmount]) => {
             const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
             const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
+
+            const platformFee = Math.round(totalAmount * fees.platformFeePercentage);
+            const netAmount = totalAmount - platformFee;
+
+            const pNames = items
+                .filter((item: any) => item.sellerId === sellerId)
+                .map((item: any) => productDetails[item.productId]?.title || item.productTitle || "Unnamed Item");
+            const pDescriptions = items
+                .filter((item: any) => item.sellerId === sellerId)
+                .map((item: any) => productDetails[item.productId]?.description || "")
+                .filter(Boolean);
 
             transaction.set(escrowRef, {
                 id: escrowId,
                 orderId: orderData.orderId,
                 buyerId: orderData.buyerId,
+                buyerEmail: buyerEmail,
                 sellerId: sellerId,
+                sellerEmail: sellerEmails[sellerId] || "",
                 participants: [orderData.buyerId, sellerId],
                 amount: totalAmount,
+                grossAmount: totalAmount,
+                platformFee: platformFee,
+                netAmount: netAmount,
+                productName: pNames.join(", ") || "Unnamed Item",
+                productDescription: pDescriptions.join("; ") || "",
                 status: "funded",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
+                paidAt: FieldValue.serverTimestamp(),
             });
+        });
+
+        // 4. Log the direct Paystack payment in the payments collection
+        const paymentId = `PAY-${orderData.orderId || orderDoc.id}`;
+        const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentId);
+        transaction.set(paymentRef, {
+            id: paymentId,
+            userId: buyerId,
+            userEmail: buyerEmail,
+            amount: amount,
+            currency: "NGN",
+            paymentReference: reference,
+            status: "success",
+            paymentMethod: "paystack",
+            purpose: "escrow_payment",
+            relatedId: orderData.orderId || orderDoc.id,
+            initiatedAt: orderData.createdAt || FieldValue.serverTimestamp(),
+            completedAt: FieldValue.serverTimestamp()
+        });
+
+        // 5. Log a balanced pair of transactions in wallet_transactions
+        if (!walletSnap.exists) {
+            transaction.set(walletRef, {
+                userId: buyerId,
+                balance: 0,
+                currency: "NGN",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        } else {
+            transaction.update(walletRef, {
+                updatedAt: FieldValue.serverTimestamp()
+            });
+        }
+
+        const fundingTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+        const purchaseTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+
+        // Funding txn (credit)
+        transaction.set(fundingTxnRef, {
+            id: fundingTxnRef.id,
+            walletId: buyerId,
+            userId: buyerId,
+            type: "funding",
+            amount: amount,
+            balanceBefore: currentBalance,
+            balanceAfter: currentBalance + amount,
+            reference: reference,
+            description: `Wallet funded via Paystack (Direct Order Payment)`,
+            status: "completed",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
+        });
+
+        // Purchase txn (debit)
+        transaction.set(purchaseTxnRef, {
+            id: purchaseTxnRef.id,
+            walletId: buyerId,
+            userId: buyerId,
+            type: "purchase",
+            amount: -amount,
+            balanceBefore: currentBalance + amount,
+            balanceAfter: currentBalance,
+            orderId: orderData.orderId || orderDoc.id,
+            description: `Marketplace purchase — Order`,
+            status: "completed",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp()
         });
 
         return { success: true };

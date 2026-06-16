@@ -232,7 +232,8 @@ export async function approveContentAction(
                     }
                     transaction.update(docRef, {
                         status: "verified",
-                        verificationStatus: "verified",
+                        verificationStatus: "approved",
+                        verified: true,
                         verifiedAt: timestamp,
                         verifiedBy: adminId,
                     });
@@ -255,11 +256,21 @@ export async function approveContentAction(
                 default:
                     return { success: false as const, error: "Invalid content type" };
             }
-            return { success: true as const, error: null };
+            return { success: true as const, error: null, ownerId: type === "land" ? (await db.collection(COLLECTIONS.LAND_LISTINGS).doc(id).get()).data()?.ownerId : null };
         });
 
         if (!result.success) {
             return { success: false as const, error: result.error || "Approval failed", data: null };
+        }
+
+        if (result.success && type === "land" && (result as any).ownerId) {
+            try {
+                const { invalidateServiceCache } = await import('@/lib/cache-invalidation');
+                await invalidateServiceCache((result as any).ownerId, 'farmNation');
+                logger.info(`[Content Approval] Cache cleared for user: ${(result as any).ownerId}`);
+            } catch (cacheError) {
+                logger.error('[Content Approval] Cache clear error:', cacheError);
+            }
         }
 
         return { error: null, success: true as const , data: null };

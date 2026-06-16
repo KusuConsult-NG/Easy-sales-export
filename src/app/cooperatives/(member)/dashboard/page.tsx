@@ -21,6 +21,7 @@ import {
     DollarSign,
     Clock,
     IdCard,
+    ChevronLeft,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -132,6 +133,17 @@ export default function CooperativeDashboardPage() {
 
     return (
         <div className="space-y-8">
+            {/* Back to Hub Link */}
+            <div className="-mb-4">
+                <Link
+                    href="/dashboard"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-purple-600 hover:text-purple-700 transition"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to Hub
+                </Link>
+            </div>
+
             {/* Header */}
             <div>
                 <h1 className="text-3xl font-bold text-slate-900 mb-2">

@@ -23,6 +23,7 @@ import {
     Plus,
     Eye,
     Search,
+    ChevronLeft,
 } from "lucide-react";
 import {
     getFarmNationDashboardStatsAction,
@@ -111,6 +112,17 @@ export default function FarmNationDashboard() {
 
     return (
         <div className="space-y-8">
+            {/* Back to Hub Link */}
+            <div className="-mb-4">
+                <Link
+                    href="/dashboard"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600 hover:text-emerald-700 transition"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                    Back to Hub
+                </Link>
+            </div>
+
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div>

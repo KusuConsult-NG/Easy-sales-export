@@ -8,7 +8,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2, Zap } from "lucide-react";
+import { ShoppingCart, Package, Clock, CheckCircle, Star, TrendingUp, Search, Loader2, Zap, ChevronLeft } from "lucide-react";
 import { logger } from '@/lib/logger';
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
 import Link from "next/link";
@@ -101,13 +101,22 @@ export default function BuyerDashboard() {
                 {/* Header */}
                 <div className="bg-white border-b border-slate-200">
                     <div className="max-w-7xl mx-auto px-8 py-6 flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                                Buyer Dashboard
-                            </h1>
-                            <p className="text-slate-600">
-                                Manage your orders and discover quality agricultural products
-                            </p>
+                        <div className="flex flex-col gap-2">
+                            <Link
+                                href="/dashboard"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                                Back to Hub
+                            </Link>
+                            <div>
+                                <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                                    Buyer Dashboard
+                                </h1>
+                                <p className="text-slate-600">
+                                    Manage your orders and discover quality agricultural products
+                                </p>
+                            </div>
                         </div>
                         <Link
                             href="/marketplace/seller/dashboard"

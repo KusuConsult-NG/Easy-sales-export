@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
     Heart,
     BookOpen,
@@ -14,6 +15,7 @@ import {
     Loader2,
     ArrowRight,
     Sparkles,
+    ChevronLeft,
 } from "lucide-react";
 import { checkWaveMembershipAction, getWaveMemberStatsAction } from "@/app/actions/wave";
 import { getWaveResourcesAction, getWaveTrainingEventsAction } from "@/app/actions/wave";
@@ -95,6 +97,17 @@ export default function WaveDashboardPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-emerald-50 via-emerald-50 to-emerald-50">
             <div className="max-w-7xl mx-auto px-4 py-8">
+                {/* Back to Hub Link */}
+                <div className="mb-4">
+                    <Link
+                        href="/dashboard"
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 transition"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                        Back to Hub
+                    </Link>
+                </div>
+
                 {/* Hero Welcome Section */}
                 <div className="bg-linear-to-r from-emerald-700 to-emerald-700 rounded-3xl p-8 mb-8 text-white relative overflow-hidden">
                     <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10 pointer-events-none" />
