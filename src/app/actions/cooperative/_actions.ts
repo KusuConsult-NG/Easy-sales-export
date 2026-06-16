@@ -406,7 +406,7 @@ export async function registerCooperativeMemberAction(
             // Flat state field for SMS geo-filter broadcast queries
             state: validatedData.stateOfOrigin,
             // Keep status as pending (admin review needed)
-            membershipStatus: "pending",
+            membershipStatus: isLegacyImport ? "approved" : "pending",
             // Flag to distinguish "form submitted" from "payment initiated"
             onboardingCompleted: true,
             updatedAt: FieldValue.serverTimestamp(),
@@ -451,9 +451,13 @@ export async function registerCooperativeMemberAction(
             }
 
             // 3. Update user service registration and sync profile data
-            transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({ "serviceRegistrations.cooperatives.status": "pending",
+            transaction.update(db.collection(COLLECTIONS.USERS).doc(userId), normalizeUserUpdate({ 
+                "serviceRegistrations.cooperatives.status": isLegacyImport ? "approved" : "pending",
                 "serviceRegistrations.cooperatives.membershipTier": validatedData.membershipTier,
                 "serviceRegistrations.cooperatives.onboardingCompletedAt": FieldValue.serverTimestamp(),
+                ...(isLegacyImport ? {
+                    roles: FieldValue.arrayUnion("cooperative_member")
+                } : {}),
 
                 // Sync KYC name fields for Admin Communication Hub & admin portal
                 firstName: validatedData.firstName,

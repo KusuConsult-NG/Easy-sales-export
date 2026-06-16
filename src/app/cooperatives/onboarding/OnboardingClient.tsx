@@ -32,7 +32,7 @@ interface OnboardingContentProps {
 function CooperativeOnboardingContent({ initialTier, paymentStatus }: OnboardingContentProps) {
     const router = useRouter();
     const { showToast } = useToast();
-    const { data: session, status } = useSession();
+    const { data: session, status, update: updateSession } = useSession();
 
     // If payment is already done, start at step 4 (review & submit)
     const [currentStep, setCurrentStep] = useState(paymentStatus === "completed" ? 4 : 1);
@@ -523,11 +523,20 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                         try { localStorage.removeItem(`coop_onboarding_${userId}_${s}`); } catch { /* non-blocking */ }
                     });
                 }
+                try {
+                    await updateSession();
+                } catch (updateErr) {
+                    logger.error("Session update failed in handlePayNow:", updateErr);
+                }
                 const isDed = typeof window !== 'undefined' &&
                     !window.location.hostname.includes('easysalesexport.com') &&
                     !window.location.hostname.includes('localhost') &&
                     !window.location.hostname.includes('railway.app');
-                router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
+                if (isLegacyImport) {
+                    router.replace(isDed ? '/dashboard' : '/cooperatives/dashboard');
+                } else {
+                    router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
+                }
                 return;
             }
             if (result.success && result.data?.paymentUrl) {
@@ -556,12 +565,21 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                     (isRevisionMode || isEditMode) ? "Application resubmitted for review!" : "Application submitted successfully!",
                     "success"
                 );
+                try {
+                    await updateSession();
+                } catch (updateErr) {
+                    logger.error("Session update failed in handleComplete:", updateErr);
+                }
                 setIsSubmitting(false);
                 const isDed = typeof window !== 'undefined' &&
                     !window.location.hostname.includes('easysalesexport.com') &&
                     !window.location.hostname.includes('localhost') &&
                     !window.location.hostname.includes('railway.app');
-                router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
+                if (isLegacyImport) {
+                    router.replace(isDed ? '/dashboard' : '/cooperatives/dashboard');
+                } else {
+                    router.replace(isDed ? '/onboarding/pending' : '/cooperatives/onboarding/pending');
+                }
             } else {
                 if (result.error) {
                     showToast(result.error, "error");
