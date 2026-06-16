@@ -104,16 +104,20 @@ export default function AdminWaveApplicationsPage() {
 
     async function handleApprove(applicationId: string) {
         setProcessingId(applicationId + "_approve");
-        const result = await approveWaveApplicationAction(applicationId);
-
-        if (result.success) {
-            showToast("Application approved successfully", "success");
-            await fetchData();
-        } else {
-            showToast(result.error || "Failed to approve application", "error");
+        try {
+            const result = await approveWaveApplicationAction(applicationId);
+            if (result.success) {
+                showToast("Application approved successfully", "success");
+                await fetchData();
+            } else {
+                showToast(result.error || "Failed to approve application", "error");
+            }
+        } catch (error) {
+            console.error("Failed to approve application:", error);
+            showToast("An unexpected error occurred while approving the application.", "error");
+        } finally {
+            setProcessingId(null);
         }
-
-        setProcessingId(null);
     };
 
     function handleReject(applicationId: string) {
@@ -126,15 +130,21 @@ export default function AdminWaveApplicationsPage() {
         setProcessingId(rejectingAppId + "_reject");
         setRejectionModalOpen(false);
 
-        const result = await rejectWaveApplicationAction(rejectingAppId, reason);
-        if (result.success) {
-            showToast("Application rejected successfully", "success");
-            await fetchData();
-        } else {
-            showToast(result.error || "Failed to reject application", "error");
+        try {
+            const result = await rejectWaveApplicationAction(rejectingAppId, reason);
+            if (result.success) {
+                showToast("Application rejected successfully", "success");
+                await fetchData();
+            } else {
+                showToast(result.error || "Failed to reject application", "error");
+            }
+        } catch (error) {
+            console.error("Failed to reject application:", error);
+            showToast("An unexpected error occurred while rejecting the application.", "error");
+        } finally {
+            setProcessingId(null);
+            setRejectingAppId(null);
         }
-        setProcessingId(null);
-        setRejectingAppId(null);
     };
 
     function handleOpenEdit(app: StandardPendingForm<WaveApplication>) {
