@@ -588,34 +588,23 @@ export default function ExportCartPage() {
                                 </button>
                             ) : (
                                 <>
-                                    {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
-                                        <button
-                                            onClick={handlePayment}
-                                            disabled={isSubmitting}
-                                            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {isSubmitting ? (
-                                                <>
-                                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                                    Processing...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <CreditCard className="w-5 h-5" />
-                                                    Pay ₦{totalInNaira.toLocaleString()}
-                                                </>
-                                            )}
-                                        </button>
-                                    ) : (
-                                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                            <p className="text-sm text-yellow-800 font-semibold mb-2">
-                                                Card Payment Temporarily Unavailable
-                                            </p>
-                                            <p className="text-xs text-yellow-700 mb-3">
-                                                Please contact support to complete your order.
-                                            </p>
-                                        </div>
-                                    )}
+                                    <button
+                                        onClick={handlePayment}
+                                        disabled={isSubmitting}
+                                        className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSubmitting ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CreditCard className="w-5 h-5" />
+                                                Pay ₦{totalInNaira.toLocaleString()}
+                                            </>
+                                        )}
+                                    </button>
                                 </>
                             )}
 

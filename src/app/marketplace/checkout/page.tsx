@@ -381,40 +381,23 @@ export default function CheckoutPage() {
                                     </div>
                                 )}
 
-                                {process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ? (
-                                    <button
-                                        onClick={handlePaystackCheckout}
-                                        disabled={isProcessing || isCalculatingFee || !email || !phone}
-                                        className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                                    >
-                                        {isProcessing ? (
-                                            <>
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                                Processing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <CreditCard className="w-5 h-5" />
-                                                Complete Payment
-                                            </>
-                                        )}
-                                    </button>
-                                ) : (
-                                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                        <p className="text-sm text-yellow-800 font-semibold mb-2">
-                                            Payment Temporarily Unavailable
-                                        </p>
-                                        <p className="text-xs text-yellow-700">
-                                            Please contact support to complete your order.
-                                        </p>
-                                        <button
-                                            disabled
-                                            className="w-full mt-3 px-6 py-3 bg-slate-300 text-slate-500 font-bold rounded-xl cursor-not-allowed"
-                                        >
-                                            Payment Disabled
-                                        </button>
-                                    </div>
-                                )}
+                                <button
+                                    onClick={handlePaystackCheckout}
+                                    disabled={isProcessing || isCalculatingFee || !email || !phone}
+                                    className="w-full px-6 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isProcessing ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CreditCard className="w-5 h-5" />
+                                            Complete Payment
+                                        </>
+                                    )}
+                                </button>
 
                                 <p className="text-xs text-center text-slate-500 mt-4">
                                     All payments are escrow-protected for your security
