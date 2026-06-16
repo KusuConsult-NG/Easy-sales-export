@@ -45,7 +45,9 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
         ]);
 
         revalidatePath("/admin/marketplace", "page");
-        revalidatePath("/", "layout");
+        revalidatePath("/admin/marketplace/sellers", "page");
+        revalidatePath("/admin/marketplace/buyers", "page");
+        revalidatePath("/dashboard", "page");
         revalidateTag("module-registration-stats-service", "page");
 
         console.log(`[Cache Invalidation] Cleared seller cache for: ${userId}`);
@@ -73,7 +75,8 @@ export async function invalidateCooperativeCache(userId: string, cooperativeId?:
         await Promise.all(keysToDelete.map(k => deleteCache(k)));
 
         revalidatePath("/admin/cooperatives", "page");
-        revalidatePath("/", "layout");
+        revalidatePath("/admin/cooperatives/members", "page");
+        revalidatePath("/dashboard", "page");
         revalidateTag("module-registration-stats-service", "page");
 
         console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}${cooperativeId ? ` (coop: ${cooperativeId})` : ""}`);
@@ -92,9 +95,14 @@ export async function invalidateServiceCache(userId: string, service?: string): 
         // Always clear user profile (contains serviceRegistrations)
         await deleteCache(CacheKeys.userProfile(userId));
 
-        revalidatePath("/", "layout");
+        revalidatePath("/dashboard", "page");
         if (service) {
             revalidatePath(`/admin/${service}`, "page");
+            revalidatePath(`/admin/${service}/applications`, "page");
+            revalidatePath(`/admin/${service}/members`, "page");
+            if (service === "wave") {
+                revalidatePath("/wave/dashboard", "page");
+            }
             revalidateTag("module-registration-stats-service", "page");
         }
 
