@@ -4,6 +4,22 @@ import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
 
+/** Returns true if the error is caused by a stale JS bundle after a new deployment */
+function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
+    const msg = error?.message ?? "";
+    const name = error?.name ?? "";
+    return (
+        name === "ChunkLoadError" ||
+        name === "UnrecognizedActionError" ||
+        msg.includes("ChunkLoadError") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("was not found on the server") ||
+        msg.includes("UnrecognizedAction") ||
+        msg.includes("Failed to fetch dynamically imported module") ||
+        msg.includes("Importing a module script failed")
+    );
+}
+
 export default function WaveApplicationError({
     error,
     reset,
@@ -12,8 +28,21 @@ export default function WaveApplicationError({
     reset: () => void;
 }) {
     useEffect(() => {
+        if (isStaleDeploymentError(error)) {
+            console.warn("[WaveApplicationError] Stale deployment detected — auto-reloading.", error.name, error.message);
+            window.location.reload();
+            return;
+        }
         console.error("[WAVE Application Error]", error);
     }, [error]);
+
+    if (isStaleDeploymentError(error)) {
+        return (
+            <div className="min-h-[400px] flex items-center justify-center p-6 bg-slate-50">
+                <p className="text-slate-600 font-medium">Updating to latest version…</p>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-[400px] flex items-center justify-center p-6 bg-slate-50">

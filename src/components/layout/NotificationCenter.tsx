@@ -280,7 +280,7 @@ export default function NotificationCenter() {
                             {notifications.length > 0 && (
                                 <div className="px-6 py-3 border-t border-slate-200">
                                     <a
-                                        href="/notifications"
+                                        href="/dashboard/notifications"
                                         className="text-sm font-semibold text-blue-600 hover:text-blue-700 flex items-center justify-center transition"
                                     >
                                         View All Notifications

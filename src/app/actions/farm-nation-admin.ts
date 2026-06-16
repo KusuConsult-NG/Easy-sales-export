@@ -502,11 +502,30 @@ async function _getAdminLandVerificationsAction(options: {
             else if (doc.status === "rejected") mappedVerificationStatus = "rejected";
             else if (doc.status === "pending_verification" || doc.status === "inspection_scheduled") mappedVerificationStatus = "pending";
             
+            // Normalize documents to the { landTitle, surveyPlan, taxClearance } object structure
+            let docsObj = { landTitle: "", surveyPlan: "", taxClearance: "" };
+            if (doc.documents) {
+                if (Array.isArray(doc.documents)) {
+                    // Try to identify by matching the filename keywords first
+                    const landTitle = doc.documents.find((url: string) => url && (url.includes("_title_") || url.includes("title"))) || doc.documents[0] || "";
+                    const surveyPlan = doc.documents.find((url: string) => url && (url.includes("_survey_") || url.includes("survey"))) || doc.documents[1] || "";
+                    const taxClearance = doc.documents.find((url: string) => url && (url.includes("_tax_") || url.includes("tax"))) || doc.documents[2] || undefined;
+                    docsObj = { landTitle, surveyPlan, taxClearance };
+                } else if (typeof doc.documents === "object") {
+                    docsObj = {
+                        landTitle: doc.documents.landTitle || "",
+                        surveyPlan: doc.documents.surveyPlan || "",
+                        taxClearance: doc.documents.taxClearance || undefined
+                    };
+                }
+            }
+
             return {
                 ...doc,
                 totalPrice: doc.totalPrice ?? doc.price ?? 0,
                 price: doc.price ?? doc.totalPrice ?? 0,
                 verificationStatus: mappedVerificationStatus,
+                documents: docsObj,
                 createdAt: doc.createdAt || new Date().toISOString(),
                 verifiedAt: doc.verificationStatus?.verifiedAt || doc.verifiedAt || undefined
             };
