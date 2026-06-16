@@ -85,6 +85,23 @@ export default function CheckoutPage() {
         // Use user-scoped cart key to match what product page sets
         const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
+
+        // Migrate guest cart to user-scoped cart if logged in
+        if (userId) {
+            const guestCart = localStorage.getItem("marketplace_cart");
+            if (guestCart) {
+                try {
+                    const parsedGuestCart = JSON.parse(guestCart);
+                    if (Array.isArray(parsedGuestCart) && parsedGuestCart.length > 0) {
+                        localStorage.setItem(cartKey, guestCart);
+                    }
+                } catch (e) {
+                    console.error("Failed to parse guest cart:", e);
+                }
+                localStorage.removeItem("marketplace_cart");
+            }
+        }
+
         const savedCart = localStorage.getItem(cartKey);
         if (savedCart) {
             const parsedCart = JSON.parse(savedCart);
@@ -205,7 +222,7 @@ export default function CheckoutPage() {
 
     async function handlePaystackCheckout() {
         if (!session) {
-            router.push("/auth/login?redirect=/marketplace/checkout");
+            router.push("/auth/register?callbackUrl=/marketplace/checkout");
             return;
         }
 

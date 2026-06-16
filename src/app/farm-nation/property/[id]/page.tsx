@@ -346,10 +346,10 @@ export default function PropertyDetailsPage() {
                                     <button
                                         onClick={() => {
                                             if (status === "unauthenticated") {
-                                                router.push(`/auth/login?callbackUrl=/farm-nation/property/${propertyId}`);
+                                                router.push(`/auth/register?callbackUrl=/farm-nation/checkout/${propertyId}`);
                                                 return;
                                             }
-                                            router.push(`/farm-nation/checkout?propertyId=${propertyId}`);
+                                            router.push(`/farm-nation/checkout/${propertyId}`);
                                         }}
                                         className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
                                     >

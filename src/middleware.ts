@@ -49,7 +49,10 @@ const authMiddleware = auth((req: any) => {
     // ── 1.1. Authentication Protection Gate ────────────────────────────
     const isLoggedIn = !!req.auth;
     if (isProtectedPath(pathname) && !isLoggedIn) {
-        const loginUrl = new URL("/auth/login", req.nextUrl.origin);
+        const targetPath = (pathname.startsWith("/marketplace/checkout") || pathname.startsWith("/farm-nation/checkout"))
+            ? "/auth/register"
+            : "/auth/login";
+        const loginUrl = new URL(targetPath, req.nextUrl.origin);
         loginUrl.searchParams.set("callbackUrl", req.nextUrl.pathname);
         return NextResponse.redirect(loginUrl);
     }

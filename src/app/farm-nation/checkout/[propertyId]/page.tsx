@@ -51,7 +51,9 @@ export default function CheckoutPage() {
     }
 
     useEffect(() => {
-        if (status === "authenticated") {
+        if (status === "unauthenticated") {
+            router.replace(`/auth/register?callbackUrl=/farm-nation/checkout/${propertyId}`);
+        } else if (status === "authenticated") {
             getUserTierAction().then((res) => {
                 if (res.success && res.data) {
                     const tier = res.data.tier;
@@ -71,7 +73,7 @@ export default function CheckoutPage() {
             loadProperty(); // Call loadProperty here
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [propertyId, status, session, params.propertyId]); // Added params.propertyId to dependencies
+    }, [propertyId, status, session, params.propertyId, router]);
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -110,7 +112,8 @@ export default function CheckoutPage() {
                     fullName: buyerInfo.name,
                     email: buyerInfo.email,
                     phone: buyerInfo.phone,
-                    purpose: buyerInfo.purpose
+                    purpose: buyerInfo.purpose,
+                    zoningComplianceDeclarationAccepted: true
                 }
             );
 
