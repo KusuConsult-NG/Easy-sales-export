@@ -86,10 +86,10 @@ export class CooperativeErrorBoundary extends React.Component<
                                     Refresh Page
                                 </button>
                                 <a
-                                    href="/cooperatives"
+                                    href="/dashboard"
                                     className="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-900 rounded-xl font-semibold transition-colors text-center"
                                 >
-                                    Go Home
+                                    Return to Dashboard
                                 </a>
                             </div>
 

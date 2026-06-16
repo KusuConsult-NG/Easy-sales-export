@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { verifyPropertyPaymentAction } from "@/app/actions/farm-nation-payment";
-import { CheckCircle, XCircle, Loader2, Home, MapPin } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Home, MapPin, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 
 function PaymentCallbackContent() {
@@ -110,11 +110,11 @@ function PaymentCallbackContent() {
                         )}
 
                         <Link
-                            href="/"
+                            href="/dashboard"
                             className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 hover:bg-slate-50 text-slate-900 rounded-lg font-semibold transition-colors"
                         >
-                            <Home className="w-5 h-5" />
-                            Go Home
+                            <LayoutDashboard className="w-5 h-5" />
+                            Return to Dashboard
                         </Link>
                     </div>
 

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
 import { HardLogoutButton } from "@/components/auth/HardLogoutButton";
+import { useSession } from "next-auth/react";
 
 /** Returns true if the error is caused by a stale JS bundle after a new deployment */
 function isStaleDeploymentError(error: Error & { digest?: string }): boolean {
@@ -27,6 +28,9 @@ export default function ErrorBoundary({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    const { data: session } = useSession();
+    const isLoggedIn = !!session?.user;
+
     useEffect(() => {
         if (isStaleDeploymentError(error)) {
             console.warn("[MarketplaceErrorBoundary] Stale deployment detected — auto-reloading.", error.name, error.message);
@@ -63,10 +67,10 @@ export default function ErrorBoundary({
                             Try again
                         </button>
                         <button
-                            onClick={() => window.location.href = '/'}
+                            onClick={() => window.location.href = isLoggedIn ? '/dashboard' : '/'}
                             className="flex-1 px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
                         >
-                            Return Home
+                            {isLoggedIn ? 'Return to Dashboard' : 'Return Home'}
                         </button>
                     </div>
                     <HardLogoutButton variant="ghost" />

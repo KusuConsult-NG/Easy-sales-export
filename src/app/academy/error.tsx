@@ -33,10 +33,10 @@ export default function ErrorBoundary({
                         Try again
                     </button>
                     <button
-                        onClick={() => window.location.href = '/'}
+                        onClick={() => window.location.href = '/dashboard'}
                         className="px-6 py-2.5 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 transition-colors"
                     >
-                        Return Home
+                        Return to Dashboard
                     </button>
                 </div>
             </div>

@@ -3,7 +3,8 @@
 import { logger } from '@/lib/logger';
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { AlertTriangle, Home, RefreshCw, LayoutDashboard } from 'lucide-react';
 import { HardLogoutButton } from '@/components/auth/HardLogoutButton';
 
 /** Returns true if the error is caused by a stale JS bundle after a new deployment */
@@ -29,6 +30,9 @@ export default function GlobalError({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
+    const { data: session } = useSession();
+    const isLoggedIn = !!session?.user;
+
     useEffect(() => {
         // Stale deployment recovery
         if (isStaleDeploymentError(error)) {
@@ -75,11 +79,11 @@ export default function GlobalError({
                             Try Again
                         </button>
                         <Link
-                            href="/"
+                            href={isLoggedIn ? "/dashboard" : "/"}
                             className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 border border-slate-200 text-slate-900 font-semibold rounded-xl hover:bg-slate-50 transition-colors"
                         >
-                            <Home className="w-4 h-4" />
-                            Go Home
+                            {isLoggedIn ? <LayoutDashboard className="w-4 h-4" /> : <Home className="w-4 h-4" />}
+                            {isLoggedIn ? "Return to Dashboard" : "Go Home"}
                         </Link>
                     </div>
 

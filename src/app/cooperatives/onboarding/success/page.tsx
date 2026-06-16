@@ -7,7 +7,7 @@
 "use client";
 
 import { Suspense, useMemo } from "react";
-import { CheckCircle, ArrowRight, Home, Wallet, TrendingUp, Users, Loader2 } from "lucide-react";
+import { CheckCircle, ArrowRight, LayoutDashboard, Wallet, TrendingUp, Users, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -102,14 +102,14 @@ function CooperativeSuccessContent() {
                         </Link>
 
                         <Link
-                            href="/"
+                            href="/dashboard"
                             className="flex items-center gap-3 p-4 bg-white rounded-xl hover:shadow-md transition-all"
                         >
                             <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                                <Home className="w-5 h-5 text-purple-600" />
+                                <LayoutDashboard className="w-5 h-5 text-purple-600" />
                             </div>
                             <div>
-                                <p className="font-semibold text-slate-900">Return Home</p>
+                                <p className="font-semibold text-slate-900">Return to Dashboard</p>
                                 <p className="text-sm text-slate-600">Explore other services</p>
                             </div>
                         </Link>
