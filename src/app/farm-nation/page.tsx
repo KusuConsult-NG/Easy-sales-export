@@ -196,6 +196,15 @@ export default function FarmNationLandingPage() {
                                     </div>
                                 </div>
                                 <div className="p-6">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm uppercase tracking-wider ${
+                                            (property.documents && property.documents.length > 0)
+                                                ? "bg-emerald-100 text-emerald-800"
+                                                : "bg-red-100 text-red-800"
+                                        }`}>
+                                            {(property.documents && property.documents.length > 0) ? "Verified Land" : "Unverified Land"}
+                                        </span>
+                                    </div>
                                     <h3 className="text-xl font-bold text-slate-900 mb-2">{property.title}</h3>
                                     <div className="flex items-center gap-2 text-slate-600 mb-4">
                                         <MapPin className="w-4 h-4" />

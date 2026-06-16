@@ -258,6 +258,15 @@ export default function PropertyDetailsPage() {
                         <div className="bg-white rounded-2xl p-6 shadow-sm">
                             <div className="flex items-start justify-between mb-4">
                                 <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-sm uppercase tracking-wider ${
+                                            (property.documents && property.documents.length > 0)
+                                                ? "bg-emerald-100 text-emerald-800"
+                                                : "bg-red-100 text-red-800"
+                                        }`}>
+                                            {(property.documents && property.documents.length > 0) ? "Verified Land" : "Unverified Land"}
+                                        </span>
+                                    </div>
                                     <h1 className="text-3xl font-bold text-slate-900 mb-2">
                                         {property.title}
                                     </h1>
