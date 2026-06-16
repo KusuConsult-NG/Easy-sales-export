@@ -114,7 +114,7 @@ export default function SellerDashboard() {
                                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
                             >
                                 <ChevronLeft className="w-3.5 h-3.5" />
-                                Back to Hub
+                                Back to Dashboard
                             </Link>
                             <div>
                                 <h1 className="text-3xl font-bold text-slate-900 mb-2">

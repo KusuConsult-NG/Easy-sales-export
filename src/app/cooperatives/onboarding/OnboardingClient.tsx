@@ -619,7 +619,7 @@ function CooperativeOnboardingContent({ initialTier, paymentStatus }: Onboarding
                             className="inline-flex items-center gap-2 text-slate-600 hover:text-purple-600 text-sm font-medium"
                         >
                             <Home className="w-4 h-4" />
-                            Hub
+                            Dashboard
                         </Link>
                     </div>
                     <h1 className="text-2xl font-bold text-slate-900">

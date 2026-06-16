@@ -530,10 +530,10 @@ export default function WaveBriefingPage() {
 
                             <div className="pt-2">
                                 <Link
-                                    href="/"
+                                    href="/dashboard"
                                     className="inline-flex items-center gap-2 text-green-700 hover:text-green-900 font-bold transition-colors group"
                                 >
-                                    <span>Return to Hub</span>
+                                    <span>Return to Dashboard</span>
                                     <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                                 </Link>
                             </div>

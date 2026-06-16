@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { verifyOrderPaymentAction } from "@/app/actions/marketplace";
-import { CheckCircle, XCircle, Loader2, Home, ShoppingBag } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Home, ShoppingBag, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { useOnce } from "@/hooks/useOnce";
 
@@ -127,11 +127,11 @@ function PaymentCallbackContent() {
                         )}
 
                         <Link
-                            href="/"
+                            href="/dashboard"
                             className="w-full flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 hover:bg-slate-50 text-slate-900 rounded-lg font-semibold transition-colors"
                         >
-                            <Home className="w-5 h-5" />
-                            Go Home
+                            <LayoutDashboard className="w-5 h-5" />
+                            Return to Dashboard
                         </Link>
                     </div>
 

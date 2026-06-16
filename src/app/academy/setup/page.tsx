@@ -194,7 +194,7 @@ export default function AcademyOnboardingPage() {
                         href="/dashboard"
                         className="inline-flex items-center gap-2 px-6 py-3 bg-slate-100 text-slate-900 rounded-xl font-medium hover:bg-slate-200 transition-colors"
                     >
-                        Return to Hub
+                        Return to Dashboard
                     </Link>
                 </div>
             </div>
@@ -226,7 +226,7 @@ export default function AcademyOnboardingPage() {
                             href="/dashboard"
                             className="w-full px-6 py-3 bg-slate-100 text-slate-900 rounded-xl font-medium hover:bg-slate-200 transition-colors"
                         >
-                            Return to Hub
+                            Return to Dashboard
                         </Link>
                     </div>
                 </div>
@@ -251,7 +251,7 @@ export default function AcademyOnboardingPage() {
                         className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 text-sm font-medium"
                     >
                         <Home className="w-4 h-4" />
-                        Hub
+                        Dashboard
                     </Link>
                 </div>
             </div>
@@ -563,7 +563,7 @@ export default function AcademyOnboardingPage() {
                                     className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 transition-colors"
                                 >
                                     <ArrowLeft className="w-5 h-5" />
-                                    Back to Hub
+                                    Back to Dashboard
                                 </Link>
                             )}
 

@@ -95,7 +95,7 @@ export default function ExportDashboardPage() {
                         className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-600 hover:text-orange-700 transition"
                     >
                         <ChevronLeft className="w-4 h-4" />
-                        Back to Hub
+                        Back to Dashboard
                     </Link>
                 </div>
 

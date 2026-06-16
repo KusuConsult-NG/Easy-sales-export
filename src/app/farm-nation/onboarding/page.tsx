@@ -359,7 +359,7 @@ export default function FarmNationOnboardingPage() {
                             className="inline-flex items-center gap-2 text-teal-100 hover:text-white text-sm font-medium transition-colors"
                         >
                             <Home className="w-4 h-4" />
-                            Hub
+                            Dashboard
                         </Link>
                     </div>
                     <div className="flex items-center gap-3 mb-2">

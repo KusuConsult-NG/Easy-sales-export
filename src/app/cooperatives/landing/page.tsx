@@ -214,7 +214,11 @@ export default function CooperativeLandingPage() {
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="flex items-center justify-between h-16">
                         <div className="flex items-center gap-4">
-                            <Link href="/" className="p-2 hover:bg-slate-100 rounded-full transition-colors hidden lg:block" title="Back to Hub">
+                            <Link
+                                href={sessionStatus === 'authenticated' ? "/dashboard" : "/"}
+                                className="p-2 hover:bg-slate-100 rounded-full transition-colors hidden lg:block"
+                                title={sessionStatus === 'authenticated' ? "Back to Dashboard" : "Back to Hub"}
+                            >
                                 <Home className="w-5 h-5 text-slate-600 hover:text-purple-600" />
                             </Link>
                             {/* Logo */}
