@@ -63,10 +63,30 @@ const authMiddleware = auth((req: any) => {
         const userRoles = req.auth?.user?.roles || [];
         const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
         const normalizedHostname = hostname.replace(/^www\./, "");
-        const rewritePrefix = DOMAIN_MAP[normalizedHostname];
+        
+        let rewritePrefix = DOMAIN_MAP[normalizedHostname];
+        if (rewritePrefix === undefined && normalizedHostname.endsWith(".easysalesexport.com")) {
+            const subdomain = normalizedHostname.replace(".easysalesexport.com", "");
+            if (Object.values(DOMAIN_MAP).includes(`/${subdomain}`)) {
+                rewritePrefix = `/${subdomain}`;
+            }
+        }
 
         if (isMale && !isAdmin && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
-            const redirectUrl = new URL("/", req.nextUrl.origin);
+            let hubOrigin = req.nextUrl.origin;
+            if (normalizedHostname.endsWith(".easysalesexport.com")) {
+                hubOrigin = "https://www.easysalesexport.com";
+            } else {
+                const hostParts = hostname.split(".");
+                const isLocalhost = hostname.endsWith("localhost");
+                const hasSubdomain = isLocalhost ? hostParts.length > 1 : hostParts.length > 2;
+                if (hasSubdomain) {
+                    const apexHost = isLocalhost ? "localhost" : hostParts.slice(1).join(".");
+                    const portStr = req.nextUrl.port ? `:${req.nextUrl.port}` : "";
+                    hubOrigin = `${req.nextUrl.protocol}//${apexHost}${portStr}`;
+                }
+            }
+            const redirectUrl = new URL("/", hubOrigin);
             return NextResponse.redirect(redirectUrl);
         }
     }
