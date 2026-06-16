@@ -215,7 +215,6 @@ export default function ProfilePage() {
                 location: userData.location,
                 bio: userData.bio,
                 identityDocument: userData.identityDocument,
-                gender: userData.gender || undefined,
             }));
 
             if (result.success) {
@@ -544,27 +543,15 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Gender</label>
-                                            {userData.gender === "male" || userData.gender === "female" ? (
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={userData.gender.charAt(0).toUpperCase() + userData.gender.slice(1)}
-                                                        disabled
-                                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed transition-all"
-                                                    />
-                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Locked</span>
-                                                </div>
-                                            ) : (
-                                                <select
-                                                    value={userData.gender}
-                                                    onChange={(e) => setUserData({ ...userData, gender: e.target.value as "male" | "female" | "" })}
-                                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
-                                                >
-                                                    <option value="">Select Gender</option>
-                                                    <option value="male">Male</option>
-                                                    <option value="female">Female</option>
-                                                </select>
-                                            )}
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={userData.gender ? (userData.gender.charAt(0).toUpperCase() + userData.gender.slice(1)) : "Not Set"}
+                                                    disabled
+                                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed transition-all"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Locked</span>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Location</label>
