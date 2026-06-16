@@ -544,7 +544,7 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Gender</label>
-                                            {userData.gender ? (
+                                            {userData.gender === "male" || userData.gender === "female" ? (
                                                 <div className="relative">
                                                     <input
                                                         type="text"

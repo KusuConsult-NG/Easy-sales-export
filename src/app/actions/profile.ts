@@ -121,7 +121,8 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         delete updatePayload.version;
 
         if (validated.gender) {
-            if (existing.gender) {
+            const currentGender = (existing.gender || "").toLowerCase().trim();
+            if (currentGender === "male" || currentGender === "female") {
                 delete updatePayload.gender;
             } else {
                 updatePayload.gender = validated.gender.toLowerCase();
