@@ -788,12 +788,15 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
             const propertyDoc = await tx.get(propertyRef);
             if (!propertyDoc.exists) throw new Error("Property not found");
 
+            const isLease = propertyDoc.data()?.type === "lease";
             tx.update(propertyRef, {
-                status: "sold",
+                status: isLease ? "leased" : "sold",
                 ownerId: txData.buyerId,
                 ownerEmail: txData.buyerEmail,
                 previousOwnerId: txData.sellerId,
-                soldAt: FieldValue.serverTimestamp(),
+                ...(isLease 
+                    ? { leasedAt: FieldValue.serverTimestamp() }
+                    : { soldAt: FieldValue.serverTimestamp() }),
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1)
             });
