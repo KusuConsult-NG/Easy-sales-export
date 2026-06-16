@@ -266,8 +266,16 @@ export default function PropertyDetailsPage() {
                                         <span>{property.location.address}, {property.location.lga}, {property.location.state}</span>
                                     </div>
                                 </div>
-                                <div className="px-4 py-2 rounded-lg font-semibold bg-green-100 text-green-700">
-                                    For Sale
+                                <div className={`px-4 py-2 rounded-lg font-semibold ${
+                                    property.status === 'sold' ? 'bg-red-100 text-red-700' :
+                                    property.status === 'leased' ? 'bg-blue-100 text-blue-700' :
+                                    property.availableForRent ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-green-100 text-green-700'
+                                }`}>
+                                    {property.status === 'sold' ? 'Sold' :
+                                     property.status === 'leased' ? 'Leased' :
+                                     property.availableForRent ? 'Leasing / Renting' :
+                                     'For Sale'}
                                 </div>
                             </div>
 
@@ -334,12 +342,14 @@ export default function PropertyDetailsPage() {
                     <div className="lg:col-span-1 space-y-6">
                         {/* CTA Card */}
                         <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
-                            <div className="mb-6">
-                                <p className="text-3xl font-bold text-slate-900 mb-1">
-                                    ₦{property.price.toLocaleString()}
-                                </p>
-                                <p className="text-sm text-slate-500">Purchase price</p>
-                            </div>
+                             <div className="mb-6">
+                                 <p className="text-3xl font-bold text-slate-900 mb-1">
+                                     ₦{property.price.toLocaleString()}
+                                 </p>
+                                 <p className="text-sm text-slate-500">
+                                     {property.availableForRent ? "Lease/Rental price" : "Purchase price"}
+                                 </p>
+                             </div>
 
                             {property.status === "verified" ? (
                                 <div className="space-y-3">
@@ -354,7 +364,7 @@ export default function PropertyDetailsPage() {
                                         className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-green-600/20"
                                     >
                                         <Lock className="w-5 h-5" />
-                                        Lock Land Reservation
+                                        {property.availableForRent ? "Lock Lease/Rental Reservation" : "Lock Land Reservation"}
                                     </button>
                                     <button
                                         onClick={handleContactSeller}
@@ -365,10 +375,15 @@ export default function PropertyDetailsPage() {
                                     </button>
                                 </div>
                             ) : (
-                                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                                    <p className="text-sm font-semibold text-yellow-800 capitalize">
-                                        {property.status === "pending_verification" ? "Verification Pending" : `Status: ${property.status}`}
-                                    </p>
+                                <div className={`p-4 border rounded-xl text-center font-bold ${
+                                    property.status === "sold" ? "bg-red-50 border-red-200 text-red-800" :
+                                    property.status === "leased" ? "bg-blue-50 border-blue-200 text-blue-800" :
+                                    "bg-yellow-50 border-yellow-200 text-yellow-800"
+                                }`}>
+                                    {property.status === "sold" ? "This Land has been Sold" :
+                                     property.status === "leased" ? "This Land has been Leased" :
+                                     property.status === "pending_verification" ? "Verification Pending" :
+                                     `Status: ${property.status}`}
                                 </div>
                             )}
                         </div>

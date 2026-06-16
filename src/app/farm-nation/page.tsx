@@ -184,8 +184,14 @@ export default function FarmNationLandingPage() {
                                         <div className="w-full h-full flex items-center justify-center text-6xl">🌾</div>
                                     )}
                                     <div className="absolute top-4 right-4">
-                                        <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full">
-                                            {property.propertyType || property.type || "Land"}
+                                        <span className={`px-3 py-1 text-white text-xs font-bold rounded-full ${
+                                            property.status === "sold" ? "bg-red-600" :
+                                            property.status === "leased" ? "bg-blue-600" :
+                                            property.availableForRent ? "bg-yellow-600" : "bg-teal-600"
+                                        }`}>
+                                            {property.status === "sold" ? "Sold" :
+                                             property.status === "leased" ? "Leased" :
+                                             property.availableForRent ? "Leasing" : "For Sale"}
                                         </span>
                                     </div>
                                 </div>

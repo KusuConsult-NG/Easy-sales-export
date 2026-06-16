@@ -20,6 +20,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 
 export interface LandListing { 
     id?: string;
+    type?: "sale" | "lease";
     ownerId: string;
     ownerName: string;
     ownerEmail: string;
@@ -37,7 +38,7 @@ export interface LandListing {
     waterSource?: string;
     images: string[];
     documents: string[];
-    status: "draft" | "pending_verification" | "verified" | "rejected";
+    status: "draft" | "pending_verification" | "verified" | "rejected" | "sold" | "leased";
     availableForSale?: boolean;
     availableForRent?: boolean;
     escrowAvailable?: boolean;
@@ -457,6 +458,7 @@ async function _submitLandListingAction(data: {
             status: "pending_verification",
             availableForSale: data.availableForSale ?? true,
             availableForRent: data.availableForRent ?? false,
+            type: (data.availableForRent && !data.availableForSale) ? "lease" : "sale",
             escrowAvailable: data.escrowAvailable ?? true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 

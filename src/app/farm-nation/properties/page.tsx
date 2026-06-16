@@ -243,8 +243,14 @@ function PropertiesContent() {
                                             </span>
                                         </div>
                                         <div className="absolute top-4 left-4">
-                                            <span className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded-full capitalize">
-                                                {property.status === 'verified' ? 'Available' : property.status}
+                                            <span className={`px-3 py-1 text-white text-xs font-bold rounded-full capitalize ${
+                                                property.status === 'sold' ? 'bg-red-600' :
+                                                property.status === 'leased' ? 'bg-blue-600' :
+                                                property.availableForRent ? 'bg-yellow-600' : 'bg-green-600'
+                                            }`}>
+                                                {property.status === 'sold' ? 'Sold' :
+                                                 property.status === 'leased' ? 'Leased' :
+                                                 property.availableForRent ? 'Leasing' : 'For Sale'}
                                             </span>
                                         </div>
                                     </div>

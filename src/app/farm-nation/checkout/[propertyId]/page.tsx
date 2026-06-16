@@ -357,15 +357,19 @@ export default function CheckoutPage() {
                                     <span>{property.size} acres</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-sm">
-                                    <span className="px-3 py-1 rounded-lg font-semibold bg-green-100 text-green-700">
-                                        Purchase
+                                    <span className={`px-3 py-1 rounded-lg font-semibold ${
+                                        property.availableForRent ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                                    }`}>
+                                        {property.availableForRent ? 'Lease / Rental' : 'Purchase'}
                                     </span>
                                 </div>
                             </div>
 
                             <div className="border-t border-slate-200 pt-4 space-y-3">
                                 <div className="flex justify-between text-sm">
-                                    <span className="text-slate-600">Property Price</span>
+                                    <span className="text-slate-600">
+                                        {property.availableForRent ? 'Lease Price' : 'Property Price'}
+                                    </span>
                                     <span className="font-semibold text-slate-900">
                                         ₦{property.price.toLocaleString()}
                                     </span>
