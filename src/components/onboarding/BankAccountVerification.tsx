@@ -45,6 +45,32 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
         loadBankList();
     }, []);
 
+    // Sync initialData changes
+    useEffect(() => {
+        if (initialData) {
+            if (initialData.bankName) setBankName(initialData.bankName);
+            if (initialData.accountNumber) setAccountNumber(initialData.accountNumber);
+            if (initialData.accountName) setAccountName(initialData.accountName);
+            if (initialData.verified !== undefined) setVerified(initialData.verified);
+            if (initialData.bvn) setBvn(initialData.bvn);
+            if (initialData.bvnVerified !== undefined) setBvnVerified(initialData.bvnVerified);
+        }
+    }, [initialData]);
+
+    // Auto-propagate changes to parent
+    useEffect(() => {
+        if (bankName && accountNumber && accountNumber.length === 10 && accountName) {
+            onVerified({
+                bankName,
+                accountNumber,
+                accountName,
+                verified: true,
+                bvn: bvn || undefined,
+                bvnVerified: bvnVerified || undefined
+            });
+        }
+    }, [bankName, accountNumber, accountName, bvn, bvnVerified, onVerified]);
+
     async function loadBankList() {
         setLoadingBanks(true);
         setBanksError("");
@@ -84,7 +110,7 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
             // SIMULATED VERIFICATION (Requested for demo/testing)
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            const newAccountName = "SIMULATED ACCOUNT NAME";
+            const newAccountName = accountName || "SIMULATED ACCOUNT NAME";
             setAccountName(newAccountName);
             setVerified(true);
             setError("");
@@ -241,18 +267,40 @@ export function BankAccountVerification({ onVerified, initialData }: BankAccount
                 </p>
             </div>
 
-            {/* Account Name (Auto-filled after verification) */}
-            {accountName && (
+            {/* Account Name (Editable if not verified, read-only if verified) */}
+            {verified ? (
+                accountName && (
+                    <div>
+                        <label className="block text-sm font-medium text-slate-900 mb-2">
+                            Account Name
+                        </label>
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <span className="font-medium text-green-900">
+                                {accountName}
+                            </span>
+                        </div>
+                    </div>
+                )
+            ) : (
                 <div>
                     <label className="block text-sm font-medium text-slate-900 mb-2">
                         Account Name
                     </label>
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-green-50 border border-green-200 rounded-lg">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-green-900">
-                            {accountName}
-                        </span>
-                    </div>
+                    <input
+                        type="text"
+                        value={accountName}
+                        onChange={(e) => {
+                            setAccountName(e.target.value);
+                            setError("");
+                        }}
+                        disabled={verifying}
+                        placeholder="Enter your account name"
+                        className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                        Enter the name associated with this account
+                    </p>
                 </div>
             )}
 

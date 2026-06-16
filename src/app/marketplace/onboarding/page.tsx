@@ -243,7 +243,7 @@ export default function MarketplaceOnboarding() {
             businessName: z.string().trim().min(2, "Business name must be at least 2 characters."),
             businessType: z.enum(["individual", "cooperative", "company"], {
                 message: "Please select a business type.",
-            }),
+            }).default("individual"),
             phone: z.string().trim().min(5, "Phone number is required."),
             location: locationSchema,
             termsAccepted: z.boolean().refine(val => val === true, {

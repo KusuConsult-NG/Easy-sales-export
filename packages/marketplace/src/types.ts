@@ -102,7 +102,11 @@ export type ProductCategory =
     | "fishery"
     | "processed"
     | "equipment"
-    | "other";
+    | "other"
+    | "nuts"
+    | "spices"
+    | "roots"
+    | "organic";
 
 export interface Product {
     id: string;

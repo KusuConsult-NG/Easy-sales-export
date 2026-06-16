@@ -1724,6 +1724,22 @@ async function _getRelatedProductsAction(productId: string, limit: number = 4): 
 }
 export const getRelatedProductsAction = withSafeAction("getRelatedProductsAction", _getRelatedProductsAction);
 
+const categoryMapping: Record<string, string[]> = {
+    grains: ["grains"],
+    roots: ["roots"],
+    vegetables: ["vegetables", "fruits"],
+    fruits: ["fruits"],
+    nuts: ["nuts"],
+    spices: ["spices", "spices_herbs_seasonings"],
+    livestock: ["livestock"],
+    poultry: ["poultry"],
+    dairy: ["dairy"],
+    processed: ["processed"],
+    organic: ["organic", "organics"],
+    sea_foods: ["sea_foods", "fishery"],
+    fishery: ["fishery", "sea_foods"],
+};
+
 /**
  * Search Products
  */
@@ -1740,7 +1756,12 @@ async function _searchProductsAction(params: { query?: string;
             .where("availableQuantity", ">", 0);
 
         if (params.category && params.category !== "All Categories") {
-            query = query.where("category", "==", params.category);
+            const mapped = categoryMapping[params.category.toLowerCase()] || [params.category];
+            if (mapped.length > 1) {
+                query = query.where("category", "in", mapped);
+            } else {
+                query = query.where("category", "==", mapped[0]);
+            }
         }
 
         if (params.state && params.state !== "All Locations") { 
@@ -1779,7 +1800,12 @@ async function _searchProductsAction(params: { query?: string;
                 // Fallback: simple query with status and category
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (params.category && params.category !== "All Categories") {
-                    fallbackQuery = fallbackQuery.where("category", "==", params.category);
+                    const mapped = categoryMapping[params.category.toLowerCase()] || [params.category];
+                    if (mapped.length > 1) {
+                        fallbackQuery = fallbackQuery.where("category", "in", mapped);
+                    } else {
+                        fallbackQuery = fallbackQuery.where("category", "==", mapped[0]);
+                    }
                 }
                 
                 snapshot = await fallbackQuery.limit(300).get();

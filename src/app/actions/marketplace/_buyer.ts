@@ -25,6 +25,22 @@ export interface ProductFilters {
     searchTerm?: string; 
 }
 
+const categoryMapping: Record<string, string[]> = {
+    grains: ["grains"],
+    roots: ["roots"],
+    vegetables: ["vegetables", "fruits"],
+    fruits: ["fruits"],
+    nuts: ["nuts"],
+    spices: ["spices", "spices_herbs_seasonings"],
+    livestock: ["livestock"],
+    poultry: ["poultry"],
+    dairy: ["dairy"],
+    processed: ["processed"],
+    organic: ["organic", "organics"],
+    sea_foods: ["sea_foods", "fishery"],
+    fishery: ["fishery", "sea_foods"],
+};
+
 /**
  * Get products with filtering
  */
@@ -34,7 +50,12 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
 
         // Apply Firestore-supported filters
         if (filters?.category && filters.category !== "all") { 
-            query = query.where("category", "==", filters.category);
+            const mapped = categoryMapping[filters.category.toLowerCase()] || [filters.category];
+            if (mapped.length > 1) {
+                query = query.where("category", "in", mapped);
+            } else {
+                query = query.where("category", "==", mapped[0]);
+            }
         }
 
         if (filters?.state) { 
@@ -62,7 +83,12 @@ async function _getProductsAction(filters?: ProductFilters): Promise<ActionRespo
                 // Fallback: only filter by status and category at DB level
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (filters?.category && filters.category !== "all") {
-                    fallbackQuery = fallbackQuery.where("category", "==", filters.category);
+                    const mapped = categoryMapping[filters.category.toLowerCase()] || [filters.category];
+                    if (mapped.length > 1) {
+                        fallbackQuery = fallbackQuery.where("category", "in", mapped);
+                    } else {
+                        fallbackQuery = fallbackQuery.where("category", "==", mapped[0]);
+                    }
                 }
                 snapshot = await fallbackQuery.limit(300).get();
             } else {

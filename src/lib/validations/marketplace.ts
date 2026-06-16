@@ -41,6 +41,10 @@ export const ProductCategorySchema = z.enum([
     "processed",
     "equipment",
     "other",
+    "nuts",
+    "spices",
+    "roots",
+    "organic",
 ]);
 
 export const ProductSchema = z.object({
