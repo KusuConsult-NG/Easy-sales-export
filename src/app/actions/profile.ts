@@ -27,6 +27,7 @@ const profileUpdateSchema = z.object({ firstName: z.string().max(50).optional(),
     bio: z.string().max(500).optional(),
     identityDocument: z.string().optional(),
     photoURL: z.string().optional(),
+    gender: z.enum(["male", "female"]).optional(),
     version: z.number().optional() });
 
 const notificationPreferencesSchema = z.object({ email: z.boolean(),
@@ -76,9 +77,10 @@ export const getUserProfileAction = withSafeAction("getUserProfileAction", async
  * Update user profile information
  * 
  * 🔒 SECURITY NOTE: 
- * Identity fields like 'gender' and 'dateOfBirth' are EXCLUDED from this action.
+ * Identity fields like 'gender' and 'dateOfBirth' are EXCLUDED from subsequent changes.
  * They are set once during registration/verification and should ONLY be changeable 
  * via a specific admin request to prevent "Identity Hopping" in programs like WAVE.
+ * We permit setting it ONCE if it has not been set yet (for legacy compatibility).
  */
 export const updateUserProfileAction = withSafeAction("updateUserProfileAction", async (data: { firstName?: string;
     lastName?: string;
@@ -89,6 +91,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
     bio?: string;
     identityDocument?: string;
     photoURL?: string;
+    gender?: string;
     version?: number; }) => { const sessionResult = await requireSession();
     if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
     const { session } = sessionResult;
@@ -116,6 +119,14 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
             profileComplete: true };
         // Remove version from payload as it's handled by versionedUpdate
         delete updatePayload.version;
+
+        if (validated.gender) {
+            if (existing.gender) {
+                delete updatePayload.gender;
+            } else {
+                updatePayload.gender = validated.gender.toLowerCase();
+            }
+        }
 
         if (validated.firstName || validated.lastName || validated.otherName) { const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";
             const last = validated.lastName ?? existing.lastName ?? existing.fullName?.split(' ').slice(1).join(' ') ?? "";

@@ -39,6 +39,7 @@ export default function ProfilePage() {
         bio: "",
         identityDocument: "",
         photoURL: "",
+        gender: "" as "male" | "female" | "",
         notifications: {
             email: true,
             push: false,
@@ -129,6 +130,7 @@ export default function ProfilePage() {
                     bio: p.bio || "",
                     identityDocument: p.identityDocument || "",
                     photoURL: p.photoURL || "",
+                    gender: p.gender || (session?.user as any)?.gender || "",
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
 
@@ -165,6 +167,7 @@ export default function ProfilePage() {
                     lastName: last,
                     otherName: "",
                     email: session?.user?.email || "",
+                    gender: (session?.user as any)?.gender || "",
                 }));
             }
             setIsFetching(false);
@@ -212,6 +215,7 @@ export default function ProfilePage() {
                 location: userData.location,
                 bio: userData.bio,
                 identityDocument: userData.identityDocument,
+                gender: userData.gender || undefined,
             }));
 
             if (result.success) {
@@ -537,6 +541,30 @@ export default function ProfilePage() {
                                                     required
                                                 />
                                             </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-slate-900">Gender</label>
+                                            {userData.gender ? (
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={userData.gender.charAt(0).toUpperCase() + userData.gender.slice(1)}
+                                                        disabled
+                                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed transition-all"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Locked</span>
+                                                </div>
+                                            ) : (
+                                                <select
+                                                    value={userData.gender}
+                                                    onChange={(e) => setUserData({ ...userData, gender: e.target.value as "male" | "female" | "" })}
+                                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+                                                >
+                                                    <option value="">Select Gender</option>
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                </select>
+                                            )}
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900">Location</label>
