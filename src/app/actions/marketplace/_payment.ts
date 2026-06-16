@@ -361,7 +361,17 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
         const orderData = orderDoc.data();
 
         await db.runTransaction(async (transaction) => { 
-            // 1. Update order status -> escrow_held
+            const items = orderData.items || [];
+
+            // 1. All Reads First
+            const productSnapshots: { ref: any; doc: any; item: any }[] = [];
+            for (const item of items) {
+                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const doc = await transaction.get(productRef);
+                productSnapshots.push({ ref: productRef, doc, item });
+            }
+
+            // 2. Update order status -> escrow_held
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
             transaction.update(orderRef, {
                 paymentStatus: "escrow_held",
@@ -372,7 +382,7 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 _version: FieldValue.increment(1) 
             });
 
-            // 2. Mark payment as processed
+            // 3. Mark payment as processed
             transaction.set(processedRef, { 
                 processedAt: FieldValue.serverTimestamp(),
                 userId: userId,
@@ -381,17 +391,12 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 reference 
             });
 
-            const items = orderData.items || [];
-
-            // 3. Decrement Inventory
-            for (const item of items) { 
-                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
-                const productDoc = await transaction.get(productRef);
-
-                if (productDoc.exists) {
-                    const currentQty = productDoc.data()?.availableQuantity || 0;
+            // 4. Decrement Inventory
+            for (const { ref, doc, item } of productSnapshots) { 
+                if (doc.exists) {
+                    const currentQty = doc.data()?.availableQuantity || 0;
                     if (currentQty >= item.quantity) {
-                        transaction.update(productRef, {
+                        transaction.update(ref, {
                             availableQuantity: FieldValue.increment(-item.quantity),
                             orders: FieldValue.increment(1),
                             _version: FieldValue.increment(1) 
@@ -402,7 +407,7 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 }
             }
 
-            // 4. Calculate Financial Split
+            // 5. Calculate Financial Split
             const sellerTotals: Record<string, number> = {};
             const uniqueSellers = Array.from(new Set(items.map((i: any) => i.sellerId))) as string[];
             const deliveryFeePerSeller = orderData.deliveryFee / uniqueSellers.length;
@@ -444,7 +449,7 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 });
             }
 
-            // 5. Global Ledger Record
+            // 6. Global Ledger Record
             const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
             transaction.set(globalTxRef, {
                 id: reference,

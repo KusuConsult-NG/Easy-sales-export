@@ -247,20 +247,20 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
             return { success: false as const, error: "Order is not in a confirmable state", data: null };
         }
 
+        const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("orderId", "==", orderId).get();
+
         await db.runTransaction(async (transaction) => { 
             transaction.update(orderRef, {
                 status: "delivered",
-                paymentStatus: "paid_to_seller",
-                deliveredAt: FieldValue.serverTimestamp(),
+                buyerConfirmed: true,
+                buyerConfirmedAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) 
             });
 
-            const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("orderId", "==", orderId).get();
             escrowQuery.docs.forEach(doc => { 
                 transaction.update(doc.ref, {
-                    status: "released",
-                    releasedAt: FieldValue.serverTimestamp(),
+                    status: "delivered",
                     updatedAt: FieldValue.serverTimestamp(),
                     _version: FieldValue.increment(1) 
                 });

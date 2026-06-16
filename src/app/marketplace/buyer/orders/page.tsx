@@ -80,9 +80,9 @@ export default function OrdersPage() {
         try {
             const result = await confirmOrderReceiptAction(orderId);
             if (result.success) {
-                showToast("Order confirmed! Funds released.", "success");
+                showToast("Order confirmed! Escrow pending admin release.", "success");
                 // Update local status instead of full reload to save bandwidth
-                setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, orderStatus: 'delivered', paymentStatus: 'released' } : o));
+                setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: 'delivered' } : o));
             } else {
                 showToast(result.error || "Failed to confirm", "error");
             }
@@ -205,7 +205,7 @@ export default function OrdersPage() {
                         </div>
                     ) : (
                         visibleOrders.map((order) => {
-                            const statusConfig = getStatusConfig(order.orderStatus);
+                            const statusConfig = getStatusConfig(order.status);
                             const StatusIcon = statusConfig.icon;
                             // Use first item for display title if multiple
                             const displayTitle = order.items && order.items.length > 0
@@ -271,7 +271,7 @@ export default function OrdersPage() {
                                             View Details
                                         </Link>
 
-                                        {(order.orderStatus === "processing" || order.orderStatus === "in_transit") && order.paymentStatus === "escrow_held" && (
+                                        {(order.status === "processing" || order.status === "in_transit" || order.status === "shipped") && order.paymentStatus === "escrow_held" && (
                                             <button
                                                 onClick={() => handleConfirmReceipt(order.orderId)}
                                                 disabled={processingId === order.orderId}
@@ -282,18 +282,25 @@ export default function OrdersPage() {
                                                 ) : (
                                                     <CheckCircle className="w-4 h-4" />
                                                 )}
-                                                Confirm Receipt & Release Funds
+                                                Confirm Receipt
                                             </button>
                                         )}
 
-                                        {order.orderStatus === "delivered" && (
+                                        {order.status === "delivered" && (
+                                            <div className="text-teal-600 text-sm font-semibold flex items-center gap-2">
+                                                <CheckCircle className="w-4 h-4" />
+                                                Product Received / Pending Admin Payout
+                                            </div>
+                                        )}
+
+                                        {order.status === "completed" && (
                                             <div className="text-green-600 text-sm font-semibold flex items-center gap-2">
                                                 <CheckCircle className="w-4 h-4" />
                                                 Funds Released
                                             </div>
                                         )}
 
-                                        {(order.orderStatus === "delivered" || order.orderStatus === "completed") && (
+                                        {(order.status === "delivered" || order.status === "completed") && (
                                             <Link
                                                 href={`/marketplace/buyer/orders/${order.orderId}/review?productId=${order.items?.[0]?.productId || ""}&sellerId=${order.items?.[0]?.sellerId || ""}`}
                                                 className="flex items-center gap-1.5 px-4 py-2 border border-yellow-400 text-yellow-700 rounded-lg text-sm font-semibold hover:bg-yellow-50 transition"

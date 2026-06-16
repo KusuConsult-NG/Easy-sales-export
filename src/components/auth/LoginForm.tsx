@@ -45,6 +45,13 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [showPassword, setShowPassword] = useState(false);
 
+    // Redirect if already authenticated
+    useEffect(() => {
+        if (status === "authenticated") {
+            router.replace(callbackUrl);
+        }
+    }, [status, router, callbackUrl]);
+
     // Handle form submission
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();

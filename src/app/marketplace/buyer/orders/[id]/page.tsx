@@ -48,12 +48,12 @@ export default function BuyerOrderDetailPage() {
     };
 
     async function handleConfirmReceipt() {
-        if (!confirm("Confirm you received this order? This will release funds to the seller.")) return;
+        if (!confirm("Confirm you received this order? Escrow will be marked ready for admin release.")) return;
         setConfirming(true);
         try {
             const result = await confirmOrderReceiptAction(id as string);
             if (result.success) {
-                showToast("Order confirmed! Funds released to seller.", "success");
+                showToast("Order confirmed! Escrow pending admin release.", "success");
                 setOrder(prev => prev ? { ...prev, status: "delivered" as OrderStatus, buyerConfirmed: true } : prev);
             } else {
                 showToast((result as any).error || "Failed to confirm", "error");
@@ -298,7 +298,7 @@ export default function BuyerOrderDetailPage() {
                             {confirming
                                 ? <Loader2 className="w-5 h-5 animate-spin" />
                                 : <CheckCircle className="w-5 h-5" />}
-                            Confirm Receipt &amp; Release Funds
+                            Confirm Receipt
                         </button>
                     )}
 

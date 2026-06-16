@@ -11,6 +11,8 @@ import { createAdminAuditLog } from "@/lib/audit-log";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
 import { serializeValue, serializeDocs } from "@/lib/firestore-serialize";
+import { smsEscrowReleased } from "@/lib/africastalking";
+import { pushEscrowReleased } from "@/lib/fcm";
 
 // Validation schemas
 const escrowAmountSchema = z.number().min(100).max(100000000); // ₦100 to ₦100M
@@ -350,27 +352,37 @@ async function _releaseEscrowFunds(
 
         const userId = session.user.id;
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
-        let txData: any = null;
+        const txDoc = await txRef.get();
+        if (!txDoc.exists) return { success: false as const, error: "Transaction not found" };
+        const data = txDoc.data()!;
+
+        if (data.status !== "delivered" && data.status !== "disputed" && data.status !== "funded") {
+            return { success: false as const, error: `Cannot release escrow in ${data.status} status.` };
+        }
+
+        if (data.status === "released") return { success: false as const, error: "Escrow already released" };
+        if (!data.amount || data.amount <= 0) return { success: false as const, error: "Invalid transaction amount" };
+
+        const orderId = data.orderId;
+        const orderEscrowsQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("orderId", "==", orderId)
+            .get();
 
         await db.runTransaction(async (tx) => {
-            const txDoc = await tx.get(txRef);
-            if (!txDoc.exists) throw new Error("Transaction not found");
-            const data = txDoc.data()!;
+            // 1. Update Escrow status
+            tx.update(txRef, { status: "released",
+                releasedAt: FieldValue.serverTimestamp(),
+                releasedBy: userId,
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1) });
 
-            if (data.status !== "delivered" && data.status !== "disputed" && data.status !== "funded") {
-                throw new Error(`Cannot release escrow in ${data.status} status.`);
-            }
-
-            if (data.status === "released") throw new Error("Escrow already released");
-            if (!data.amount || data.amount <= 0) throw new Error("Invalid transaction amount");
-
-            txData = data;
+            // 2. Create payout instruction
             const paymentInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(paymentInstructionRef, {
                 type: "escrow_release",
                 escrowId: transactionId,
                 recipientId: data.sellerId,
-                recipientEmail: data.sellerEmail,
+                recipientEmail: data.sellerEmail || "",
                 amount: data.amount,
                 status: "pending_admin_action",
                 description: `Release escrow funds for ${data.productName}`,
@@ -378,38 +390,90 @@ async function _releaseEscrowFunds(
                 createdBy: userId,
                 _version: 0 });
 
-            tx.update(txRef, { status: "released",
-                releasedAt: FieldValue.serverTimestamp(),
-                releasedBy: userId,
-                updatedAt: FieldValue.serverTimestamp(),
-                _version: FieldValue.increment(1) });
-        });
+            // 3. Credit Seller's Wallet directly
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.sellerId);
+            const walletSnap = await tx.get(walletRef);
+            if (!walletSnap.exists) {
+                tx.set(walletRef, {
+                    userId: data.sellerId,
+                    balance: data.amount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                tx.update(walletRef, {
+                    balance: FieldValue.increment(data.amount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
 
-        if (txData) { await createAdminAuditLog({
-                userId,
-                action: 'escrow_released',
-                targetId: transactionId,
-                targetType: "escrow",
-                metadata: { sellerId: txData.sellerId, amount: txData.amount }
+            // 4. Record in Global Ledger
+            const txId = `ESCROW-RELEASE-${transactionId}`;
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(txId);
+            tx.set(globalTxRef, {
+                id: txId,
+                userId: data.sellerId,
+                type: "escrow_payout",
+                module: "escrow",
+                amount: data.amount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: transactionId,
+                description: `Escrow Payout for "${data.productName}"`
             });
 
-            await Promise.allSettled([
-                createNotificationAction({
-                    userId: txData.sellerId,
-                    type: "escrow",
-                    title: "Escrow Funds Released",
-                    message: `₦${txData.amount.toLocaleString()} for "${txData.productName}" has been released.`,
-                    link: `/escrow/${transactionId}`,
-                    linkText: "View Details" }),
-                createNotificationAction({
-                    userId: txData.buyerId,
-                    type: "escrow",
-                    title: "Transaction Completed",
-                    message: `Escrow for "${txData.productName}" completed and funds released.`,
-                    link: `/escrow/${transactionId}`,
-                    linkText: "View Details" }),
-            ]).catch((e) => logger.error("[releaseEscrowFunds] Notifications failed:", e));
-        }
+            // 5. Update Order Status if all escrows for this order are released
+            const otherEscrows = orderEscrowsQuery.docs.filter(d => d.id !== transactionId);
+            const allOthersReleased = otherEscrows.every(d => d.data().status === "released");
+            if (allOthersReleased) {
+                const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
+                tx.update(orderRef, {
+                    status: "completed",
+                    paymentStatus: "paid_to_seller",
+                    escrowReleased: true,
+                    escrowReleasedAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1)
+                });
+            }
+        });
+
+        await createAdminAuditLog({
+            userId,
+            action: 'escrow_released',
+            targetId: transactionId,
+            targetType: "escrow",
+            metadata: { sellerId: data.sellerId, amount: data.amount }
+        });
+
+        await Promise.allSettled([
+            createNotificationAction({
+                userId: data.sellerId,
+                type: "escrow",
+                title: "Escrow Funds Released",
+                message: `₦${data.amount.toLocaleString()} for "${data.productName}" has been released.`,
+                link: `/escrow/${transactionId}`,
+                linkText: "View Details" }),
+            createNotificationAction({
+                userId: data.buyerId,
+                type: "escrow",
+                title: "Transaction Completed",
+                message: `Escrow for "${data.productName}" completed and funds released.`,
+                link: `/escrow/${transactionId}`,
+                linkText: "View Details" }),
+        ]).catch((e) => logger.error("[releaseEscrowFunds] Notifications failed:", e));
+
+        // Send SMS & Push notifications
+        const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(data.sellerId).get();
+        const sellerPhone: string | undefined = sellerDoc.data()?.phone ?? sellerDoc.data()?.phoneNumber;
+        const orderRef = data.orderId;
+
+        await Promise.allSettled([
+            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, data.amount) : Promise.resolve(),
+            pushEscrowReleased(data.sellerId, orderRef, data.amount, transactionId),
+        ]).catch((e) => logger.error("[releaseEscrowFunds] SMS/Push notifications failed:", e));
 
         return { error: null,  success: true as const, data: null };
     } catch (error: any) { logger.error("Release escrow funds error:", {

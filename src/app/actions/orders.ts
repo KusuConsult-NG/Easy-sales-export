@@ -158,8 +158,21 @@ async function _getOrderByIdAction(orderId: string) { let sessionResult;
         if (orderData?.buyerId !== session.user.id) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
+        const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("orderId", "==", orderId)
+            .get();
+
         const { serializeDoc } = await import("@/lib/firestore-serialize");
-        const order = serializeDoc(orderDoc.id, orderDoc.data()) as unknown as Order;
+        const order = serializeDoc(orderDoc.id, orderDoc.data()) as unknown as any;
+
+        if (!escrowQuery.empty) {
+            order.escrowTransactionId = escrowQuery.docs[0].id;
+            order.escrowReleased = escrowQuery.docs.every(doc => doc.data().status === "released");
+        } else {
+            order.escrowTransactionId = null;
+            order.escrowReleased = false;
+        }
+
         return { success: true as const, error: null, data: { order } };
     } catch (error) { logger.error("Get order error:", {
             userId: sessionResult?.session?.user?.id,
