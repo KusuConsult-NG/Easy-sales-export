@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
@@ -61,6 +62,15 @@ export default function AdminLandVerificationPage() {
     const [inspectorNotes, setInspectorNotes] = useState("");
     const [isDispatchingInspector, setIsDispatchingInspector] = useState(false);
     const [activeTab, setActiveTab] = useState<"details" | "inspector">("details");
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [previewTitle, setPreviewTitle] = useState<string>("");
+
+    useEffect(() => {
+        if (!isDetailsModalOpen) {
+            setPreviewUrl(null);
+            setPreviewTitle("");
+        }
+    }, [isDetailsModalOpen]);
 
     // Server-side aggregate stats — independent of pagination
     const [serverStats, setServerStats] = useState<{
@@ -385,7 +395,9 @@ export default function AdminLandVerificationPage() {
 
                 {isDetailsModalOpen && selectedVerification && (
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-                        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
+                        <div className={`bg-white rounded-2xl shadow-2xl w-full my-8 transition-all duration-300 ${
+                            previewUrl ? "max-w-6xl" : "max-w-4xl"
+                        }`}>
                             <div className="p-6 border-b border-slate-200 flex items-center justify-between">
                                 <h2 className="text-2xl font-bold text-slate-900">Land Verification Details</h2>
                                 <button onClick={() => { setIsDetailsModalOpen(false); setActiveTab("details"); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
@@ -408,101 +420,179 @@ export default function AdminLandVerificationPage() {
                                 ))}
                             </div>
 
-                            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
-                                {activeTab === "details" && (
-                                    <>
-                                        <section>
-                                            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                                <MapPin className="w-5 h-5" /> Land Information
-                                            </h3>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold">{selectedVerification.title}</p></div>
-                                                <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold">{selectedVerification.category}</p></div>
-                                                <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold">{selectedVerification.state}, {selectedVerification.lga}</p></div>
-                                                <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
-                                                {selectedVerification.gpsCoordinates && (
-                                                    <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
-                                                )}
-                                            </div>
-                                        </section>
-                                        <section>
-                                            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                                <FileText className="w-5 h-5" /> Legal Documents
-                                            </h3>
-                                            <div className="space-y-2">
-                                                {selectedVerification.documents.landTitle && (
-                                                    <a href={selectedVerification.documents.landTitle} target="_blank" rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition group">
-                                                        <FileText className="w-5 h-5 text-blue-600" />
-                                                        <span className="text-sm font-semibold text-blue-700 group-hover:underline">Land Title Document</span>
-                                                    </a>
-                                                )}
-                                                {selectedVerification.documents.surveyPlan && (
-                                                    <a href={selectedVerification.documents.surveyPlan} target="_blank" rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 p-3 bg-green-50 hover:bg-green-100 rounded-lg transition group">
-                                                        <FileText className="w-5 h-5 text-green-600" />
-                                                        <span className="text-sm font-semibold text-green-700 group-hover:underline">Survey Plan Document</span>
-                                                    </a>
-                                                )}
-                                                {selectedVerification.documents.taxClearance && (
-                                                    <a href={selectedVerification.documents.taxClearance} target="_blank" rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 p-3 bg-amber-50 hover:bg-amber-100 rounded-lg transition group">
-                                                        <FileText className="w-5 h-5 text-amber-600" />
-                                                        <span className="text-sm font-semibold text-amber-700 group-hover:underline">Tax Clearance Document</span>
-                                                    </a>
-                                                )}
-                                            </div>
-                                        </section>
-                                        {selectedVerification.verificationNotes && (
-                                            <section className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                                                <h3 className="text-sm font-bold text-blue-800 mb-1">Inspector / Verification Notes</h3>
-                                                <p className="text-sm text-blue-700 whitespace-pre-line">{selectedVerification.verificationNotes}</p>
+                            <div className="flex flex-col lg:flex-row flex-1 overflow-hidden min-h-[500px]">
+                                {/* Left Side: Details */}
+                                <div className={`p-6 space-y-6 overflow-y-auto max-h-[60vh] flex-1 transition-all ${
+                                    previewUrl ? "lg:max-w-[50%]" : ""
+                                }`}>
+                                    {activeTab === "details" && (
+                                        <>
+                                            <section>
+                                                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                                    <MapPin className="w-5 h-5" /> Land Information
+                                                </h3>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold">{selectedVerification.title}</p></div>
+                                                    <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold">{selectedVerification.category}</p></div>
+                                                    <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold">{selectedVerification.state}, {selectedVerification.lga}</p></div>
+                                                    <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
+                                                    {selectedVerification.gpsCoordinates && (
+                                                        <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
+                                                    )}
+                                                </div>
                                             </section>
-                                        )}
-                                    </>
-                                )}
+                                            <section>
+                                                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                                    <FileText className="w-5 h-5" /> Legal Documents
+                                                </h3>
+                                                <div className="space-y-2">
+                                                    {selectedVerification.documents.landTitle && (
+                                                        <div className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition group">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setPreviewUrl(selectedVerification.documents.landTitle);
+                                                                    setPreviewTitle("Land Title Document");
+                                                                }}
+                                                                className="flex items-center gap-2 text-left"
+                                                            >
+                                                                <FileText className="w-5 h-5 text-blue-600" />
+                                                                <span className="text-sm font-semibold text-blue-700 group-hover:underline">Land Title Document</span>
+                                                            </button>
+                                                            <a href={selectedVerification.documents.landTitle} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                                                                Download
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    {selectedVerification.documents.surveyPlan && (
+                                                        <div className="flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition group">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setPreviewUrl(selectedVerification.documents.surveyPlan);
+                                                                    setPreviewTitle("Survey Plan Document");
+                                                                }}
+                                                                className="flex items-center gap-2 text-left"
+                                                            >
+                                                                <FileText className="w-5 h-5 text-green-600" />
+                                                                <span className="text-sm font-semibold text-green-700 group-hover:underline">Survey Plan Document</span>
+                                                            </button>
+                                                            <a href={selectedVerification.documents.surveyPlan} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 hover:underline">
+                                                                Download
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    {selectedVerification.documents.taxClearance && (
+                                                        <div className="flex items-center justify-between p-3 bg-amber-50 hover:bg-amber-100 rounded-lg transition group">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setPreviewUrl(selectedVerification.documents.taxClearance!);
+                                                                    setPreviewTitle("Tax Clearance Document");
+                                                                }}
+                                                                className="flex items-center gap-2 text-left"
+                                                            >
+                                                                <FileText className="w-5 h-5 text-amber-600" />
+                                                                <span className="text-sm font-semibold text-amber-700 group-hover:underline">Tax Clearance Document</span>
+                                                            </button>
+                                                            <a href={selectedVerification.documents.taxClearance} target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline">
+                                                                Download
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </section>
+                                            {selectedVerification.verificationNotes && (
+                                                <section className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                                                    <h3 className="text-sm font-bold text-blue-800 mb-1">Inspector / Verification Notes</h3>
+                                                    <p className="text-sm text-blue-700 whitespace-pre-line">{selectedVerification.verificationNotes}</p>
+                                                </section>
+                                            )}
+                                        </>
+                                    )}
 
-                                {activeTab === "inspector" && (
-                                    <div className="space-y-5">
-                                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                                            <p className="text-sm font-semibold text-amber-800">🔍 Inspector Dispatch</p>
-                                            <p className="text-xs text-amber-700 mt-1">Assign a field inspector to visit and confirm the GPS coordinates, land boundaries, and document authenticity before final approval.</p>
+                                    {activeTab === "inspector" && (
+                                        <div className="space-y-5">
+                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                                <p className="text-sm font-semibold text-amber-800">🔍 Inspector Dispatch</p>
+                                                <p className="text-xs text-amber-700 mt-1">Assign a field inspector to visit and confirm the GPS coordinates, land boundaries, and document authenticity before final approval.</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                                                    <User className="w-4 h-4 inline mr-1" />Inspector Name <span className="text-red-500">*</span>
+                                                </label>
+                                                <input type="text" value={inspectorName} onChange={e => setInspectorName(e.target.value)}
+                                                    placeholder="e.g. Adeola Bello" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-slate-900 mb-1.5">
+                                                    <Calendar className="w-4 h-4 inline mr-1" />Scheduled Inspection Date <span className="text-red-500">*</span>
+                                                </label>
+                                                <input type="date" value={inspectorDate} onChange={e => setInspectorDate(e.target.value)}
+                                                    min={new Date().toISOString().split("T")[0]}
+                                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-slate-900 mb-1.5">Dispatch Notes (optional)</label>
+                                                <textarea value={inspectorNotes} onChange={e => setInspectorNotes(e.target.value)}
+                                                    placeholder="Any specific instructions for the inspector..." rows={3}
+                                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                                            </div>
+                                            <button
+                                                onClick={() => handleDispatchInspector(selectedVerification.id)}
+                                                disabled={isDispatchingInspector}
+                                                className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/20"
+                                            >
+                                                {isDispatchingInspector ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                                                {isDispatchingInspector ? "Dispatching…" : "Dispatch Inspector"}
+                                            </button>
+                                            <p className="text-xs text-slate-500 text-center">An email notification will be sent to the inspector with the property location and document links.</p>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-semibold text-slate-900 mb-1.5">
-                                                <User className="w-4 h-4 inline mr-1" />Inspector Name <span className="text-red-500">*</span>
-                                            </label>
-                                            <input type="text" value={inspectorName} onChange={e => setInspectorName(e.target.value)}
-                                                placeholder="e.g. Adeola Bello" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    )}
+                                </div>
+
+                                {/* Right Side: Preview */}
+                                {previewUrl && (
+                                    <div className="w-full lg:w-1/2 border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col bg-slate-50 max-h-[60vh]">
+                                        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
+                                            <h4 className="font-bold text-slate-800 text-sm truncate max-w-[200px]" title={previewTitle}>{previewTitle}</h4>
+                                            <div className="flex items-center gap-3">
+                                                <a 
+                                                    href={previewUrl} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                                                >
+                                                    Open Full
+                                                </a>
+                                                <button 
+                                                    onClick={() => setPreviewUrl(null)}
+                                                    className="text-slate-400 hover:text-slate-600 transition"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-semibold text-slate-900 mb-1.5">
-                                                <Calendar className="w-4 h-4 inline mr-1" />Scheduled Inspection Date <span className="text-red-500">*</span>
-                                            </label>
-                                            <input type="date" value={inspectorDate} onChange={e => setInspectorDate(e.target.value)}
-                                                min={new Date().toISOString().split("T")[0]}
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        <div className="flex-1 p-4 flex items-center justify-center overflow-hidden h-full min-h-[400px]">
+                                            {previewUrl.toLowerCase().includes(".pdf") || previewUrl.toLowerCase().includes("/raw/") ? (
+                                                <iframe 
+                                                    src={`https://docs.google.com/viewer?url=${encodeURIComponent(previewUrl)}&embedded=true`}
+                                                    className="w-full h-full min-h-[400px] border-0 rounded-lg bg-white"
+                                                    title={previewTitle}
+                                                />
+                                            ) : (
+                                                <img 
+                                                    src={previewUrl} 
+                                                    alt={previewTitle} 
+                                                    className="max-w-full max-h-full object-contain rounded-lg shadow-sm"
+                                                />
+                                            )}
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-semibold text-slate-900 mb-1.5">Dispatch Notes (optional)</label>
-                                            <textarea value={inspectorNotes} onChange={e => setInspectorNotes(e.target.value)}
-                                                placeholder="Any specific instructions for the inspector..." rows={3}
-                                                className="w-full px-4 py-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-                                        </div>
-                                        <button
-                                            onClick={() => handleDispatchInspector(selectedVerification.id)}
-                                            disabled={isDispatchingInspector}
-                                            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-xl transition shadow-lg shadow-blue-600/20"
-                                        >
-                                            {isDispatchingInspector ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                                            {isDispatchingInspector ? "Dispatching…" : "Dispatch Inspector"}
-                                        </button>
-                                        <p className="text-xs text-slate-500 text-center">An email notification will be sent to the inspector with the property location and document links.</p>
                                     </div>
                                 )}
                             </div>
                             {selectedVerification.verificationStatus === "pending" && (
-                                <div className="p-6 border-t border-slate-200 flex gap-4">
+                                <div className="p-6 border-t border-slate-200 flex gap-4 bg-white">
                                     <button
                                         onClick={() => handleApprove(selectedVerification.id)}
                                         disabled={isProcessing}
