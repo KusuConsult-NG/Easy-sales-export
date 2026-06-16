@@ -375,7 +375,7 @@ export default function PropertyDetailsPage() {
 
                         {/* Seller Info (Protected) */}
                         <div className="bg-white rounded-2xl p-6 shadow-sm">
-                            <h3 className="text-lg font-bold text-slate-900 mb-4">Seller Information</h3>
+                            <h3 className="text-lg font-bold text-slate-900 mb-4">Farm Owner Information</h3>
 
                                 <div className="space-y-3">
                                     <div className="flex items-center gap-3">

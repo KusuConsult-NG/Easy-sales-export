@@ -153,16 +153,15 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        // Fetch application outside transaction
+        const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+            .where("userId", "==", userId);
+        const appSnap = await appQuery.get();
+
         // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-            const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "==", userId);
-            
-            const [userDoc, appSnap] = await Promise.all([
-                transaction.get(userRef),
-                appQuery.get()
-            ]);
+            const userDoc = await transaction.get(userRef);
 
             if (!userDoc.exists) throw new Error("User not found");
 
@@ -215,16 +214,15 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
         const { session } = sessionResult;
 
+        // Fetch application outside transaction
+        const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+            .where("userId", "==", userId);
+        const appSnap = await appQuery.get();
+
         // ── SYNC AUTHORITATIVE RECORD & USER IN A TRANSACTION ──────
         await db.runTransaction(async (transaction) => {
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
-            const appQuery = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("userId", "==", userId);
-            
-            const [userDoc, appSnap] = await Promise.all([
-                transaction.get(userRef),
-                appQuery.get()
-            ]);
+            const userDoc = await transaction.get(userRef);
 
             if (!userDoc.exists) throw new Error("User not found");
 
@@ -777,6 +775,10 @@ const farmNationOnboardingSchema = z.object({
         listingTypes: z.array(z.string()).optional(),
         totalAcreage: z.string().optional(),
         readyToList: z.boolean().optional(),
+        farmLocation: z.string().optional(),
+        latitude: z.string().optional(),
+        longitude: z.string().optional(),
+        farmDocuments: z.array(z.string()).optional(),
     }).optional().nullable(),
     terms: z.object({
         termsAccepted: z.boolean(),

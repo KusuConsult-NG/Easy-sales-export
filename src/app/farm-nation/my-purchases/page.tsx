@@ -84,7 +84,7 @@ Location: ${purchase.propertyLocation || "N/A"}
 BUYER INFORMATION:
 ${session?.user?.name || "Unknown"}
 
-SELLER INFORMATION:
+FARM OWNER INFORMATION:
 ${purchase.sellerName}
 ${purchase.sellerEmail ? `Email: ${purchase.sellerEmail}` : ""}
 ${purchase.sellerPhone ? `Phone: ${purchase.sellerPhone}` : ""}
@@ -335,7 +335,7 @@ This document serves as a record of the purchase agreement initiated through Eas
 
                                             {/* Seller Info */}
                                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                                                <p className="text-xs font-semibold text-blue-800 mb-2">Seller Information</p>
+                                                <p className="text-xs font-semibold text-blue-800 mb-2">Farm Owner Information</p>
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                                                     <div className="flex items-center gap-2 text-slate-900">
                                                         <CheckCircle className="w-4 h-4 text-blue-600" />

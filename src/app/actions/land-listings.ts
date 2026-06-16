@@ -655,7 +655,7 @@ async function _deleteLandListingAction(
 
         await logAdminAction(
             "land_deleted",
-            adminId,
+            session.user.id,
             listingId,
             "land_listing",
             "Listing was permanently deleted"

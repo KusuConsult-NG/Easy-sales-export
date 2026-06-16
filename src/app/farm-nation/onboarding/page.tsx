@@ -220,9 +220,17 @@ export default function FarmNationOnboardingPage() {
                 }).optional(),
             }, { message: "Profile details are required." }),
             interests: z.object({
-                buyerInterests: z.array(z.string()).optional(),
-                sellerCategories: z.array(z.string()).optional(),
-            }).optional(),
+                propertyTypes: z.array(z.string()).optional(),
+                budgetRange: z.string().optional(),
+                preferredSize: z.string().optional(),
+                listingTypes: z.array(z.string()).optional(),
+                totalAcreage: z.string().optional(),
+                readyToList: z.boolean().optional(),
+                farmLocation: z.string().optional(),
+                latitude: z.string().optional(),
+                longitude: z.string().optional(),
+                farmDocuments: z.array(z.string()).optional(),
+            }).optional().nullable(),
             terms: z.object({
                 termsAccepted: z.boolean().refine(val => val === true, {
                     message: "You must accept the Terms of Service.",

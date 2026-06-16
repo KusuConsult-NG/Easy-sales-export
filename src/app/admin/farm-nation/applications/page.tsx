@@ -7,7 +7,7 @@ import { StandardPendingForm } from "@/lib/types/admin";
 import { useAdminData } from "@/hooks/useAdminData";
 import AdminDataTable from "@/components/admin/AdminDataTable";
 import { useToast } from "@/contexts/ToastContext";
-import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X, Eye } from "lucide-react";
+import { Users, CheckCircle, XCircle, Shield, Loader2, Download, X, Eye, FileText } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import DateRangeFilter, { type DateRange } from "@/components/admin/DateRangeFilter";
 import DynamicDetailModal from "@/components/admin/DynamicDetailModal";
@@ -31,9 +31,19 @@ interface SellerProfile {
             submittedAt: any;
         };
     };
+    interests?: any;
     isVerified: boolean;
     createdAt: Date;
 }
+
+const formatRole = (role?: string) => {
+    if (!role) return "—";
+    const lowercaseRole = role.toLowerCase();
+    if (lowercaseRole === "seller") return "Farm Owner";
+    if (lowercaseRole === "both") return "Farm Owner & Buyer";
+    if (lowercaseRole === "buyer") return "Buyer";
+    return role.replace(/_/g, " ");
+};
 
 export default function FarmNationApplicationsPage() {
     const { showToast } = useToast();
@@ -231,7 +241,7 @@ export default function FarmNationApplicationsPage() {
             header: "Role",
             accessor: (item: StandardPendingForm<SellerProfile>) => (
                 <span className="text-sm text-slate-700 capitalize">
-                    {item.data.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
+                    {formatRole(item.data.serviceRegistrations?.farmNation?.role)}
                 </span>
             ),
             hideOnMobile: true
@@ -448,8 +458,8 @@ export default function FarmNationApplicationsPage() {
                             <div className="bg-slate-50 p-4 rounded-xl text-sm space-y-2">
                                 <div className="flex justify-between">
                                     <span className="text-slate-500">Role Applied For</span>
-                                    <span className="font-medium capitalize">
-                                        {selectedSeller.data.serviceRegistrations?.farmNation?.role?.replace(/_/g, " ") || "—"}
+                                    <span className="font-medium">
+                                        {formatRole(selectedSeller.data.serviceRegistrations?.farmNation?.role)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
@@ -460,6 +470,48 @@ export default function FarmNationApplicationsPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Farm Information */}
+                        {(selectedSeller.data.interests?.farmLocation || 
+                          (selectedSeller.data.interests?.farmDocuments && selectedSeller.data.interests.farmDocuments.length > 0) ||
+                          selectedSeller.data.interests?.latitude ||
+                          selectedSeller.data.interests?.longitude) && (
+                            <div>
+                                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Farm Information</h4>
+                                <div className="bg-slate-50 p-4 rounded-xl text-sm space-y-3">
+                                    {selectedSeller.data.interests?.farmLocation && (
+                                        <div>
+                                            <span className="text-slate-500 block text-xs mb-0.5">Farm Location</span>
+                                            <p className="font-medium text-slate-900">{selectedSeller.data.interests.farmLocation}</p>
+                                        </div>
+                                    )}
+                                    {(selectedSeller.data.interests?.latitude || selectedSeller.data.interests?.longitude) && (
+                                        <div>
+                                            <span className="text-slate-500 block text-xs mb-0.5">Coordinates</span>
+                                            <p className="font-medium text-slate-900 font-mono text-xs">
+                                                {selectedSeller.data.interests.latitude ? `Lat: ${selectedSeller.data.interests.latitude}` : "—"}
+                                                {selectedSeller.data.interests.longitude ? `, Long: ${selectedSeller.data.interests.longitude}` : ""}
+                                            </p>
+                                        </div>
+                                    )}
+                                    {selectedSeller.data.interests?.farmDocuments && selectedSeller.data.interests.farmDocuments.length > 0 && (
+                                        <div>
+                                            <span className="text-slate-500 block text-xs mb-1.5">Uploaded Documents</span>
+                                            <ul className="divide-y divide-slate-100 border border-slate-200 rounded-lg bg-white overflow-hidden">
+                                                {selectedSeller.data.interests.farmDocuments.map((doc: string, idx: number) => (
+                                                    <li key={idx} className="flex items-center justify-between p-3 text-sm">
+                                                        <a href={doc} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-teal-600 hover:underline font-medium">
+                                                            <FileText className="w-4 h-4" />
+                                                            Document {idx + 1}
+                                                        </a>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Interests — shown as readable tags, not raw JSON */}
                         {selectedSeller.data.farmNation?.interests && (

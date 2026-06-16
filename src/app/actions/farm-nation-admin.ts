@@ -384,16 +384,17 @@ async function _getFarmNationVerificationStatsAction(): Promise<ActionResponse<{
             // Redis error should not block the action
         }
 
-        const [totalSnap, pendingSnap, verifiedSnap, rejectedSnap] = await Promise.all([
+        const [totalSnap, pendingSnap1, pendingSnap2, verifiedSnap, rejectedSnap] = await Promise.all([
             db.collection(COLLECTIONS.LAND_LISTINGS).count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "pending_verification").count().get(),
+            db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "inspection_scheduled").count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified").count().get(),
             db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "rejected").count().get(),
         ]);
 
         const stats = {
             total: totalSnap.data().count,
-            pending: pendingSnap.data().count,
+            pending: pendingSnap1.data().count + pendingSnap2.data().count,
             verified: verifiedSnap.data().count,
             rejected: rejectedSnap.data().count
         };
@@ -445,9 +446,15 @@ async function _getAdminLandVerificationsAction(options: {
 
         if (options.status && options.status !== "all") {
             const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
-            queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
-                .where("status", "==", mappedStatus)
-                .orderBy("createdAt", orderDirection);
+            if (mappedStatus === "pending_verification") {
+                queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
+                    .where("status", "in", ["pending_verification", "inspection_scheduled"])
+                    .orderBy("createdAt", orderDirection);
+            } else {
+                queryRef = db.collection(COLLECTIONS.LAND_LISTINGS)
+                    .where("status", "==", mappedStatus)
+                    .orderBy("createdAt", orderDirection);
+            }
         }
 
         if (options.lastDocId) {
@@ -457,12 +464,43 @@ async function _getAdminLandVerificationsAction(options: {
             }
         }
 
-        const snapshot = await queryRef.limit(fetchLimit).get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await queryRef.limit(fetchLimit).get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.toLowerCase()?.includes("index")) {
+                logger.warn("getAdminLandVerificationsAction query failed (missing index). Falling back to memory sorting.");
+                indexError = true;
+                
+                let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.LAND_LISTINGS);
+                if (options.status && options.status !== "all") {
+                    const mappedStatus = options.status === "pending" ? "pending_verification" : options.status;
+                    if (mappedStatus === "pending_verification") {
+                        fallbackQuery = fallbackQuery.where("status", "in", ["pending_verification", "inspection_scheduled"]);
+                    } else {
+                        fallbackQuery = fallbackQuery.where("status", "==", mappedStatus);
+                    }
+                }
+                
+                if (options.lastDocId) {
+                    const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(options.lastDocId).get();
+                    if (lastDoc.exists) {
+                        fallbackQuery = fallbackQuery.startAfter(lastDoc);
+                    }
+                }
+                
+                snapshot = await fallbackQuery.limit(fetchLimit).get();
+            } else {
+                throw e;
+            }
+        }
+
         const rawVerifications = serializeDocs(snapshot.docs).map((doc: any) => {
             let mappedVerificationStatus = "pending";
             if (doc.status === "verified") mappedVerificationStatus = "verified";
             else if (doc.status === "rejected") mappedVerificationStatus = "rejected";
-            else if (doc.status === "pending_verification") mappedVerificationStatus = "pending";
+            else if (doc.status === "pending_verification" || doc.status === "inspection_scheduled") mappedVerificationStatus = "pending";
             
             return {
                 ...doc,
@@ -471,6 +509,14 @@ async function _getAdminLandVerificationsAction(options: {
                 verifiedAt: doc.verificationStatus?.verifiedAt || doc.verifiedAt || undefined
             };
         }) as any[];
+
+        if (indexError) {
+            rawVerifications.sort((a, b) => {
+                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return orderDirection === "desc" ? bTime - aTime : aTime - bTime;
+            });
+        }
 
         // HYDRATION: Batch-resolve owner bank details
         const ownerIds = [...new Set(rawVerifications.map((v: any) => v.ownerId).filter(Boolean))];
@@ -581,13 +627,48 @@ async function _getFarmNationTransactionsAction(options: {
                 queryRef = queryRef.startAfter(lastDoc);
             }
         }
-        const snapshot = await queryRef.limit(fetchLimit).get();
+
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await queryRef.limit(fetchLimit).get();
+        } catch (e: any) {
+            if (e.message?.includes("FAILED_PRECONDITION") || e.code === 9 || e.message?.toLowerCase()?.includes("index")) {
+                logger.warn("getFarmNationTransactionsAction query failed (missing index). Falling back to memory sorting.");
+                indexError = true;
+                
+                let fallbackQuery: FirebaseFirestore.Query = db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS);
+                if (options.status && options.status !== "all") {
+                    fallbackQuery = fallbackQuery.where("status", "==", options.status);
+                }
+                
+                if (options.lastDocId) {
+                    const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS).doc(options.lastDocId).get();
+                    if (lastDoc.exists) {
+                        fallbackQuery = fallbackQuery.startAfter(lastDoc);
+                    }
+                }
+                
+                snapshot = await fallbackQuery.limit(fetchLimit).get();
+            } else {
+                throw e;
+            }
+        }
+
         const transactions = serializeDocs(snapshot.docs).map((doc: any) => ({
             ...doc,
             createdAt: doc.createdAt || new Date().toISOString(),
             updatedAt: doc.updatedAt || new Date().toISOString(),
             paymentVerifiedAt: doc.paymentVerifiedAt || undefined
         })) as any[];
+
+        if (indexError) {
+            transactions.sort((a, b) => {
+                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return bTime - aTime;
+            });
+        }
 
         // HYDRATION: Batch-resolve user bank details (Sellers/Participants)
         const participantIds = [...new Set(transactions.map((t: any) => t.sellerId).filter(Boolean))];
