@@ -765,6 +765,7 @@ async function _createProductAction(prevState: unknown, formData: FormData): Pro
             location: {
                 state: formData.get("state") as string || "Lagos",
                 lga: formData.get("lga") as string || "Unknown",
+                nearestMarket: formData.get("nearestMarket") as string || "Unknown",
             },
             deliveryMethod: formData.get("deliveryMethod") || undefined,
             estimatedDeliveryDays: formData.get("estimatedDeliveryDays") ? parseInt(formData.get("estimatedDeliveryDays") as string) : undefined,
@@ -963,6 +964,7 @@ async function _updateProductAction(prevState: unknown, formData: FormData): Pro
             location: {
                 state: formData.get("state") as string || "Lagos",
                 lga: formData.get("lga") as string || "Unknown",
+                nearestMarket: formData.get("nearestMarket") as string || "Unknown",
             },
             deliveryMethod: formData.get("deliveryMethod") || undefined,
             estimatedDeliveryDays: formData.get("estimatedDeliveryDays") ? parseInt(formData.get("estimatedDeliveryDays") as string) : undefined,
@@ -1153,7 +1155,12 @@ async function _getProductByIdAction(productId: string): Promise<ActionResponse<
 
         const data = doc.data();
         const { serializeValue } = await import("@/lib/firestore-serialize");
-        const product = serializeValue(ProductSchema.parse({ id: doc.id, ...data })) as Product;
+        let product: Product;
+        try {
+            product = serializeValue(ProductSchema.parse({ id: doc.id, ...data })) as Product;
+        } catch (e) {
+            product = serializeValue({ id: doc.id, ...data }) as Product;
+        }
 
         return { error: null, success: true as const, data: product };
     } catch (error) { 
@@ -1223,8 +1230,12 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
         const { serializeValue } = await import("@/lib/firestore-serialize");
         const products = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
-            const parsed = ProductSchema.parse({ id: doc.id, ...data });
-            return serializeValue(parsed);
+            try {
+                const parsed = ProductSchema.parse({ id: doc.id, ...data });
+                return serializeValue(parsed);
+            } catch (e) {
+                return serializeValue({ id: doc.id, ...data });
+            }
         });
 
         return { error: null, success: true as const, data: { products } };
@@ -1435,8 +1446,12 @@ async function _getSellerOrdersAction(options: { limit?: number;
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let orders = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
-            const parsed = OrderSchema.parse({ id: doc.id, ...data });
-            return serializeValue(parsed);
+            try {
+                const parsed = OrderSchema.parse({ id: doc.id, ...data });
+                return serializeValue(parsed);
+            } catch (e) {
+                return serializeValue({ id: doc.id, ...data });
+            }
         });
 
         // Server-assisted search
@@ -1625,8 +1640,12 @@ async function _getBuyerOrdersAction(options: { limit?: number;
         const { serializeValue } = await import("@/lib/firestore-serialize");
         const orders = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
-            const parsed = OrderSchema.parse({ id: doc.id, ...data });
-            return serializeValue(parsed);
+            try {
+                const parsed = OrderSchema.parse({ id: doc.id, ...data });
+                return serializeValue(parsed);
+            } catch (e) {
+                return serializeValue({ id: doc.id, ...data });
+            }
         });
 
         let newLastId = undefined;
@@ -1865,7 +1884,11 @@ async function _searchProductsAction(params: { query?: string;
         }
 
         const products = productsData.map((p: any) => {
-            return ProductSchema.parse(p);
+            try {
+                return ProductSchema.parse(p);
+            } catch (e) {
+                return p as Product;
+            }
         });
 
         // Fetch seller names (optimize this with a separate user index/cache later)

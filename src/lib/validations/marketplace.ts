@@ -62,7 +62,8 @@ export const ProductSchema = z.object({
     location: z.object({
         state: z.string().default("Lagos"),
         lga: z.string().default("Unknown"),
-    }).default({ state: "Lagos", lga: "Unknown" }),
+        nearestMarket: z.string().default("Unknown"),
+    }).default({ state: "Lagos", lga: "Unknown", nearestMarket: "Unknown" }),
     deliveryMethod: z.enum(["pickup", "delivery", "both"]).default("delivery"),
     estimatedDeliveryDays: z.number().optional(),
     status: z.enum(["draft", "active", "suspended", "out_of_stock", "deleted", "pending", "rejected"]).default("draft"),

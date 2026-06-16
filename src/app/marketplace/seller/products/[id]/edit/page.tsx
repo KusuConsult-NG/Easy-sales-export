@@ -90,6 +90,7 @@ export default function EditProductPage() {
     // Location & delivery state
     const [state, setState] = useState("");
     const [lga, setLga] = useState("");
+    const [nearestMarket, setNearestMarket] = useState("");
     const [deliveryMethod, setDeliveryMethod] = useState("both");
     const [estimatedDeliveryDays, setEstimatedDeliveryDays] = useState<string>("");
     const [videoUrl, setVideoUrl] = useState("");
@@ -120,6 +121,7 @@ export default function EditProductPage() {
                     // Location
                     setState(prod.location?.state || "");
                     setLga(prod.location?.lga || "");
+                    setNearestMarket(prod.location?.nearestMarket || "");
                     setDeliveryMethod(prod.deliveryMethod || "both");
                     setEstimatedDeliveryDays(prod.estimatedDeliveryDays?.toString() || "");
 
@@ -231,6 +233,7 @@ export default function EditProductPage() {
 
             submitFormData.append("state", state);
             submitFormData.append("lga", lga);
+            submitFormData.append("nearestMarket", nearestMarket);
             submitFormData.append("deliveryMethod", deliveryMethod);
             if (estimatedDeliveryDays) {
                 submitFormData.append("estimatedDeliveryDays", estimatedDeliveryDays);
@@ -628,7 +631,7 @@ export default function EditProductPage() {
                         </div>
 
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
                                         State *
@@ -655,6 +658,19 @@ export default function EditProductPage() {
                                         value={lga}
                                         onChange={(e) => setLga(e.target.value)}
                                         placeholder="e.g., Ikeja"
+                                        className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                        Nearest Market *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={nearestMarket}
+                                        onChange={(e) => setNearestMarket(e.target.value)}
+                                        placeholder="e.g., Mile 12 Market"
                                         className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
                                     />
                                 </div>

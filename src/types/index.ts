@@ -281,7 +281,7 @@ export interface Product {
     sellerName?: string;
 
     // Location
-    location?: { state: string; lga?: string; address?: string };
+    location?: { state: string; lga?: string; address?: string; nearestMarket?: string };
 
     quality?: "Standard" | "Premium" | "Organic";
     createdAt?: Date | any;

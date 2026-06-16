@@ -133,6 +133,7 @@ export interface Product {
     location: {
         state: string;
         lga: string;
+        nearestMarket?: string;
     };
 
     // Delivery

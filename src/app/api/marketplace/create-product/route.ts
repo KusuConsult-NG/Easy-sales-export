@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         const escrowAvailable = formData.get("escrowAvailable") === "true";
         const locationState = (formData.get("state") || formData.get("locationState") || userData?.stateOfOrigin || userData?.state || "Lagos") as string;
         const locationLga = (formData.get("lga") || formData.get("locationLga") || userData?.lga || "Unknown") as string;
+        const locationNearestMarket = (formData.get("nearestMarket") || formData.get("locationNearestMarket") || "Unknown") as string;
 
         if (!name || !category || !description || !unit || !minOrder || !stockQuantity || !retailPrice) {
             return NextResponse.json(
@@ -120,7 +121,8 @@ export async function POST(request: NextRequest) {
             sellerName: sellerBusinessName,
             location: {
                 state: locationState,
-                lga: locationLga
+                lga: locationLga,
+                nearestMarket: locationNearestMarket
             },
             name,
             // Also save as 'title' so getSellerProductsAction (which uses 'title') can find it

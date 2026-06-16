@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Image from "next/image";
-import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X, Store } from "lucide-react";
+import { ShoppingCart, CreditCard, ArrowLeft, Loader2, CheckCircle, X, Store, Plus, Minus, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { MarketplaceErrorBoundary } from "@/components/marketplace/MarketplaceErrorBoundary";
 import { initializeOrderPaymentAction, calculateDeliveryAction } from "@/app/actions/marketplace";
@@ -55,6 +55,42 @@ export default function CheckoutPage() {
             router.push("/marketplace");
         }
     }, [router, session]);
+ 
+    const handleUpdateQuantity = (productId: string, newQty: number) => {
+        const item = cart.find(i => i.id === productId);
+        if (!item) return;
+
+        const minQty = item.minimumOrderQuantity || 1;
+        if (newQty < minQty) {
+            showToast(`Minimum order quantity for this item is ${minQty}`, "warning");
+            return;
+        }
+
+        const updated = cart.map(i => {
+            if (i.id === productId) {
+                return { ...i, quantity: newQty };
+            }
+            return i;
+        });
+        setCart(updated);
+        const userId = session?.user?.id;
+        const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
+        localStorage.setItem(cartKey, JSON.stringify(updated));
+    };
+
+    const handleRemoveProduct = (productId: string) => {
+        const updated = cart.filter(i => i.id !== productId);
+        setCart(updated);
+        const userId = session?.user?.id;
+        const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
+        if (updated.length === 0) {
+            localStorage.removeItem(cartKey);
+            router.push("/marketplace");
+        } else {
+            localStorage.setItem(cartKey, JSON.stringify(updated));
+        }
+        showToast("Product removed from cart", "success");
+    };
 
     // Calculate delivery fee when cart is loaded
     useEffect(() => {
@@ -218,9 +254,37 @@ export default function CheckoutPage() {
                                                     <h3 className="font-bold text-slate-900">
                                                         {item.title}
                                                     </h3>
-                                                    <p className="text-sm text-slate-600">
-                                                        {formatCurrency(price)} × {item.quantity} {item.unit}
+                                                    <p className="text-sm text-slate-600 mb-2">
+                                                        {formatCurrency(price)} per {item.unit}
                                                     </p>
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-slate-50">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                                                                className="px-2.5 py-1.5 hover:bg-slate-200 text-slate-600 transition"
+                                                            >
+                                                                <Minus className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <span className="px-3 font-semibold text-slate-900 min-w-[32px] text-center text-sm">
+                                                                {item.quantity}
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                                                                className="px-2.5 py-1.5 hover:bg-slate-200 text-slate-600 transition"
+                                                            >
+                                                                <Plus className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveProduct(item.id)}
+                                                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg transition"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                                 <p className="font-bold text-primary">
                                                     {formatCurrency(price * item.quantity)}

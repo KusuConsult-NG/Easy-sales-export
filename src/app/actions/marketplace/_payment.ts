@@ -151,6 +151,44 @@ async function _initializeOrderPaymentAction(
             _version: 0 
         });
 
+        // Create Escrow Record for each seller with status: "pending"
+        const sellerTotals: Record<string, number> = {};
+        const uniqueSellers = Array.from(new Set(validatedItems.map((i: any) => i.sellerId))) as string[];
+        const deliveryFeePerSeller = calculatedDeliveryFee / uniqueSellers.length;
+
+        validatedItems.forEach((item: any) => { 
+            const sellerId = item.sellerId;
+            const itemTotal = item.pricePerUnit * item.quantity;
+            sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + itemTotal;
+        });
+
+        uniqueSellers.forEach(sellerId => { 
+            sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
+        });
+
+        for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
+            const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
+            const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
+
+            const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
+            const netAmount = grossAmount - platformFee;
+
+            await escrowRef.set({ 
+                id: escrowId,
+                orderId: orderId,
+                buyerId: userId,
+                sellerId: sellerId,
+                participants: [userId, sellerId],
+                grossAmount: grossAmount,
+                platformFee: platformFee,
+                netAmount: netAmount,
+                status: "pending",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: 0 
+            });
+        }
+
         const primarySellerId = validatedItems[0]?.sellerId;
         if (primarySellerId) { 
             notifyOrderPlaced({
@@ -311,13 +349,15 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 sellerTotals[sellerId] = (sellerTotals[sellerId] || 0) + deliveryFeePerSeller;
             });
 
-            // Create Escrow Record for each seller
+            // Create/Update Escrow Record for each seller to "funded"
             for (const [sellerId, grossAmount] of Object.entries(sellerTotals)) {
                 const escrowId = `ESC-${orderData.orderId}-${sellerId.substring(0, 5)}`;
                 const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
 
                 const platformFee = Math.round(grossAmount * fees.platformFeePercentage);
                 const netAmount = grossAmount - platformFee;
+
+                const originalCreatedAt = orderData.createdAt || FieldValue.serverTimestamp();
 
                 transaction.set(escrowRef, { 
                     id: escrowId,
@@ -329,8 +369,9 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                     platformFee: platformFee,
                     netAmount: netAmount,
                     status: "funded",
-                    createdAt: FieldValue.serverTimestamp(),
+                    createdAt: originalCreatedAt,
                     updatedAt: FieldValue.serverTimestamp(),
+                    paidAt: FieldValue.serverTimestamp(),
                     _version: 0 
                 });
             }

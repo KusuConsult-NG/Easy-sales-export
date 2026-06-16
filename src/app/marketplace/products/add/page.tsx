@@ -31,6 +31,9 @@ export default function AddProductPage() {
         exportPrice: 0,
         certifications: [] as string[],
         escrowAvailable: true,
+        state: "Lagos",
+        lga: "",
+        nearestMarket: "",
     });
 
     const [media, setMedia] = useState({
@@ -62,6 +65,14 @@ export default function AddProductPage() {
         "HACCP Certified",
         "Non-GMO",
         "Rainforest Alliance"
+    ];
+
+    const nigerianStates = [
+        "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+        "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT", "Gombe", "Imo",
+        "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa",
+        "Niger", "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba",
+        "Yobe", "Zamfara"
     ];
 
     function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -403,6 +414,60 @@ export default function AddProductPage() {
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         placeholder="0"
                                         min="0"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Location */}
+                        <section>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
+                                Product Location
+                            </h2>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        State *
+                                    </label>
+                                    <select
+                                        value={formData.state}
+                                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        required
+                                    >
+                                        <option value="">Select State</option>
+                                        {nigerianStates.map(st => (
+                                            <option key={st} value={st}>{st}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        LGA *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.lga}
+                                        onChange={(e) => setFormData({ ...formData, lga: e.target.value })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        placeholder="e.g., Ikeja"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                        Nearest Market *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.nearestMarket}
+                                        onChange={(e) => setFormData({ ...formData, nearestMarket: e.target.value })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        placeholder="e.g., Mile 12 Market"
                                         required
                                     />
                                 </div>
