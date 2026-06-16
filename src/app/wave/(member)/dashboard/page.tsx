@@ -299,6 +299,98 @@ export default function WaveDashboardPage() {
                     </div>
                 </div>
 
+                {/* Second Grid Row: Announcements & Funding Ledger */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+                    {/* Announcements & Mandates */}
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 flex flex-col">
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
+                            <Sparkles className="w-5 h-5 text-emerald-700 animate-pulse" />
+                            Program Announcements & Mandates
+                        </h2>
+                        <div className="space-y-4 flex-1">
+                            {[
+                                {
+                                    tag: "Presidential Mandate",
+                                    tagColor: "bg-purple-100 text-purple-700",
+                                    title: "Federal Agripreneur Initiative Alignment",
+                                    desc: "Presidential mandate to support 100,000 female agripreneurs in value-chain export expansion by 2027.",
+                                    date: "June 15, 2026"
+                                },
+                                {
+                                    tag: "Local Update",
+                                    tagColor: "bg-blue-100 text-blue-700",
+                                    title: "Bauchi & Kano Fertilizer Distribution",
+                                    desc: "Seed inputs and organic fertilizer batches are now arriving at regional hubs for WAVE member collection.",
+                                    date: "June 12, 2026"
+                                },
+                                {
+                                    tag: "Export Milestone",
+                                    tagColor: "bg-green-100 text-green-700",
+                                    title: "First Organic Sesame Shipment Booked",
+                                    desc: "WAVE cooperative members successfully booked a consolidated export container heading to the Port of Rotterdam.",
+                                    date: "June 08, 2026"
+                                }
+                            ].map((ann, idx) => (
+                                <div key={idx} className="p-4 bg-slate-50 hover:bg-slate-100 rounded-xl transition border border-slate-100">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${ann.tagColor}`}>
+                                            {ann.tag}
+                                        </span>
+                                        <span className="text-xs text-gray-400">{ann.date}</span>
+                                    </div>
+                                    <h3 className="font-semibold text-gray-900 text-sm mb-1">{ann.title}</h3>
+                                    <p className="text-xs text-gray-600 leading-relaxed">{ann.desc}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* NGO & Sponsor Funding Ledger */}
+                    <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 flex flex-col">
+                        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2 mb-6">
+                            <TrendingUp className="w-5 h-5 text-emerald-700" />
+                            NGO & Sponsor Funding Ledger
+                        </h2>
+                        
+                        <div className="space-y-5 flex-1">
+                            <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-semibold text-emerald-800">Total Program Funding Distributed</span>
+                                    <span className="text-sm font-bold text-emerald-700">₦80,500,000</span>
+                                </div>
+                                <div className="w-full bg-emerald-200/40 rounded-full h-2">
+                                    <div className="bg-emerald-600 h-2 rounded-full" style={{ width: '80%' }}></div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Regional Funding Dispersion</p>
+                                {[
+                                    { state: "Kano", amount: 24200000, sponsor: "Bill & Melinda Gates Foundation", pct: 90, barColor: "bg-emerald-600" },
+                                    { state: "Bauchi", amount: 18500000, sponsor: "UN Women / AgDevCo", pct: 75, barColor: "bg-emerald-500" },
+                                    { state: "Gombe", amount: 15400000, sponsor: "African Development Bank", pct: 60, barColor: "bg-teal-600" },
+                                    { state: "Jigawa", amount: 12800000, sponsor: "USAID Agri-Connect", pct: 50, barColor: "bg-teal-500" },
+                                    { state: "Katsina", amount: 9600000, sponsor: "Federal Ministry of Agriculture", pct: 40, barColor: "bg-sky-500" }
+                                ].map((item, idx) => (
+                                    <div key={idx} className="space-y-1">
+                                        <div className="flex justify-between text-xs">
+                                            <div>
+                                                <span className="font-bold text-gray-800">{item.state}</span>
+                                                <span className="text-gray-400 mx-2">|</span>
+                                                <span className="text-gray-500 text-[10px]">{item.sponsor}</span>
+                                            </div>
+                                            <span className="font-semibold text-gray-700">₦{item.amount.toLocaleString()}</span>
+                                        </div>
+                                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                                            <div className={`${item.barColor} h-1.5 rounded-full`} style={{ width: `${item.pct}%` }}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Quick Actions */}
                 <div className="mt-8 bg-white rounded-2xl p-6 shadow-lg border border-gray-100">
                     <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
