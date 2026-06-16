@@ -20,6 +20,7 @@ import {
     User,
     ExternalLink,
     Sparkles,
+    Settings,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { db } from "@/lib/firebase";
@@ -160,6 +161,8 @@ export default function DashboardNav() {
         ...(isWaveOrAcademy ? [
             { label: "Certificates", href: "/dashboard/certificates",   icon: Award },
         ] : []),
+        // Profile & Settings
+        { label: "Settings",       href: "/profile",                    icon: Settings },
     ];
 
     function isActive(href: string) {

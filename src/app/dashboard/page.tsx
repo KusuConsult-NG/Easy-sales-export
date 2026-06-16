@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
     Wallet, Package, MessageCircle, Bell, Award, IdCard,
     AlertTriangle, Star, Sparkles, ChevronRight, Loader2,
-    TrendingUp, Users, BookOpen, Landmark, ExternalLink,
+    TrendingUp, Users, BookOpen, Landmark, ExternalLink, Settings,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { collection, doc, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
@@ -384,6 +384,7 @@ function DashboardHomeContent() {
                         {[
                             { label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
                             { label: "Notifications", href: "/dashboard/notifications", icon: Bell },
+                            { label: "Settings", href: "/profile", icon: Settings },
                         ].map(({ label, href, icon: Icon }) => (
                             <Link
                                 key={href}
