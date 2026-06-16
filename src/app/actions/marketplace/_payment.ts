@@ -70,11 +70,50 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
     return { subtotal, validatedItems };
 }
 
+// Helper to estimate total weight of the cart items
+function estimateCartWeight(items: CartItem[]): number {
+    return items.reduce((total, item) => {
+        const unit = (item.unit || "").toLowerCase().trim();
+        let itemWeight = 1; // Default to 1kg per item unit if not specified
+        if (unit === "kg") {
+            itemWeight = 1;
+        } else if (unit === "ton" || unit === "tonne" || unit === "tons" || unit === "tonnes") {
+            itemWeight = 1000;
+        } else if (unit.includes("50kg")) {
+            itemWeight = 50;
+        } else if (unit.includes("25kg")) {
+            itemWeight = 25;
+        } else if (unit.includes("10kg")) {
+            itemWeight = 10;
+        } else if (unit.includes("5kg")) {
+            itemWeight = 5;
+        } else if (unit.includes("bag")) {
+            itemWeight = 50; // Standard bag weight in Nigeria
+        }
+        return total + (itemWeight * item.quantity);
+    }, 0);
+}
+
 // Helper to calculate delivery fee server-side
-function calculateDeliveryFee(items: CartItem[], _location: any, fees: any): number { 
-    const baseFee = fees.baseDeliveryFee || 1500;
-    const additionalItemFee = fees.additionalItemFee || 200;
-    return baseFee + (Math.max(0, items.length - 1) * additionalItemFee); 
+function calculateDeliveryFee(items: CartItem[], location: any, _fees: any): number { 
+    const isWithinCityCenter = location?.isWithinCityCenter !== false; // defaults to true
+    const baseFee = isWithinCityCenter ? 2000 : 3000; // 2k flat rate for city center, 3k outside
+    const distance = typeof location?.distance === "number" ? location.distance : 10; // default to 10KM (within flat rate)
+    const weight = typeof location?.weight === "number" ? location.weight : estimateCartWeight(items); // default to estimated cart weight
+
+    let fee = baseFee;
+
+    // 1. Distance surcharge: 20 naira for every additional KM above 10KM
+    if (distance > 10) {
+        fee += (distance - 10) * 20;
+    }
+
+    // 2. Weight surcharge: 500 naira for every additional 5kg above 5kg
+    if (weight > 5) {
+        fee += Math.ceil((weight - 5) / 5) * 500;
+    }
+
+    return Math.round(fee); 
 }
 
 /**
@@ -85,7 +124,18 @@ async function _initializeOrderPaymentAction(
     cartItems: CartItem[],
     buyerEmail: string,
     buyerPhone: string,
-    deliveryFee: number
+    deliveryFee: number,
+    location?: {
+        recipientName?: string;
+        recipientPhone?: string;
+        street?: string;
+        city?: string;
+        state?: string;
+        lga?: string;
+        distance?: number;
+        weight?: number;
+        isWithinCityCenter?: boolean;
+    }
 ): Promise<ActionResponse<{ authorizationUrl: string; reference: string }>> { 
     let sessionResult;
     try {
@@ -102,7 +152,7 @@ async function _initializeOrderPaymentAction(
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
 
         const fees = await getPlatformFees();
-        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, {}, fees);
+        const calculatedDeliveryFee = calculateDeliveryFee(cartItems, location || {}, fees);
         const totalAmount = subtotal + calculatedDeliveryFee;
 
         if (totalAmount < fees.minOrderAmount) {
@@ -146,6 +196,17 @@ async function _initializeOrderPaymentAction(
             paymentReference: reference,
             paymentStatus: "pending",
             status: "pending_payment",
+            deliveryAddress: {
+                recipientName: location?.recipientName || "",
+                recipientPhone: location?.recipientPhone || buyerPhone,
+                street: location?.street || "",
+                city: location?.city || "",
+                state: location?.state || "",
+                lga: location?.lga || "",
+                distance: location?.distance || 10,
+                weight: location?.weight || estimateCartWeight(cartItems),
+                isWithinCityCenter: location?.isWithinCityCenter !== false
+            },
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
             _version: 0 
@@ -553,7 +614,7 @@ async function _createPaymentOnDeliveryOrderAction(
 
         const { subtotal, validatedItems } = await validateCartItems(cartItems);
         const fees = await getPlatformFees();
-        const deliveryFee = calculateDeliveryFee(cartItems, {}, fees);
+        const deliveryFee = calculateDeliveryFee(cartItems, deliveryAddress, fees);
         const totalAmount = subtotal + deliveryFee;
 
         if (totalAmount < fees.minOrderAmount) { 

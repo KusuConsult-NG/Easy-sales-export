@@ -11,12 +11,37 @@ import { initializeOrderPaymentAction, calculateDeliveryAction } from "@/app/act
 import { useToast } from "@/contexts/ToastContext";
 import PhoneInput, { isValidNigerianPhone } from "@/components/ui/PhoneInput";
 import type { Product, CartItem } from "@/lib/types/marketplace";
+import { NIGERIAN_LOCATIONS } from "@/lib/locations";
+import { getUserProfileAction } from "@/app/actions/profile";
 
 // Disable static generation for this page - must be client-only due to Paystack
 export const dynamic = 'force-dynamic';
 
 interface LocalCartItem extends Product {
     quantity: number;
+}
+
+function estimateCartWeight(items: any[]): number {
+    return items.reduce((total, item) => {
+        const unit = (item.unit || "").toLowerCase().trim();
+        let itemWeight = 1; // Default to 1kg per item unit if not specified
+        if (unit === "kg") {
+            itemWeight = 1;
+        } else if (unit === "ton" || unit === "tonne" || unit === "tons" || unit === "tonnes") {
+            itemWeight = 1000;
+        } else if (unit.includes("50kg")) {
+            itemWeight = 50;
+        } else if (unit.includes("25kg")) {
+            itemWeight = 25;
+        } else if (unit.includes("10kg")) {
+            itemWeight = 10;
+        } else if (unit.includes("5kg")) {
+            itemWeight = 5;
+        } else if (unit.includes("bag")) {
+            itemWeight = 50;
+        }
+        return total + (itemWeight * item.quantity);
+    }, 0);
 }
 
 export default function CheckoutPage() {
@@ -29,32 +54,77 @@ export default function CheckoutPage() {
     const [email, setEmail] = useState("");
     const [phone, setPhone] = useState("");
     const [phoneError, setPhoneError] = useState<string>("");
+    
+    const [recipientName, setRecipientName] = useState("");
     const [deliveryAddress, setDeliveryAddress] = useState({
         street: "",
         city: "",
         state: "",
         lga: "",
     });
+    const [distance, setDistance] = useState<number>(10);
+    const [weight, setWeight] = useState<number>(0);
+    const [isWithinCityCenter, setIsWithinCityCenter] = useState<boolean>(true);
+    const [savedAddress, setSavedAddress] = useState<{
+        street: string;
+        city: string;
+        state: string;
+        lga: string;
+    } | null>(null);
+
     const [deliveryFee, setDeliveryFee] = useState<number>(0);
     const [isCalculatingFee, setIsCalculatingFee] = useState(true);
     const [isClient, setIsClient] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-         
         setIsClient(true);
         if (session?.user?.email) setEmail(session.user.email);
+        if (session?.user?.name) setRecipientName(session.user.name);
 
         // Use user-scoped cart key to match what product page sets
         const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
         const savedCart = localStorage.getItem(cartKey);
         if (savedCart) {
-            setCart(JSON.parse(savedCart));
+            const parsedCart = JSON.parse(savedCart);
+            setCart(parsedCart);
+            setWeight(estimateCartWeight(parsedCart));
         } else {
             router.push("/marketplace");
         }
     }, [router, session]);
+
+    useEffect(() => {
+        async function loadProfileAddress() {
+            try {
+                const res = await getUserProfileAction();
+                if (res.success && res.data?.profile) {
+                    const prof = res.data.profile;
+                    if (prof.address?.street || prof.address?.state) {
+                        setSavedAddress({
+                            street: prof.address.street || "",
+                            city: prof.address.city || "",
+                            state: prof.address.state || "",
+                            lga: prof.address.lga || "",
+                        });
+                    } else if (prof.residentialAddress) {
+                        setSavedAddress({
+                            street: prof.residentialAddress,
+                            city: prof.city || "",
+                            state: prof.state || "",
+                            lga: prof.lga || "",
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load user profile address:", err);
+            }
+        }
+        if (session) {
+            loadProfileAddress();
+        }
+    }, [session]);
  
     const handleUpdateQuantity = (productId: string, newQty: number) => {
         const item = cart.find(i => i.id === productId);
@@ -73,6 +143,7 @@ export default function CheckoutPage() {
             return i;
         });
         setCart(updated);
+        setWeight(estimateCartWeight(updated));
         const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
         localStorage.setItem(cartKey, JSON.stringify(updated));
@@ -81,6 +152,7 @@ export default function CheckoutPage() {
     const handleRemoveProduct = (productId: string) => {
         const updated = cart.filter(i => i.id !== productId);
         setCart(updated);
+        setWeight(estimateCartWeight(updated));
         const userId = session?.user?.id;
         const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
         if (updated.length === 0) {
@@ -92,7 +164,7 @@ export default function CheckoutPage() {
         showToast("Product removed from cart", "success");
     };
 
-    // Calculate delivery fee when cart is loaded
+    // Calculate delivery fee when cart is loaded or details change
     useEffect(() => {
         async function fetchFee() {
             if (cart.length === 0) return;
@@ -108,7 +180,11 @@ export default function CheckoutPage() {
                     selectedTier: item.pricingTiers[0]?.type || "retail",
                     addedAt: new Date(),
                 }));
-                const res = await calculateDeliveryAction(cartItems);
+                const res = await calculateDeliveryAction(cartItems, {
+                    distance,
+                    weight,
+                    isWithinCityCenter
+                });
                 if (res.success && res.data) {
                     setDeliveryFee(res.data.fee);
                 } else {
@@ -123,7 +199,7 @@ export default function CheckoutPage() {
             }
         }
         fetchFee();
-    }, [cart, showToast]);
+    }, [cart, distance, weight, isWithinCityCenter, showToast]);
 
     const subtotal = cart.reduce((sum, item) => sum + (item.pricingTiers[0]?.price || 0) * item.quantity, 0);
 
@@ -141,6 +217,16 @@ export default function CheckoutPage() {
         // Validate phone number
         if (!isValidNigerianPhone(phone)) {
             setPhoneError("Please enter a valid Nigerian phone number");
+            return;
+        }
+
+        if (!recipientName) {
+            setError("Please provide the recipient's name");
+            return;
+        }
+
+        if (!deliveryAddress.street || !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.lga) {
+            setError("Please fill out all delivery address fields");
             return;
         }
 
@@ -171,7 +257,18 @@ export default function CheckoutPage() {
                 cartItems,
                 email,
                 phone,
-                deliveryFee
+                deliveryFee,
+                {
+                    recipientName,
+                    recipientPhone: phone,
+                    street: deliveryAddress.street,
+                    city: deliveryAddress.city,
+                    state: deliveryAddress.state,
+                    lga: deliveryAddress.lga,
+                    distance,
+                    weight,
+                    isWithinCityCenter
+                }
             );
 
             if (result.success ) {
@@ -324,7 +421,184 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
+                            {/* Delivery Address & Details */}
+                            <div className="bg-white rounded-2xl p-6">
+                                <div className="flex justify-between items-start flex-wrap gap-4 mb-4">
+                                    <h2 className="text-xl font-bold text-slate-900">
+                                        Delivery Address
+                                    </h2>
+                                    {savedAddress && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDeliveryAddress({
+                                                    street: savedAddress.street,
+                                                    city: savedAddress.city,
+                                                    state: savedAddress.state,
+                                                    lga: savedAddress.lga,
+                                                });
+                                                showToast("Address populated from your profile!", "success");
+                                            }}
+                                            className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 rounded-lg border border-primary/20 transition"
+                                        >
+                                            📋 Use saved profile address
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            Recipient's Name
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={recipientName}
+                                            onChange={(e) => setRecipientName(e.target.value)}
+                                            placeholder="e.g. John Doe"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            Street Address
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={deliveryAddress.street}
+                                            onChange={(e) => setDeliveryAddress({ ...deliveryAddress, street: e.target.value })}
+                                            placeholder="e.g. 123 Main Street"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            City
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={deliveryAddress.city}
+                                            onChange={(e) => setDeliveryAddress({ ...deliveryAddress, city: e.target.value })}
+                                            placeholder="e.g. Ikeja"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            State
+                                        </label>
+                                        <select
+                                            value={deliveryAddress.state}
+                                            onChange={(e) => {
+                                                const selectedState = e.target.value;
+                                                setDeliveryAddress({
+                                                    ...deliveryAddress,
+                                                    state: selectedState,
+                                                    lga: "" // Reset LGA when state changes
+                                                });
+                                            }}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
+                                            required
+                                        >
+                                            <option value="">Select State</option>
+                                            {Object.keys(NIGERIAN_LOCATIONS).map((st) => (
+                                                <option key={st} value={st}>{st}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                            Local Government Area (LGA)
+                                        </label>
+                                        <select
+                                            value={deliveryAddress.lga}
+                                            onChange={(e) => setDeliveryAddress({ ...deliveryAddress, lga: e.target.value })}
+                                            disabled={!deliveryAddress.state}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                                            required
+                                        >
+                                            <option value="">Select LGA</option>
+                                            {deliveryAddress.state && NIGERIAN_LOCATIONS[deliveryAddress.state]?.map((lga) => (
+                                                <option key={lga} value={lga}>{lga}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
 
+                            {/* Delivery Options & Calculator Parameters */}
+                            <div className="bg-white rounded-2xl p-6 space-y-6">
+                                <h2 className="text-xl font-bold text-slate-900">
+                                    Delivery Customizations
+                                </h2>
+                                <p className="text-sm text-slate-600">
+                                    Adjust distance and weight options below to estimate accurate delivery costs.
+                                </p>
+                                
+                                <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    {/* Distance slider */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-sm font-semibold text-slate-900">
+                                                Estimated Delivery Distance: <span className="text-primary font-bold">{distance} KM</span>
+                                            </label>
+                                            <span className="text-xs text-slate-600">(10KM included in flat rate)</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="100"
+                                            value={distance}
+                                            onChange={(e) => setDistance(Number(e.target.value))}
+                                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                                        />
+                                        <div className="flex justify-between text-xs text-slate-600 mt-1">
+                                            <span>1 KM</span>
+                                            <span>50 KM</span>
+                                            <span>100 KM</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Weight manual override */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-sm font-semibold text-slate-900">
+                                                Total Estimated Weight (kg)
+                                            </label>
+                                            <span className="text-xs text-slate-600">(5kg included in flat rate)</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                min="0.1"
+                                                step="0.1"
+                                                value={weight}
+                                                onChange={(e) => setWeight(Math.max(0.1, Number(e.target.value)))}
+                                                className="w-32 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary text-sm font-semibold"
+                                            />
+                                            <span className="text-sm text-slate-600">kg</span>
+                                        </div>
+                                    </div>
+
+                                    {/* City Center toggle */}
+                                    <div className="pt-2 border-t border-slate-200">
+                                        <label className="flex items-start gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isWithinCityCenter}
+                                                onChange={(e) => setIsWithinCityCenter(e.target.checked)}
+                                                className="rounded text-primary focus:ring-primary w-5 h-5 mt-0.5"
+                                            />
+                                            <div>
+                                                <span className="text-sm font-semibold text-slate-900">Within City Center</span>
+                                                <p className="text-xs text-slate-600">Flat rate of ₦2,000 applies to deliveries within the city center.</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Order Total */}

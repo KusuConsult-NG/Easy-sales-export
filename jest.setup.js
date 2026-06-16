@@ -106,6 +106,13 @@ jest.mock('@/lib/session-guard', () => ({
     isSessionExpired: () => false,
 }));
 
+// Mock next/cache globally to prevent unstable_cache invariant issues in Jest
+jest.mock('next/cache', () => ({
+    unstable_cache: (fn) => fn,
+    revalidateTag: jest.fn(),
+    revalidatePath: jest.fn(),
+}));
+
 // Suppress console errors in tests (optional)
 global.console = {
     ...console,
