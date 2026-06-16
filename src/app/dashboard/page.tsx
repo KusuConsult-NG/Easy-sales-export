@@ -35,7 +35,8 @@ interface RecentNotification {
 }
 
 /** Returns all platform modules with their dynamic application status */
-function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[]) {
+function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[], gender?: string) {
+    const isMale = gender?.toLowerCase() === "male";
     const modulesDef = [
         {
             id: "academy",
@@ -97,7 +98,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             dashboardUrl: "/farm-nation/dashboard",
             pendingUrl: "/farm-nation/onboarding/pending",
         }
-    ];
+    ].filter(mod => !(mod.id === "wave" && isMale));
 
     return modulesDef.map(mod => {
         const registrationStatus = serviceRegistrations[mod.id]?.status 
@@ -269,7 +270,7 @@ function DashboardHomeContent() {
         );
     }
 
-    const platformModules = getPlatformModules(serviceRegistrations, roles);
+    const platformModules = getPlatformModules(serviceRegistrations, roles, session?.user?.gender);
 
     const statCards = [
         { label: "Wallet Balance", value: fmt(stats.walletBalance), icon: Wallet, color: "text-emerald-600 bg-emerald-50", href: "/dashboard/wallet" },

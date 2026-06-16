@@ -62,6 +62,7 @@ export const authConfig = {
                 token.sellerVerificationStatus = user.sellerVerificationStatus;
                 token.serviceRegistrations = user.serviceRegistrations;
                 token.currentModuleId = user.currentModuleId || "platform";
+                token.gender = user.gender;
             }
             return token;
         },
@@ -78,6 +79,7 @@ export const authConfig = {
                 session.user.sellerVerificationStatus = token.sellerVerificationStatus as string | undefined;
                 session.user.serviceRegistrations = token.serviceRegistrations as Record<string, any> | undefined;
                 session.user.currentModuleId = token.currentModuleId as string || "platform";
+                session.user.gender = token.gender as "male" | "female" | undefined;
             }
             return session;
         },

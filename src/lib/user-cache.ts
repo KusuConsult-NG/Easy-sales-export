@@ -28,6 +28,7 @@ export interface CachedUserProfile {
     location?: string;
     bio?: string;
     identityDocument?: any;
+    gender?: string;
 }
 
 /**
@@ -81,6 +82,7 @@ export async function getUserProfile(userId: string): Promise<CachedUserProfile 
             location: userData.location,
             bio: userData.bio,
             identityDocument: userData.identityDocument,
+            gender: userData.gender,
         };
 
         // Cache for next time

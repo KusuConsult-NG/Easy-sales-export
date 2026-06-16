@@ -25,6 +25,7 @@ export default function RegisterForm() {
         password: "",
         confirmPassword: "",
         phone: "",
+        gender: "",
     });
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -80,7 +81,7 @@ export default function RegisterForm() {
         }
     }, [state.error]);
 
-    function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    function handleInputChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         const { name, value } = e.target;
         setFormData({
             ...formData,
@@ -194,6 +195,26 @@ export default function RegisterForm() {
                                 disabled={isPending}
                                 required
                             />
+                        </div>
+
+                        {/* Gender Field */}
+                        <div className="space-y-2">
+                            <label htmlFor="gender" className="block text-sm font-semibold text-slate-900">
+                                Gender
+                            </label>
+                            <select
+                                id="gender"
+                                name="gender"
+                                value={formData.gender}
+                                onChange={handleInputChange}
+                                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500/50 transition-all cursor-pointer"
+                                disabled={isPending}
+                                required
+                            >
+                                <option value="" disabled>Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
                         </div>
 
                         {/* Password Field */}

@@ -24,6 +24,8 @@ export default function HubNavigation() {
         await signOut({ callbackUrl: "/auth/login" });
     };
 
+    const isMale = session?.user?.gender?.toLowerCase() === "male";
+
     const navItems = [
         // Home removed per user request
         { label: "About Easy Sales Export", href: "/about" },
@@ -38,7 +40,7 @@ export default function HubNavigation() {
                 ...(toggles.academy_courses !== false ? [{ label: "Academy", href: "/academy" }] : []),
             ],
         },
-        ...(toggles.wave_program !== false ? [{ label: "WAVE Program", href: "/wave/landing" }] : []),
+        ...(toggles.wave_program !== false && !isMale ? [{ label: "WAVE Program", href: "/wave/landing" }] : []),
         { label: "Export", href: "/export" },
         { label: "Contact", href: "/contact" },
     ];

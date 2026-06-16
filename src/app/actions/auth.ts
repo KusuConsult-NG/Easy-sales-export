@@ -316,6 +316,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
+    const gender = formData.get("gender") as string;
 
     try {
         const ip = await getActionClientIp();
@@ -329,7 +330,8 @@ export async function registerAction(prevState: any, formData: FormData) { const
             email,
             password,
             confirmPassword,
-            phone: formData.get("phone") as string });
+            phone: formData.get("phone") as string,
+            gender });
 
         // 🔒 DEDUP GUARD: Check phone uniqueness before touching Firebase Auth
         // Prevents multi-account fraud (same phone, different email addresses)
@@ -374,6 +376,7 @@ export async function registerAction(prevState: any, formData: FormData) { const
             otherName: registrationOtherName || undefined,
             email: validatedData.email,
             phone: normalisedPhone,
+            gender: validatedData.gender.toLowerCase() as "male" | "female",
             roles: userRoles,
             isVerified: true,  // canonical field
             verified: true,    // legacy compat field — keep both so old queries still work

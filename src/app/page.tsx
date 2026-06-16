@@ -10,8 +10,12 @@ import {
     ArrowRight,
     Sparkles
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 export default function HubPage() {
+    const { data: session } = useSession();
+    const isMale = session?.user?.gender?.toLowerCase() === "male";
+
     const modules = [
         {
             title: "WAVE Program",
@@ -64,7 +68,7 @@ export default function HubPage() {
             gradient: "from-purple-500 to-pink-500",
             stats: "8,932 Courses Completed",
         },
-    ];
+    ].filter(m => !(m.title === "WAVE Program" && isMale));
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -75,43 +79,45 @@ export default function HubPage() {
             <HubHero />
 
             {/* ═══ WAVE Briefing Announcement Banner ═══ */}
-            <section className="py-8 px-4">
-                <Link href="/wave/briefing" className="block max-w-5xl mx-auto group">
-                    <div className="relative overflow-hidden rounded-3xl bg-white p-8 md:p-10 border border-green-200 shadow-xl shadow-green-900/5 hover:shadow-green-900/10 transition-all duration-500 hover:scale-[1.01]">
-                        {/* Background pattern */}
-                        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
-                            backgroundImage: `radial-gradient(circle at 2px 2px, #14532d 0.5px, transparent 0)`,
-                            backgroundSize: '40px 40px'
-                        }} />
-                        {/* Glow accent */}
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-green-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
-                        <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50 rounded-full blur-3xl opacity-60 pointer-events-none" />
+            {!isMale && (
+                <section className="py-8 px-4">
+                    <Link href="/wave/briefing" className="block max-w-5xl mx-auto group">
+                        <div className="relative overflow-hidden rounded-3xl bg-white p-8 md:p-10 border border-green-200 shadow-xl shadow-green-900/5 hover:shadow-green-900/10 transition-all duration-500 hover:scale-[1.01]">
+                            {/* Background pattern */}
+                            <div className="absolute inset-0 opacity-5 pointer-events-none" style={{
+                                backgroundImage: `radial-gradient(circle at 2px 2px, #14532d 0.5px, transparent 0)`,
+                                backgroundSize: '40px 40px'
+                            }} />
+                            {/* Glow accent */}
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-green-100 rounded-full blur-3xl opacity-60 pointer-events-none" />
+                            <div className="absolute bottom-0 left-0 w-48 h-48 bg-green-50 rounded-full blur-3xl opacity-60 pointer-events-none" />
 
-                        <div className="relative z-10">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-                                <div className="flex-1">
-                                    <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-4 py-1.5 rounded-full text-xs font-bold mb-4 uppercase tracking-wider">
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                        <span>🎯 Free Registration • Limited Seats</span>
+                            <div className="relative z-10">
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                                    <div className="flex-1">
+                                        <div className="inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-4 py-1.5 rounded-full text-xs font-bold mb-4 uppercase tracking-wider">
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                            <span>🎯 Free Registration • Limited Seats</span>
+                                        </div>
+                                        <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-2">
+                                            WAVE National Awareness Briefing
+                                        </h3>
+                                        <p className="text-slate-600 text-sm md:text-base max-w-xl font-medium">
+                                            One-day live session on how to position yourself inside government-backed agricultural structures — access to <strong className="text-green-800">₦1M capital</strong>, <strong className="text-green-800">₦20M+ growth in 5 years</strong>, and national food security contracts.
+                                        </p>
                                     </div>
-                                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 mb-2">
-                                        WAVE National Awareness Briefing
-                                    </h3>
-                                    <p className="text-slate-600 text-sm md:text-base max-w-xl font-medium">
-                                        One-day live session on how to position yourself inside government-backed agricultural structures — access to <strong className="text-green-800">₦1M capital</strong>, <strong className="text-green-800">₦20M+ growth in 5 years</strong>, and national food security contracts.
-                                    </p>
-                                </div>
-                                <div className="shrink-0 flex items-center">
-                                    <span className="inline-flex items-center gap-2 bg-green-900 text-white px-8 py-4 rounded-xl text-base font-bold shadow-lg shadow-green-900/20 group-hover:bg-green-800 transition-all group-hover:-translate-y-0.5">
-                                        <span>Reserve Your Seat</span>
-                                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                                    </span>
+                                    <div className="shrink-0 flex items-center">
+                                        <span className="inline-flex items-center gap-2 bg-green-900 text-white px-8 py-4 rounded-xl text-base font-bold shadow-lg shadow-green-900/20 group-hover:bg-green-800 transition-all group-hover:-translate-y-0.5">
+                                            <span>Reserve Your Seat</span>
+                                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </Link>
-            </section>
+                    </Link>
+                </section>
+            )}
 
             {/* Platform Statistics */}
             <PlatformStats />

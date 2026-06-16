@@ -114,6 +114,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             roles: (cachedProfile.roles || []) as UserRole[],
                             verified: true,
                             serviceRegistrations: cachedProfile.serviceRegistrations || {},
+                            gender: cachedProfile.gender as "male" | "female" | undefined,
                         };
                     }
 
@@ -172,6 +173,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         roles: (userData.roles || []) as UserRole[],
                         verified: userData.verified ?? true,
                         serviceRegistrations: userData.serviceRegistrations || {},
+                        gender: userData.gender as "male" | "female" | undefined,
                     };
                 } catch (error: any) {
                     // ── CRITICAL: Log the REAL error BEFORE mapping it ────────
@@ -253,6 +255,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             token.sellerVerificationStatus = (cachedProfile as any).sellerVerificationStatus;
                             token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
                             token.isBanned = cachedProfile.isBanned || cachedProfile.status === "banned" || cachedProfile.suspended || false;
+                            token.gender = cachedProfile.gender;
                             token.lastSyncedAt = now;
                         } else {
                             // Cache miss (invalidated by admin approval) and getUserProfile returned null.
@@ -270,6 +273,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                     token.sellerVerificationStatus = userData.sellerVerificationStatus;
                                     token.serviceRegistrations = userData.serviceRegistrations || {};
                                     token.isBanned = userData.isBanned || userData.status === "banned" || userData.suspended || false;
+                                    token.gender = userData.gender;
                                     token.lastSyncedAt = now;
                                 }
                             } catch (fsErr) {
@@ -401,6 +405,7 @@ declare module "next-auth" {
             sellerVerificationStatus?: string;
             serviceRegistrations?: Record<string, any>;
             currentModuleId?: string;
+            gender?: "male" | "female";
         };
         firebaseToken?: string;
     }
@@ -416,5 +421,6 @@ declare module "next-auth" {
         sellerVerificationStatus?: string;
         serviceRegistrations?: Record<string, any>;
         currentModuleId?: string;
+        gender?: "male" | "female";
     }
 }

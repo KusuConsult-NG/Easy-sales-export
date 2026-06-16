@@ -57,6 +57,20 @@ const authMiddleware = auth((req: any) => {
         return NextResponse.redirect(loginUrl);
     }
 
+    // ── 1.2. Gender-based WAVE Program Restriction ─────────────────────
+    if (isLoggedIn) {
+        const isMale = req.auth?.user?.gender?.toLowerCase() === "male";
+        const userRoles = req.auth?.user?.roles || [];
+        const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
+        const normalizedHostname = hostname.replace(/^www\./, "");
+        const rewritePrefix = DOMAIN_MAP[normalizedHostname];
+
+        if (isMale && !isAdmin && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
+            const redirectUrl = new URL("/", req.nextUrl.origin);
+            return NextResponse.redirect(redirectUrl);
+        }
+    }
+
     const requestHeaders = new Headers(req.headers);
     requestHeaders.set("x-url", req.url);
     requestHeaders.set("x-invoke-path", pathname);

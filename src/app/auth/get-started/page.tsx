@@ -97,6 +97,9 @@ export default function GetStartedPage() {
         );
     }
 
+    const isMale = session?.user?.gender?.toLowerCase() === "male";
+    const filteredModules = modules.filter(m => !(m.id === "wave" && isMale));
+
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 relative">
             {/* Back to Hub Navigation */}
@@ -124,7 +127,7 @@ export default function GetStartedPage() {
 
                 {/* Module Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {modules.map((module) => {
+                    {filteredModules.map((module) => {
                         const Icon = module.icon;
                         return (
                             <button
