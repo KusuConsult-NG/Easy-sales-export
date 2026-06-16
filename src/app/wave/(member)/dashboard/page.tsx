@@ -429,6 +429,73 @@ export default function WaveDashboardPage() {
                         </button>
                     </div>
                 </div>
+
+                {/* Agribusiness, Trade & Export Gateways */}
+                <div className="mt-8 bg-emerald-900 rounded-3xl p-8 text-white relative overflow-hidden shadow-xl">
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5 pointer-events-none" />
+                    <div className="relative z-10">
+                        <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                            <Sparkles className="w-6 h-6 text-emerald-300 animate-pulse" />
+                            Agribusiness, Trade & Export Gateways
+                        </h2>
+                        <p className="text-emerald-100 text-sm mb-6">
+                            Gain direct visibility, list assets, and access international markets using our integrated trade modules.
+                        </p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 hover:bg-white/15 transition flex flex-col justify-between">
+                                <div>
+                                    <span className="text-[10px] px-2.5 py-1 bg-emerald-500/30 text-emerald-200 rounded-full font-bold uppercase tracking-wider">Marketplace</span>
+                                    <h3 className="text-lg font-bold mt-3 mb-1">Trade Products</h3>
+                                    <p className="text-xs text-emerald-200/90 leading-relaxed mb-4">
+                                        Directly sell your harvests, processed foodstuffs, and agricultural products to local and international buyers.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => router.push("/marketplace")}
+                                    className="w-full py-2.5 bg-white text-emerald-900 font-semibold rounded-xl text-xs hover:bg-emerald-50 transition flex items-center justify-center gap-1.5"
+                                >
+                                    Open Marketplace
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+
+                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 hover:bg-white/15 transition flex flex-col justify-between">
+                                <div>
+                                    <span className="text-[10px] px-2.5 py-1 bg-emerald-500/30 text-emerald-200 rounded-full font-bold uppercase tracking-wider">Export Window</span>
+                                    <h3 className="text-lg font-bold mt-3 mb-1">Export Window</h3>
+                                    <p className="text-xs text-emerald-200/90 leading-relaxed mb-4">
+                                        Access international shipping windows, cargo consolidation, and global supply chains for your agro commodities.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => router.push("/export")}
+                                    className="w-full py-2.5 bg-white text-emerald-900 font-semibold rounded-xl text-xs hover:bg-emerald-50 transition flex items-center justify-center gap-1.5"
+                                >
+                                    Access Export Portal
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+
+                            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10 hover:bg-white/15 transition flex flex-col justify-between">
+                                <div>
+                                    <span className="text-[10px] px-2.5 py-1 bg-emerald-500/30 text-emerald-200 rounded-full font-bold uppercase tracking-wider">Farm Nation</span>
+                                    <h3 className="text-lg font-bold mt-3 mb-1">Farmland & Cultivation</h3>
+                                    <p className="text-xs text-emerald-200/90 leading-relaxed mb-4">
+                                        Lease, rent, or purchase verified agricultural land plots and list your land listings for collaborative farming.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => router.push("/farm-nation")}
+                                    className="w-full py-2.5 bg-white text-emerald-900 font-semibold rounded-xl text-xs hover:bg-emerald-50 transition flex items-center justify-center gap-1.5"
+                                >
+                                    Explore Farm Nation
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
