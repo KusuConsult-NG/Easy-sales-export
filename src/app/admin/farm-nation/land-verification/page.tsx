@@ -18,6 +18,7 @@ type LandVerification = {
     size: number;
     unit: string;
     totalPrice: number;
+    price?: number;
     gpsCoordinates?: { latitude: number; longitude: number; };
     documents: { landTitle: string; surveyPlan: string; taxClearance?: string; };
     images: string[];
@@ -312,7 +313,7 @@ export default function AdminLandVerificationPage() {
                                                 <p className="text-sm font-semibold text-slate-900">{verification.size} {verification.unit}</p>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <p className="text-sm font-semibold text-green-600">₦{verification.totalPrice.toLocaleString()}</p>
+                                                <p className="text-sm font-semibold text-green-600">₦{(verification.totalPrice ?? verification.price ?? 0).toLocaleString()}</p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${verification.verificationStatus === "pending" ? "bg-yellow-100 text-yellow-700"
@@ -418,7 +419,7 @@ export default function AdminLandVerificationPage() {
                                                 <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold">{selectedVerification.title}</p></div>
                                                 <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold">{selectedVerification.category}</p></div>
                                                 <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold">{selectedVerification.state}, {selectedVerification.lga}</p></div>
-                                                <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{selectedVerification.totalPrice.toLocaleString()}</p></div>
+                                                <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
                                                 {selectedVerification.gpsCoordinates && (
                                                     <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
                                                 )}

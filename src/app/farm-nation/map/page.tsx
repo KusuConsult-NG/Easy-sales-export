@@ -30,12 +30,14 @@ type LandListing = {
     unit: string;
     pricePerUnit: number;
     totalPrice: number;
+    price?: number;
     gpsCoordinates?: {
         latitude: number;
         longitude: number;
     };
     images: string[];
     verificationStatus: string;
+    status?: string;
 };
 
 type ViewMode = "map" | "grid";
@@ -90,10 +92,10 @@ export default function FarmNationMapPage() {
             const response = await fetch("/api/farm-nation/listings");
             const data = await response.json();
 
-            if (data.success) {
+            if (data.success && data.data?.listings) {
                 // Only show verified listings with GPS coordinates on the map
-                const mappableListings = data.listings.filter(
-                    (l: LandListing) => l.verificationStatus === "verified" && l.gpsCoordinates
+                const mappableListings = data.data.listings.filter(
+                    (l: LandListing) => (l.verificationStatus === "verified" || l.status === "verified") && l.gpsCoordinates
                 );
                 setListings(mappableListings);
             }
@@ -116,11 +118,11 @@ export default function FarmNationMapPage() {
         }
 
         if (filters.minPrice > 0) {
-            filtered = filtered.filter(l => l.totalPrice >= filters.minPrice);
+            filtered = filtered.filter(l => (l.totalPrice ?? l.price ?? 0) >= filters.minPrice);
         }
 
         if (filters.maxPrice > 0) {
-            filtered = filtered.filter(l => l.totalPrice <= filters.maxPrice);
+            filtered = filtered.filter(l => (l.totalPrice ?? l.price ?? 0) <= filters.maxPrice);
         }
 
         if (filters.minSize > 0) {
@@ -329,7 +331,7 @@ export default function FarmNationMapPage() {
                                         <div className="text-right">
                                             <p className="text-xs text-slate-500">Total Price</p>
                                             <p className="font-bold text-green-600">
-                                                ₦{listing.totalPrice.toLocaleString()}
+                                                ₦{(listing.totalPrice ?? listing.price ?? 0).toLocaleString()}
                                             </p>
                                         </div>
                                     </div>

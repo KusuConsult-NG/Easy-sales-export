@@ -504,6 +504,8 @@ async function _getAdminLandVerificationsAction(options: {
             
             return {
                 ...doc,
+                totalPrice: doc.totalPrice ?? doc.price ?? 0,
+                price: doc.price ?? doc.totalPrice ?? 0,
                 verificationStatus: mappedVerificationStatus,
                 createdAt: doc.createdAt || new Date().toISOString(),
                 verifiedAt: doc.verificationStatus?.verifiedAt || doc.verifiedAt || undefined

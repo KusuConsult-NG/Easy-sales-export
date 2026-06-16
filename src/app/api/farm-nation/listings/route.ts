@@ -13,16 +13,22 @@ export async function GET(request: NextRequest) {
     try {
         // Get all verified land listings (Admin SDK)
         const snapshot = await db.collection(COLLECTIONS.LAND_LISTINGS)
-            .where("verificationStatus", "==", "verified")
+            .where("status", "==", "verified")
             .orderBy("createdAt", "desc")
             .get();
 
-        const listings = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            createdAt: doc.data().createdAt?.toDate?.() || new Date(),
-            updatedAt: doc.data().updatedAt?.toDate?.() || new Date(),
-        }));
+        const listings = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                totalPrice: data.totalPrice ?? data.price ?? 0,
+                price: data.price ?? data.totalPrice ?? 0,
+                verificationStatus: data.status || data.verificationStatus || "pending",
+                createdAt: data.createdAt?.toDate?.() || new Date(),
+                updatedAt: data.updatedAt?.toDate?.() || new Date(),
+            };
+        });
 
         return NextResponse.json({
             success: true,
