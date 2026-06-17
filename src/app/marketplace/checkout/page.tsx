@@ -78,6 +78,10 @@ export default function CheckoutPage() {
     const [isClient, setIsClient] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [isAddressVerified, setIsAddressVerified] = useState(false);
+    const [isGeocoding, setIsGeocoding] = useState(false);
+    const [verificationError, setVerificationError] = useState<string | null>(null);
+
     const [mapsLoaded, setMapsLoaded] = useState(false);
     const [productCoords, setProductCoords] = useState<Record<string, { lat: number; lng: number }>>({});
     const [destinationCoords, setDestinationCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -152,6 +156,8 @@ export default function CheckoutPage() {
             const lat = place.geometry.location.lat();
             const lng = place.geometry.location.lng();
             setDestinationCoords({ lat, lng });
+            setIsAddressVerified(true);
+            setVerificationError(null);
             
             // Extract address components
             let street = "";
@@ -188,6 +194,34 @@ export default function CheckoutPage() {
             });
         });
     }, [mapsLoaded, showToast]);
+
+    // Manual geocoding function for input addresses
+    const geocodeManualAddress = () => {
+        if (!deliveryAddress.street.trim() || !(window as any).google || !mapsLoaded) return;
+
+        setIsGeocoding(true);
+        setVerificationError(null);
+
+        const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city || ""}, ${deliveryAddress.state}, Nigeria`;
+
+        const geocoder = new (window as any).google.maps.Geocoder();
+        geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+            setIsGeocoding(false);
+            if (status === "OK" && results && results[0] && results[0].geometry) {
+                const loc = results[0].geometry.location;
+                setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+                setIsAddressVerified(true);
+                setVerificationError(null);
+                showToast("Location successfully verified on Google Maps!", "success");
+            } else {
+                console.error("Geocoding failed for manual address:", status);
+                setDestinationCoords(null);
+                setIsAddressVerified(false);
+                setVerificationError("Google Places could not find this location. Try selecting from dropdown.");
+                showToast("Could not verify address. Please use the dropdown options.", "error");
+            }
+        });
+    };
 
     // Recalculate distance when destination or product coordinates change
     useEffect(() => {
@@ -230,8 +264,12 @@ export default function CheckoutPage() {
                 if (status === "OK" && results && results[0] && results[0].geometry) {
                     const loc = results[0].geometry.location;
                     setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+                    setIsAddressVerified(true);
+                    setVerificationError(null);
                 } else {
                     console.error("Geocoding failed for saved address:", status);
+                    setIsAddressVerified(false);
+                    setVerificationError("Saved address could not be verified by Google Places.");
                 }
             });
         }
@@ -405,6 +443,12 @@ export default function CheckoutPage() {
 
         if (!deliveryAddress.street || !deliveryAddress.city || !deliveryAddress.state || !deliveryAddress.lga) {
             setError("Please fill out all delivery address fields");
+            return;
+        }
+
+        if (!isAddressVerified || !destinationCoords) {
+            setError("Please verify your address using Google Places before proceeding. Select from the dropdown or click 'Verify Address'.");
+            showToast("Address verification required.", "error");
             return;
         }
 
@@ -637,11 +681,45 @@ export default function CheckoutPage() {
                                             type="text"
                                             id="delivery-street-input"
                                             value={deliveryAddress.street}
-                                            onChange={(e) => setDeliveryAddress({ ...deliveryAddress, street: e.target.value })}
+                                            onChange={(e) => {
+                                                setDeliveryAddress({ ...deliveryAddress, street: e.target.value });
+                                                setIsAddressVerified(false);
+                                                setDestinationCoords(null);
+                                                setVerificationError(null);
+                                            }}
+                                            onBlur={geocodeManualAddress}
                                             placeholder="e.g. 123 Main Street"
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
                                         />
+                                        <div className="mt-2 flex items-center justify-between flex-wrap gap-2 text-xs">
+                                            <div>
+                                                {isGeocoding ? (
+                                                    <span className="text-blue-600 font-medium flex items-center gap-1 animate-pulse">
+                                                        🌀 Locating address via Google Places...
+                                                     </span>
+                                                ) : isAddressVerified && destinationCoords ? (
+                                                    <span className="text-green-600 font-semibold flex items-center gap-1">
+                                                        🟢 Address verified (Distance: {distance} km)
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-amber-600 font-medium flex items-center gap-1">
+                                                        🟡 Address unverified. Select from suggestions or click verify.
+                                                    </span>
+                                                )}
+                                                {verificationError && (
+                                                    <p className="text-red-500 mt-1 font-medium">{verificationError}</p>
+                                                )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={geocodeManualAddress}
+                                                disabled={isGeocoding || !deliveryAddress.street.trim()}
+                                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors shrink-0"
+                                            >
+                                                Verify Address
+                                            </button>
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-semibold text-slate-900 mb-2">
@@ -650,7 +728,13 @@ export default function CheckoutPage() {
                                         <input
                                             type="text"
                                             value={deliveryAddress.city}
-                                            onChange={(e) => setDeliveryAddress({ ...deliveryAddress, city: e.target.value })}
+                                            onChange={(e) => {
+                                                setDeliveryAddress({ ...deliveryAddress, city: e.target.value });
+                                                setIsAddressVerified(false);
+                                                setDestinationCoords(null);
+                                                setVerificationError(null);
+                                            }}
+                                            onBlur={geocodeManualAddress}
                                             placeholder="e.g. Ikeja"
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
@@ -669,6 +753,9 @@ export default function CheckoutPage() {
                                                     state: selectedState,
                                                     lga: "" // Reset LGA when state changes
                                                 });
+                                                setIsAddressVerified(false);
+                                                setDestinationCoords(null);
+                                                setVerificationError(null);
                                             }}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
@@ -685,7 +772,12 @@ export default function CheckoutPage() {
                                         </label>
                                         <select
                                             value={deliveryAddress.lga}
-                                            onChange={(e) => setDeliveryAddress({ ...deliveryAddress, lga: e.target.value })}
+                                            onChange={(e) => {
+                                                setDeliveryAddress({ ...deliveryAddress, lga: e.target.value });
+                                                setIsAddressVerified(false);
+                                                setDestinationCoords(null);
+                                                setVerificationError(null);
+                                            }}
                                             disabled={!deliveryAddress.state}
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                                             required
