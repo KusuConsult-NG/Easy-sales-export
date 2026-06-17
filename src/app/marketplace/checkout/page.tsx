@@ -457,8 +457,11 @@ export default function CheckoutPage() {
         }
 
         if (!isAddressVerified || !destinationCoords) {
-            setError("Please verify your address using Google Places before proceeding. Select from the dropdown or click 'Verify Address'.");
+            setError("Address verification is required. If Google Places cannot locate your address, click the 'Use Address Anyway' option under the Street Address field to proceed.");
             showToast("Address verification required.", "error");
+            if (!verificationError) {
+                setVerificationError("Google Places verification is required. If your address is not found, click 'Use Address Anyway' below to proceed.");
+            }
             return;
         }
 
@@ -702,33 +705,54 @@ export default function CheckoutPage() {
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
                                         />
-                                        <div className="mt-2 flex items-center justify-between flex-wrap gap-2 text-xs">
-                                            <div>
-                                                {isGeocoding ? (
-                                                    <span className="text-blue-600 font-medium flex items-center gap-1 animate-pulse">
-                                                        🌀 Locating address via Google Places...
-                                                     </span>
-                                                ) : isAddressVerified && destinationCoords ? (
-                                                    <span className="text-green-600 font-semibold flex items-center gap-1">
-                                                        🟢 Address verified (Distance: {distance} km)
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-amber-600 font-medium flex items-center gap-1">
-                                                        🟡 Address unverified. Select from suggestions or click verify.
-                                                    </span>
-                                                )}
-                                                {verificationError && (
-                                                    <p className="text-red-500 mt-1 font-medium">{verificationError}</p>
-                                                )}
+                                        <div className="mt-2 space-y-2">
+                                            <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                                                <div>
+                                                    {isGeocoding ? (
+                                                        <span className="text-blue-600 font-medium flex items-center gap-1 animate-pulse">
+                                                            🌀 Locating address via Google Places...
+                                                         </span>
+                                                    ) : isAddressVerified && destinationCoords ? (
+                                                        <span className="text-green-600 font-semibold flex items-center gap-1">
+                                                            🟢 Address verified (Distance: {distance} km)
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-amber-600 font-medium flex items-center gap-1">
+                                                            🟡 Address unverified. Select from suggestions or click verify.
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={geocodeManualAddress}
+                                                    disabled={isGeocoding || !deliveryAddress.street.trim()}
+                                                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors shrink-0"
+                                                >
+                                                    Verify Address
+                                                </button>
                                             </div>
-                                            <button
-                                                type="button"
-                                                onClick={geocodeManualAddress}
-                                                disabled={isGeocoding || !deliveryAddress.street.trim()}
-                                                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors shrink-0"
-                                            >
-                                                Verify Address
-                                            </button>
+
+                                            {verificationError && (
+                                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-4 text-xs">
+                                                    <div className="text-amber-800 font-medium leading-relaxed">
+                                                        <p className="font-bold mb-0.5">Google Places could not verify this location.</p>
+                                                        <p>You can proceed anyway, but shipping fees will be estimated using a standard base rate.</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setIsAddressVerified(true);
+                                                            setDestinationCoords({ lat: 6.5244, lng: 3.3792 }); // Lagos default coordinates
+                                                            setDistance(10);
+                                                            setVerificationError(null);
+                                                            showToast("Proceeding with manual address (standard shipping rate applied).", "info");
+                                                        }}
+                                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg transition shrink-0"
+                                                    >
+                                                        Use Address Anyway
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div>
