@@ -752,6 +752,8 @@ export async function getWaveTrainingEventsAction(...args: Parameters<typeof _ge
 
 export interface ShipmentTracking { id: string;
     memberId: string;
+    memberName?: string;
+    memberEmail?: string;
     orderId: string;
     productName: string;
     destination: string;

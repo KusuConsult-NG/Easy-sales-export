@@ -1,6 +1,6 @@
 "use client";
 
-import { Waves, FileText, CheckCircle, Users, Calendar } from "lucide-react";
+import { Waves, FileText, CheckCircle, Users, Calendar, Truck } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminWavePage() {
@@ -52,6 +52,14 @@ export default function AdminWavePage() {
             href: "/admin/wave/resources",
             color: "text-indigo-600",
             bg: "bg-indigo-100"
+        },
+        {
+            title: "Member Shipments",
+            description: "Manage inputs, kit deliveries, and tracking",
+            icon: Truck,
+            href: "/admin/wave/shipments",
+            color: "text-amber-600",
+            bg: "bg-amber-100"
         }
     ];
 

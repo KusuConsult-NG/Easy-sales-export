@@ -69,6 +69,22 @@ async function _updateOrderStatusAction(
         const userId = session.user.id;
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
 
+        let finalTrackingNumber = trackingNumber;
+        if (newStatus === "shipped" && !finalTrackingNumber) {
+            const orderDoc = await orderRef.get();
+            if (orderDoc.exists) {
+                const orderData = orderDoc.data() as Order;
+                const provider = getLogisticsProvider();
+                const shipment = await provider.createShipment({
+                    orderId,
+                    sellerId: orderData.sellerId || (Array.isArray(orderData.sellerIds) ? orderData.sellerIds[0] : undefined),
+                    buyerId: orderData.buyerId,
+                    destination: orderData.deliveryAddress?.city || "Destination",
+                });
+                finalTrackingNumber = shipment.trackingNumber;
+            }
+        }
+
         await db.runTransaction(async (transaction) => { const currentOrderDoc = await transaction.get(orderRef);
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
@@ -83,14 +99,11 @@ async function _updateOrderStatusAction(
                 throw new Error(`Sellers cannot set status to '${newStatus}'`);
             }
 
-            if (newStatus === "shipped" && !trackingNumber) { throw new Error("Tracking number is required when marking order as shipped.");
-            }
-
             const updateData: any = { status: newStatus,
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) };
 
-            if (trackingNumber) updateData.trackingNumber = trackingNumber;
+            if (finalTrackingNumber) updateData.trackingNumber = finalTrackingNumber;
             if (newStatus === "shipped") { const estimatedDate = new Date();
                 estimatedDate.setDate(estimatedDate.getDate() + 7);
                 updateData.estimatedDeliveryDate = estimatedDate;
