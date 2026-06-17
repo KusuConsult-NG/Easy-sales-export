@@ -35,6 +35,10 @@ async function _createDisputeAction(params: { orderId: string;
         if (description.length < 50) { return { success: false as const, error: "Description must be at least 50 characters", data: null };
         }
 
+        if (!evidenceUrls || evidenceUrls.length === 0) {
+            return { success: false as const, error: "At least one image or document is required as evidence", data: null };
+        }
+
         const orderDoc = await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).get();
         if (!orderDoc.exists) { return { success: false as const, error: "Order not found", data: null };
         }

@@ -43,20 +43,29 @@ global.mockFirestoreBatchCommit = jest.fn(() => Promise.resolve());
 global.mockFirestoreDoc = jest.fn();
 global.mockFirestoreGet = jest.fn();
 global.mockFirestoreUpdate = jest.fn();
+global.mockFirestoreTxGet = jest.fn();
 
 jest.mock('@/lib/firebase-admin', () => {
     const mockDb = {
         collection: (name) => {
             global.mockFirestoreCollection(name);
-            return {
-                doc: (id) => {
-                    global.mockFirestoreDoc(id);
-                    return {
-                        get: () => global.mockFirestoreGet(id),
-                        update: (fields) => global.mockFirestoreUpdate(id, fields),
-                    };
-                }
+            const docObj = (id) => {
+                global.mockFirestoreDoc(id);
+                return {
+                    get: () => global.mockFirestoreGet(id),
+                    update: (fields) => global.mockFirestoreUpdate(id, fields),
+                    set: (data) => Promise.resolve(),
+                };
             };
+            const queryObj = {
+                doc: docObj,
+                where: () => queryObj,
+                orderBy: () => queryObj,
+                limit: () => queryObj,
+                startAfter: () => queryObj,
+                get: () => global.mockFirestoreGet(name),
+            };
+            return queryObj;
         },
         batch: () => {
             global.mockFirestoreBatch();
@@ -64,6 +73,14 @@ jest.mock('@/lib/firebase-admin', () => {
                 update: (ref, fields) => global.mockFirestoreBatchUpdate(ref, fields),
                 commit: () => global.mockFirestoreBatchCommit(),
             };
+        },
+        runTransaction: (cb) => {
+            const tx = {
+                get: (ref) => global.mockFirestoreTxGet(ref),
+                set: jest.fn(),
+                update: jest.fn(),
+            };
+            return cb(tx);
         }
     };
     return {

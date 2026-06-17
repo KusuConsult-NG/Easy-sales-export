@@ -158,6 +158,11 @@ function NewDisputePageContent() {
             return;
         }
 
+        if (evidenceUrls.length === 0) {
+            showToast("At least one image or document is required as evidence", "error");
+            return;
+        }
+
         if (!orderId) return;
 
         setSubmitting(true);
@@ -298,7 +303,7 @@ function NewDisputePageContent() {
                     {/* Evidence Upload */}
                     <div className="mb-6">
                         <label className="block text-sm font-semibold text-gray-700 mb-3">
-                            Evidence (optional)
+                            Evidence * (At least 1 file required)
                         </label>
 
                         {/* File Upload Area */}
@@ -399,7 +404,7 @@ function NewDisputePageContent() {
                         </button>
                         <button
                             type="submit"
-                            disabled={submitting || description.length < 50}
+                            disabled={submitting || description.length < 50 || evidenceUrls.length === 0}
                             className="flex-1 px-6 py-3 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
                             {submitting ? (
