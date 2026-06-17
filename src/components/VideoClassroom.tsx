@@ -127,6 +127,10 @@ export default function VideoClassroom({
 
                 apiRef.current = new window.JitsiMeetExternalAPI(domain, options);
 
+                // Hide custom loading screen once the iframe is successfully added to the DOM
+                // so Jitsi's native loading state, permission prompts, and join button are interactive.
+                if (active) setIsLoading(false);
+
                 // Set moderator role
                 if (isModeratorRef.current) {
                     apiRef.current.executeCommand("toggleLobby", false);
