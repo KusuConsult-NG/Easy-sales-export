@@ -807,7 +807,7 @@ export default function CheckoutPage() {
                                     Delivery Customizations
                                 </h2>
                                 <p className="text-sm text-slate-600">
-                                    Adjust distance and weight options below to estimate accurate delivery costs.
+                                    Review the automatically calculated distance and adjust weight parameters below to estimate accurate delivery costs.
                                 </p>
                                 
                                 <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
