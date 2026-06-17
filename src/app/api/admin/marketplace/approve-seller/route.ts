@@ -94,7 +94,24 @@ export async function POST(request: NextRequest) {
         try {
             const userRef = db.collection(COLLECTIONS.USERS).doc(verificationData.userId);
             const userSnap = await userRef.get();
-            if (userSnap.exists) {
+            if (!userSnap.exists) {
+                await userRef.set({
+                    uid: verificationData.userId,
+                    email: verificationData.userEmail || verificationData.email || "",
+                    fullName: verificationData.userName || "Seller",
+                    createdAt: FieldValue.serverTimestamp(),
+                    roles: ["seller"],
+                    isVerified: true,
+                    sellerVerificationStatus: "approved",
+                    "serviceRegistrations": {
+                        "marketplace": {
+                            "status": "approved",
+                            "activatedAt": FieldValue.serverTimestamp()
+                        }
+                    },
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+            } else {
                 const existingRoles: string[] = userSnap.data()?.roles || [];
                 const updateData: any = {
                     updatedAt: FieldValue.serverTimestamp(),

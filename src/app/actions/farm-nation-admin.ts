@@ -174,39 +174,81 @@ async function _getStandardFarmNationRegistrantsAction(options: {
         const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
         const applicationsSortDirection = options.sortOrder || "desc";
 
-        // 1. Query the dedicated applications collection (Authoritative Record)
-        // This avoids range query violations on the USERS collection.
-        let q: any = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).orderBy("submittedAt", applicationsSortDirection);
+        let applications: any[] = [];
+        let hasMoreRaw = false;
 
-        if (options.status && options.status !== "all") {
-            q = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
-                .where("status", "==", options.status)
-                .orderBy("submittedAt", applicationsSortDirection);
-        }
-
-        // Apply server-side date range filtering
-        if (options.dateFrom) {
-            const fromTs = dateRangeStart(options.dateFrom);
-            q = q.where("submittedAt", ">=", fromTs);
-        }
-        if (options.dateTo) {
-            const toTs = dateRangeEnd(options.dateTo);
-            q = q.where("submittedAt", "<=", toTs);
-        }
-
-        if (options.lastDocId && !useMemoryPagination) {
-            const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                q = q.startAfter(lastDoc);
+        if (options.search) {
+            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            const matchingUserIds = await searchUserIdsByQuery(options.search);
+            if (matchingUserIds.length === 0) {
+                return {
+                    success: true,
+                    error: null,
+                    data: [],
+                    meta: {
+                        totalFetched: 0,
+                        hasMore: false,
+                        lastDocId: null
+                    }
+                };
             }
-        }
 
-        q = q.limit(fetchLimit + 1);
-        const snapshot = await q.get();
-        let applications = serializeDocs(snapshot.docs);
-        const hasMoreRaw = applications.length > fetchLimit;
-        if (!useMemoryPagination) {
-            applications = applications.slice(0, fetchLimit);
+            const querySnap = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                .where("userId", "in", matchingUserIds)
+                .get();
+
+            applications = serializeDocs(querySnap.docs);
+            if (options.status && options.status !== "all") {
+                applications = applications.filter(app => app.status === options.status);
+            }
+            if (options.dateFrom) {
+                const from = new Date(options.dateFrom);
+                from.setHours(0, 0, 0, 0);
+                applications = applications.filter(app => {
+                    const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
+                    return d >= from;
+                });
+            }
+            if (options.dateTo) {
+                const to = new Date(options.dateTo);
+                to.setHours(23, 59, 59, 999);
+                applications = applications.filter(app => {
+                    const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
+                    return d <= to;
+                });
+            }
+        } else {
+            let q: any = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).orderBy("submittedAt", applicationsSortDirection);
+
+            if (options.status && options.status !== "all") {
+                q = db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS)
+                    .where("status", "==", options.status)
+                    .orderBy("submittedAt", applicationsSortDirection);
+            }
+
+            if (options.dateFrom) {
+                const fromTs = dateRangeStart(options.dateFrom);
+                q = q.where("submittedAt", ">=", fromTs);
+            }
+            if (options.dateTo) {
+                const toTs = dateRangeEnd(options.dateTo);
+                q = q.where("submittedAt", "<=", toTs);
+            }
+
+            if (options.lastDocId && !useMemoryPagination) {
+                const lastDoc = await db.collection(COLLECTIONS.FARM_NATION_APPLICATIONS).doc(options.lastDocId).get();
+                if (lastDoc.exists) {
+                    q = q.startAfter(lastDoc);
+                }
+            }
+
+            q = q.limit(fetchLimit + 1);
+            const snapshot = await q.get();
+            applications = serializeDocs(snapshot.docs);
+            hasMoreRaw = applications.length > fetchLimit;
+            if (!useMemoryPagination) {
+                applications = applications.slice(0, fetchLimit);
+            }
         }
 
         // 2. Hydrate User Data (Standard Hydration Pattern)

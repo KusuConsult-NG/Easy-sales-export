@@ -654,6 +654,13 @@ async function _approveWaveApplicationAction(
             }
             targetUserId = appData?.userId;
 
+            let userDoc = null;
+            let userRef = null;
+            if (targetUserId) {
+                userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
+                userDoc = await transaction.get(userRef);
+            }
+
             transaction.update(appRef, {
                 status: "approved",
                 approvedAt: FieldValue.serverTimestamp(),
@@ -665,9 +672,17 @@ async function _approveWaveApplicationAction(
                 _version: FieldValue.increment(1),
             });
 
-            // If user exists, update their profile and roles
-            if (targetUserId) {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
+            if (targetUserId && userRef) {
+                if (!userDoc || !userDoc.exists) {
+                    transaction.set(userRef, {
+                        uid: targetUserId,
+                        email: appData?.email || appData?.userEmail || "",
+                        fullName: [appData?.firstName, appData?.otherNames, appData?.surname].filter(Boolean).join(" ").trim() || "WAVE Participant",
+                        createdAt: FieldValue.serverTimestamp(),
+                        roles: ["wave_participant"],
+                        isVerified: true,
+                    });
+                }
                 
                 const updates: any = {
                     isVerified: true,
@@ -915,52 +930,85 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
-        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
-        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
-        const orderDirection = options.sortOrder || "desc";
-        let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
-        let countQ: Query = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+        let applications: any[] = [];
+        let hasMoreRaw = false;
+        let nextCursor: string | undefined = undefined;
 
-        if (options.status && options.status !== "all") {
-            q = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
-                .where("status", "==", options.status)
-                .orderBy("createdAt", orderDirection);
-            countQ = countQ.where("status", "==", options.status);
-        }
-
-        if (options.dateFrom) {
-            const fromTs = dateRangeStart(options.dateFrom);
-            q = q.where("createdAt", ">=", fromTs);
-        }
-        if (options.dateTo) {
-            const toTs = dateRangeEnd(options.dateTo);
-            q = q.where("createdAt", "<=", toTs);
-        }
-
-        if (options.lastDocId && !useMemoryPagination) {
-            const lastDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                q = q.startAfter(lastDoc);
+        if (options.search) {
+            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            const matchingUserIds = await searchUserIdsByQuery(options.search);
+            if (matchingUserIds.length === 0) {
+                return {
+                    error: null, success: true as const,
+                    data: [],
+                    lastDocId: undefined,
+                    hasMore: false,
+                    meta: {
+                        totalFetched: 0,
+                        totalCount: 0,
+                        hasMore: false
+                    }
+                };
             }
-        }
-        q = q.limit(fetchLimit + 1);
 
-        const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
-        let totalCount = 0;
-        try {
-            const cachedCount = await getCached<number>(cacheKey);
-            if (cachedCount !== null) {
-                totalCount = cachedCount;
+            const querySnap = await db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                .where("userId", "in", matchingUserIds)
+                .get();
+
+            applications = serializeDocs(querySnap.docs);
+            if (options.status && options.status !== "all") {
+                applications = applications.filter(app => app.status === options.status);
             }
-        } catch (e) { }
+            if (options.dateFrom) {
+                const from = new Date(options.dateFrom);
+                from.setHours(0, 0, 0, 0);
+                applications = applications.filter(app => {
+                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
+                    return d >= from;
+                });
+            }
+            if (options.dateTo) {
+                const to = new Date(options.dateTo);
+                to.setHours(23, 59, 59, 999);
+                applications = applications.filter(app => {
+                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
+                    return d <= to;
+                });
+            }
+        } else {
+            let q = db.collection(COLLECTIONS.WAVE_APPLICATIONS).orderBy("createdAt", orderDirection);
 
-        const snapshot = await q.get();
-        let applications = serializeDocs(snapshot.docs);
-        const hasMoreRaw = applications.length > fetchLimit;
-        if (!useMemoryPagination) {
-            applications = applications.slice(0, fetchLimit);
+            if (options.status && options.status !== "all") {
+                q = db.collection(COLLECTIONS.WAVE_APPLICATIONS)
+                    .where("status", "==", options.status)
+                    .orderBy("createdAt", orderDirection);
+            }
+
+            if (options.dateFrom) {
+                const fromTs = dateRangeStart(options.dateFrom);
+                q = q.where("createdAt", ">=", fromTs);
+            }
+            if (options.dateTo) {
+                const toTs = dateRangeEnd(options.dateTo);
+                q = q.where("createdAt", "<=", toTs);
+            }
+
+            if (options.lastDocId && !useMemoryPagination) {
+                const lastDoc = await db.collection(COLLECTIONS.WAVE_APPLICATIONS).doc(options.lastDocId).get();
+                if (lastDoc.exists) {
+                    q = q.startAfter(lastDoc);
+                }
+            }
+            q = q.limit(fetchLimit + 1);
+
+            const snapshot = await q.get();
+            applications = serializeDocs(snapshot.docs);
+            hasMoreRaw = applications.length > fetchLimit;
+            if (!useMemoryPagination) {
+                applications = applications.slice(0, fetchLimit);
+            }
+            nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
         }
-        const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
         if (totalCount === 0) {
             const countSnap = await countQ.count().get();
             totalCount = countSnap.data().count;

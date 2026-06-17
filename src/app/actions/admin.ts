@@ -3932,37 +3932,108 @@ async function _getStandardSellerVerificationsAction(
             cursorSnap = await db.collection(COLLECTIONS.SELLER_VERIFICATIONS).doc(cursorId).get();
         }
 
-        const direction = sortOrder || "desc";
-        let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", direction);
-        if (statusFilter && statusFilter !== "all") {
-            q = q.where("status", "==", statusFilter);
-        }
-
-        if (dateFrom) {
-            const fromTs = dateRangeStart(dateFrom);
-            q = q.where("createdAt", ">=", fromTs);
-        }
-        if (dateTo) {
-            const toTs = dateRangeEnd(dateTo);
-            q = q.where("createdAt", "<=", toTs);
-        }
-
         const useMemoryPagination = !!search || !!dateFrom || !!dateTo;
-        const fetchLimit = useMemoryPagination ? 5000 : limitCount;
+        let applications: any[] = [];
+        let nextCursorId: string | undefined = undefined;
 
-        if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
-            q = q.startAfter(cursorSnap);
-        }
-        
-        q = q.limit(fetchLimit + 1);
+        if (search) {
+            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            const matchingUserIds = await searchUserIdsByQuery(search);
 
-        const snapshot = await q.get();
-        let applications = serializeDocs(snapshot.docs);
-        const hasMoreRaw = applications.length > fetchLimit;
-        if (!useMemoryPagination) {
-            applications = applications.slice(0, fetchLimit);
+            const capitalizedQ = search.trim()
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+            const rawLowerQ = search.trim().toLowerCase();
+            const rawUpperQ = search.trim().toUpperCase();
+
+            const promises = [];
+            
+            if (matchingUserIds.length > 0) {
+                promises.push(
+                    db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                        .where("userId", "in", matchingUserIds)
+                        .get()
+                );
+            }
+
+            // businessName in title case prefix
+            promises.push(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                    .where("businessName", ">=", capitalizedQ)
+                    .where("businessName", "<=", capitalizedQ + "\uf8ff")
+                    .limit(50)
+                    .get()
+            );
+
+            // businessName in lowercase prefix
+            promises.push(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                    .where("businessName", ">=", rawLowerQ)
+                    .where("businessName", "<=", rawLowerQ + "\uf8ff")
+                    .limit(50)
+                    .get()
+            );
+
+            // businessRegNumber prefix
+            promises.push(
+                db.collection(COLLECTIONS.SELLER_VERIFICATIONS)
+                    .where("businessRegNumber", ">=", rawUpperQ)
+                    .where("businessRegNumber", "<=", rawUpperQ + "\uf8ff")
+                    .limit(50)
+                    .get()
+            );
+
+            const snaps = await Promise.all(promises);
+            const seenIds = new Set<string>();
+            const uniqueDocs: any[] = [];
+
+            for (const snap of snaps) {
+                for (const doc of snap.docs) {
+                    if (!seenIds.has(doc.id)) {
+                        seenIds.add(doc.id);
+                        uniqueDocs.push(doc);
+                    }
+                }
+            }
+
+            applications = serializeDocs(uniqueDocs);
+
+            // Filter by statusFilter
+            if (statusFilter && statusFilter !== "all") {
+                applications = applications.filter(app => app.status === statusFilter);
+            }
+        } else {
+            const direction = sortOrder || "desc";
+            let q = db.collection(COLLECTIONS.SELLER_VERIFICATIONS).orderBy("createdAt", direction);
+            if (statusFilter && statusFilter !== "all") {
+                q = q.where("status", "==", statusFilter);
+            }
+
+            if (dateFrom) {
+                const fromTs = dateRangeStart(dateFrom);
+                q = q.where("createdAt", ">=", fromTs);
+            }
+            if (dateTo) {
+                const toTs = dateRangeEnd(dateTo);
+                q = q.where("createdAt", "<=", toTs);
+            }
+
+            const fetchLimit = useMemoryPagination ? 5000 : limitCount;
+
+            if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
+                q = q.startAfter(cursorSnap);
+            }
+            
+            q = q.limit(fetchLimit + 1);
+
+            const snapshot = await q.get();
+            applications = serializeDocs(snapshot.docs);
+            if (!useMemoryPagination) {
+                applications = applications.slice(0, fetchLimit);
+            }
+            nextCursorId = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
         }
-        const nextCursorId = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];
         const userMap = new Map<string, any>();
@@ -4025,6 +4096,14 @@ async function _getStandardSellerVerificationsAction(
                     app.data?.businessRegNumber
                 ].filter(Boolean).map(String).join(" ").toLowerCase();
                 return searchString.includes(s);
+            });
+
+            // Sort the final forms in memory
+            const dir = sortOrder || "desc";
+            finalForms.sort((a, b) => {
+                const dateA = new Date(a.data?.createdAt?.toDate ? a.data.createdAt.toDate().toISOString() : a.data?.createdAt || 0).getTime();
+                const dateB = new Date(b.data?.createdAt?.toDate ? b.data.createdAt.toDate().toISOString() : b.data?.createdAt || 0).getTime();
+                return dir === "desc" ? dateB - dateA : dateA - dateB;
             });
         }
 

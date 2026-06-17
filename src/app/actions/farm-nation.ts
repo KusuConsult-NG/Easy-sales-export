@@ -173,7 +173,18 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
             const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
             const userDoc = await transaction.get(userRef);
 
-            if (!userDoc.exists) throw new Error("User not found");
+            if (!userDoc.exists) {
+                const appData = !appSnap.empty ? appSnap.docs[0].data() : {};
+                const profile = appData.profile || {};
+                transaction.set(userRef, {
+                    uid: userId,
+                    email: profile.email || appData.userEmail || "",
+                    fullName: profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : "Farmer",
+                    createdAt: FieldValue.serverTimestamp(),
+                    roles: ["farmer"],
+                    isVerified: true,
+                });
+            }
 
             // Update user
             transaction.update(userRef, { 

@@ -56,7 +56,11 @@ async function _approveAcademyApplicationAction(
             const appSnap = await transaction.get(appRef);
             if (!appSnap.exists) throw new Error("Application not found");
 
-            // 2. Update Application Status
+            // 2. Read User Profile (read before any writes)
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const userDoc = await transaction.get(userRef);
+
+            // 3. Update Application Status
             transaction.update(appRef, {
                 status: "approved",
                 reviewedBy: session.user.id,
@@ -64,8 +68,19 @@ async function _approveAcademyApplicationAction(
                 _version: FieldValue.increment(1),
             });
 
-            // 3. Update User Profile (Verify, Add Role, Activate Service)
-            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            // 4. Update User Profile (Verify, Add Role, Activate Service)
+            if (!userDoc.exists) {
+                const pi = appData.personalInfo || {};
+                transaction.set(userRef, {
+                    uid: userId,
+                    email: pi.email || appData.email || "",
+                    fullName: pi.fullName || (pi.firstName ? `${pi.firstName} ${pi.lastName || ''}`.trim() : "Learner"),
+                    createdAt: FieldValue.serverTimestamp(),
+                    roles: ["academy_participant"],
+                    isVerified: true,
+                });
+            }
+
             transaction.set(userRef, {
                 isVerified: true,
                 verifiedBy: session.user.id,
@@ -801,35 +816,77 @@ async function _getStandardAcademyApplicationsAction(options: {
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         
-        // 1. Query dedicated collection
-        let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
-        
-        if (options.status && options.status !== "all") {
-            q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
-                .where("status", "==", options.status)
-                .orderBy("submittedAt", orderDirection);
-        }
+        let applications: any[] = [];
 
-        // Apply server-side date range filtering
-        if (options.dateFrom) {
-            const fromTs = dateRangeStart(options.dateFrom);
-            q = q.where("submittedAt", ">=", fromTs);
-        }
-        if (options.dateTo) {
-            const toTs = dateRangeEnd(options.dateTo);
-            q = q.where("submittedAt", "<=", toTs);
-        }
-
-        if (options.lastDocId) {
-            const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
-            if (lastDoc.exists) {
-                q = q.startAfter(lastDoc);
+        if (options.search) {
+            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            const matchingUserIds = await searchUserIdsByQuery(options.search);
+            if (matchingUserIds.length === 0) {
+                return {
+                    success: true,
+                    error: null,
+                    data: [],
+                    meta: {
+                        totalFetched: 0,
+                        hasMore: false,
+                        lastDocId: null
+                    }
+                };
             }
-        }
-        q = q.limit(fetchLimit);
 
-        const snapshot = await q.get();
-        const applications = serializeDocs(snapshot.docs);
+            const querySnap = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                .where("userId", "in", matchingUserIds)
+                .get();
+
+            applications = serializeDocs(querySnap.docs);
+            if (options.status && options.status !== "all") {
+                applications = applications.filter(app => app.status === options.status);
+            }
+            if (options.dateFrom) {
+                const from = new Date(options.dateFrom);
+                from.setHours(0, 0, 0, 0);
+                applications = applications.filter(app => {
+                    const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
+                    return d >= from;
+                });
+            }
+            if (options.dateTo) {
+                const to = new Date(options.dateTo);
+                to.setHours(23, 59, 59, 999);
+                applications = applications.filter(app => {
+                    const d = app.submittedAt?.seconds ? new Date(app.submittedAt.seconds * 1000) : new Date(app.submittedAt);
+                    return d <= to;
+                });
+            }
+        } else {
+            let q: any = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).orderBy("submittedAt", orderDirection);
+
+            if (options.status && options.status !== "all") {
+                q = db.collection(COLLECTIONS.ACADEMY_APPLICATIONS)
+                    .where("status", "==", options.status)
+                    .orderBy("submittedAt", orderDirection);
+            }
+
+            if (options.dateFrom) {
+                const fromTs = dateRangeStart(options.dateFrom);
+                q = q.where("submittedAt", ">=", fromTs);
+            }
+            if (options.dateTo) {
+                const toTs = dateRangeEnd(options.dateTo);
+                q = q.where("submittedAt", "<=", toTs);
+            }
+
+            if (options.lastDocId) {
+                const lastDoc = await db.collection(COLLECTIONS.ACADEMY_APPLICATIONS).doc(options.lastDocId).get();
+                if (lastDoc.exists) {
+                    q = q.startAfter(lastDoc);
+                }
+            }
+            q = q.limit(fetchLimit);
+
+            const snapshot = await q.get();
+            applications = serializeDocs(snapshot.docs);
+        }
 
         // 2. Hydrate User Data (Standard Hydration Pattern)
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];

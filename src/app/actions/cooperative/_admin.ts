@@ -446,6 +446,13 @@ async function _updateMemberStatusAction(
             const mDoc = await transaction.get(mRef);
             if (!mDoc.exists) throw new Error("Member not found");
 
+            let userDoc = null;
+            let userRef = null;
+            if (status === "active") {
+                userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
+                userDoc = await transaction.get(userRef);
+            }
+
             transaction.update(mRef, {
                 membershipStatus: status,
                 updatedAt: FieldValue.serverTimestamp(),
@@ -455,14 +462,22 @@ async function _updateMemberStatusAction(
 
             let notificationInfo: { email: string; fullName: string } | null = null;
 
-            if (status === "active") {
-                const userRef = db.collection(COLLECTIONS.USERS).doc(targetUserId);
-                const userDoc = await transaction.get(userRef);
-                const userData = userDoc.data();
-                if (userData?.email) {
+            if (status === "active" && userRef) {
+                const userData = userDoc?.data();
+                if (!userDoc || !userDoc.exists) {
+                    transaction.set(userRef, {
+                        uid: targetUserId,
+                        email: memberData?.email || "",
+                        fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
+                        createdAt: FieldValue.serverTimestamp(),
+                        roles: ["cooperative_member"],
+                        isVerified: true,
+                    });
+                }
+                if (userData?.email || memberData?.email) {
                     notificationInfo = {
-                        email: userData.email,
-                        fullName: userData.fullName || 'Member'
+                        email: userData?.email || memberData.email,
+                        fullName: userData?.fullName || `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || 'Member'
                     };
                 }
 
@@ -1339,59 +1354,105 @@ export async function getStandardCooperativeMembersAction(
         const fetchLimit = useMemoryPagination ? 5000 : limitCount;
 
         const adminScope = await getAdminScope(session.user.id, liveRoles);
-        // Build query with all where() clauses BEFORE orderBy() to satisfy
-        // Firestore composite index requirements (FAILED_PRECONDITION otherwise)
-        let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        if (adminScope) {
-            q = q.where("cooperativeId", "==", adminScope);
-        }
+        let applications: any[] = [];
+        let hasMoreRaw = false;
+        let nextCursor: string | undefined = undefined;
 
-        if (statusFilter && statusFilter !== "all") {
-            if (statusFilter === "approved" || statusFilter === "active") {
-                q = q.where("membershipStatus", "in", ["approved", "active"]);
-            } else {
-                q = q.where("membershipStatus", "==", statusFilter);
+        if (search) {
+            const { searchUserIdsByQuery } = await import("@/lib/admin-search-helper");
+            const matchingUserIds = await searchUserIdsByQuery(search);
+            if (matchingUserIds.length === 0) {
+                return paginatedOk([], undefined);
             }
-        }
 
-        // Server-side paymentStatus filter — prevents client-side filter on paginated data
-        // causing mismatch between stat counts and table rows.
-        if (paymentFilter && paymentFilter !== "all") {
-            if (paymentFilter === "completed") {
-                q = q.where("paymentStatus", "==", "completed");
-            } else if (paymentFilter === "unpaid" || paymentFilter === "pending") {
-                q = q.where("paymentStatus", "in", ["pending", "unpaid", "failed"]);
-            } else {
-                q = q.where("paymentStatus", "==", paymentFilter);
+            const querySnap = await db.collection(COLLECTIONS.COOPERATIVE_MEMBERS)
+                .where("userId", "in", matchingUserIds)
+                .get();
+
+            applications = serializeDocs(querySnap.docs);
+            if (adminScope) {
+                applications = applications.filter(app => app.cooperativeId === adminScope);
             }
-        }
+            if (statusFilter && statusFilter !== "all") {
+                if (statusFilter === "approved" || statusFilter === "active") {
+                    applications = applications.filter(app => app.membershipStatus === "approved" || app.membershipStatus === "active");
+                } else {
+                    applications = applications.filter(app => app.membershipStatus === statusFilter);
+                }
+            }
+            if (paymentFilter && paymentFilter !== "all") {
+                if (paymentFilter === "completed") {
+                    applications = applications.filter(app => app.paymentStatus === "completed");
+                } else {
+                    applications = applications.filter(app => app.paymentStatus !== "completed");
+                }
+            }
+            if (options.dateFrom) {
+                const from = new Date(options.dateFrom);
+                from.setHours(0, 0, 0, 0);
+                applications = applications.filter(app => {
+                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
+                    return d >= from;
+                });
+            }
+            if (options.dateTo) {
+                const to = new Date(options.dateTo);
+                to.setHours(23, 59, 59, 999);
+                applications = applications.filter(app => {
+                    const d = app.createdAt?.seconds ? new Date(app.createdAt.seconds * 1000) : new Date(app.createdAt);
+                    return d <= to;
+                });
+            }
+        } else {
+            let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.COOPERATIVE_MEMBERS);
 
-        // Server-side date range filter
-        if (options.dateFrom) {
-            const fromTs = dateRangeStart(options.dateFrom);
-            q = q.where("createdAt", ">=", fromTs);
-        }
-        if (options.dateTo) {
-            const toTs = dateRangeEnd(options.dateTo);
-            q = q.where("createdAt", "<=", toTs);
-        }
+            if (adminScope) {
+                q = q.where("cooperativeId", "==", adminScope);
+            }
 
-        // orderBy must come after all where() clauses
-        q = q.orderBy("createdAt", "desc");
+            if (statusFilter && statusFilter !== "all") {
+                if (statusFilter === "approved" || statusFilter === "active") {
+                    q = q.where("membershipStatus", "in", ["approved", "active"]);
+                } else {
+                    q = q.where("membershipStatus", "==", statusFilter);
+                }
+            }
 
-        if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
-            q = q.startAfter(cursorSnap);
-        }
-        q = q.limit(fetchLimit + 1);
+            if (paymentFilter && paymentFilter !== "all") {
+                if (paymentFilter === "completed") {
+                    q = q.where("paymentStatus", "==", "completed");
+                } else if (paymentFilter === "unpaid" || paymentFilter === "pending") {
+                    q = q.where("paymentStatus", "in", ["pending", "unpaid", "failed"]);
+                } else {
+                    q = q.where("paymentStatus", "==", paymentFilter);
+                }
+            }
 
-        const snapshot = await q.get();
-        let applications = serializeDocs(snapshot.docs);
-        const hasMoreRaw = applications.length > fetchLimit;
-        if (!useMemoryPagination) {
-            applications = applications.slice(0, fetchLimit);
+            if (options.dateFrom) {
+                const fromTs = dateRangeStart(options.dateFrom);
+                q = q.where("createdAt", ">=", fromTs);
+            }
+            if (options.dateTo) {
+                const toTs = dateRangeEnd(options.dateTo);
+                q = q.where("createdAt", "<=", toTs);
+            }
+
+            q = q.orderBy("createdAt", "desc");
+
+            if (cursorSnap && cursorSnap.exists && !useMemoryPagination) {
+                q = q.startAfter(cursorSnap);
+            }
+            q = q.limit(fetchLimit + 1);
+
+            const snapshot = await q.get();
+            applications = serializeDocs(snapshot.docs);
+            hasMoreRaw = applications.length > fetchLimit;
+            if (!useMemoryPagination) {
+                applications = applications.slice(0, fetchLimit);
+            }
+            nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
         }
-        const nextCursor = applications.length > 0 ? applications[applications.length - 1].id as string : undefined;
 
 
         const userIds = [...new Set(applications.map(app => app.userId).filter(Boolean))];

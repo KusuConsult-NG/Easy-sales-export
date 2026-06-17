@@ -64,6 +64,9 @@ export async function POST(request: NextRequest) {
 
         // Atomic update: member doc + user doc in a single transaction
         await db.runTransaction(async (txn) => {
+            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            const userSnap = await txn.get(userRef);
+
             txn.update(memberRef, {
                 membershipStatus: "active",   // canonical approved state
                 approvedBy: session.user.id,
@@ -72,7 +75,16 @@ export async function POST(request: NextRequest) {
                 _version: FieldValue.increment(1),
             });
 
-            const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
+            if (!userSnap.exists) {
+                txn.set(userRef, {
+                    uid: userId,
+                    email: memberData?.email || "",
+                    fullName: `${memberData?.firstName || ''} ${memberData?.lastName || ''}`.trim() || "Cooperative Member",
+                    createdAt: FieldValue.serverTimestamp(),
+                    roles: ["cooperative_member"],
+                    isVerified: true,
+                });
+            }
             txn.update(userRef, normalizeUserUpdate({
                 isVerified: true,
                 roles: FieldValue.arrayUnion("cooperative_member"),
