@@ -98,10 +98,9 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             .where("status", "in", ["in_transit", "delivered"])
             .get();
 
-        // 5b. Marketplace Escrow
+        // 5b. Marketplace Escrow (Queried by participants only to avoid composite index requirement)
         const marketplaceEscrowPromise = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
             .where("participants", "array-contains", userId)
-            .where("status", "in", ["funded", "in_transit", "delivered", "disputed"])
             .get();
 
         // EXECUTE PARALLEL
@@ -132,7 +131,11 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
         const marketplaceEscrow = marketplaceEscrowSnap.docs
             .reduce((sum, doc) => {
                 const data = doc.data();
-                return sum + (data.amount || data.grossAmount || 0);
+                const activeStatuses = ["funded", "in_transit", "delivered", "disputed"];
+                if (activeStatuses.includes(data.status)) {
+                    return sum + (data.amount || data.grossAmount || 0);
+                }
+                return sum;
             }, 0);
 
         const totalEscrow = exportEscrow + marketplaceEscrow;
@@ -255,7 +258,6 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
                 .get(),
             db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("participants", "array-contains", userId)
-                .where("status", "in", ["funded", "in_transit", "delivered", "disputed"])
                 .get()
         ]);
 
@@ -294,8 +296,10 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
         // 2. Process Marketplace Escrows
         marketplaceSnapshot.forEach(docSnapshot => {
             const data = docSnapshot.data();
-            const amount = data.amount || data.grossAmount || 0;
+            const activeStatuses = ["funded", "in_transit", "delivered", "disputed"];
+            if (!activeStatuses.includes(data.status)) return;
 
+            const amount = data.amount || data.grossAmount || 0;
             totalLocked += amount;
 
             // If buyer has confirmed receipt (escrow status "delivered"),
