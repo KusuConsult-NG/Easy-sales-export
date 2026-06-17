@@ -43,7 +43,19 @@ export async function GET(_request: NextRequest) {
         const hasWaveReg = userData.serviceRegistrations?.wave?.status !== undefined;
 
         const isMale = gender?.toLowerCase() === "male";
-        const eligible = !isMale || isUserAdmin || isAcademyElite || hasWaveRole || hasWaveReg;
+        const userCreatedAt = userData.createdAt;
+        const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
+        let registeredOnOrAfterCutoff = false;
+        if (userCreatedAt) {
+            const dateVal = typeof userCreatedAt.toDate === "function" 
+                ? userCreatedAt.toDate() 
+                : (userCreatedAt.seconds ? new Date(userCreatedAt.seconds * 1000) : new Date(userCreatedAt));
+            registeredOnOrAfterCutoff = dateVal >= CUTOFF_DATE;
+        }
+        const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
+
+        const isWaveBlocked = isMale && (isNewMaleUser || (!hasWaveRole && !hasWaveReg));
+        const eligible = !isWaveBlocked || isUserAdmin || isAcademyElite;
 
         // Check application status from user's serviceRegistrations (single source of truth)
         const applicationStatus: string =

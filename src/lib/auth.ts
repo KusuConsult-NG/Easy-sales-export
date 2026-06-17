@@ -174,6 +174,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         verified: userData.verified ?? true,
                         serviceRegistrations: userData.serviceRegistrations || {},
                         gender: userData.gender as "male" | "female" | undefined,
+                        createdAt: userData.createdAt,
                     };
                 } catch (error: any) {
                     // ── CRITICAL: Log the REAL error BEFORE mapping it ────────
@@ -256,6 +257,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             token.serviceRegistrations = cachedProfile.serviceRegistrations || {};
                             token.isBanned = cachedProfile.isBanned || cachedProfile.status === "banned" || cachedProfile.suspended || false;
                             token.gender = cachedProfile.gender;
+                            const cachedCreatedAt = (cachedProfile as any).createdAt;
+                            if (cachedCreatedAt) {
+                                if (typeof cachedCreatedAt.toDate === "function") {
+                                    token.createdAt = cachedCreatedAt.toDate().toISOString();
+                                } else if (cachedCreatedAt.seconds) {
+                                    token.createdAt = new Date(cachedCreatedAt.seconds * 1000).toISOString();
+                                } else {
+                                    token.createdAt = new Date(cachedCreatedAt).toISOString();
+                                }
+                            }
                             token.lastSyncedAt = now;
                         } else {
                             // Cache miss (invalidated by admin approval) and getUserProfile returned null.
@@ -274,6 +285,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                     token.serviceRegistrations = userData.serviceRegistrations || {};
                                     token.isBanned = userData.isBanned || userData.status === "banned" || userData.suspended || false;
                                     token.gender = userData.gender;
+                                    const fsCreatedAt = userData.createdAt;
+                                    if (fsCreatedAt) {
+                                        if (typeof fsCreatedAt.toDate === "function") {
+                                            token.createdAt = fsCreatedAt.toDate().toISOString();
+                                        } else if (fsCreatedAt.seconds) {
+                                            token.createdAt = new Date(fsCreatedAt.seconds * 1000).toISOString();
+                                        } else {
+                                            token.createdAt = new Date(fsCreatedAt).toISOString();
+                                        }
+                                    }
                                     token.lastSyncedAt = now;
                                 }
                             } catch (fsErr) {
@@ -406,6 +427,7 @@ declare module "next-auth" {
             serviceRegistrations?: Record<string, any>;
             currentModuleId?: string;
             gender?: "male" | "female" | "other";
+            createdAt?: string;
         };
         firebaseToken?: string;
     }
@@ -422,5 +444,6 @@ declare module "next-auth" {
         serviceRegistrations?: Record<string, any>;
         currentModuleId?: string;
         gender?: "male" | "female" | "other";
+        createdAt?: string;
     }
 }

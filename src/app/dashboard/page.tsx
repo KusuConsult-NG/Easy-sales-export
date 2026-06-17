@@ -35,8 +35,14 @@ interface RecentNotification {
 }
 
 /** Returns all platform modules with their dynamic application status */
-function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[], gender?: string) {
+function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[], gender?: string, createdAt?: string) {
     const isMale = gender?.toLowerCase() === "male";
+    
+    // Define cutoff date: June 17, 2026
+    const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
+    const registeredOnOrAfterCutoff = !!createdAt && new Date(createdAt) >= CUTOFF_DATE;
+    const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
+
     const waveRegStatus = serviceRegistrations?.wave?.status;
     const hasWaveAccess = roles.includes("wave_participant") || 
                           waveRegStatus === "approved" || 
@@ -44,6 +50,8 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
                           waveRegStatus === "pending" || 
                           waveRegStatus === "under_review" ||
                           waveRegStatus === "revision_required";
+
+    const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccess);
 
     const modulesDef = [
         {
@@ -106,7 +114,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             dashboardUrl: "/farm-nation/dashboard",
             pendingUrl: "/farm-nation/onboarding/pending",
         }
-    ].filter(mod => !(mod.id === "wave" && isMale && !hasWaveAccess));
+    ].filter(mod => !(mod.id === "wave" && isWaveBlocked));
 
     return modulesDef.map(mod => {
         const registrationStatus = serviceRegistrations[mod.id]?.status 
@@ -278,7 +286,7 @@ function DashboardHomeContent() {
         );
     }
 
-    const platformModules = getPlatformModules(serviceRegistrations, roles, session?.user?.gender);
+    const platformModules = getPlatformModules(serviceRegistrations, roles, session?.user?.gender, session?.user?.createdAt);
 
     const statCards = [
         { label: "Wallet Balance", value: fmt(stats.walletBalance), icon: Wallet, color: "text-emerald-600 bg-emerald-50", href: "/dashboard/wallet" },

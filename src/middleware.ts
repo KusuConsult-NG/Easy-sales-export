@@ -60,11 +60,17 @@ const authMiddleware = auth((req: any) => {
     // ── 1.2. Gender-based WAVE Program Restriction ─────────────────────
     if (isLoggedIn) {
         const isMale = req.auth?.user?.gender?.toLowerCase() === "male";
+        const userCreatedAt = req.auth?.user?.createdAt;
         const userRoles = req.auth?.user?.roles || [];
         const serviceRegs = req.auth?.user?.serviceRegistrations || {};
         const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
         const hasWaveRole = userRoles.includes("wave_participant");
         
+        // Define the cutoff date: June 17, 2026
+        const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
+        const registeredOnOrAfterCutoff = !!userCreatedAt && new Date(userCreatedAt) >= CUTOFF_DATE;
+        const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
+
         // Stale-safe check: also allow if serviceRegistrations.wave is approved/active/pending/reviewing.
         const waveRegStatus = serviceRegs.wave?.status;
         const hasWaveAccess = hasWaveRole || 
@@ -73,6 +79,10 @@ const authMiddleware = auth((req: any) => {
                              waveRegStatus === "pending" || 
                              waveRegStatus === "under_review" ||
                              waveRegStatus === "revision_required";
+
+        // Strict enforcement: new male users (registered on/after June 17, 2026) are never allowed access.
+        // Legacy male users are allowed only if they have pre-existing WAVE access.
+        const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccess);
 
         const normalizedHostname = hostname.replace(/^www\./, "");
         
@@ -84,7 +94,7 @@ const authMiddleware = auth((req: any) => {
             }
         }
 
-        if (isMale && !isAdmin && !hasWaveAccess && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
+        if (isWaveBlocked && !isAdmin && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
             let hubOrigin = req.nextUrl.origin;
             if (normalizedHostname.endsWith(".easysalesexport.com")) {
                 hubOrigin = "https://www.easysalesexport.com";

@@ -63,6 +63,16 @@ export const authConfig = {
                 token.serviceRegistrations = user.serviceRegistrations;
                 token.currentModuleId = user.currentModuleId || "platform";
                 token.gender = user.gender;
+                const userCreatedAt = (user as any).createdAt;
+                if (userCreatedAt) {
+                    if (typeof userCreatedAt.toDate === "function") {
+                        token.createdAt = userCreatedAt.toDate().toISOString();
+                    } else if (userCreatedAt.seconds) {
+                        token.createdAt = new Date(userCreatedAt.seconds * 1000).toISOString();
+                    } else {
+                        token.createdAt = new Date(userCreatedAt).toISOString();
+                    }
+                }
             }
             return token;
         },
@@ -80,6 +90,7 @@ export const authConfig = {
                 session.user.serviceRegistrations = token.serviceRegistrations as Record<string, any> | undefined;
                 session.user.currentModuleId = token.currentModuleId as string || "platform";
                 session.user.gender = token.gender as "male" | "female" | "other" | undefined;
+                session.user.createdAt = token.createdAt as string | undefined;
             }
             return session;
         },

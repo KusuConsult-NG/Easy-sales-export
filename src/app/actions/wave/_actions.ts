@@ -273,8 +273,22 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
         
         // Only explicitly block male users who do not have admin, elite, or pre-existing WAVE status/role.
         const isMale = existingGender?.toLowerCase() === "male";
+
+        const userCreatedAt = userData?.createdAt;
+        const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
+        let registeredOnOrAfterCutoff = false;
+        if (userCreatedAt) {
+            const dateVal = typeof userCreatedAt.toDate === "function" 
+                ? userCreatedAt.toDate() 
+                : (userCreatedAt.seconds ? new Date(userCreatedAt.seconds * 1000) : new Date(userCreatedAt));
+            registeredOnOrAfterCutoff = dateVal >= CUTOFF_DATE;
+        }
+        const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
+
+        // Block if male AND (new user OR doesn't have pre-existing wave access)
+        const isWaveBlocked = isMale && (isNewMaleUser || (!hasWaveRole && !hasWaveReg));
         
-        if (isMale && !isUserAdmin && !isAcademyElite && !hasWaveRole && !hasWaveReg) {
+        if (isWaveBlocked && !isUserAdmin && !isAcademyElite) {
             return {
                 error: null,
                 success: true as const,

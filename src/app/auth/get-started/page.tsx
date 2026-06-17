@@ -99,6 +99,13 @@ export default function GetStartedPage() {
     }
 
     const isMale = session?.user?.gender?.toLowerCase() === "male";
+    const userCreatedAt = session?.user?.createdAt;
+    
+    // Define cutoff date: June 17, 2026
+    const CUTOFF_DATE = new Date("2026-06-17T00:00:00.000Z");
+    const registeredOnOrAfterCutoff = !!userCreatedAt && new Date(userCreatedAt) >= CUTOFF_DATE;
+    const isNewMaleUser = isMale && registeredOnOrAfterCutoff;
+
     const roles = (session?.user?.roles as UserRole[]) || [];
     const serviceRegistrations = session?.user?.serviceRegistrations || {};
     const waveRegStatus = serviceRegistrations.wave?.status;
@@ -109,7 +116,9 @@ export default function GetStartedPage() {
                           waveRegStatus === "under_review" ||
                           waveRegStatus === "revision_required";
 
-    const filteredModules = modules.filter(m => !(m.id === "wave" && isMale && !hasWaveAccess));
+    const isWaveBlocked = isMale && (isNewMaleUser || !hasWaveAccess);
+
+    const filteredModules = modules.filter(m => !(m.id === "wave" && isWaveBlocked));
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 relative">
