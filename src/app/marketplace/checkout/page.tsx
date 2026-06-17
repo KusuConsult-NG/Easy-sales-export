@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -83,6 +83,7 @@ export default function CheckoutPage() {
     const [verificationError, setVerificationError] = useState<string | null>(null);
 
     const [mapsLoaded, setMapsLoaded] = useState(false);
+    const [mapsError, setMapsError] = useState(false);
     const [productCoords, setProductCoords] = useState<Record<string, { lat: number; lng: number }>>({});
     const [destinationCoords, setDestinationCoords] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -187,8 +188,8 @@ export default function CheckoutPage() {
                 // Extract address components
                 let street = "";
                 let city = "";
-                let state = "";
-                let lga = "";
+                let rawState = "";
+                let rawLga = "";
 
                 const components = place.address_components || [];
                 
@@ -201,9 +202,9 @@ export default function CheckoutPage() {
                     } else if (types.includes("locality") || types.includes("sublocality")) {
                         city = c.long_name;
                     } else if (types.includes("administrative_area_level_1")) {
-                        state = c.long_name.replace(/\s*state$/i, "").trim();
+                        rawState = c.long_name.replace(/\s*state$/i, "").trim();
                     } else if (types.includes("administrative_area_level_2")) {
-                        lga = c.long_name;
+                        rawLga = c.long_name;
                     }
                 });
 
@@ -211,11 +212,43 @@ export default function CheckoutPage() {
                     street = inputEl.value.split(",")[0] || "";
                 }
 
+                // Robust state matching
+                let matchedState = "";
+                const stateKey = Object.keys(NIGERIAN_LOCATIONS).find(
+                    (s) => s.toLowerCase() === rawState.toLowerCase()
+                );
+                if (stateKey) {
+                    matchedState = stateKey;
+                } else if (rawState.toLowerCase() === "federal capital territory" || rawState.toLowerCase() === "abuja") {
+                    matchedState = "FCT";
+                }
+
+                // Robust LGA matching
+                let matchedLga = "";
+                if (matchedState && NIGERIAN_LOCATIONS[matchedState]) {
+                    const lgaList = NIGERIAN_LOCATIONS[matchedState];
+                    const lgaLower = rawLga.toLowerCase();
+                    const directLgaMatch = lgaList.find(
+                        (l) => l.toLowerCase() === lgaLower
+                    );
+                    if (directLgaMatch) {
+                        matchedLga = directLgaMatch;
+                    } else {
+                        // Find partial match
+                        const partialLgaMatch = lgaList.find(
+                            (l) => l.toLowerCase().includes(lgaLower) || lgaLower.includes(l.toLowerCase())
+                        );
+                        if (partialLgaMatch) {
+                            matchedLga = partialLgaMatch;
+                        }
+                    }
+                }
+
                 setDeliveryAddress({
                     street: street.trim(),
-                    city: city || lga || "",
-                    state: state,
-                    lga: lga,
+                    city: city || rawLga || "",
+                    state: matchedState,
+                    lga: matchedLga,
                 });
             });
         } catch (e) {
@@ -224,13 +257,19 @@ export default function CheckoutPage() {
     }, [mapsLoaded, showToast]);
 
     // Manual geocoding function for input addresses
-    const geocodeManualAddress = () => {
-        if (!deliveryAddress.street.trim()) return;
+    const geocodeManualAddress = useCallback((force = false) => {
+        if (!deliveryAddress.street.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state) {
+            // Do not geocode automatically if required fields are missing
+            if (force === true) {
+                showToast("Please fill street, city, and state first.", "warning");
+            }
+            return;
+        }
 
         setIsGeocoding(true);
         setVerificationError(null);
 
-        const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city || ""}, ${deliveryAddress.state}, Nigeria`;
+        const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city}, ${deliveryAddress.state}, Nigeria`;
 
         try {
             if (typeof window === "undefined" || !(window as any).google?.maps?.Geocoder) {
@@ -250,8 +289,14 @@ export default function CheckoutPage() {
                     console.error("Geocoding failed for manual address:", status);
                     setDestinationCoords(null);
                     setIsAddressVerified(false);
-                    setVerificationError(`Google Places could not find this location (Status: ${status}). Try selecting from the dropdown or click 'Use Address Anyway' to bypass.`);
-                    showToast("Could not verify address. Please use the dropdown options or bypass.", "error");
+                    
+                    let errMsg = `Google Places could not find this location (Status: ${status}). Try selecting from the dropdown or click 'Use Address Anyway' to bypass.`;
+                    if (status === "REQUEST_DENIED") {
+                        errMsg = "Google Maps API request was denied. This usually means the Geocoding API or Places API is not enabled in your Google Cloud Console, or billing is not linked to your project. Please verify your Google Developer Console settings, or click 'Use Address Anyway' to bypass.";
+                    }
+                    
+                    setVerificationError(errMsg);
+                    showToast(status === "REQUEST_DENIED" ? "Maps API request denied. See details below." : "Could not verify address. Please use the dropdown options or bypass.", "error");
                 }
             });
         } catch (e: any) {
@@ -262,7 +307,19 @@ export default function CheckoutPage() {
             setVerificationError(e?.message || "Google Maps could not be loaded. Please check your connection or use the bypass below.");
             showToast("Address verification failed.", "error");
         }
-    };
+    }, [deliveryAddress, showToast]);
+
+    // Auto-geocode when fields change and are complete, debounced by 1000ms
+    useEffect(() => {
+        if (isAddressVerified) return;
+        if (!deliveryAddress.street.trim() || !deliveryAddress.city.trim() || !deliveryAddress.state) {
+            return;
+        }
+        const timer = setTimeout(() => {
+            geocodeManualAddress(false);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [deliveryAddress.street, deliveryAddress.city, deliveryAddress.state, deliveryAddress.lga, isAddressVerified, geocodeManualAddress]);
 
     // Recalculate distance when destination or product coordinates change
     useEffect(() => {
@@ -311,7 +368,11 @@ export default function CheckoutPage() {
                     } else {
                         console.error("Geocoding failed for saved address:", status);
                         setIsAddressVerified(false);
-                        setVerificationError(`Saved address could not be verified by Google Places (Status: ${status}).`);
+                        let errMsg = `Saved address could not be verified by Google Places (Status: ${status}).`;
+                        if (status === "REQUEST_DENIED") {
+                            errMsg = "Google Maps API request was denied for your saved address. This usually means the Geocoding API is not enabled in Google Cloud Console, or billing is not linked to your project. Click 'Verify Address' to retry or click 'Use Address Anyway' below.";
+                        }
+                        setVerificationError(errMsg);
                     }
                 });
             } else {
@@ -741,7 +802,7 @@ export default function CheckoutPage() {
                                                 setDestinationCoords(null);
                                                 setVerificationError(null);
                                             }}
-                                            onBlur={geocodeManualAddress}
+                                            onBlur={() => geocodeManualAddress(false)}
                                             placeholder="e.g. 123 Main Street"
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
@@ -753,6 +814,10 @@ export default function CheckoutPage() {
                                                         <span className="text-blue-600 font-medium flex items-center gap-1 animate-pulse">
                                                             🌀 Locating address via Google Places...
                                                          </span>
+                                                    ) : mapsError ? (
+                                                        <span className="text-red-600 font-medium flex items-center gap-1">
+                                                            🔴 Google Maps failed to load. Please use the bypass below.
+                                                        </span>
                                                     ) : isAddressVerified && destinationCoords ? (
                                                         <span className="text-green-600 font-semibold flex items-center gap-1">
                                                             🟢 Address verified (Distance: {distance} km)
@@ -765,7 +830,7 @@ export default function CheckoutPage() {
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    onClick={geocodeManualAddress}
+                                                    onClick={() => geocodeManualAddress(true)}
                                                     disabled={isGeocoding || !deliveryAddress.street.trim()}
                                                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 font-semibold rounded-lg border border-slate-300 transition-colors shrink-0"
                                                 >
@@ -776,7 +841,8 @@ export default function CheckoutPage() {
                                             {verificationError && (
                                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-4 text-xs">
                                                     <div className="text-amber-800 font-medium leading-relaxed">
-                                                        <p className="font-bold mb-0.5">Google Places could not verify this location.</p>
+                                                        <p className="font-bold mb-0.5">Address Verification Notice</p>
+                                                        <p className="mb-1">{verificationError}</p>
                                                         <p>You can proceed anyway, but shipping fees will be estimated using a standard base rate.</p>
                                                     </div>
                                                     <button
@@ -809,7 +875,7 @@ export default function CheckoutPage() {
                                                 setDestinationCoords(null);
                                                 setVerificationError(null);
                                             }}
-                                            onBlur={geocodeManualAddress}
+                                            onBlur={() => geocodeManualAddress(false)}
                                             placeholder="e.g. Ikeja"
                                             className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
                                             required
@@ -1020,6 +1086,11 @@ export default function CheckoutPage() {
                 <Script
                     src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}&libraries=places`}
                     onLoad={() => setMapsLoaded(true)}
+                    onError={() => {
+                        console.error("Google Maps Script failed to load");
+                        setMapsError(true);
+                        setVerificationError("Google Maps library failed to load. Please check your internet connection or click 'Use Address Anyway' below to bypass.");
+                    }}
                     strategy="afterInteractive"
                 />
             </div>
