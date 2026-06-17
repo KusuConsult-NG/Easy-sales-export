@@ -4942,9 +4942,13 @@ async function _onboardLegacyMemberAction(
         let emailSent = true;
         if (isNewUser) {
             try {
-                await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+                const emailResult = await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+                if (emailResult && !emailResult.success) {
+                    logger.warn(`[Legacy Onboarding] Failed to send welcome email for ${data.email}:`, { error: emailResult.error });
+                    emailSent = false;
+                }
             } catch (emailErr: any) {
-                logger.warn(`[Legacy Onboarding] Failed to send welcome email for ${data.email}:`, emailErr);
+                logger.error(`[Legacy Onboarding] Exception while sending welcome email for ${data.email}:`, emailErr);
                 emailSent = false;
             }
         }
@@ -4990,7 +4994,9 @@ async function _onboardLegacyMemberAction(
         return { success: false as const, error: error.message || "Failed to onboard legacy member" };
     }
 }
-export const onboardLegacyMemberAction = withFlexibleSafeAction("onboardLegacyMemberAction", _onboardLegacyMemberAction);
+export async function onboardLegacyMemberAction(data: Parameters<typeof _onboardLegacyMemberAction>[0]) {
+    return withFlexibleSafeAction("onboardLegacyMemberAction", _onboardLegacyMemberAction)(data);
+}
 
 /**
  * Approve Marketplace User (Buyer)

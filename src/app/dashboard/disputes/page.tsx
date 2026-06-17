@@ -13,7 +13,7 @@ import { collection, query, where, orderBy, onSnapshot } from "firebase/firestor
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
 import { useToast } from "@/contexts/ToastContext";
-import { startConversationAction } from "@/app/actions/messages";
+import { startSupportConversationAction } from "@/app/actions/messages";
 
 interface Dispute {
     id: string;
@@ -90,13 +90,9 @@ export default function DisputesPage() {
     }, [userId, isAuthed, status, router]);
 
     async function handleContactSupport(dispute: Dispute) {
-        if (!dispute.sellerId) {
-            showToast("No seller contact available for this dispute", "error");
-            return;
-        }
         setContactingId(dispute.id);
         try {
-            const result = await startConversationAction(dispute.sellerId);
+            const result = await startSupportConversationAction("marketplace");
             if (result && "conversationId" in result && result.conversationId) {
                 router.push(`/messages?conversation=${result.conversationId}`);
             } else {

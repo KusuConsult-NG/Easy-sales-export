@@ -13,13 +13,14 @@ import {
     ShieldCheck,
     StickyNote,
     Send,
+    MessageCircle,
 } from "lucide-react";
 import {
     getDisputeByIdAction,
     updateDisputeStatusAction,
 } from "@/app/actions/disputes";
 import { getOrderByIdAction } from "@/app/actions/orders";
-import { getEscrowTransactionByIdAction, escalateDisputeAction } from "@/app/actions/marketplace";
+import { getEscrowTransactionByIdAction, escalateDisputeAction, getEscrowTransactionByOrderIdAction } from "@/app/actions/marketplace";
 import {
     addEscalationNoteAction,
     getEscalationNotesAction,
@@ -117,6 +118,10 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                     const o = orderResult.data.order as unknown as Order;
                     setOrder(o);
                     setRefundAmount(o.totalAmount.toString());
+                }
+                const escrowResult = await getEscrowTransactionByOrderIdAction(d.orderId);
+                if (escrowResult.success && escrowResult.data) {
+                    setEscrowData(escrowResult.data);
                 }
             } else if (d.escrowId) {
                 // ── Escrow-origin dispute (standalone escrow) ─────────────
@@ -242,6 +247,15 @@ export default function DisputeDetailPage(props: DisputeDetailPageProps) {
                             >
                                 {escalating ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
                                 Escalate Dispute
+                            </button>
+                        )}
+                        {escrowData?.id && (
+                            <button
+                                onClick={() => router.push(`/escrow/${escrowData.id}/chat`)}
+                                className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition text-sm flex items-center gap-2"
+                            >
+                                <MessageCircle className="w-4 h-4" />
+                                View Escrow Chat
                             </button>
                         )}
                     </div>

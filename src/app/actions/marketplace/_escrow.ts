@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { requireAdmin } from "@/lib/require-admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminFinancialAction } from "@/lib/audit-log";
-import { requireSession } from "@/lib/session-guard";
+import { requireSession, isAdmin } from "@/lib/session-guard";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { createNotificationAction } from "@/app/actions/notifications";
 import { verifyPaystackPayment } from "@/lib/paystack-server";
@@ -531,7 +531,9 @@ async function _createDisputeAction(data: { escrowId: string;
         return { success: false as const, error: error instanceof Error ? error.message : "Failed to create dispute"};
     }
 }
-export const createDisputeAction = withFlexibleSafeAction("createDisputeAction", _createDisputeAction);
+export async function createDisputeAction(data: Parameters<typeof _createDisputeAction>[0]) {
+    return withFlexibleSafeAction("createDisputeAction", _createDisputeAction)(data);
+}
 
 /**
  * Admin resolves dispute.
@@ -781,12 +783,14 @@ async function _sendEscrowMessageAction(data: { escrowId: string;
         if (session.user.id !== data.senderId) { return { success: false as const, error: "Unauthorized"};
         }
 
-        // Verify they are a participant in this escrow
         const escrowDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(data.escrowId).get();
         if (!escrowDoc.exists) { return { success: false as const, error: "Escrow transaction not found"};
         }
         const escrow = escrowDoc.data() as EscrowTransaction;
-        if (escrow.buyerId !== data.senderId && escrow.sellerId !== data.senderId) { return { success: false as const, error: "Not a participant of this escrow"};
+
+        const isAdminUser = isAdmin(session.user.roles);
+        if (escrow.buyerId !== data.senderId && escrow.sellerId !== data.senderId && !isAdminUser) {
+            return { success: false as const, error: "Not a participant of this escrow"};
         }
 
         const messageData: Omit<Message, "id"> & { createdAt: any } = { ...data,
@@ -805,7 +809,9 @@ async function _sendEscrowMessageAction(data: { escrowId: string;
         return { success: false as const, error: "Failed to send message"};
     }
 }
-export const sendEscrowMessageAction = withFlexibleSafeAction("sendEscrowMessageAction", _sendEscrowMessageAction);
+export async function sendEscrowMessageAction(data: Parameters<typeof _sendEscrowMessageAction>[0]) {
+    return withFlexibleSafeAction("sendEscrowMessageAction", _sendEscrowMessageAction)(data);
+}
 
 /**
  * Get escrow messages — only for escrow participants
@@ -818,12 +824,13 @@ export async function getEscrowMessagesAction(escrowId: string): Promise<
         if (!sessionResult.session) return { success: false as const, data: null, error: "Unauthorized" };
         const { session } = sessionResult;
 
-        // Verify they are a participant
+        // Verify they are a participant or admin
         const escrowDoc = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId).get();
         if (!escrowDoc.exists) return { success: false as const, data: null, error: "Escrow not found" };
         const escrow = escrowDoc.data() as EscrowTransaction;
         const userId = session.user.id;
-        if (escrow.buyerId !== userId && escrow.sellerId !== userId) {
+        const isAdminUser = isAdmin(session.user.roles);
+        if (escrow.buyerId !== userId && escrow.sellerId !== userId && !isAdminUser) {
             logger.warn(`[getEscrowMessages] Non-participant access attempt by ${userId} on escrow ${escrowId}`);
             return { success: false as const, data: null, error: "Access denied" };
         }
@@ -871,3 +878,43 @@ export async function getEscrowTransactionByIdAction(escrowId: string): Promise<
         return { success: false as const, error: "Failed to fetch escrow transaction", data: null };
     }
 }
+
+/**
+ * Get single escrow transaction by order ID — only for participants or admins
+ */
+export async function getEscrowTransactionByOrderIdAction(orderId: string): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) {
+            return { success: false as const, error: (sessionResult.error as any)?.error ?? "Session expired", data: null };
+        }
+        const { session } = sessionResult;
+
+        const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("orderId", "==", orderId)
+            .limit(1)
+            .get();
+
+        if (escrowQuery.empty) {
+            return { success: false as const, error: "Escrow transaction not found", data: null };
+        }
+
+        const escrowDoc = escrowQuery.docs[0];
+        const data = escrowDoc.data() as EscrowTransaction;
+        const userId = session.user.id;
+        const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
+
+        if (!isAdminUser && data.buyerId !== userId && data.sellerId !== userId) {
+            return { success: false as const, error: "Not authorized to view this escrow", data: null };
+        }
+
+        return { error: null, success: true as const, data: serializeDoc(escrowDoc.id, data) };
+    } catch (error) {
+        logger.error("Error fetching escrow transaction by order ID:", error);
+        return { success: false as const, error: "Failed to fetch escrow transaction", data: null };
+    }
+}
+

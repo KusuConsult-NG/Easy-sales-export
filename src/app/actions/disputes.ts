@@ -104,7 +104,9 @@ async function _createDisputeAction(params: { orderId: string;
         return { success: false as const, error: error instanceof Error ? error.message : "Failed to create dispute", data: null };
     }
 }
-export const createDisputeAction = withFlexibleSafeAction("createDisputeAction", _createDisputeAction);
+export async function createDisputeAction(params: Parameters<typeof _createDisputeAction>[0]) {
+    return withFlexibleSafeAction("createDisputeAction", _createDisputeAction)(params);
+}
 
 /**
  * Get buyer's disputes

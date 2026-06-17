@@ -45,8 +45,9 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
                 const escrow = result.data;
                 const isBuyer = escrow?.buyerId === session.user.id;
                 const isSeller = escrow?.sellerId === session.user.id;
+                const isAdminUser = session.user.roles?.includes("admin") || session.user.roles?.includes("super_admin");
 
-                if (isBuyer || isSeller) {
+                if (isBuyer || isSeller || isAdminUser) {
                     setEscrowData(escrow);
                     setAuthorized(true);
                 } else {
@@ -201,9 +202,15 @@ export default function EscrowChatPage({ params }: EscrowChatPageProps) {
                             <p className="text-sm text-blue-200">Transaction #{escrowId.slice(0, 8)}</p>
                         </div>
                     </div>
-                    <div className="text-xs text-blue-300 bg-blue-500/20 px-3 py-1 rounded-full">
-                        Secure Messaging
-                    </div>
+                    {session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin") ? (
+                        <div className="text-xs text-red-300 bg-red-500/20 px-3 py-1 rounded-full font-semibold">
+                            Admin Mode
+                        </div>
+                    ) : (
+                        <div className="text-xs text-blue-300 bg-blue-500/20 px-3 py-1 rounded-full">
+                            Secure Messaging
+                        </div>
+                    )}
                 </div>
             </div>
 

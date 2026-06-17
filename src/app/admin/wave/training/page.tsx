@@ -297,6 +297,7 @@ export default function AdminWaveTrainingPage() {
                             { title: "Upcoming Events", items: upcomingEvents },
                             { title: "Ongoing Events", items: ongoingEvents },
                             { title: "Completed Events", items: completedEvents },
+                            { title: "Cancelled Events", items: cancelledEvents },
                         ].map(
                             (section) =>
                                 section.items.length > 0 && (
