@@ -63,7 +63,7 @@ export const HUB_MODULES: Record<string, ModuleConfig> = {
         id: 'mod_farm_001',
         name: 'Farm Nation',
         domain: 'farmnation.easysalesexport.com',
-        slug: 'farmnation',
+        slug: 'farm-nation',
         version: '1.0.0',
         features: { hasAcademy: true, hasFinance: false, hasChat: false, hasListings: true },
         uploadLimits: { video: 50, docs: 20 },

@@ -24,6 +24,7 @@ import {
     Eye,
     Search,
     ChevronLeft,
+    ChevronDown,
 } from "lucide-react";
 import {
     getFarmNationDashboardStatsAction,
@@ -65,6 +66,7 @@ export default function FarmNationDashboard() {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<FarmNationDashboardStats | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
 
     useEffect(() => {
         getFarmNationDashboardStatsAction()
@@ -378,13 +380,17 @@ export default function FarmNationDashboard() {
                         ) : (
                             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 divide-y divide-slate-100">
                                 {stats.recentTransactions.map((tx) => (
-                                    <div key={tx.id} className="p-4">
+                                    <div
+                                        key={tx.id}
+                                        onClick={() => setExpandedTxId(expandedTxId === tx.id ? null : tx.id)}
+                                        className="p-4 hover:bg-slate-50 transition cursor-pointer border-b border-slate-100 last:border-0"
+                                    >
                                         <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
+                                            <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-semibold text-slate-900 truncate">
                                                     {tx.propertyName}
                                                 </p>
-                                                <p className="text-xs text-slate-500 capitalize">
+                                                <p className="text-xs text-slate-500 capitalize mt-0.5">
                                                     {tx.propertyType} ·{" "}
                                                     {new Date(tx.createdAt).toLocaleDateString("en-NG", {
                                                         month: "short",
@@ -392,13 +398,46 @@ export default function FarmNationDashboard() {
                                                     })}
                                                 </p>
                                             </div>
-                                            <div className="text-right shrink-0">
-                                                <p className="text-sm font-bold text-emerald-700">
-                                                    {formatCurrency(tx.amount)}
-                                                </p>
-                                                <StatusBadge status={tx.status} />
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <div className="text-right">
+                                                    <p className="text-sm font-bold text-emerald-700">
+                                                        {formatCurrency(tx.amount)}
+                                                    </p>
+                                                    <StatusBadge status={tx.status} />
+                                                </div>
+                                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedTxId === tx.id ? "rotate-180" : ""}`} />
                                             </div>
                                         </div>
+
+                                        {/* Expanded details */}
+                                        {expandedTxId === tx.id && (
+                                            <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-slate-50 p-3.5 rounded-xl">
+                                                <div>
+                                                    <p className="text-slate-500 font-semibold mb-0.5">Request ID</p>
+                                                    <p className="font-mono text-slate-800 select-all">{tx.id}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-slate-500 font-semibold mb-0.5">Property Type</p>
+                                                    <p className="text-slate-800 capitalize font-medium">{tx.propertyType}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-slate-500 font-semibold mb-0.5">Date</p>
+                                                    <p className="text-slate-800 font-medium">
+                                                        {new Date(tx.createdAt).toLocaleString("en-NG", {
+                                                            month: "short",
+                                                            day: "numeric",
+                                                            year: "numeric",
+                                                            hour: "2-digit",
+                                                            minute: "2-digit"
+                                                        })}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-slate-500 font-semibold mb-0.5">Escrow Status</p>
+                                                    <p className="text-slate-800 capitalize font-medium">{tx.status || "N/A"}</p>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>

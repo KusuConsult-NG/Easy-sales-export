@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
     DollarSign, TrendingUp, Clock, Download, Calendar,
-    Eye, Loader2, ArrowDownCircle, CheckCircle
+    Eye, Loader2, ArrowDownCircle, CheckCircle, ChevronDown
 } from "lucide-react";
 import { calculateEarningsAction, withdrawEarningsAction } from "@/app/actions/wave";
 import type { MemberEarnings } from "@/app/actions/wave";
@@ -22,6 +22,7 @@ export default function WaveEarningsPage() {
     const [loading, setLoading] = useState(true);
     const [withdrawalAmount, setWithdrawalAmount] = useState("");
     const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+    const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
     useEffect(() => {
         if (status === "unauthenticated") {
@@ -192,60 +193,66 @@ export default function WaveEarningsPage() {
                             </p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                                            Date
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
-                                            Order ID
-                                        </th>
-                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
-                                            Sale Amount
-                                        </th>
-                                        <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
-                                            Commission
-                                        </th>
-                                        <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
-                                            Status
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {earnings.transactions.map((txn, idx) => (
-                                        <tr
-                                            key={txn.orderId}
-                                            className="hover:bg-gray-50 transition"
-                                        >
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar className="w-4 h-4 text-gray-400" />
-                                                    {txn.date.toLocaleDateString()}
+                        <div className="divide-y divide-gray-100">
+                            {earnings.transactions.map((txn) => (
+                                <div
+                                    key={txn.orderId}
+                                    onClick={() => setExpandedOrderId(expandedOrderId === txn.orderId ? null : txn.orderId)}
+                                    className="p-5 hover:bg-gray-50 transition cursor-pointer"
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                                                <DollarSign className="w-5 h-5 text-emerald-700" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-semibold text-slate-900 text-sm">Commission from Sale</h4>
+                                                <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                                                    <Calendar className="w-3.5 h-3.5" />
+                                                    <span>{txn.date.toLocaleDateString()}</span>
                                                 </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-600">
-                                                {txn.orderId}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
-                                                {formatCurrency(txn.saleAmount)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-bold text-emerald-700">
-                                                {formatCurrency(txn.commission)}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${txn.status === "paid"
-                                                    ? "bg-emerald-100 text-emerald-800"
-                                                    : "bg-yellow-100 text-yellow-700"
-                                                    }`}>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-right">
+                                                <p className="font-bold text-sm text-emerald-700">
+                                                    +{formatCurrency(txn.commission)}
+                                                </p>
+                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                                    txn.status === "paid"
+                                                        ? "bg-emerald-100 text-emerald-800"
+                                                        : "bg-yellow-100 text-yellow-700"
+                                                }`}>
                                                     {txn.status.charAt(0).toUpperCase() + txn.status.slice(1)}
                                                 </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                            </div>
+                                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedOrderId === txn.orderId ? "rotate-180" : ""}`} />
+                                        </div>
+                                    </div>
+
+                                    {/* Expanded details */}
+                                    {expandedOrderId === txn.orderId && (
+                                        <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl">
+                                            <div>
+                                                <p className="text-gray-500 font-semibold mb-0.5">Order ID</p>
+                                                <p className="font-mono text-gray-800 select-all">{txn.orderId}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-500 font-semibold mb-0.5">Sale Amount</p>
+                                                <p className="text-gray-800 font-medium">{formatCurrency(txn.saleAmount)}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-500 font-semibold mb-0.5">Commission Rate</p>
+                                                <p className="text-gray-800 font-medium">{(earnings.commissionRate * 100).toFixed(0)}%</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-gray-500 font-semibold mb-0.5">Payment Status</p>
+                                                <p className="text-gray-800 capitalize font-medium">{txn.status}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, ArrowDownCircle, ArrowUpCircle, Clock, Loader2, AlertCircle } from "lucide-react";
+import { Calendar, ArrowDownCircle, ArrowUpCircle, Clock, Loader2, AlertCircle, ChevronDown } from "lucide-react";
 import { getMyExportInvestmentsAction } from "@/app/actions/export";
 
 interface TransactionRow {
@@ -16,6 +16,7 @@ interface TransactionRow {
 export default function ExportTransactionsPage() {
     const [transactions, setTransactions] = useState<TransactionRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     useEffect(() => {
         getMyExportInvestmentsAction().then((result) => {
@@ -93,7 +94,11 @@ export default function ExportTransactionsPage() {
                     <div className="bg-white rounded-xl border border-slate-200">
                         <div className="divide-y divide-slate-200">
                             {transactions.map((tx) => (
-                                <div key={tx.id} className="p-6 hover:bg-slate-50 transition-colors">
+                                <div
+                                    key={tx.id}
+                                    onClick={() => setExpandedId(expandedId === tx.id ? null : tx.id)}
+                                    className="p-6 hover:bg-slate-50 transition-colors cursor-pointer border-b border-slate-100 last:border-0"
+                                >
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-start gap-4 flex-1">
                                             <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
@@ -112,13 +117,42 @@ export default function ExportTransactionsPage() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="text-right flex flex-col items-end gap-2">
-                                            <div className={`text-xl font-bold ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
-                                                {tx.amount > 0 ? "+" : ""}₦{Math.abs(tx.amount).toLocaleString()}
+                                        <div className="text-right flex items-center gap-4">
+                                            <div className="flex flex-col items-end gap-2">
+                                                <div className={`text-xl font-bold ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
+                                                    {tx.amount > 0 ? "+" : ""}₦{Math.abs(tx.amount).toLocaleString()}
+                                                </div>
+                                                {getStatusBadge(tx.status)}
                                             </div>
-                                            {getStatusBadge(tx.status)}
+                                            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedId === tx.id ? "rotate-180" : ""}`} />
                                         </div>
                                     </div>
+
+                                    {/* Expanded details */}
+                                    {expandedId === tx.id && (
+                                        <div className="mt-4 pt-4 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl">
+                                            <div>
+                                                <p className="text-slate-500 font-semibold mb-0.5">Transaction ID</p>
+                                                <p className="font-mono text-slate-800 select-all">{tx.id}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-slate-500 font-semibold mb-0.5">Status</p>
+                                                <p className="text-slate-800 capitalize font-medium">{tx.status}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-slate-500 font-semibold mb-0.5">Transaction Type</p>
+                                                <p className="text-slate-800 capitalize font-medium">{tx.type}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-slate-500 font-semibold mb-0.5">Date</p>
+                                                <p className="text-slate-800 font-medium">
+                                                    {tx.date
+                                                        ? new Date(tx.date).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                                                        : "TBD"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

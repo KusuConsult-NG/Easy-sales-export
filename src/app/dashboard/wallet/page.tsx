@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
     Wallet, ArrowDownCircle, ArrowUpCircle, Plus, History,
     Loader2, AlertCircle, CheckCircle, Clock, XCircle, RefreshCw,
+    ChevronDown,
 } from "lucide-react";
 import {
     getWalletAction,
@@ -75,6 +76,7 @@ export default function WalletPage() {
     } | null>(null);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [hasMore, setHasMore] = useState(false);
+    const [expandedTxId, setExpandedTxId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [txLoading, setTxLoading] = useState(false);
     const [lastId, setLastId] = useState<string | undefined>();
@@ -281,20 +283,67 @@ export default function WalletPage() {
                                     txn.type === "withdrawal" ? ArrowUpCircle :
                                         txn.status === "failed" ? XCircle : ArrowUpCircle;
                                 return (
-                                    <div key={txn.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition">
-                                        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isDebit ? "bg-red-50" : "bg-green-50"}`}>
-                                            <TypeIcon className={`w-5 h-5 ${isDebit ? "text-red-500" : "text-green-600"}`} />
+                                    <div
+                                        key={txn.id}
+                                        onClick={() => setExpandedTxId(expandedTxId === txn.id ? null : txn.id)}
+                                        className="px-6 py-4 hover:bg-slate-50 transition cursor-pointer border-b border-slate-100 last:border-0"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isDebit ? "bg-red-50" : "bg-green-50"}`}>
+                                                <TypeIcon className={`w-5 h-5 ${isDebit ? "text-red-500" : "text-green-600"}`} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-slate-900 text-sm truncate">{txn.description}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">{fmtDate(txn.createdAt)}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <div className="text-right">
+                                                    <p className={`font-bold text-sm ${isDebit ? "text-red-600" : "text-green-600"}`}>
+                                                        {isDebit ? "-" : "+"}{fmt(Math.abs(txn.amount))}
+                                                    </p>
+                                                    <StatusBadge status={txn.status} />
+                                                </div>
+                                                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedTxId === txn.id ? "rotate-180" : ""}`} />
+                                            </div>
                                         </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-slate-900 text-sm truncate">{txn.description}</p>
-                                            <p className="text-xs text-slate-400 mt-0.5">{fmtDate(txn.createdAt)}</p>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                            <p className={`font-bold text-sm ${isDebit ? "text-red-600" : "text-green-600"}`}>
-                                                {isDebit ? "-" : "+"}{fmt(Math.abs(txn.amount))}
-                                            </p>
-                                            <StatusBadge status={txn.status} />
-                                        </div>
+
+                                        {/* Expanded details */}
+                                        {expandedTxId === txn.id && (
+                                            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl">
+                                                <div>
+                                                    <p className="text-slate-500 font-semibold mb-0.5">Transaction ID</p>
+                                                    <p className="font-mono text-slate-800 select-all">{txn.id}</p>
+                                                </div>
+                                                {txn.reference && (
+                                                    <div>
+                                                        <p className="text-slate-500 font-semibold mb-0.5">Reference</p>
+                                                        <p className="font-mono text-slate-800">{txn.reference}</p>
+                                                    </div>
+                                                )}
+                                                {txn.orderId && (
+                                                    <div>
+                                                        <p className="text-slate-500 font-semibold mb-0.5">Order ID</p>
+                                                        <p className="font-mono text-slate-800">{txn.orderId}</p>
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <p className="text-slate-500 font-semibold mb-0.5">Transaction Type</p>
+                                                    <p className="text-slate-800 capitalize font-medium">{txn.type}</p>
+                                                </div>
+                                                {(txn.balanceBefore !== undefined || txn.balanceAfter !== undefined) && (
+                                                    <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <p className="text-slate-500 font-semibold mb-0.5">Balance Before</p>
+                                                            <p className="text-slate-800 font-medium">{fmt(txn.balanceBefore)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-slate-500 font-semibold mb-0.5">Balance After</p>
+                                                            <p className="text-slate-800 font-medium">{fmt(txn.balanceAfter)}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

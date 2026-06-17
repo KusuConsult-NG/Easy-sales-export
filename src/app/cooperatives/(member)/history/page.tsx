@@ -18,6 +18,7 @@ export default function CooperativeHistoryPage() {
     const [transactions, setTransactions] = useState<CooperativeTransaction[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterType, setFilterType] = useState("all");
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     useEffect(() => {
         async function loadData() {
@@ -117,48 +118,68 @@ export default function CooperativeHistoryPage() {
                         </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Description</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                                {filteredTransactions.map((t) => (
-                                    <tr key={t.id} className="hover:bg-slate-50 transition">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                                            {formatDateTime(t.date)}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                                            {t.description || "Transaction"}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span className="capitalize px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                    <div className="divide-y divide-slate-100">
+                        {filteredTransactions.map((t) => (
+                            <div
+                                key={t.id}
+                                onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                                className="p-5 hover:bg-slate-50 transition cursor-pointer"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+                                            <HistoryIcon className="w-5 h-5 text-purple-600" />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold text-slate-900 text-sm">
+                                                {t.description || "Transaction"}
+                                            </h4>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                {formatDateTime(t.date)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="text-right">
+                                            <p className={`font-bold text-sm ${t.amount > 0 ? "text-green-600" : "text-slate-900"}`}>
+                                                {t.amount > 0 ? "+" : ""}
+                                                {formatCurrency(t.amount)}
+                                            </p>
+                                            <span className="capitalize px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
                                                 {t.type.replace('_', ' ')}
                                             </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <span className={`capitalize px-2 py-1 rounded-full text-xs font-medium ${t.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                    t.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                                        'bg-red-100 text-red-700'
-                                                }`}>
+                                        </div>
+                                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${expandedId === t.id ? "rotate-180" : ""}`} />
+                                    </div>
+                                </div>
+
+                                {/* Expanded details */}
+                                {expandedId === t.id && (
+                                    <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl">
+                                        <div>
+                                            <p className="text-slate-500 font-semibold mb-0.5">Transaction ID</p>
+                                            <p className="font-mono text-slate-800 select-all">{t.id}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-slate-500 font-semibold mb-0.5">Status</p>
+                                            <span className={`capitalize px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                                t.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                t.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                                'bg-red-100 text-red-700'
+                                            }`}>
                                                 {t.status}
                                             </span>
-                                        </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm font-bold text-right ${t.amount > 0 ? 'text-green-600' : 'text-slate-900'
-                                            }`}>
-                                            {t.amount > 0 ? "+" : ""}
-                                            {formatCurrency(Math.abs(t.amount))}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+                                        {t.description && (
+                                            <div className="col-span-1 md:col-span-2">
+                                                <p className="text-slate-500 font-semibold mb-0.5">Description</p>
+                                                <p className="text-slate-700 font-medium">{t.description}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>

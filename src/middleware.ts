@@ -22,6 +22,9 @@ const DOMAIN_MAP: Record<string, string> = Object.values(HUB_MODULES).reduce((ac
 
 // Root domain alias
 DOMAIN_MAP["easysalesexport.com"] = "";
+DOMAIN_MAP["farmnation.ng"] = "/farm-nation";
+DOMAIN_MAP["farmnation.easysalesexport.com"] = "/farm-nation";
+DOMAIN_MAP["farm-nation.easysalesexport.com"] = "/farm-nation";
 
 const APEX_DOMAINS: string[] = Object.values(HUB_MODULES)
     .map(m => m.domain)
