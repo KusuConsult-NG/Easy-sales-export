@@ -237,6 +237,7 @@ async function _updateTrainingEventAction(
         maxParticipants: number;
         meetingLink: string;
         status: "upcoming" | "ongoing" | "completed" | "cancelled";
+        videoUrl: string;
     }>
 ): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }

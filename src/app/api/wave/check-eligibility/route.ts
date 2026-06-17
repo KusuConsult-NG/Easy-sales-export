@@ -35,6 +35,15 @@ export async function GET(_request: NextRequest) {
 
         const userData = userDoc.data()!;
         const gender: string | null = userData.gender || null;
+        const roles: string[] = userData.roles || [];
+        const isUserAdmin = roles.includes("admin") || roles.includes("super_admin");
+        const academyReg = userData.serviceRegistrations?.academy;
+        const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
+        const hasWaveRole = roles.includes("wave_participant");
+        const hasWaveReg = userData.serviceRegistrations?.wave?.status !== undefined;
+
+        const isMale = gender?.toLowerCase() === "male";
+        const eligible = !isMale || isUserAdmin || isAcademyElite || hasWaveRole || hasWaveReg;
 
         // Check application status from user's serviceRegistrations (single source of truth)
         const applicationStatus: string =
@@ -45,7 +54,7 @@ export async function GET(_request: NextRequest) {
             data: {
                 gender,
                 applicationStatus,
-                eligible: gender?.toLowerCase() === "female",
+                eligible,
             },
             meta: { cursor: null, hasMore: false },
         });

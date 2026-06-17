@@ -20,7 +20,7 @@ import { withFlexibleSafeAction, ActionResponse } from "@/lib/safe-action";
 
 export interface LandListing { 
     id?: string;
-    type?: "sale" | "lease";
+    type?: "sale" | "rent" | "lease";
     ownerId: string;
     ownerName: string;
     ownerEmail: string;
@@ -453,10 +453,12 @@ async function _submitLandListingAction(data: {
     gpsCoordinates?: { latitude: number; longitude: number };
     availableForSale?: boolean;
     availableForRent?: boolean;
+    availableForLease?: boolean;
+    type?: "sale" | "rent" | "lease";
     escrowAvailable?: boolean;
 }): Promise<ActionResponse<{ listingId: string }>> { 
     try {
-        const listing: Omit<LandListing, "id"> = {
+        const listing: any = {
             ownerId: data.ownerId,
             ownerName: data.ownerName,
             ownerEmail: data.ownerEmail,
@@ -465,22 +467,24 @@ async function _submitLandListingAction(data: {
             location: data.location,
             size: data.size,
             price: data.price,
-            category: data.category,
-            soilType: data.soilType,
-            waterSource: data.waterSource,
             images: data.imageUrls,
             documents: data.documentUrls,
             status: "pending_verification",
             availableForSale: data.availableForSale ?? true,
             availableForRent: data.availableForRent ?? false,
-            type: (data.availableForRent && !data.availableForSale) ? "lease" : "sale",
+            availableForLease: data.availableForLease ?? false,
+            type: data.type || ((data.availableForRent && !data.availableForSale) ? "lease" : "sale"),
             escrowAvailable: data.escrowAvailable ?? true,
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp() 
         };
 
+        if (data.category !== undefined) listing.category = data.category;
+        if (data.soilType !== undefined) listing.soilType = data.soilType;
+        if (data.waterSource !== undefined) listing.waterSource = data.waterSource;
+
         if (data.gpsCoordinates) { 
-            (listing as LandListing & { gpsCoordinates?: { latitude: number; longitude: number } }).gpsCoordinates = data.gpsCoordinates;
+            listing.gpsCoordinates = data.gpsCoordinates;
         }
 
         const docRef = await db.collection(COLLECTIONS.LAND_LISTINGS).add(listing);

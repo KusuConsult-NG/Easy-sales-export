@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import VideoClassroom from "@/components/VideoClassroom";
-import { Video, ArrowLeft, Users, Clock, PhoneOff, Loader2, AlertCircle } from "lucide-react";
-import { getWaveTrainingEventsAction, endWaveLiveSessionAction } from "@/app/actions/wave";
+import { Video, ArrowLeft, Users, Clock, PhoneOff, Loader2, AlertCircle, CloudUpload, Square } from "lucide-react";
+import { getWaveTrainingEventsAction, endWaveLiveSessionAction, updateTrainingEventAction } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
 
 interface Props {
@@ -22,6 +22,184 @@ export default function AdminWaveLivePage({ params }: Props) {
     const [isLoading, setIsLoading] = useState(true);
     const [isEnding, setIsEnding] = useState(false);
     const [ended, setEnded] = useState(false);
+
+    // Recording & Upload States
+    const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+
+    // Timer effect for recording duration
+    useEffect(() => {
+        let interval: any;
+        if (isRecording) {
+            interval = setInterval(() => {
+                setRecordingTime((prev) => prev + 1);
+            }, 1000);
+        } else {
+            setRecordingTime(0);
+        }
+        return () => clearInterval(interval);
+    }, [isRecording]);
+
+    const formatTime = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+        return [
+            h > 0 ? h : null,
+            String(m).padStart(2, '0'),
+            String(s).padStart(2, '0')
+        ].filter(Boolean).join(':');
+    };
+
+    function uploadFileWithProgress(blob: Blob, fileName: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/upload", true);
+            
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percentComplete = (event.loaded / event.total) * 100;
+                    setUploadProgress(percentComplete);
+                }
+            };
+            
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success && response.url) {
+                            resolve(response.url);
+                        } else {
+                            reject(new Error(response.error || "Upload failed"));
+                        }
+                    } catch (e) {
+                        reject(new Error("Failed to parse response"));
+                    }
+                } else {
+                    reject(new Error(`Upload failed with status ${xhr.status}`));
+                }
+            };
+            
+            xhr.onerror = () => reject(new Error("Network error during upload"));
+            
+            const formData = new FormData();
+            formData.append("file", blob, fileName);
+            formData.append("folder", "wave-training-sessions");
+            formData.append("documentType", "session-video");
+            
+            xhr.send(formData);
+        });
+    }
+
+    async function handleUploadRecording() {
+        if (!recordingBlob) return;
+        setIsUploading(true);
+        setUploadProgress(0);
+        
+        try {
+            const fileName = `wave-session-${eventId}.webm`;
+            const videoUrl = await uploadFileWithProgress(recordingBlob, fileName);
+            
+            const result = await updateTrainingEventAction(eventId, {
+                videoUrl,
+                status: "completed"
+            });
+            
+            if (result.success) {
+                showToast("Recording uploaded successfully and published for students.", "success");
+                setShowUploadModal(false);
+                setRecordingBlob(null);
+                router.push("/admin/wave/training");
+            } else {
+                showToast(result.error || "Failed to update training event with video", "error");
+            }
+        } catch (err: any) {
+            console.error("Upload error:", err);
+            showToast(err.message || "Failed to upload recording", "error");
+        } finally {
+            setIsUploading(false);
+        }
+    }
+
+    async function startRecording() {
+        try {
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { displaySurface: "browser" },
+                audio: true
+            });
+
+            let tracks = [...displayStream.getTracks()];
+            
+            try {
+                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                tracks = [...tracks, ...micStream.getAudioTracks()];
+            } catch (micErr) {
+                console.warn("Microphone access denied or failed:", micErr);
+            }
+
+            const stream = new MediaStream(tracks);
+            
+            let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'video/webm;codecs=vp8,opus' };
+            }
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options = { mimeType: 'video/webm' };
+            }
+
+            const recorder = new MediaRecorder(stream, options);
+            const chunks: Blob[] = [];
+
+            recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    chunks.push(e.data);
+                }
+            };
+
+            recorder.onstop = () => {
+                stream.getTracks().forEach(track => track.stop());
+
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                setRecordingBlob(blob);
+                setIsRecording(false);
+                setMediaRecorder(null);
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `wave-session-${eventId}-${Date.now()}.webm`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                setShowUploadModal(true);
+            };
+
+            displayStream.getVideoTracks()[0].onended = () => {
+                if (recorder.state !== "inactive") {
+                    recorder.stop();
+                }
+            };
+
+            recorder.start(1000);
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+            showToast("Recording started. Please share your browser tab with system audio enabled.", "success");
+        } catch (err: any) {
+            console.error("Recording start error:", err);
+            showToast(err.message || "Failed to start recording.", "error");
+        }
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            mediaRecorder.stop();
+        }
+    }
 
     useEffect(() => {
         if (status === "loading") return;
@@ -55,12 +233,23 @@ export default function AdminWaveLivePage({ params }: Props) {
         if (!confirmed) return;
 
         setIsEnding(true);
+
+        if (mediaRecorder && mediaRecorder.state !== "inactive") {
+            try {
+                mediaRecorder.stop();
+            } catch (err) {
+                console.error("Error stopping recorder on session end:", err);
+            }
+        }
+
         try {
             const result = await endWaveLiveSessionAction(eventId);
             if (result.success) {
                 showToast("Live session ended successfully.", "success");
                 setEnded(true);
-                setTimeout(() => router.push("/admin/wave/training"), 2000);
+                if (!isRecording && !recordingBlob && !showUploadModal && !isUploading) {
+                    setTimeout(() => router.push("/admin/wave/training"), 2000);
+                }
             } else {
                 showToast(result.error || "Failed to end session", "error");
             }
@@ -87,7 +276,7 @@ export default function AdminWaveLivePage({ params }: Props) {
         );
     }
 
-    if (ended) {
+    if (ended && !showUploadModal && !isUploading) {
         return (
             <div className="min-h-screen bg-slate-900 flex items-center justify-center">
                 <div className="text-center text-white">
@@ -129,6 +318,20 @@ export default function AdminWaveLivePage({ params }: Props) {
                         <Users className="w-4 h-4 text-emerald-400" />
                         <span className="text-emerald-300 text-xs font-semibold">Trainer (Moderator)</span>
                     </div>
+                    
+                    {/* Screen Recorder Button */}
+                    <button
+                        onClick={isRecording ? stopRecording : startRecording}
+                        className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors border ${
+                            isRecording 
+                                ? "bg-red-950/40 border-red-700 text-red-400 hover:bg-red-950/60" 
+                                : "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
+                        }`}
+                    >
+                        <span className={`w-2 h-2 rounded-full bg-red-500 ${isRecording ? 'animate-pulse' : ''}`} />
+                        {isRecording ? `Recording (${formatTime(recordingTime)})` : "Record Session"}
+                    </button>
+
                     <button
                         onClick={handleEndSession}
                         disabled={isEnding}
@@ -205,6 +408,74 @@ export default function AdminWaveLivePage({ params }: Props) {
                     )}
                 </div>
             </div>
+
+            {/* Upload Modal */}
+            {showUploadModal && (
+                <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-xs">
+                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full text-center space-y-6 shadow-2xl">
+                        <div className="w-16 h-16 bg-pink-900/40 border border-pink-700/50 rounded-full flex items-center justify-center mx-auto">
+                            <Video className="w-8 h-8 text-pink-400" />
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <h3 className="text-xl font-bold text-white">Upload Training Recording</h3>
+                            <p className="text-sm text-slate-400">
+                                Your session has been recorded and saved locally. Would you like to upload it to the platform so students can stream it?
+                            </p>
+                        </div>
+
+                        {isUploading && (
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs font-semibold text-slate-300">
+                                    <span>Uploading to Cloudinary...</span>
+                                    <span>{Math.round(uploadProgress)}%</span>
+                                </div>
+                                <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                                    <div 
+                                        className="bg-linear-to-r from-pink-500 to-rose-500 h-full transition-all duration-300"
+                                        style={{ width: `${uploadProgress}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                type="button"
+                                disabled={isUploading}
+                                onClick={() => {
+                                    setShowUploadModal(false);
+                                    setRecordingBlob(null);
+                                    if (ended) {
+                                        router.push("/admin/wave/training");
+                                    }
+                                }}
+                                className="flex-1 py-3 border border-slate-600 hover:bg-slate-700 disabled:opacity-50 text-slate-300 font-semibold rounded-xl transition"
+                            >
+                                Keep Local Only
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isUploading || !recordingBlob}
+                                onClick={handleUploadRecording}
+                                className="flex-1 py-3 bg-linear-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 disabled:opacity-50 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Uploading...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CloudUpload className="w-4 h-4" />
+                                        Upload & Publish
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

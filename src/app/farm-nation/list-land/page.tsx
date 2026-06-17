@@ -35,8 +35,7 @@ export default function ListLandPage() {
         pricePerUnit: 0,
         latitude: "",
         longitude: "",
-        availableForSale: true,
-        availableForRent: false,
+        listingType: "sale" as "sale" | "rent" | "lease",
         escrowAvailable: true,
     });
 
@@ -181,10 +180,12 @@ export default function ListLandPage() {
                     latitude: parseFloat(formData.latitude),
                     longitude: parseFloat(formData.longitude)
                 } : undefined,
-                availableForSale: formData.availableForSale,
-                availableForRent: formData.availableForRent,
+                availableForSale: formData.listingType === "sale",
+                availableForRent: formData.listingType === "rent" || formData.listingType === "lease",
+                availableForLease: formData.listingType === "lease",
+                type: formData.listingType,
                 escrowAvailable: formData.escrowAvailable,
-            } as Parameters<typeof submitLandListingAction>[0]); // Type cast due to minor discrepancies in action signature vs local state
+            });
 
             if (result.success) {
                 showToast("Land Listing Submitted! Your listing has been submitted for verification.", "success");
@@ -565,44 +566,47 @@ export default function ListLandPage() {
                                 Availability Options
                             </h2>
 
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
-                                    <input
-                                        type="checkbox"
-                                        id="forSale"
-                                        checked={formData.availableForSale}
-                                        onChange={(e) => setFormData({ ...formData, availableForSale: e.target.checked })}
-                                        className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
-                                    />
-                                    <label htmlFor="forSale" className="text-sm font-semibold text-slate-900">
-                                        Available for Sale
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-3">
+                                        Listing Type *
                                     </label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {[
+                                            { value: "sale", label: "For Sale", description: "List this land for permanent purchase", icon: "🏷️" },
+                                            { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
+                                            { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
+                                        ].map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, listingType: option.value as "sale" | "rent" | "lease" })}
+                                                className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col ${formData.listingType === option.value
+                                                    ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
+                                                    : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
+                                                    }`}
+                                            >
+                                                <div className="text-3xl mb-3">{option.icon}</div>
+                                                <h3 className="font-bold text-slate-950 mb-1">{option.label}</h3>
+                                                <p className="text-xs text-slate-600 leading-relaxed">{option.description}</p>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
-                                    <input
-                                        type="checkbox"
-                                        id="forRent"
-                                        checked={formData.availableForRent}
-                                        onChange={(e) => setFormData({ ...formData, availableForRent: e.target.checked })}
-                                        className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
-                                    />
-                                    <label htmlFor="forRent" className="text-sm font-semibold text-slate-900">
-                                        Available for Rent/Lease
-                                    </label>
-                                </div>
-
-                                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg">
-                                    <input
-                                        type="checkbox"
-                                        id="escrow"
-                                        checked={formData.escrowAvailable}
-                                        onChange={(e) => setFormData({ ...formData, escrowAvailable: e.target.checked })}
-                                        className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
-                                    />
-                                    <label htmlFor="escrow" className="text-sm font-semibold text-slate-900">
-                                        Enable Escrow Protection (Recommended)
-                                    </label>
+                                <div className="border-t border-slate-100 pt-6">
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-xl hover:bg-slate-100/50 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            id="escrow"
+                                            checked={formData.escrowAvailable}
+                                            onChange={(e) => setFormData({ ...formData, escrowAvailable: e.target.checked })}
+                                            className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-pointer"
+                                        />
+                                        <label htmlFor="escrow" className="text-sm font-semibold text-slate-900 cursor-pointer select-none">
+                                            Enable Escrow Protection (Recommended)
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </section>

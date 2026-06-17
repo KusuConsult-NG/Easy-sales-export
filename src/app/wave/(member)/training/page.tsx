@@ -45,7 +45,7 @@ export default function WaveTrainingPage() {
             }
 
             // Load events
-            const eventsResult = await getWaveTrainingEventsAction();
+            const eventsResult = await getWaveTrainingEventsAction(undefined, 100, true);
             if (eventsResult.success && eventsResult.data) {
                 setEvents(eventsResult.data);
             }
@@ -296,6 +296,68 @@ export default function WaveTrainingPage() {
                                             <Video className="w-4 h-4" />
                                             Join Now
                                         </a>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Completed & Recorded Sessions */}
+                {completedEvents.length > 0 && (
+                    <div className="mb-8">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                            Completed & Recorded Sessions
+                        </h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {completedEvents.map((event) => (
+                                <div
+                                    key={event.id}
+                                    className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-semibold">
+                                                Completed
+                                            </span>
+                                            {event.videoUrl && (
+                                                <span className="flex items-center gap-1 text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-1 rounded-md">
+                                                    <Video className="w-3.5 h-3.5" />
+                                                    Recording Available
+                                                </span>
+                                            )}
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-900 mb-2">
+                                            {event.title}
+                                        </h3>
+                                        <p className="text-gray-600 text-sm mb-4 leading-relaxed">{event.description}</p>
+                                        
+                                        <div className="space-y-2 text-xs text-gray-500 mb-6">
+                                            <div className="flex items-center gap-2">
+                                                <User className="w-3.5 h-3.5 text-gray-400" />
+                                                <span>Instructor: {event.instructor}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                <span>Date: {toSafeDate(event.date).toLocaleDateString()}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {event.videoUrl ? (
+                                        <a
+                                            href={event.videoUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="w-full text-center px-4 py-3 bg-linear-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2 shadow-xs hover:shadow-sm"
+                                        >
+                                            <Video className="w-5 h-5" />
+                                            Watch Recording
+                                        </a>
+                                    ) : (
+                                        <div className="w-full text-center px-4 py-3 bg-gray-50 text-gray-400 border border-gray-100 font-semibold rounded-xl select-none cursor-not-allowed">
+                                            No Recording Available
+                                        </div>
                                     )}
                                 </div>
                             ))}

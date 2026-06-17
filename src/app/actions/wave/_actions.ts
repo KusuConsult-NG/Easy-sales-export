@@ -53,6 +53,7 @@ export interface WaveTrainingEvent { id?: string;
     currentParticipants: number;
     meetingLink?: string;
     status: "upcoming" | "ongoing" | "completed" | "cancelled";
+    videoUrl?: string;
     createdAt: FieldValue | Timestamp | Date | string; }
 
 // Validation Schema for WAVE Application (OFFICIAL BENEFICIARY APPLICATION FORM)
@@ -267,7 +268,13 @@ async function _checkWaveEligibilityAction(userId: string): Promise<ActionRespon
         // 🔒 SECURITY: Strict Gender Enforcement for standard users
         // Admins (including module-specific admins) and Academy Elite members are always eligible.
         const existingGender = userData?.gender;
-        if (existingGender !== undefined && existingGender !== null && existingGender.toLowerCase() !== "female" && !isUserAdmin && !isAcademyElite) {
+        const hasWaveRole = roles.includes("wave_participant");
+        const hasWaveReg = userData?.serviceRegistrations?.wave?.status !== undefined;
+        
+        // Only explicitly block male users who do not have admin, elite, or pre-existing WAVE status/role.
+        const isMale = existingGender?.toLowerCase() === "male";
+        
+        if (isMale && !isUserAdmin && !isAcademyElite && !hasWaveRole && !hasWaveReg) {
             return {
                 error: null,
                 success: true as const,
@@ -346,8 +353,16 @@ async function _submitMultiStepWaveApplicationAction(applicationData: z.infer<ty
         }
 
         const userData = userDoc.data();
+        const userRoles = userData?.roles || [];
+        const isUserAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
+        const academyReg = userData?.serviceRegistrations?.academy;
+        const isAcademyElite = academyReg?.plan === 'elite' && (academyReg?.status === 'approved' || academyReg?.status === 'active');
+        const hasWaveRole = userRoles.includes("wave_participant");
+        const hasWaveReg = userData?.serviceRegistrations?.wave?.status !== undefined;
+
         const applicantGender = userData?.gender;
-        if (applicantGender !== undefined && applicantGender !== null && applicantGender.toLowerCase() !== "female") {
+        const isMale = applicantGender?.toLowerCase() === "male";
+        if (isMale && !isUserAdmin && !isAcademyElite && !hasWaveRole && !hasWaveReg) {
             return { success: false as const, error: "Only female applicants are eligible to enroll in the WAVE program.", data: null };
         }
 
