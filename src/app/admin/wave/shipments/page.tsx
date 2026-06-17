@@ -11,7 +11,8 @@ import {
     createWaveShipmentAction, 
     getWaveShipmentsAction, 
     updateShipmentStatusAction, 
-    syncShipmentWithCarrierAction 
+    syncShipmentWithCarrierAction,
+    getStandardWaveApplicationsAction
 } from "@/app/actions/wave";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, limit } from "firebase/firestore";
@@ -92,41 +93,36 @@ export default function AdminWaveShipmentsPage() {
         setRefreshing(false);
     }
 
-    // Search users in client side Firestore
+    // Search users via server action
     async function handleSearchUsers() {
         if (!searchUserQuery.trim()) return;
         setSearchingUsers(true);
         try {
-            const usersRef = collection(db, "users");
-            const q = query(
-                usersRef, 
-                where("roles", "array-contains", "wave_participant"),
-                limit(10)
-            );
-            const snapshot = await getDocs(q);
-            const list: UserSearchRef[] = [];
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                const fullName = data.firstName 
-                    ? `${data.firstName} ${data.surname || data.lastName || ""}`.trim()
-                    : (data.name || "Unknown");
-                
-                if (
-                    fullName.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-                    (data.email || "").toLowerCase().includes(searchUserQuery.toLowerCase())
-                ) {
-                    list.push({
-                        id: doc.id,
-                        name: fullName,
-                        email: data.email || data.userEmail || "",
-                        city: data.city || data.location?.city || "",
-                        state: data.state || data.location?.state || ""
-                    });
-                }
+            const result = await getStandardWaveApplicationsAction({
+                status: "approved",
+                search: searchUserQuery,
+                limit: 10
             });
-            setSearchedUsers(list);
-            if (list.length === 0) {
-                showToast("No active WAVE members matched that search query", "info");
+
+            if (result.success && result.data) {
+                const list: UserSearchRef[] = (result.data || []).map((item: any) => {
+                    const data = item.data || {};
+                    const user = item.user || {};
+                    const fullName = data.fullName || [data.firstName, data.otherNames, data.surname].filter(Boolean).join(" ").trim() || user.name || "Unknown";
+                    return {
+                        id: user.id || item.id,
+                        name: fullName,
+                        email: user.email || data.email || data.userEmail || "",
+                        city: user.city || data.city || "",
+                        state: user.state || data.state || ""
+                    };
+                });
+                setSearchedUsers(list);
+                if (list.length === 0) {
+                    showToast("No active WAVE members matched that search query", "info");
+                }
+            } else {
+                showToast(result.error || "Failed to search members", "error");
             }
         } catch (error) {
             showToast("Error searching members", "error");
