@@ -80,7 +80,7 @@ async function _getAllEscrowTransactionsAdmin(options: { status?: EscrowStatus;
         const sortDirection = options.sortOrder || "desc";
         let q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).orderBy("createdAt", sortDirection);
 
-        if (options.status) { q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+        if (options.status && (options.status as string) !== "all") { q = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
                 .where("status", "==", options.status)
                 .orderBy("createdAt", sortDirection);
         }
