@@ -14,7 +14,14 @@ export const UserSchema = z.object({
     fullName: z.string().default("Easy Sales User"),
     email: z.string().email().default("user@easysales.local"),
     phone: z.string().optional(),
-    gender: z.enum(["male", "female"]).optional(),
+    gender: z.preprocess((val) => {
+        if (typeof val === "string") {
+            const normalized = val.toLowerCase().trim();
+            if (normalized === "male") return "male";
+            if (normalized === "female") return "female";
+        }
+        return undefined;
+    }, z.enum(["male", "female"]).optional()),
     stateOfOrigin: z.string().optional(),
     lga: z.string().optional(),
     residentialAddress: z.string().optional(),
