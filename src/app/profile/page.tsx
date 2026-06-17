@@ -39,15 +39,13 @@ export default function ProfilePage() {
         bio: "",
         identityDocument: "",
         photoURL: "",
-        gender: "" as "male" | "female" | "",
+        gender: "" as "male" | "female" | "other" | "",
         notifications: {
             email: true,
             push: false,
             sms: true
         }
     });
-
-    const [isGenderLocked, setIsGenderLocked] = useState(true);
 
     const [countryCode, setCountryCode] = useState("+234");
     const [rawPhone, setRawPhone] = useState("");
@@ -132,12 +130,9 @@ export default function ProfilePage() {
                     bio: p.bio || "",
                     identityDocument: p.identityDocument || "",
                     photoURL: p.photoURL || "",
-                    gender: p.gender || (session?.user as any)?.gender || "",
+                    gender: (p.gender || (session?.user as any)?.gender || "").toLowerCase() as any,
                     notifications: p.notifications || { email: true, push: false, sms: true },
                 });
-
-                const hasGender = !!(p.gender || (session?.user as any)?.gender);
-                setIsGenderLocked(hasGender);
 
                 // Parse phone — use a known country-code list to avoid greedy over-matching.
                 // e.g. +2348036546039 should parse as code=+234, not code=+2348.
@@ -172,7 +167,7 @@ export default function ProfilePage() {
                     lastName: last,
                     otherName: "",
                     email: session?.user?.email || "",
-                    gender: (session?.user as any)?.gender || "",
+                    gender: ((session?.user as any)?.gender || "").toLowerCase() as any,
                 }));
             }
             setIsFetching(false);
@@ -220,13 +215,10 @@ export default function ProfilePage() {
                 location: userData.location,
                 bio: userData.bio,
                 identityDocument: userData.identityDocument,
-                gender: !isGenderLocked && userData.gender ? (userData.gender as any) : undefined,
+                gender: userData.gender ? (userData.gender as any) : undefined,
             }));
 
             if (result.success) {
-                if (userData.gender) {
-                    setIsGenderLocked(true);
-                }
                 if (emailChanged) {
                     // Session JWT is now stale — user must re-login with the new email
                     setSaveMessage({ type: 'success', text: 'Email updated! You will be signed out to apply the change.' });
@@ -553,27 +545,16 @@ export default function ProfilePage() {
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium text-slate-900 block">Gender</label>
                                             <div className="relative">
-                                                {!isGenderLocked ? (
-                                                    <select
-                                                        value={userData.gender}
-                                                        onChange={(e) => setUserData({ ...userData, gender: e.target.value as any })}
-                                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none cursor-pointer"
-                                                    >
-                                                        <option value="">Select Gender</option>
-                                                        <option value="male">Male</option>
-                                                        <option value="female">Female</option>
-                                                    </select>
-                                                ) : (
-                                                    <>
-                                                        <input
-                                                            type="text"
-                                                            value={userData.gender ? (userData.gender.charAt(0).toUpperCase() + userData.gender.slice(1)) : "Not Set"}
-                                                            disabled
-                                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed transition-all"
-                                                        />
-                                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Locked</span>
-                                                    </>
-                                                )}
+                                                <select
+                                                    value={userData.gender}
+                                                    onChange={(e) => setUserData({ ...userData, gender: e.target.value as any })}
+                                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none cursor-pointer"
+                                                >
+                                                    <option value="">Select Gender</option>
+                                                    <option value="male">Male</option>
+                                                    <option value="female">Female</option>
+                                                    <option value="other">Other</option>
+                                                </select>
                                             </div>
                                         </div>
                                         <div className="space-y-2">

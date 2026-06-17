@@ -27,7 +27,7 @@ export interface User {
     displayName?: string;
     phoneNumber?: string;
     phone?: string;
-    gender?: "male" | "female";
+    gender?: "male" | "female" | "other";
     profileImage?: string;
 
     // Roles (multi-role array — platform standard)
@@ -398,7 +398,7 @@ export interface WAVEApplication {
     userId: string;
     fullName?: string;
     phone?: string;
-    gender?: "female" | "male";
+    gender?: "female" | "male" | "other";
     businessName?: string;
     businessType?: string;
     farmingExperience?: string;

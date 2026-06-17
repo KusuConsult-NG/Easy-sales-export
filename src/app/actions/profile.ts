@@ -27,7 +27,7 @@ const profileUpdateSchema = z.object({ firstName: z.string().max(50).optional(),
     bio: z.string().max(500).optional(),
     identityDocument: z.string().optional(),
     photoURL: z.string().optional(),
-    gender: z.enum(["male", "female"]).optional(),
+    gender: z.enum(["male", "female", "other"]).optional(),
     version: z.number().optional() });
 
 const notificationPreferencesSchema = z.object({ email: z.boolean(),
@@ -121,12 +121,7 @@ export const updateUserProfileAction = withSafeAction("updateUserProfileAction",
         delete updatePayload.version;
 
         if (validated.gender) {
-            const currentGender = (existing.gender || "").toLowerCase().trim();
-            if (currentGender === "male" || currentGender === "female") {
-                delete updatePayload.gender;
-            } else {
-                updatePayload.gender = validated.gender.toLowerCase();
-            }
+            updatePayload.gender = validated.gender.toLowerCase();
         }
 
         if (validated.firstName || validated.lastName || validated.otherName) { const first = validated.firstName ?? existing.firstName ?? existing.fullName?.split(' ')[0] ?? "";

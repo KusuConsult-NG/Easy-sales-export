@@ -79,7 +79,7 @@ export const authConfig = {
                 session.user.sellerVerificationStatus = token.sellerVerificationStatus as string | undefined;
                 session.user.serviceRegistrations = token.serviceRegistrations as Record<string, any> | undefined;
                 session.user.currentModuleId = token.currentModuleId as string || "platform";
-                session.user.gender = token.gender as "male" | "female" | undefined;
+                session.user.gender = token.gender as "male" | "female" | "other" | undefined;
             }
             return session;
         },

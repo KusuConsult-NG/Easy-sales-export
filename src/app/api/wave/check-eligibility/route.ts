@@ -45,7 +45,7 @@ export async function GET(_request: NextRequest) {
             data: {
                 gender,
                 applicationStatus,
-                eligible: gender === "female",
+                eligible: gender?.toLowerCase() === "female",
             },
             meta: { cursor: null, hasMore: false },
         });

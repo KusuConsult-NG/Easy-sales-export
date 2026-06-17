@@ -405,7 +405,7 @@ declare module "next-auth" {
             sellerVerificationStatus?: string;
             serviceRegistrations?: Record<string, any>;
             currentModuleId?: string;
-            gender?: "male" | "female";
+            gender?: "male" | "female" | "other";
         };
         firebaseToken?: string;
     }
@@ -421,6 +421,6 @@ declare module "next-auth" {
         sellerVerificationStatus?: string;
         serviceRegistrations?: Record<string, any>;
         currentModuleId?: string;
-        gender?: "male" | "female";
+        gender?: "male" | "female" | "other";
     }
 }
