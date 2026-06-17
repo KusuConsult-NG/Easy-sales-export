@@ -4939,22 +4939,32 @@ async function _onboardLegacyMemberAction(
         // 9. Send Welcome Email with the temporary PIN included (only for new users)
         // They will use this to log in, and getPostLoginRedirect will force them
         // to change their password via /auth/reset-legacy-password
+        let emailSent = true;
         if (isNewUser) {
-            await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+            try {
+                await sendLegacyMemberWelcomeEmail(data.email, data.fullName, tempPassword);
+            } catch (emailErr: any) {
+                logger.warn(`[Legacy Onboarding] Failed to send welcome email for ${data.email}:`, emailErr);
+                emailSent = false;
+            }
         }
 
         // 10. Audit Log
-        await createAdminAuditLog({
-            action: "legacy_member_onboarded",
-            userId: session.user.id,
-            targetId: userRecord.uid,
-            targetType: "user",
-            metadata: {
-                targetEmail: data.email,
-                roles: data.roles,
-                services: data.services,
-            },
-        });
+        try {
+            await createAdminAuditLog({
+                action: "legacy_member_onboarded",
+                userId: session.user.id,
+                targetId: userRecord.uid,
+                targetType: "user",
+                metadata: {
+                    targetEmail: data.email,
+                    roles: data.roles,
+                    services: data.services,
+                },
+            });
+        } catch (auditErr: any) {
+            logger.warn(`[Legacy Onboarding] Failed to create audit log for onboarded user ${userRecord.uid}:`, auditErr);
+        }
 
         // 11. Invalidate Redis Cache
         try {
@@ -4969,7 +4979,9 @@ async function _onboardLegacyMemberAction(
         return { 
             error: null, success: true as const, 
             message: isNewUser 
-                ? `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
+                ? (emailSent 
+                    ? `Legacy member ${data.fullName} successfully onboarded. Default PIN sent to ${data.email}.`
+                    : `Legacy member ${data.fullName} successfully onboarded, but the welcome email failed to send. Please share the temporary PIN (${tempPassword}) with the member manually.`)
                 : `Legacy member ${data.fullName} successfully updated.`
         };
 
