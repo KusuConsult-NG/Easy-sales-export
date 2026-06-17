@@ -112,23 +112,78 @@ export async function getProductReviewsAction(
     }
 ): Promise<ActionResponse<{ reviews: ProductReview[] }>> { 
     try {
-        let query = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
+        const baseQuery = db.collection(COLLECTIONS.PRODUCT_REVIEWS)
             .where("productId", "==", productId)
-            .where("status", "==", "approved")
-            .orderBy("createdAt", "desc")
-            .limit(50);
+            .where("status", "==", "approved");
 
+        let query = baseQuery;
         if (filters?.rating) {
             query = query.where("rating", "==", filters.rating);
         }
 
-        const snapshot = await query.get();
+        let snapshot;
+        let needsMemorySort = false;
+        try {
+            snapshot = await query.orderBy("createdAt", "desc").limit(50).get();
+        } catch (e: any) {
+            const errMsg = e.message ? e.message.toLowerCase() : "";
+            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || errMsg.includes("precondition")) {
+                logger.warn("getProductReviewsAction failed due to missing index. Falling back to in-memory sorting.");
+                // Fetch without orderBy, limit to 200 to sort in memory
+                snapshot = await query.limit(200).get();
+                needsMemorySort = true;
+            } else {
+                throw e;
+            }
+        }
+
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
 
         // Filter by verified if specified
-        const filteredReviews = filters?.verified !== undefined
+        let filteredReviews = filters?.verified !== undefined
             ? reviews.filter((r) => r.verified === filters.verified)
             : reviews;
+
+        if (needsMemorySort) {
+            filteredReviews.sort((a, b) => {
+                let aMs = 0;
+                let bMs = 0;
+                const aTime = a.createdAt;
+                const bTime = b.createdAt;
+
+                if (aTime) {
+                    if (aTime instanceof Date) {
+                        aMs = aTime.getTime();
+                    } else if (typeof aTime === 'object' && 'toDate' in aTime && typeof (aTime as any).toDate === 'function') {
+                        aMs = (aTime as any).toDate().getTime();
+                    } else if (typeof aTime === 'object' && 'seconds' in aTime) {
+                        aMs = (aTime as any).seconds * 1000;
+                    } else if (typeof aTime === 'object' && '_seconds' in aTime) {
+                        aMs = (aTime as any)._seconds * 1000;
+                    } else {
+                        aMs = new Date(aTime as any).getTime() || 0;
+                    }
+                }
+
+                if (bTime) {
+                    if (bTime instanceof Date) {
+                        bMs = bTime.getTime();
+                    } else if (typeof bTime === 'object' && 'toDate' in bTime && typeof (bTime as any).toDate === 'function') {
+                        bMs = (bTime as any).toDate().getTime();
+                    } else if (typeof bTime === 'object' && 'seconds' in bTime) {
+                        bMs = (bTime as any).seconds * 1000;
+                    } else if (typeof bTime === 'object' && '_seconds' in bTime) {
+                        bMs = (bTime as any)._seconds * 1000;
+                    } else {
+                        bMs = new Date(bTime as any).getTime() || 0;
+                    }
+                }
+
+                return bMs - aMs;
+            });
+            // Apply limit after sorting
+            filteredReviews = filteredReviews.slice(0, 50);
+        }
 
         return { success: true as const, data: { reviews: filteredReviews }, error: null };
     } catch (error) { 
@@ -148,12 +203,63 @@ export async function getUserReviewsAction(): Promise<ActionResponse<{ reviews: 
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        const snapshot = await db.collection(COLLECTIONS.PRODUCT_REVIEWS)
-            .where("userId", "==", userId)
-            .orderBy("createdAt", "desc")
-            .get();
+        const baseQuery = db.collection(COLLECTIONS.PRODUCT_REVIEWS).where("userId", "==", userId);
+        
+        let snapshot;
+        let needsMemorySort = false;
+        try {
+            snapshot = await baseQuery.orderBy("createdAt", "desc").get();
+        } catch (e: any) {
+            const errMsg = e.message ? e.message.toLowerCase() : "";
+            if (errMsg.includes("index") || errMsg.includes("failed_precondition") || String(e.code) === "9" || errMsg.includes("precondition")) {
+                logger.warn("getUserReviewsAction failed due to missing index. Falling back to in-memory sorting.");
+                snapshot = await baseQuery.get();
+                needsMemorySort = true;
+            } else {
+                throw e;
+            }
+        }
 
         const reviews = serializeDocs(snapshot.docs) as unknown as ProductReview[];
+
+        if (needsMemorySort) {
+            reviews.sort((a, b) => {
+                let aMs = 0;
+                let bMs = 0;
+                const aTime = a.createdAt;
+                const bTime = b.createdAt;
+
+                if (aTime) {
+                    if (aTime instanceof Date) {
+                        aMs = aTime.getTime();
+                    } else if (typeof aTime === 'object' && 'toDate' in aTime && typeof (aTime as any).toDate === 'function') {
+                        aMs = (aTime as any).toDate().getTime();
+                    } else if (typeof aTime === 'object' && 'seconds' in aTime) {
+                        aMs = (aTime as any).seconds * 1000;
+                    } else if (typeof aTime === 'object' && '_seconds' in aTime) {
+                        aMs = (aTime as any)._seconds * 1000;
+                    } else {
+                        aMs = new Date(aTime as any).getTime() || 0;
+                    }
+                }
+
+                if (bTime) {
+                    if (bTime instanceof Date) {
+                        bMs = bTime.getTime();
+                    } else if (typeof bTime === 'object' && 'toDate' in bTime && typeof (bTime as any).toDate === 'function') {
+                        bMs = (bTime as any).toDate().getTime();
+                    } else if (typeof bTime === 'object' && 'seconds' in bTime) {
+                        bMs = (bTime as any).seconds * 1000;
+                    } else if (typeof bTime === 'object' && '_seconds' in bTime) {
+                        bMs = (bTime as any)._seconds * 1000;
+                    } else {
+                        bMs = new Date(bTime as any).getTime() || 0;
+                    }
+                }
+
+                return bMs - aMs;
+            });
+        }
 
         return { success: true as const, data: { reviews }, error: null };
     } catch (error) { 
