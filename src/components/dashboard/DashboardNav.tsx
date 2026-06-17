@@ -43,29 +43,43 @@ interface NavItem {
  * Returns the label + href for the user's primary module dashboard link
  * based on their roles — so approved users can jump straight to their module.
  */
-function getModuleLinks(roles: UserRole[], serviceRegs: any): { label: string; href: string; icon: React.ElementType }[] {
+function getModuleLinks(roles: UserRole[], serviceRegs: any, gender?: string): { label: string; href: string; icon: React.ElementType }[] {
     const links: { label: string; href: string; icon: React.ElementType }[] = [];
 
     const isApprovedOrPending = (mod: string) => {
         return serviceRegs?.[mod]?.status === 'approved' || serviceRegs?.[mod]?.status === 'pending';
     };
 
-    if (roles.includes("wave_participant") && isApprovedOrPending('wave')) {
-        links.push({ label: "WAVE Dashboard", href: "/wave/dashboard", icon: Sparkles });
+    const isMale = gender?.toLowerCase() === "male";
+
+    // WAVE is visible to any female user (not male)
+    if (!isMale) {
+        const waveStatus = serviceRegs?.wave?.status;
+        const hasWaveAccess = roles.includes("wave_participant") || waveStatus === "approved" || waveStatus === "active";
+        const isWavePending = waveStatus === "pending" || waveStatus === "under_review" || waveStatus === "pending_review";
+        
+        if (hasWaveAccess) {
+            links.push({ label: "WAVE Dashboard", href: "/wave/dashboard", icon: Sparkles });
+        } else if (isWavePending) {
+            links.push({ label: "WAVE (Pending)", href: "/wave/application/review-pending", icon: Sparkles });
+        } else {
+            links.push({ label: "WAVE Program", href: "/wave/application", icon: Sparkles });
+        }
     }
-    if (roles.includes("academy_participant") && isApprovedOrPending('academy')) {
+
+    if ((roles.includes("academy_participant") || serviceRegs?.academy?.status === 'approved') && isApprovedOrPending('academy')) {
         links.push({ label: "Academy", href: "/academy/dashboard", icon: Award });
     }
-    if ((roles.includes("buyer") || roles.includes("seller")) && isApprovedOrPending('marketplace')) {
+    if ((roles.includes("buyer") || roles.includes("seller") || serviceRegs?.marketplace?.status === 'approved') && isApprovedOrPending('marketplace')) {
         links.push({ label: "Marketplace", href: "/marketplace", icon: Package });
     }
-    if (roles.includes("cooperative_member") && isApprovedOrPending('cooperatives')) {
+    if ((roles.includes("cooperative_member") || serviceRegs?.cooperatives?.status === 'approved' || serviceRegs?.cooperative?.status === 'approved') && (isApprovedOrPending('cooperatives') || serviceRegs?.cooperative?.status === 'pending')) {
         links.push({ label: "Cooperative", href: "/cooperatives/dashboard", icon: User });
     }
-    if (roles.includes("export_participant") && isApprovedOrPending('export')) {
+    if ((roles.includes("export_participant") || serviceRegs?.export?.status === 'approved') && isApprovedOrPending('export')) {
         links.push({ label: "Export Hub", href: "/export/dashboard", icon: ExternalLink });
     }
-    if ((roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor")) && isApprovedOrPending('farm-nation')) {
+    if ((roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor") || serviceRegs?.['farm-nation']?.status === 'approved' || serviceRegs?.farmNation?.status === 'approved') && (isApprovedOrPending('farm-nation') || serviceRegs?.farmNation?.status === 'pending')) {
         links.push({ label: "Farm Nation", href: "/farm-nation/dashboard", icon: ExternalLink });
     }
 
@@ -124,17 +138,17 @@ export default function DashboardNav() {
         return () => unsub();
     }, [userId, isAuthed]);
 
-    const moduleLinks = getModuleLinks(roles, serviceRegs);
+    const moduleLinks = getModuleLinks(roles, serviceRegs, session?.user?.gender);
     const toggles = useFeatureToggles(["digital_id_system", "escrow_messaging"]);
 
     // ── Role-gated nav items ──────────────────────────────────────────────────
     // ONLY show module-specific links to users who have actually enrolled AND are approved.
     const isAdmin = roles.includes("admin") || roles.includes("super_admin");
 
-    const isMarketplaceApproved = (roles.includes("buyer") || roles.includes("seller")) && serviceRegs?.marketplace?.status === 'approved';
-    const isFarmNationApproved  = (roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor")) && serviceRegs?.['farm-nation']?.status === 'approved';
-    const isWaveOrAcademyApproved = (roles.includes("wave_participant") && serviceRegs?.wave?.status === 'approved') || 
-                                    (roles.includes("academy_participant") && serviceRegs?.academy?.status === 'approved');
+    const isMarketplaceApproved = (roles.includes("buyer") || roles.includes("seller") || serviceRegs?.marketplace?.status === 'approved');
+    const isFarmNationApproved  = (roles.includes("farmer") || roles.includes("land_owner") || roles.includes("investor") || serviceRegs?.['farm-nation']?.status === 'approved' || serviceRegs?.farmNation?.status === 'approved');
+    const isWaveOrAcademyApproved = (roles.includes("wave_participant") || serviceRegs?.wave?.status === 'approved') || 
+                                    (roles.includes("academy_participant") || serviceRegs?.academy?.status === 'approved');
 
     const isMarketplaceUser = isMarketplaceApproved;
     const isFarmNationUser = isFarmNationApproved;

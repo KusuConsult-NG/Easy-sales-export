@@ -145,7 +145,15 @@ export const authConfig = {
                         // If not approved and not on a public/onboarding path, redirect to onboarding
                         // Use rawSlug so the URL is valid (e.g. /farm-nation/onboarding not /farmNation/onboarding)
                         if (!isApproved) {
-                            const redirectUrl = new URL(`/${rawSlug}/onboarding`, nextUrl.origin);
+                            let redirectPath = `/${rawSlug}/onboarding`;
+                            if (rawSlug === "wave") {
+                                redirectPath = status === "pending" || status === "under_review" || status === "pending_review"
+                                    ? "/wave/application/review-pending"
+                                    : "/wave/application";
+                            } else if (rawSlug === "academy") {
+                                redirectPath = "/academy/setup";
+                            }
+                            const redirectUrl = new URL(redirectPath, nextUrl.origin);
                             return Response.redirect(redirectUrl);
                         }
                     }
