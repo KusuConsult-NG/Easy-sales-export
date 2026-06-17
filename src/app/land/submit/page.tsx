@@ -28,6 +28,8 @@ interface FormData {
     price: string;
     soilType: string;
     waterSource: string;
+    availableForSale: boolean;
+    availableForRent: boolean;
 }
 
 export default function SubmitLandListingPage() {
@@ -47,6 +49,8 @@ export default function SubmitLandListingPage() {
         price: "",
         soilType: "",
         waterSource: "",
+        availableForSale: true,
+        availableForRent: false,
     });
 
     const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -73,7 +77,7 @@ export default function SubmitLandListingPage() {
             return !!(formData.title && formData.description && formData.state && formData.lga);
         }
         if (currentStep === 2) {
-            return !!(formData.size && formData.price);
+            return !!(formData.size && formData.price) && (formData.availableForSale || formData.availableForRent);
         }
         if (currentStep === 3) {
             return imageFiles.length > 0;
@@ -135,6 +139,8 @@ export default function SubmitLandListingPage() {
                 price: parseFloat(formData.price),
                 soilType: formData.soilType,
                 waterSource: formData.waterSource,
+                availableForSale: formData.availableForSale,
+                availableForRent: formData.availableForRent,
                 imageUrls,
                 documentUrls,
             });
@@ -390,6 +396,40 @@ export default function SubmitLandListingPage() {
                                             </option>
                                         ))}
                                     </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="block text-sm font-semibold text-slate-900">
+                                    Availability Options *
+                                </label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                                        <input
+                                            type="checkbox"
+                                            id="availableForSale"
+                                            name="availableForSale"
+                                            checked={formData.availableForSale}
+                                            onChange={(e) => setFormData({ ...formData, availableForSale: e.target.checked })}
+                                            className="w-5 h-5 text-green-600 rounded-sm focus:ring-2 focus:ring-green-600 cursor-pointer"
+                                        />
+                                        <label htmlFor="availableForSale" className="text-sm font-semibold text-slate-900 cursor-pointer select-none">
+                                            Available for Sale
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                                        <input
+                                            type="checkbox"
+                                            id="availableForRent"
+                                            name="availableForRent"
+                                            checked={formData.availableForRent}
+                                            onChange={(e) => setFormData({ ...formData, availableForRent: e.target.checked })}
+                                            className="w-5 h-5 text-green-600 rounded-sm focus:ring-2 focus:ring-green-600 cursor-pointer"
+                                        />
+                                        <label htmlFor="availableForRent" className="text-sm font-semibold text-slate-900 cursor-pointer select-none">
+                                            Available for Rent/Lease
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         </div>

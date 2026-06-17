@@ -88,11 +88,21 @@ async function uploadHandler(request: NextRequest) {
         // Convert file to buffer for Cloudinary
         const buffer = Buffer.from(await file.arrayBuffer());
         
-        // Build public_id
+        // Build public_id with correct file extension at the end (required by Cloudinary raw uploads like PDFs)
         const userId = session.user.id;
         const timestamp = Math.floor(Date.now() / 1000);
-        const safeName = folder.replace(/[^a-zA-Z0-9-]/g, "-");
-        const publicId = `${safeName}/${userId}/${documentType}-${timestamp}`;
+        const originalName = file.name || "document";
+        const extensionIdx = originalName.lastIndexOf(".");
+        const extension = extensionIdx !== -1 ? originalName.slice(extensionIdx) : "";
+        
+        let baseDocType = documentType;
+        if (extension && baseDocType.endsWith(extension)) {
+            baseDocType = baseDocType.slice(0, -extension.length);
+        }
+        
+        const safeDocType = baseDocType.replace(/[^a-zA-Z0-9-]/g, "-");
+        const safeFolderName = folder.split("/").map(part => part.replace(/[^a-zA-Z0-9-]/g, "-")).join("/");
+        const publicId = `${safeFolderName}/${userId}/${safeDocType}-${timestamp}${extension}`;
 
         // Sign the upload request
         // Cloudinary signature: parameters must be in alphabetical order

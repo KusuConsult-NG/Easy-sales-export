@@ -72,8 +72,17 @@ export async function uploadDocumentAction(
 
         // ── Build signed Cloudinary upload ───────────────────────────────────
         const timestamp = Math.floor(Date.now() / 1000);
-        const safeName = documentType.replace(/[^a-zA-Z0-9-]/g, "-");
-        const publicId = `documents/${userId}/${safeName}-${timestamp}`;
+        const originalName = fileName || file.name || "document";
+        const extensionIdx = originalName.lastIndexOf(".");
+        const extension = extensionIdx !== -1 ? originalName.slice(extensionIdx) : "";
+        
+        let baseDocType = documentType;
+        if (extension && baseDocType.endsWith(extension)) {
+            baseDocType = baseDocType.slice(0, -extension.length);
+        }
+        
+        const safeName = baseDocType.replace(/[^a-zA-Z0-9-]/g, "-");
+        const publicId = `documents/${userId}/${safeName}-${timestamp}${extension}`;
 
         const crypto = await import("crypto");
         const signatureStr = `public_id=${publicId}&timestamp=${timestamp}${apiSecret}`;
