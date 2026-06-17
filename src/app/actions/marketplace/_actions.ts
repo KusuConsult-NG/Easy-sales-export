@@ -1520,60 +1520,77 @@ async function _getSellerAnalyticsAction(): Promise<ActionResponse<{ analytics: 
         const productsRef = db.collection(COLLECTIONS.PRODUCTS)
             .where("sellerId", "==", userId);
 
-        const totalSalesSnapshot = await ordersRef
-            .where("status", "not-in", ["cancelled", "disputed"])
-            .aggregate({ totalAmount: AggregateField.sum("totalAmount"),
-                count: AggregateField.count()
-            })
-            .get();
-        const totalSales = totalSalesSnapshot.data().totalAmount || 0;
-        const totalOrdersCount = totalSalesSnapshot.data().count || 0;
+        // Fetch all matching orders and products in parallel to avoid index errors on status inequalities
+        const [ordersSnapshot, productsSnapshot] = await Promise.all([
+            ordersRef.get(),
+            productsRef.get()
+        ]);
 
-        const pendingOrdersSnapshot = await ordersRef
-            .where("status", "in", ["pending_payment", "processing"])
-            .aggregate({ count: AggregateField.count()
-            })
-            .get();
-        const pendingOrders = pendingOrdersSnapshot.data().count || 0;
+        const getOrderDate = (createdAt: any): Date | null => {
+            if (!createdAt) return null;
+            if (typeof createdAt.toDate === "function") return createdAt.toDate();
+            if (createdAt instanceof Date) return createdAt;
+            if (createdAt.seconds) return new Date(createdAt.seconds * 1000);
+            const parsed = new Date(createdAt);
+            return isNaN(parsed.getTime()) ? null : parsed;
+        };
+
+        let totalSales = 0;
+        let totalOrdersCount = 0;
+        let pendingOrders = 0;
+        let monthlyRevenue = 0;
+        let prevMonthRevenue = 0;
 
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
-        const monthlyRevenueSnapshot = await ordersRef
-            .where("status", "not-in", ["cancelled", "disputed"])
-            .where("createdAt", ">=", startOfMonth)
-            .aggregate({ totalAmount: AggregateField.sum("totalAmount")
-            })
-            .get();
-        const monthlyRevenue = monthlyRevenueSnapshot.data().totalAmount || 0;
-
         const startOfPrevMonth = new Date(startOfMonth);
         startOfPrevMonth.setMonth(startOfPrevMonth.getMonth() - 1);
         const endOfPrevMonth = new Date(startOfMonth);
 
-        const prevMonthRevenueSnapshot = await ordersRef
-            .where("status", "not-in", ["cancelled", "disputed"])
-            .where("createdAt", ">=", startOfPrevMonth)
-            .where("createdAt", "<", endOfPrevMonth)
-            .aggregate({ totalAmount: AggregateField.sum("totalAmount")
-            })
-            .get();
-        const prevMonthRevenue = prevMonthRevenueSnapshot.data().totalAmount || 0;
+        ordersSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const status = data.status || "";
+            const totalAmount = data.totalAmount || 0;
+            const orderDate = getOrderDate(data.createdAt);
 
-        const activeListingsSnapshot = await productsRef
-            .where("status", "==", "active")
-            .count()
-            .get();
-        const activeListings = activeListingsSnapshot.data().count || 0;
+            if (status !== "cancelled" && status !== "disputed") {
+                totalSales += totalAmount;
+                totalOrdersCount += 1;
 
-        const productStatsSnapshot = await productsRef
-            .aggregate({ totalViews: AggregateField.sum("views"),
-                avgRating: AggregateField.average("rating")
-            })
-            .get();
-        const totalProductViews = productStatsSnapshot.data().totalViews || 0;
-        const averageRating = productStatsSnapshot.data().avgRating || 0;
+                if (orderDate) {
+                    if (orderDate >= startOfMonth) {
+                        monthlyRevenue += totalAmount;
+                    } else if (orderDate >= startOfPrevMonth && orderDate < endOfPrevMonth) {
+                        prevMonthRevenue += totalAmount;
+                    }
+                }
+            }
+
+            if (status === "pending_payment" || status === "processing") {
+                pendingOrders += 1;
+            }
+        });
+
+        let activeListings = 0;
+        let totalProductViews = 0;
+        let totalProductRating = 0;
+        let ratedProductsCount = 0;
+
+        productsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.status === "active") {
+                activeListings += 1;
+            }
+            totalProductViews += (data.views || 0);
+            if (data.rating !== undefined && data.rating !== null) {
+                totalProductRating += data.rating;
+                ratedProductsCount += 1;
+            }
+        });
+
+        const averageRating = ratedProductsCount > 0 ? (totalProductRating / ratedProductsCount) : 0;
 
         const conversionRate = totalProductViews > 0
             ? parseFloat(((totalOrdersCount / totalProductViews) * 100).toFixed(1))

@@ -361,7 +361,9 @@ async function _releaseEscrowFunds(
         }
 
         if (data.status === "released") return { success: false as const, error: "Escrow already released" };
-        if (!data.amount || data.amount <= 0) return { success: false as const, error: "Invalid transaction amount" };
+        
+        const escrowAmount = data.amount || data.grossAmount || 0;
+        if (escrowAmount <= 0) return { success: false as const, error: "Invalid transaction amount" };
 
         const orderId = data.orderId;
         const orderEscrowsQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
@@ -383,7 +385,7 @@ async function _releaseEscrowFunds(
                 escrowId: transactionId,
                 recipientId: data.sellerId,
                 recipientEmail: data.sellerEmail || "",
-                amount: data.amount,
+                amount: escrowAmount,
                 status: "pending_admin_action",
                 description: `Release escrow funds for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
@@ -397,7 +399,7 @@ async function _releaseEscrowFunds(
             if (!walletSnap.exists) {
                 tx.set(walletRef, {
                     userId: data.sellerId,
-                    balance: data.amount,
+                    balance: escrowAmount,
                     currency: "NGN",
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp()
@@ -405,7 +407,7 @@ async function _releaseEscrowFunds(
             } else {
                 balanceBefore = walletSnap.data()?.balance || 0;
                 tx.update(walletRef, {
-                    balance: FieldValue.increment(data.amount),
+                    balance: FieldValue.increment(escrowAmount),
                     updatedAt: FieldValue.serverTimestamp()
                 });
             }
@@ -417,9 +419,9 @@ async function _releaseEscrowFunds(
                 walletId: data.sellerId,
                 userId: data.sellerId,
                 type: "funding",
-                amount: data.amount,
+                amount: escrowAmount,
                 balanceBefore,
-                balanceAfter: balanceBefore + data.amount,
+                balanceAfter: balanceBefore + escrowAmount,
                 reference: transactionId,
                 description: `Payout for order #${data.orderId} (Escrow released)`,
                 status: "completed",
@@ -435,7 +437,7 @@ async function _releaseEscrowFunds(
                 userId: data.sellerId,
                 type: "escrow_payout",
                 module: "escrow",
-                amount: data.amount,
+                amount: escrowAmount,
                 currency: "NGN",
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
@@ -464,7 +466,7 @@ async function _releaseEscrowFunds(
             action: 'escrow_released',
             targetId: transactionId,
             targetType: "escrow",
-            metadata: { sellerId: data.sellerId, amount: data.amount }
+            metadata: { sellerId: data.sellerId, amount: escrowAmount }
         });
 
         await Promise.allSettled([
@@ -472,7 +474,7 @@ async function _releaseEscrowFunds(
                 userId: data.sellerId,
                 type: "escrow",
                 title: "Escrow Funds Released",
-                message: `₦${data.amount.toLocaleString()} for "${data.productName}" has been released.`,
+                message: `₦${escrowAmount.toLocaleString()} for "${data.productName}" has been released.`,
                 link: `/escrow/${transactionId}`,
                 linkText: "View Details" }),
             createNotificationAction({
@@ -490,8 +492,8 @@ async function _releaseEscrowFunds(
         const orderRef = data.orderId;
 
         await Promise.allSettled([
-            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, data.amount) : Promise.resolve(),
-            pushEscrowReleased(data.sellerId, orderRef, data.amount, transactionId),
+            sellerPhone ? smsEscrowReleased(sellerPhone, orderRef, escrowAmount) : Promise.resolve(),
+            pushEscrowReleased(data.sellerId, orderRef, escrowAmount, transactionId),
         ]).catch((e) => logger.error("[releaseEscrowFunds] SMS/Push notifications failed:", e));
 
         return { error: null,  success: true as const, data: null };
@@ -521,6 +523,7 @@ async function _refundEscrowToBuyer(
         const userId = session.user.id;
         const txRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(transactionId);
         let txData: any = null;
+        let escrowAmount = 0;
 
         await db.runTransaction(async (tx) => {
             const txDoc = await tx.get(txRef);
@@ -533,6 +536,11 @@ async function _refundEscrowToBuyer(
 
             if (data.refundedAt) throw new Error("Escrow already refunded");
 
+            escrowAmount = data.amount || data.grossAmount || 0;
+            if (escrowAmount <= 0) {
+                throw new Error("Invalid transaction amount");
+            }
+
             txData = data;
             const refundInstructionRef = db.collection(COLLECTIONS.PAYMENT_INSTRUCTIONS).doc();
             tx.set(refundInstructionRef, {
@@ -540,7 +548,7 @@ async function _refundEscrowToBuyer(
                 escrowId: transactionId,
                 recipientId: data.buyerId,
                 recipientEmail: data.buyerEmail,
-                amount: data.amount,
+                amount: escrowAmount,
                 status: "pending_admin_action",
                 description: `Refund escrow for ${data.productName}`,
                 createdAt: FieldValue.serverTimestamp(),
@@ -559,7 +567,7 @@ async function _refundEscrowToBuyer(
                 action: 'escrow_refunded',
                 targetId: transactionId,
                 targetType: "escrow",
-                metadata: { buyerId: txData.buyerId, amount: txData.amount }
+                metadata: { buyerId: txData.buyerId, amount: escrowAmount }
             });
 
             await Promise.allSettled([
@@ -567,7 +575,7 @@ async function _refundEscrowToBuyer(
                     userId: txData.buyerId,
                     type: "escrow",
                     title: "Escrow Refunded",
-                    message: `Your escrow of ₦${txData.amount.toLocaleString()} for "${txData.productName}" has been refunded.`,
+                    message: `Your escrow of ₦${escrowAmount.toLocaleString()} for "${txData.productName}" has been refunded.`,
                     link: `/escrow/${transactionId}`,
                     linkText: "View Details" }),
                 createNotificationAction({
