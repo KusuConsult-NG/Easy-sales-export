@@ -742,7 +742,9 @@ async function _getWaveTrainingEventsAction(
         return { success: false as const, error: "Failed to fetch training events", meta: { cursor: null, hasMore: false }, data: null };
     }
 }
-export const getWaveTrainingEventsAction = withFlexibleSafeAction("getWaveTrainingEventsAction", _getWaveTrainingEventsAction);
+export async function getWaveTrainingEventsAction(...args: Parameters<typeof _getWaveTrainingEventsAction>) {
+    return withFlexibleSafeAction("getWaveTrainingEventsAction", _getWaveTrainingEventsAction)(...args);
+}
 
 // ============================================================================
 // SHIPMENT TRACKING

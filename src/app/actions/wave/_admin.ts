@@ -278,7 +278,9 @@ async function _updateTrainingEventAction(
         return { success: false as const, error: "Failed to update event" , data: null };
     }
 }
-export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
+export async function updateTrainingEventAction(...args: Parameters<typeof _updateTrainingEventAction>) {
+    return withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction)(...args);
+}
 
 async function _deleteTrainingEventAction(
     eventId: string
@@ -424,7 +426,9 @@ async function _startWaveLiveSessionAction(
         return { success: false as const, error: "Failed to start live session" , data: null };
     }
 }
-export const startWaveLiveSessionAction = withFlexibleSafeAction("startWaveLiveSessionAction", _startWaveLiveSessionAction);
+export async function startWaveLiveSessionAction(...args: Parameters<typeof _startWaveLiveSessionAction>) {
+    return withFlexibleSafeAction("startWaveLiveSessionAction", _startWaveLiveSessionAction)(...args);
+}
 
 async function _endWaveLiveSessionAction(
     eventId: string
@@ -481,7 +485,9 @@ async function _endWaveLiveSessionAction(
         return { success: false as const, error: "Failed to end live session", data: null };
     }
 }
-export const endWaveLiveSessionAction = withFlexibleSafeAction("endWaveLiveSessionAction", _endWaveLiveSessionAction);
+export async function endWaveLiveSessionAction(...args: Parameters<typeof _endWaveLiveSessionAction>) {
+    return withFlexibleSafeAction("endWaveLiveSessionAction", _endWaveLiveSessionAction)(...args);
+}
 
 
 

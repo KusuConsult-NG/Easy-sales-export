@@ -126,20 +126,88 @@ export default function AdminWaveLivePage({ params }: Props) {
         }
     }
 
+    function mixAudioStreams(displayStream: MediaStream, micStream: MediaStream | null): MediaStreamTrack | null {
+        try {
+            const displayAudioTracks = displayStream.getAudioTracks();
+            const micAudioTracks = micStream ? micStream.getAudioTracks() : [];
+
+            if (displayAudioTracks.length === 0 && micAudioTracks.length === 0) {
+                return null;
+            }
+
+            // If only one stream has audio, return its first track directly
+            if (displayAudioTracks.length === 0) {
+                return micAudioTracks[0];
+            }
+            if (micAudioTracks.length === 0) {
+                return displayAudioTracks[0];
+            }
+
+            // Both streams have audio, mix them using Web Audio API
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            const audioCtx = new AudioContextClass();
+            
+            const displaySource = audioCtx.createMediaStreamSource(new MediaStream([displayAudioTracks[0]]));
+            const micSource = audioCtx.createMediaStreamSource(new MediaStream([micAudioTracks[0]]));
+            
+            const destination = audioCtx.createMediaStreamDestination();
+            
+            displaySource.connect(destination);
+            micSource.connect(destination);
+            
+            // Keep references to prevent garbage collection during recording
+            (destination as any)._audioCtx = audioCtx;
+            (destination as any)._displaySource = displaySource;
+            (destination as any)._micSource = micSource;
+
+            return destination.stream.getAudioTracks()[0];
+        } catch (err) {
+            console.error("Failed to mix audio streams:", err);
+            // Fallback to first available track
+            const displayAudio = displayStream.getAudioTracks()[0];
+            const micAudio = micStream ? micStream.getAudioTracks()[0] : null;
+            return displayAudio || micAudio || null;
+        }
+    }
+
     async function startRecording() {
         try {
-            const displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: { displaySurface: "browser" },
-                audio: true
-            });
-
-            let tracks = [...displayStream.getTracks()];
-            
+            let displayStream: MediaStream;
             try {
-                const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                tracks = [...tracks, ...micStream.getAudioTracks()];
+                displayStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { displaySurface: "browser" },
+                    audio: true
+                });
+            } catch (firstErr) {
+                console.warn("Failed to get display media with audio, trying without display audio:", firstErr);
+                displayStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true
+                });
+            }
+
+            let micStream: MediaStream | null = null;
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (micErr) {
                 console.warn("Microphone access denied or failed:", micErr);
+            }
+
+            const videoTrack = displayStream.getVideoTracks()[0];
+            const mixedAudioTrack = mixAudioStreams(displayStream, micStream);
+
+            const tracks: MediaStreamTrack[] = [];
+            if (videoTrack) tracks.push(videoTrack);
+            if (mixedAudioTrack) tracks.push(mixedAudioTrack);
+
+            // Clean up unused display audio tracks if they weren't mixed directly
+            displayStream.getAudioTracks().forEach(track => {
+                if (track !== mixedAudioTrack) track.stop();
+            });
+            // Clean up unused mic tracks
+            if (micStream) {
+                micStream.getAudioTracks().forEach(track => {
+                    if (track !== mixedAudioTrack) track.stop();
+                });
             }
 
             const stream = new MediaStream(tracks);
@@ -179,11 +247,13 @@ export default function AdminWaveLivePage({ params }: Props) {
                 setShowUploadModal(true);
             };
 
-            displayStream.getVideoTracks()[0].onended = () => {
-                if (recorder.state !== "inactive") {
-                    recorder.stop();
-                }
-            };
+            if (videoTrack) {
+                videoTrack.onended = () => {
+                    if (recorder.state !== "inactive") {
+                        recorder.stop();
+                    }
+                };
+            }
 
             recorder.start(1000);
             setMediaRecorder(recorder);

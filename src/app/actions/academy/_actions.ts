@@ -311,7 +311,9 @@ async function _getCourseByIdAction(courseId: string): Promise<ActionResponse<an
         return { success: false as const, error: error instanceof Error ? error.message : "Fetch failed", data: null };
     }
 }
-export const getCourseByIdAction = withFlexibleSafeAction("getCourseByIdAction", _getCourseByIdAction);
+export async function getCourseByIdAction(...args: Parameters<typeof _getCourseByIdAction>) {
+    return withFlexibleSafeAction("getCourseByIdAction", _getCourseByIdAction)(...args);
+}
 
 /**
  * Initialize Payment for a Course
@@ -925,7 +927,9 @@ async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse
         return { success: false as const, data: null, error: error instanceof Error ? error.message : "Fetch failed" };
     }
 }
-export const getLiveSessionsAction = withFlexibleSafeAction("getLiveSessionsAction", _getLiveSessionsAction);
+export async function getLiveSessionsAction(...args: Parameters<typeof _getLiveSessionsAction>) {
+    return withFlexibleSafeAction("getLiveSessionsAction", _getLiveSessionsAction)(...args);
+}
 
 async function _startAcademyLiveSessionAction(
     courseId: string,
@@ -1002,7 +1006,9 @@ async function _startAcademyLiveSessionAction(
         return { success: false as const, error: "Failed to start live session", data: null };
     }
 }
-export const startAcademyLiveSessionAction = withFlexibleSafeAction("startAcademyLiveSessionAction", _startAcademyLiveSessionAction);
+export async function startAcademyLiveSessionAction(...args: Parameters<typeof _startAcademyLiveSessionAction>) {
+    return withFlexibleSafeAction("startAcademyLiveSessionAction", _startAcademyLiveSessionAction)(...args);
+}
 
 async function _endAcademyLiveSessionAction(
     courseId: string,
@@ -1052,7 +1058,9 @@ async function _endAcademyLiveSessionAction(
         return { success: false as const, error: "Failed to end live session", data: null };
     }
 }
-export const endAcademyLiveSessionAction = withFlexibleSafeAction("endAcademyLiveSessionAction", _endAcademyLiveSessionAction);
+export async function endAcademyLiveSessionAction(...args: Parameters<typeof _endAcademyLiveSessionAction>) {
+    return withFlexibleSafeAction("endAcademyLiveSessionAction", _endAcademyLiveSessionAction)(...args);
+}
 
 /**
  * APPLICATION SUBMISSION
