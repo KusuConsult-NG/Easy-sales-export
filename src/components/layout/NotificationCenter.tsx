@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Menu, Transition } from "@headlessui/react";
 import { Fragment } from "react";
 import { Bell, BellDot, Package, DollarSign, GraduationCap, Users, Wallet, TrendingUp, X } from "lucide-react";
@@ -25,6 +25,8 @@ export default function NotificationCenter() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(true);
+    // Track IDs we've already queued for mark-as-read to avoid duplicate writes
+    const pendingReadRef = useRef<Set<string>>(new Set());
 
     const userId = session?.user?.id;
     const isAuthed = useFirebaseAuthed(userId);
@@ -89,24 +91,59 @@ export default function NotificationCenter() {
     const unreadCount = visibleNotifications.filter((n) => !n.read).length;
 
     const markAsRead = async (id: string) => {
+        // Optimistic update — decrement immediately in local state
+        setNotifications(prev =>
+            prev.map(n => n.id === id ? { ...n, read: true } : n)
+        );
         try {
             await markNotificationAsReadAction(id);
-            // UI will update automatically via onSnapshot listener
+            // onSnapshot will confirm the persisted state
         } catch (error) {
             console.error("Mark as read error:", error);
+            // Revert optimistic update on failure
+            setNotifications(prev =>
+                prev.map(n => n.id === id ? { ...n, read: false } : n)
+            );
         }
     };
 
     async function markAllAsRead() {
         if (!session?.user?.id) return;
-
+        // Optimistic update
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
         try {
             await markAllAsReadAction(session.user.id);
-            // UI will update automatically via onSnapshot listener
         } catch (error) {
             console.error("Mark all as read error:", error);
         }
-    };
+    }
+
+    // When the panel opens, auto-mark all currently-visible unread notifications as read
+    useEffect(() => {
+        if (!isOpen || !session?.user?.id) return;
+
+        const unreadVisible = visibleNotifications.filter(n => !n.read);
+        if (unreadVisible.length === 0) return;
+
+        // Filter out IDs already in-flight to avoid duplicate writes
+        const toMark = unreadVisible.filter(n => !pendingReadRef.current.has(n.id));
+        if (toMark.length === 0) return;
+
+        // Optimistic update
+        const ids = toMark.map(n => n.id);
+        ids.forEach(id => pendingReadRef.current.add(id));
+        setNotifications(prev =>
+            prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n)
+        );
+
+        // Persist in the background — fire-and-forget
+        Promise.all(ids.map(id => markNotificationAsReadAction(id))).then(() => {
+            ids.forEach(id => pendingReadRef.current.delete(id));
+        }).catch(() => {
+            ids.forEach(id => pendingReadRef.current.delete(id));
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen]);
 
     const getNotificationIcon = (type: Notification["type"]) => {
         switch (type) {

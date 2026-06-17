@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -111,6 +111,8 @@ export default function NotificationsPage() {
 
     const userId = session?.user?.id;
     const isAuthed = useFirebaseAuthed(userId);
+    // Prevent duplicate auto-read calls on re-renders
+    const autoReadDoneRef = useRef(false);
 
     /* ── Subscription data from session (synced live via auth.config) ── */
     const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
@@ -180,6 +182,32 @@ export default function NotificationsPage() {
             setFilter("all");
         }
     }, [filter, visibleTabKeys]);
+
+    /* ── Auto-mark all visible unread as read when the page first loads ── */
+    useEffect(() => {
+        if (autoReadDoneRef.current || !userId || notifications.length === 0) return;
+
+        const unreadVisible = notifications.filter(n =>
+            !n.read && isNotificationVisible(n.type, serviceRegistrations, roles)
+        );
+        if (unreadVisible.length === 0) return;
+
+        autoReadDoneRef.current = true;
+
+        // Optimistic update — reflect instantly in UI
+        const ids = unreadVisible.map(n => n.id);
+        setNotifications(prev =>
+            prev.map(n => ids.includes(n.id) ? { ...n, read: true } : n)
+        );
+
+        // Persist in the background without blocking the UI
+        import("@/app/actions/notifications").then(({ markAllAsReadAction }) => {
+            markAllAsReadAction(userId).catch(() => {
+                // Non-fatal — onSnapshot will self-heal on next open
+            });
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notifications, userId]);
 
     /* ── Actions ── */
     async function handleMarkAsRead(id: string) {
