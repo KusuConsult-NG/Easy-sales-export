@@ -115,10 +115,13 @@ export default function CheckoutPage() {
         let updated = false;
 
         const geocodePromises = cart.map((item) => {
-            const locKey = `${item.location?.lga || ""}, ${item.location?.state || ""}`.trim();
+            const lga = item.location?.lga && item.location.lga.toLowerCase() !== "unknown" ? item.location.lga : "";
+            const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
+            
+            const locKey = `${lga}, ${state}`.trim();
             if (!locKey || productCoords[item.id]) return Promise.resolve();
 
-            const addressStr = `${item.location?.lga ? item.location.lga + ", " : ""}${item.location?.state || ""}, Nigeria`;
+            const addressStr = `${lga ? lga + ", " : ""}${state}, Nigeria`;
             
             return new Promise<void>((resolve) => {
                 geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {

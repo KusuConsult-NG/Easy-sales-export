@@ -27,7 +27,7 @@ import {
     Lock, Briefcase, Container, MessageSquare, User, Store,
     Waves, Building2, ClipboardCheck, ToggleLeft, BadgeCheck,
     UserX, MessageCircle, ShieldAlert, ChevronLeft, ChevronRight,
-    LogOut, X, Settings, Sprout, Zap, IdCard
+    LogOut, X, Settings, Sprout, Zap, IdCard, ShoppingCart
 } from "lucide-react";
 
 
@@ -102,6 +102,7 @@ const FARM_NATION_NAV: NavItem[] = [
 
 const MARKETPLACE_NAV: NavItem[] = [
     { name: "Browse Products",   href: "/marketplace/buyer/products", icon: Search },
+    { name: "Shopping Cart",     href: "/marketplace/checkout",       icon: ShoppingCart },
     { name: "My Orders",         href: "/marketplace/buyer/orders",   icon: Package },
     { name: "Village Market",    href: "/marketplace/village-market", icon: Zap },
     { name: "Escrow",            href: "/escrow",                     icon: Lock },
