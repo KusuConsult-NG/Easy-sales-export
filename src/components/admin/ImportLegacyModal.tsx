@@ -555,7 +555,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                                 Enable Academy Enrollment
                             </label>
                         </div>
-                        {formData.services.academy && (
+                        {formData.services.academy && ACADEMY_CONFIG?.plans && (
                             <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                                 <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Academy Tier</label>
                                 <select value={formData.academyPlan}
@@ -563,7 +563,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
                                     {Object.values(ACADEMY_CONFIG.plans).map((plan) => (
                                         <option key={plan.id} value={plan.id}>
-                                            {plan.name} ({CURRENCY_CONFIG.symbol}{plan.fee.toLocaleString()} Value)
+                                            {plan.name} ({CURRENCY_CONFIG?.symbol || "₦"}{(plan.fee || 0).toLocaleString()} Value)
                                         </option>
                                     ))}
                                 </select>
@@ -597,7 +597,17 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
         );
     }
 
-    const stepPanels = [renderStepIdentity(), renderStepLocation(), renderStepNextOfKin(), renderStepDocuments(), renderStepFinancial(), renderStepServices()];
+    function renderStepContent() {
+        switch (step) {
+            case 0: return renderStepIdentity();
+            case 1: return renderStepLocation();
+            case 2: return renderStepNextOfKin();
+            case 3: return renderStepDocuments();
+            case 4: return renderStepFinancial();
+            case 5: return renderStepServices();
+            default: return null;
+        }
+    }
 
     // ── render ───────────────────────────────────────────────────────────────
     return (
@@ -624,7 +634,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                     )}
 
                     {/* Step panel */}
-                    {stepPanels[step]}
+                    {renderStepContent()}
 
                     {/* Navigation */}
                     <div className="flex gap-3 pt-4 border-t border-slate-200">
