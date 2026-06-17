@@ -11,6 +11,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { paystackPayout } from "@/lib/paystack-transfer";
 import { serializeDoc, serializeDocs } from "@/lib/firestore-serialize";
 import { withFlexibleSafeAction } from "@/lib/safe-action";
+import { getLogisticsProvider } from "@/lib/logistics";
 
 /**
  * Get all orders for a seller
@@ -312,3 +313,29 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
 }
 export const getOrderDetailsAction = withFlexibleSafeAction("getOrderDetailsAction", _getOrderDetailsAction);
 export const getOrderByIdForSellerAction = getOrderDetailsAction;
+
+/**
+ * Get tracking updates for a shipment
+ */
+async function _getTrackingUpdatesAction(trackingNumber: string) {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Authentication required", data: null };
+
+        if (!trackingNumber) {
+            return { success: false as const, error: "Tracking number is required", data: null };
+        }
+
+        const provider = getLogisticsProvider();
+        const updates = await provider.trackShipment(trackingNumber);
+
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const serializedUpdates = serializeValue(updates);
+
+        return { error: null, success: true as const, data: { updates: serializedUpdates, providerName: provider.name } };
+    } catch (error) {
+        logger.error("Get tracking updates error:", { trackingNumber, error });
+        return { success: false as const, error: "Failed to fetch tracking updates", data: null };
+    }
+}
+export const getTrackingUpdatesAction = withFlexibleSafeAction("getTrackingUpdatesAction", _getTrackingUpdatesAction);

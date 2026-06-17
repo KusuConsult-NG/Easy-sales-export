@@ -13,7 +13,8 @@ import {
     MapPin, Loader2, AlertCircle, Copy, Check, Phone
 } from "lucide-react";
 import { getOrderByIdForSellerAction } from "@/app/actions/order-management";
-import { updateOrderStatusAction } from "@/app/actions/order-management";
+import { updateOrderStatusAction, getTrackingUpdatesAction } from "@/app/actions/order-management";
+import type { TrackingUpdate } from "@/lib/logistics";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
@@ -28,6 +29,8 @@ export default function SellerOrderDetailPage() {
     const [updating, setUpdating] = useState(false);
     const [copied, setCopied] = useState(false);
     const [trackingNumber, setTrackingNumber] = useState("");
+    const [trackingUpdates, setTrackingUpdates] = useState<TrackingUpdate[]>([]);
+    const [loadingTracking, setLoadingTracking] = useState(false);
 
     useEffect(() => {
         if (!id) return;
@@ -41,6 +44,17 @@ export default function SellerOrderDetailPage() {
             setLoading(false);
         });
     }, [id]);
+
+    useEffect(() => {
+        if (!order?.trackingNumber) return;
+        setLoadingTracking(true);
+        getTrackingUpdatesAction(order.trackingNumber).then((res) => {
+            if (res.success && res.data?.updates) {
+                setTrackingUpdates(res.data.updates as any);
+            }
+            setLoadingTracking(false);
+        });
+    }, [order?.trackingNumber]);
 
     const copyOrderId = () => {
         navigator.clipboard.writeText(id as string);
@@ -211,6 +225,63 @@ export default function SellerOrderDetailPage() {
                             <p className="font-semibold text-rose-900 text-sm">Dispute in Progress</p>
                             <p className="text-rose-700 text-xs mt-0.5">Our team is reviewing this dispute. Please check your email for updates.</p>
                         </div>
+                    </div>
+                )}
+
+                {/* Shipment Tracking Timeline */}
+                {order.trackingNumber && (
+                    <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-bold text-slate-900 flex items-center gap-2">
+                                <Truck className="w-5 h-5 text-green-600" />
+                                Shipment Tracking Details
+                            </h2>
+                            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-50 text-green-700 border border-green-200">
+                                Active Tracking
+                            </span>
+                        </div>
+                        
+                        {loadingTracking ? (
+                            <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
+                                <Loader2 className="w-4 h-4 animate-spin text-green-600" />
+                                <span>Fetching latest logistics updates...</span>
+                            </div>
+                        ) : trackingUpdates.length > 0 ? (
+                            <div className="relative pl-6 border-l-2 border-slate-200 space-y-6 ml-3 mt-4">
+                                {trackingUpdates.map((update, idx) => {
+                                    const isLatest = idx === trackingUpdates.length - 1;
+                                    return (
+                                        <div key={idx} className="relative">
+                                            {/* Dot indicator */}
+                                            <div className={`absolute -left-[33px] top-1 w-4.5 h-4.5 rounded-full border-2 bg-white flex items-center justify-center ${
+                                                isLatest ? "border-green-600 ring-4 ring-green-50" : "border-slate-350"
+                                            }`}>
+                                                <div className={`w-2 h-2 rounded-full ${isLatest ? "bg-green-600 animate-pulse" : "bg-slate-400"}`} />
+                                            </div>
+                                            
+                                            <div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                                                    <span className={`font-semibold text-sm ${isLatest ? "text-green-700 text-base" : "text-slate-800"}`}>
+                                                        {update.location}
+                                                    </span>
+                                                    <span className="text-xs text-slate-400 font-mono">
+                                                        {formatDateTime(update.timestamp)}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-0.5 capitalize font-semibold">{update.status.replace("_", " ")}</p>
+                                                {update.note && (
+                                                    <p className="text-sm text-slate-600 mt-1 bg-slate-50 p-3 rounded-lg border border-slate-100 italic">
+                                                        {update.note}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-500 py-2">No tracking updates available yet.</div>
+                        )}
                     </div>
                 )}
 
