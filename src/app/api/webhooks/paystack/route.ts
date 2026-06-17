@@ -68,6 +68,12 @@ export async function POST(req: NextRequest) {
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
                     await processAcademyRegistration(reference, amountPaidv, userId, plan);
+                } else if (type === "wallet_funding") {
+                    const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
+                    const res = await confirmWalletFundingAction(reference);
+                    if (!res.success && res.error !== "Already processed") {
+                        throw new Error(res.error || "Wallet funding verification failed");
+                    }
                 } else {
                     // Log unhandled types so they appear in Vercel logs — never silently drop money.
                     logger.warn(`[Paystack Webhook] UNHANDLED payment type: "${type}" for reference ${reference}. Amount: ${amountPaidv}. Metadata: ${JSON.stringify(metadata)}`);

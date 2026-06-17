@@ -640,7 +640,8 @@ async function _approveWaveApplicationAction(
 
             if (!appDoc.exists) throw new Error("Application not found");
             const appData = appDoc.data();
-            if (appData?.status !== "pending" && appData?.status !== "under_review") {
+            const currentStatus = appData?.status || "pending";
+            if (currentStatus !== "pending" && currentStatus !== "under_review") {
                 throw new Error("Application is not in a reviewable state");
             }
             targetUserId = appData?.userId;
@@ -805,7 +806,8 @@ async function _rejectWaveApplicationAction(
 
             if (!appDoc.exists) throw new Error("Application not found");
             const appData = appDoc.data();
-            if (appData?.status !== "pending" && appData?.status !== "under_review") {
+            const currentStatus = appData?.status || "pending";
+            if (currentStatus !== "pending" && currentStatus !== "under_review") {
                 throw new Error("Application is not in a reviewable state");
             }
             targetUserId = appData?.userId;

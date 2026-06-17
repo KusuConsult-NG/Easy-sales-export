@@ -228,6 +228,16 @@ export async function confirmWalletFundingAction(reference: string): Promise<Act
                 description: "Wallet funded successfully"
             }, { merge: true });
 
+            t.set(db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference), {
+                reference,
+                type: "wallet_funding",
+                userId,
+                amount: amountNGN,
+                processedAt: FieldValue.serverTimestamp(),
+                source: "wallet_funding_action",
+                status: "completed",
+            });
+
             return updatedBalance;
         });
 
