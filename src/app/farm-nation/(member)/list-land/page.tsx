@@ -35,7 +35,7 @@ export default function ListLandPage() {
         pricePerUnit: 0,
         latitude: "",
         longitude: "",
-        listingType: "sale" as "sale" | "rent" | "lease",
+        listingTypes: ["sale"] as ("sale" | "rent" | "lease")[],
         escrowAvailable: true,
     });
 
@@ -57,6 +57,19 @@ export default function ListLandPage() {
                 ? current.filter(c => c !== value)
                 : [...current, value];
             return { ...prev, category: updated };
+        });
+    };
+
+    const toggleListingType = (value: "sale" | "rent" | "lease") => {
+        setFormData(prev => {
+            const current = prev.listingTypes || [];
+            const exists = current.includes(value);
+            if (exists) {
+                if (current.length <= 1) return prev;
+                return { ...prev, listingTypes: current.filter(t => t !== value) };
+            } else {
+                return { ...prev, listingTypes: [...current, value] };
+            }
         });
     };
 
@@ -180,11 +193,11 @@ export default function ListLandPage() {
                     latitude: parseFloat(formData.latitude),
                     longitude: parseFloat(formData.longitude)
                 } : undefined,
-                availableForSale: formData.listingType === "sale",
-                availableForRent: formData.listingType === "rent" || formData.listingType === "lease",
-                availableForLease: formData.listingType === "lease",
-                type: formData.listingType,
-                escrowAvailable: formData.escrowAvailable,
+                availableForSale: formData.listingTypes.includes("sale"),
+                availableForRent: formData.listingTypes.includes("rent") || formData.listingTypes.includes("lease"),
+                availableForLease: formData.listingTypes.includes("lease"),
+                type: formData.listingTypes.includes("sale") ? "sale" : (formData.listingTypes.includes("rent") ? "rent" : "lease"),
+                escrowAvailable: true,
             });
 
             if (result.success) {
@@ -569,42 +582,50 @@ export default function ListLandPage() {
                             <div className="space-y-6">
                                 <div>
                                     <label className="block text-sm font-semibold text-slate-900 mb-3">
-                                        Listing Type *
+                                        Listing Type * (Select one or more)
                                     </label>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         {[
                                             { value: "sale", label: "For Sale", description: "List this land for permanent purchase", icon: "🏷️" },
                                             { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
                                             { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
-                                        ].map((option) => (
-                                            <button
-                                                key={option.value}
-                                                type="button"
-                                                onClick={() => setFormData({ ...formData, listingType: option.value as "sale" | "rent" | "lease" })}
-                                                className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col ${formData.listingType === option.value
-                                                    ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
-                                                    : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
-                                                    }`}
-                                            >
-                                                <div className="text-3xl mb-3">{option.icon}</div>
-                                                <h3 className="font-bold text-slate-950 mb-1">{option.label}</h3>
-                                                <p className="text-xs text-slate-600 leading-relaxed">{option.description}</p>
-                                            </button>
-                                        ))}
+                                        ].map((option) => {
+                                            const isSelected = formData.listingTypes.includes(option.value as any);
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    type="button"
+                                                    onClick={() => toggleListingType(option.value as any)}
+                                                    className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col relative ${isSelected
+                                                        ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
+                                                        : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
+                                                        }`}
+                                                >
+                                                    {isSelected && (
+                                                        <div className="absolute top-3 right-3 bg-green-600 text-white rounded-full p-0.5">
+                                                            <Check className="w-3.5 h-3.5" />
+                                                        </div>
+                                                    )}
+                                                    <div className="text-3xl mb-3">{option.icon}</div>
+                                                    <h3 className="font-bold text-slate-950 mb-1">{option.label}</h3>
+                                                    <p className="text-xs text-slate-600 leading-relaxed">{option.description}</p>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
                                 <div className="border-t border-slate-100 pt-6">
-                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-xl hover:bg-slate-100/50 transition-colors">
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-xl cursor-not-allowed">
                                         <input
                                             type="checkbox"
                                             id="escrow"
-                                            checked={formData.escrowAvailable}
-                                            onChange={(e) => setFormData({ ...formData, escrowAvailable: e.target.checked })}
-                                            className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-pointer"
+                                            checked={true}
+                                            disabled={true}
+                                            className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500 cursor-not-allowed bg-slate-100"
                                         />
-                                        <label htmlFor="escrow" className="text-sm font-semibold text-slate-900 cursor-pointer select-none">
-                                            Enable Escrow Protection (Recommended)
+                                        <label htmlFor="escrow" className="text-sm font-semibold text-slate-500 cursor-not-allowed select-none">
+                                            Enable Escrow Protection (Required)
                                         </label>
                                     </div>
                                 </div>

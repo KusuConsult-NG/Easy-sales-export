@@ -41,6 +41,7 @@ export interface LandListing {
     status: "draft" | "pending_verification" | "verified" | "rejected" | "sold" | "leased";
     availableForSale?: boolean;
     availableForRent?: boolean;
+    availableForLease?: boolean;
     escrowAvailable?: boolean;
     verificationStatus?: { 
         verified: boolean;
