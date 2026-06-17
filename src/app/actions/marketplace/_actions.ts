@@ -1053,9 +1053,10 @@ async function _getMarketplaceProductsAction(params: {
     location?: string;
     sortBy?: string;
     limit?: number; 
-} = {}): Promise<ActionResponse<{ products: Product[] }>> { 
+    lastId?: string;
+} = {}): Promise<ActionResponse<{ products: Product[]; lastId?: string; hasMore: boolean }>> { 
     try {
-        const { category, search, location, sortBy, limit: limitCount = 20 } = params;
+        const { category, search, location, sortBy, limit: limitCount = 20, lastId } = params;
 
         let query = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active") as FirebaseFirestore.Query;
 
@@ -1067,22 +1068,30 @@ async function _getMarketplaceProductsAction(params: {
             query = query.where("location.state", "==", location);
         }
 
+        let orderedQuery = query;
         // Apply sorting
         switch (sortBy) { 
             case "newest":
-                query = query.orderBy("createdAt", "desc");
+                orderedQuery = query.orderBy("createdAt", "desc");
                 break;
             case "popular":
-                query = query.orderBy("views", "desc");
+                orderedQuery = query.orderBy("views", "desc");
                 break;
             default:
-                query = query.orderBy("createdAt", "desc");
+                orderedQuery = query.orderBy("createdAt", "desc");
+        }
+
+        if (lastId) {
+            const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
+            if (lastDoc.exists) {
+                orderedQuery = orderedQuery.startAfter(lastDoc);
+            }
         }
 
         let snapshot;
         let indexError = false;
         try {
-            snapshot = await query.limit(limitCount).get();
+            snapshot = await orderedQuery.limit(limitCount).get();
         } catch (e: any) {
             if (e.message && e.message.toLowerCase().includes("index")) {
                 logger.warn("Marketplace products search failed due to missing index. Falling back.", { error: e.message });
@@ -1091,6 +1100,13 @@ async function _getMarketplaceProductsAction(params: {
                 let fallbackQuery = db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active");
                 if (category && category !== "all") fallbackQuery = fallbackQuery.where("category", "==", category);
                 if (location) fallbackQuery = fallbackQuery.where("location.state", "==", location);
+                
+                if (lastId) {
+                    const lastDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(lastId).get();
+                    if (lastDoc.exists) {
+                        fallbackQuery = fallbackQuery.startAfter(lastDoc);
+                    }
+                }
                 
                 snapshot = await fallbackQuery.limit(limitCount).get();
             } else {
@@ -1133,7 +1149,14 @@ async function _getMarketplaceProductsAction(params: {
             });
         }
 
-        return { error: null, success: true as const, data: { products } };
+        let newLastId = undefined;
+        let hasMore = false;
+        if (snapshot.docs.length === limitCount) {
+            hasMore = true;
+            newLastId = snapshot.docs[snapshot.docs.length - 1].id;
+        }
+
+        return { error: null, success: true as const, data: { products, lastId: newLastId, hasMore } };
     } catch (error) { 
         logger.error("Get products error:", {
             error: error instanceof Error ? error.message : String(error)

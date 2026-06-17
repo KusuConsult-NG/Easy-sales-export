@@ -181,6 +181,21 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 _version: FieldValue.increment(1) });
 
             const sellerId = currentOrder.sellerId || (Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds[0] : undefined);
+            if (sellerId) {
+                const escrowId = `ESC-${orderId}-${sellerId.substring(0, 5)}`;
+                const escrowRef = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).doc(escrowId);
+                const escrowDoc = await transaction.get(escrowRef);
+                if (escrowDoc.exists) {
+                    transaction.update(escrowRef, {
+                        status: "released",
+                        releasedAt: FieldValue.serverTimestamp(),
+                        releasedBy: userId,
+                        updatedAt: FieldValue.serverTimestamp(),
+                        _version: FieldValue.increment(1)
+                    });
+                }
+            }
+
             if (!sellerId) throw new Error("Seller ID not found on order");
 
             const sellerRef = db.collection(COLLECTIONS.USERS).doc(sellerId);

@@ -233,6 +233,26 @@ async function _verifyPropertyPaymentAction(reference: string): Promise<ActionRe
                 description: `Property Purchase - ${metadata.propertyTitle}`
             });
 
+            // Log direct Paystack payment in the payments collection
+            const paymentId = `PAY-${reference}`;
+            const paymentRef = db.collection(COLLECTIONS.PAYMENTS).doc(paymentId);
+            tx.set(paymentRef, {
+                id: paymentId,
+                userId: session.user.id,
+                userEmail: session.user.email || "",
+                amount: amountInNaira,
+                currency: "NGN",
+                paymentReference: reference,
+                status: "success",
+                paymentMethod: "paystack",
+                purpose: "escrow_payment",
+                relatedId: propertyId,
+                initiatedAt: freshData.createdAt || FieldValue.serverTimestamp(),
+                completedAt: FieldValue.serverTimestamp(),
+                sellerId: metadata.sellerId || freshData.ownerId || "",
+                participants: [session.user.id, metadata.sellerId || freshData.ownerId || ""].filter(Boolean)
+            });
+
             // Update purchase record
             const purchaseQuery = await db.collection(COLLECTIONS.FARM_NATION_TRANSACTIONS)
                 .where("paymentReference", "==", reference)

@@ -536,7 +536,10 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
                 purpose: "escrow_payment",
                 relatedId: orderData.orderId || orderDoc.id,
                 initiatedAt: orderData.createdAt || FieldValue.serverTimestamp(),
-                completedAt: FieldValue.serverTimestamp()
+                completedAt: FieldValue.serverTimestamp(),
+                sellerId: orderData.sellerId || (uniqueSellers && uniqueSellers[0]) || "",
+                sellerIds: orderData.sellerIds || uniqueSellers || [],
+                participants: [userId, ...(orderData.sellerIds || uniqueSellers || [orderData.sellerId]).filter(Boolean)]
             });
 
             // 7. Log a balanced pair of transactions in wallet_transactions

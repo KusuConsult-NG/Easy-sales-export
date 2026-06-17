@@ -1,19 +1,37 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Package, Search, Loader2, Star, MapPin, Edit, Plus, Eye, AlertCircle } from "lucide-react";
+import { Package, Search, Loader2, Star, MapPin, Plus, Eye, AlertCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { getSellerProductsAction } from "@/app/actions/marketplace";
+import { useSession } from "next-auth/react";
+import { getMarketplaceProductsAction } from "@/app/actions/marketplace";
 import type { Product } from "@/lib/types/marketplace";
 import { formatCurrency } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 
+const CATEGORY_MAP = [
+    { id: "all", label: "All" },
+    { id: "grains", label: "Grains & Cereals" },
+    { id: "roots", label: "Tubers & Roots" },
+    { id: "fruits", label: "Fruits" },
+    { id: "vegetables", label: "Vegetables" },
+    { id: "spices", label: "Spices" },
+    { id: "nuts", label: "Nuts & Seeds" },
+    { id: "processed", label: "Processed Foods" },
+    { id: "livestock", label: "Livestock" },
+    { id: "poultry", label: "Poultry" },
+    { id: "other", label: "Other" }
+];
+
 export default function MarketplaceProductsPage() {
+    const { data: session } = useSession();
+    const isSeller = session?.user?.roles?.includes("seller") || session?.user?.roles?.includes("admin") || session?.user?.roles?.includes("super_admin");
+
     const [loading, setLoading] = useState(true);
     const [products, setProducts] = useState<Product[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [filterStatus, setFilterStatus] = useState("all");
+    const [filterCategory, setFilterCategory] = useState("all");
     const [lastId, setLastId] = useState<string | undefined>(undefined);
     const [hasMore, setHasMore] = useState(false);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -32,10 +50,10 @@ export default function MarketplaceProductsPage() {
 
             const currentLastId = isReset ? undefined : lastId;
 
-            const result = await getSellerProductsAction({
+            const result = await getMarketplaceProductsAction({
                 limit: 12,
                 lastId: currentLastId,
-                status: filterStatus,
+                category: filterCategory,
                 search: debouncedSearch
             });
 
@@ -52,12 +70,12 @@ export default function MarketplaceProductsPage() {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [filterStatus, debouncedSearch, lastId]);
+    }, [filterCategory, debouncedSearch, lastId]);
 
     useEffect(() => {
         fetchProducts(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filterStatus, debouncedSearch]);
+    }, [filterCategory, debouncedSearch]);
 
     const loadMore = () => {
         if (!loadingMore && hasMore) {
@@ -65,17 +83,14 @@ export default function MarketplaceProductsPage() {
         }
     };
 
-    const getStatusConfig = (status: string) => {
-        const configs: Record<string, { bg: string; label: string }> = {
-            active: { bg: "bg-emerald-50 text-emerald-700 border border-emerald-200", label: "Active" },
-            draft: { bg: "bg-slate-50 text-slate-600 border border-slate-200", label: "Draft" },
-            out_of_stock: { bg: "bg-rose-50 text-rose-700 border border-rose-200", label: "Out of Stock" },
-            suspended: { bg: "bg-red-50 text-red-700 border border-red-200", label: "Suspended" },
-            pending: { bg: "bg-amber-50 text-amber-700 border border-amber-200", label: "Pending Approval" },
-            rejected: { bg: "bg-rose-50 text-rose-700 border border-rose-200", label: "Rejected" },
-            low_stock: { bg: "bg-orange-50 text-orange-700 border border-orange-200", label: "Low Stock" }
-        };
-        return configs[status] || configs.active;
+    const getStockConfig = (availableQuantity: number) => {
+        if (availableQuantity <= 0) {
+            return { bg: "bg-rose-50 text-rose-700 border border-rose-200", label: "Out of Stock" };
+        }
+        if (availableQuantity < 50) {
+            return { bg: "bg-orange-50 text-orange-700 border border-orange-200", label: "Low Stock" };
+        }
+        return { bg: "bg-emerald-50 text-emerald-700 border border-emerald-200", label: "In Stock" };
     };
 
     return (
@@ -86,19 +101,28 @@ export default function MarketplaceProductsPage() {
                     <div>
                         <div className="flex items-center gap-3 mb-4">
                             <Package className="w-8 h-8" />
-                            <h1 className="text-4xl font-bold">My Products</h1>
+                            <h1 className="text-4xl font-bold">Commodity Marketplace</h1>
                         </div>
                         <p className="text-green-100 text-lg max-w-2xl">
-                            Manage your product listings, track stock, and edit details of your uploaded agricultural commodities
+                            Browse and purchase premium agricultural commodities directly from verified Nigerian farmers
                         </p>
                     </div>
-                    <Link
-                        href="/marketplace/sell/create"
-                        className="self-start md:self-auto flex items-center gap-2 px-6 py-3.5 bg-white text-green-700 rounded-xl font-bold hover:bg-green-50 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-95"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Add New Product
-                    </Link>
+                    {isSeller ? (
+                        <Link
+                            href="/marketplace/sell/create"
+                            className="self-start md:self-auto flex items-center gap-2 px-6 py-3.5 bg-white text-green-700 rounded-xl font-bold hover:bg-green-50 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-95"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Add New Product
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/marketplace/onboarding"
+                            className="self-start md:self-auto flex items-center gap-2 px-6 py-3.5 bg-white text-green-700 rounded-xl font-bold hover:bg-green-50 shadow-lg hover:shadow-xl transition-all hover:scale-[1.02] active:scale-95"
+                        >
+                            Become a Seller
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -113,26 +137,19 @@ export default function MarketplaceProductsPage() {
                                 type="text"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search your products..."
+                                placeholder="Search agricultural products..."
                                 className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition text-slate-800"
                             />
                         </div>
 
-                        {/* Status Filter Tab-like buttons */}
+                        {/* Category Filter Tab-like buttons */}
                         <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-none">
-                            {[
-                                { id: "all", label: "All" },
-                                { id: "active", label: "Active" },
-                                { id: "pending", label: "Pending" },
-                                { id: "draft", label: "Draft" },
-                                { id: "out_of_stock", label: "Out of Stock" },
-                                { id: "low_stock", label: "Low Stock" }
-                            ].map((tab) => (
+                            {CATEGORY_MAP.map((tab) => (
                                 <button
                                     key={tab.id}
-                                    onClick={() => setFilterStatus(tab.id)}
+                                    onClick={() => setFilterCategory(tab.id)}
                                     className={`px-4 py-2.5 rounded-xl font-semibold text-sm transition-all whitespace-nowrap ${
-                                        filterStatus === tab.id
+                                        filterCategory === tab.id
                                             ? "bg-green-600 text-white shadow-md shadow-green-600/10"
                                             : "bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100"
                                     }`}
@@ -156,12 +173,10 @@ export default function MarketplaceProductsPage() {
                 {products.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {products.map((product) => {
-                            let displayStatus: string = product.status;
-                            if (product.status === "active" && product.availableQuantity < 50 && product.availableQuantity > 0) {
-                                displayStatus = "low_stock";
-                            }
-                            const statusConfig = getStatusConfig(displayStatus);
+                            const stockConfig = getStockConfig(product.availableQuantity);
                             const retailPrice = product.pricingTiers?.find((t: any) => t.type === "retail")?.price || product.pricingTiers?.[0]?.price || 0;
+                            const categoryObj = CATEGORY_MAP.find(c => c.id === product.category);
+                            const categoryLabel = categoryObj ? categoryObj.label : product.category;
 
                             return (
                                 <div key={product.id} className="bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-xl border border-slate-100 hover:border-slate-200/80 transition-all duration-300 hover:-translate-y-1.5 h-full flex flex-col group">
@@ -179,10 +194,10 @@ export default function MarketplaceProductsPage() {
                                                 <Package className="w-16 h-16" />
                                             </div>
                                         )}
-                                        {/* Status Badge */}
+                                        {/* Stock Badge */}
                                         <div className="absolute top-4 left-4">
-                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${statusConfig.bg}`}>
-                                                {statusConfig.label}
+                                            <span className={`px-3 py-1.5 rounded-full text-xs font-bold shadow-sm backdrop-blur-md ${stockConfig.bg}`}>
+                                                {stockConfig.label}
                                             </span>
                                         </div>
                                         {/* Export Ready Badge */}
@@ -199,7 +214,7 @@ export default function MarketplaceProductsPage() {
                                     <div className="p-6 flex-1 flex flex-col">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                                                <span>{product.category}</span>
+                                                <span>{categoryLabel}</span>
                                                 <span>•</span>
                                                 <div className="flex items-center gap-1">
                                                     <MapPin className="w-3.5 h-3.5" />
@@ -246,20 +261,12 @@ export default function MarketplaceProductsPage() {
                                                 <div className="text-xs text-slate-400 font-semibold">per {product.unit}</div>
                                             </div>
                                             
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 w-1/2">
                                                 <Link
                                                     href={`/marketplace/products/${product.id}`}
-                                                    className="p-3 text-slate-600 hover:text-green-600 bg-slate-50 hover:bg-green-50 rounded-xl transition"
-                                                    title="View Public Listing"
+                                                    className="w-full text-center py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-600/10 hover:shadow-green-600/20 transition-all hover:scale-[1.02] active:scale-95"
                                                 >
-                                                    <Eye className="w-5 h-5" />
-                                                </Link>
-                                                <Link
-                                                    href={`/marketplace/seller/products/${product.id}/edit`}
-                                                    className="flex items-center gap-2 px-5 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg shadow-green-600/10 hover:shadow-green-600/20 transition-all hover:scale-[1.02] active:scale-95"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                    <span>Edit</span>
+                                                    View Details
                                                 </Link>
                                             </div>
                                         </div>
@@ -276,23 +283,30 @@ export default function MarketplaceProductsPage() {
                             <p className="text-slate-500 max-w-md mx-auto mb-6">
                                 {searchQuery 
                                     ? "We couldn't find any products matching your search query. Try adjusting your search term."
-                                    : "You haven't listed any products under this category yet. List your first agricultural product to start selling!"
+                                    : "No agricultural products found in this category. Try exploring other categories or check back later!"
                                 }
                             </p>
                             {searchQuery ? (
                                 <button
-                                    onClick={() => { setSearchQuery(""); setFilterStatus("all"); }}
+                                    onClick={() => { setSearchQuery(""); setFilterCategory("all"); }}
                                     className="px-6 py-2.5 bg-green-50 text-green-700 font-bold rounded-xl hover:bg-green-100 transition"
                                 >
                                     Clear Search
                                 </button>
-                            ) : (
+                            ) : isSeller ? (
                                 <Link
                                     href="/marketplace/sell/create"
                                     className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition"
                                 >
                                     <Plus className="w-5 h-5" />
                                     Add Your First Product
+                                </Link>
+                            ) : (
+                                <Link
+                                    href="/marketplace/onboarding"
+                                    className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-lg transition"
+                                >
+                                    Become a Seller
                                 </Link>
                             )}
                         </div>
@@ -303,7 +317,7 @@ export default function MarketplaceProductsPage() {
                 {loading && products.length === 0 && (
                     <div className="py-24 flex flex-col items-center justify-center gap-4 text-slate-500">
                         <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
-                        <p className="font-semibold text-sm">Loading your products...</p>
+                        <p className="font-semibold text-sm">Loading products...</p>
                     </div>
                 )}
 
@@ -331,17 +345,26 @@ export default function MarketplaceProductsPage() {
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.1),transparent_50%)]" />
                     <div className="relative z-10">
                         <h2 className="text-3xl font-bold mb-4">
-                            Expand Your Inventory
+                            {isSeller ? "List Your Commodities" : "Start Trading on Easy Market"}
                         </h2>
                         <p className="text-slate-300 text-lg mb-8 max-w-2xl mx-auto">
-                            List new produce types or increase availability to match demand from local and international buyers
+                            {isSeller 
+                                ? "List new produce types or increase availability to match demand from local and international buyers."
+                                : "Join thousands of farmers and buyers across Nigeria. Secure escrow payments and verified delivery."
+                            }
                         </p>
                         <Link
-                            href="/marketplace/sell/create"
+                            href={isSeller ? "/marketplace/sell/create" : "/marketplace/onboarding"}
                             className="inline-flex items-center gap-2 px-8 py-4 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-xl shadow-lg hover:shadow-green-600/20 transition-all hover:scale-105 active:scale-95"
                         >
-                            <Plus className="w-5 h-5" />
-                            List Another Product
+                            {isSeller ? (
+                                <>
+                                    <Plus className="w-5 h-5" />
+                                    List a Product
+                                </>
+                            ) : (
+                                "Become a Seller"
+                            )}
                         </Link>
                     </div>
                 </div>
