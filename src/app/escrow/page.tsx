@@ -283,7 +283,7 @@ export default function EscrowDashboardPage() {
                                             Transaction #{transaction.id ? transaction.id.slice(0, 8) : '...'}
                                         </h3>
                                         <p className="text-2xl font-bold text-[#1358ec]">
-                                            {formatCurrency(transaction.amount)}
+                                            {formatCurrency(transaction.amount ?? transaction.grossAmount)}
                                         </p>
                                     </div>
                                     <div className="text-right text-sm text-slate-500">

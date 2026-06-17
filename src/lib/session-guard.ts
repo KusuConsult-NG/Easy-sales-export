@@ -156,12 +156,15 @@ export async function requireSession(): Promise<
         }
 
         // Force-sync live roles and serviceRegistrations from database/cache over stale JWT roles
-        if (data.roles) {
-            session.user.roles = data.roles;
-        }
-        if (data.serviceRegistrations) {
-            session.user.serviceRegistrations = data.serviceRegistrations;
-        }
+        // via a cloned session object (NextAuth v5 session objects are read-only)
+        const clonedSession = {
+            ...session,
+            user: {
+                ...session.user,
+                roles: data?.roles || (session.user as any).roles || [],
+                serviceRegistrations: data?.serviceRegistrations || (session.user as any).serviceRegistrations || null
+            }
+        };
 
         // Check for password change requirement (Legacy Reset Bypass)
         if (data.requiresPasswordChange) {
@@ -184,6 +187,13 @@ export async function requireSession(): Promise<
                 shouldRedirectToPasswordReset = true;
             }
         }
+
+        if (shouldRedirectToPasswordReset) {
+            const { redirect } = await import("next/navigation");
+            redirect("/auth/reset-legacy-password");
+        }
+
+        return { session: clonedSession as ValidSession, error: null };
     }
 
     if (shouldRedirectToPasswordReset) {

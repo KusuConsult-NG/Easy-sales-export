@@ -44,6 +44,8 @@ export {
     getUserProgressAction,
     getUserAggregateProgressAction,
     getLiveSessionsAction,
+    startAcademyLiveSessionAction,
+    endAcademyLiveSessionAction,
     submitAcademyApplicationAction,
     createCourseAction,
     updateCourseAction,

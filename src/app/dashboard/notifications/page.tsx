@@ -44,7 +44,7 @@ interface Notification {
  * ────────────────────────────────────────────────────────────── */
 function getIcon(type: NotifType) {
     switch (type) {
-        case "order": case "transaction": return <Package className="w-5 h-5" />;
+        case "order": case "transaction": case "marketplace": return <Package className="w-5 h-5" />;
         case "payment": case "payout": return <DollarSign className="w-5 h-5" />;
         case "warning": case "dispute": return <AlertCircle className="w-5 h-5" />;
         case "wave": return <TrendingUp className="w-5 h-5" />;
@@ -60,6 +60,7 @@ function getIcon(type: NotifType) {
 function getIconColor(type: NotifType): string {
     switch (type) {
         case "order": case "transaction": return "text-blue-600 bg-blue-100";
+        case "marketplace": return "text-indigo-600 bg-indigo-100";
         case "payment": case "payout": return "text-green-600 bg-green-100";
         case "warning": return "text-yellow-600 bg-yellow-100";
         case "error": case "dispute": return "text-red-600 bg-red-100";
@@ -260,8 +261,8 @@ export default function NotificationsPage() {
                         {filtered.map((notif) => (
                             <div
                                 key={notif.id}
-                                className={`bg-white rounded-xl p-5 shadow-sm transition hover:shadow-md ${
-                                    !notif.read ? "border-l-4 border-blue-500" : "border border-slate-100"
+                                className={`rounded-xl p-5 shadow-sm transition hover:shadow-md ${
+                                    !notif.read ? "border-l-4 border-blue-500 bg-blue-50/20" : "border border-slate-100 bg-white"
                                 }`}
                             >
                                 <div className="flex items-start gap-4">
@@ -273,14 +274,14 @@ export default function NotificationsPage() {
                                     {/* Content */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-start justify-between gap-3 mb-1">
-                                            <h3 className={`font-bold text-sm ${!notif.read ? "text-gray-900" : "text-gray-600"}`}>
+                                            <h3 className={`font-bold text-sm break-words ${!notif.read ? "text-gray-900" : "text-gray-600"}`}>
                                                 {notif.title}
                                             </h3>
                                             <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">
                                                 {formatDistanceToNow(toDate(notif.createdAt), { addSuffix: true })}
                                             </span>
                                         </div>
-                                        <p className="text-sm text-gray-500 leading-relaxed mb-3">
+                                        <p className="text-sm text-gray-500 leading-relaxed mb-3 break-words">
                                             {notif.message}
                                         </p>
 

@@ -310,6 +310,7 @@ export interface EscrowTransaction {
 
     // Amount
     amount: number;
+    grossAmount?: number;
     platformFee?: number;
     sellerAmount?: number;
 

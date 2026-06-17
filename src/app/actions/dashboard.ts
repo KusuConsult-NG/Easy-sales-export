@@ -98,28 +98,44 @@ export async function getDashboardStatsAction(): Promise<DashboardActionState> {
             .where("status", "in", ["in_transit", "delivered"])
             .get();
 
+        // 5b. Marketplace Escrow
+        const marketplaceEscrowPromise = db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+            .where("participants", "array-contains", userId)
+            .where("status", "in", ["funded", "in_transit", "delivered", "disputed"])
+            .get();
+
         // EXECUTE PARALLEL
         const [
             totalExportsSnap,
             activeOrdersSnap,
             enrollmentsSnap,
             userDoc,
-            escrowDocsSnap
+            escrowDocsSnap,
+            marketplaceEscrowSnap
         ] = await Promise.all([
             totalExportsPromise,
             activeOrdersPromise,
             enrollmentsPromise,
             userDocPromise,
-            escrowDocsPromise
+            escrowDocsPromise,
+            marketplaceEscrowPromise
         ]);
 
-        // Process Restults
+        // Process Results
         const totalExports = totalExportsSnap.data().count;
         const activeOrders = activeOrdersSnap.data().count;
         const academyEnrollments = enrollmentsSnap.data().count;
 
-        const totalEscrow = escrowDocsSnap.docs
+        const exportEscrow = escrowDocsSnap.docs
             .reduce((sum, doc) => sum + (doc.data().amount || 0), 0);
+
+        const marketplaceEscrow = marketplaceEscrowSnap.docs
+            .reduce((sum, doc) => {
+                const data = doc.data();
+                return sum + (data.amount || data.grossAmount || 0);
+            }, 0);
+
+        const totalEscrow = exportEscrow + marketplaceEscrow;
 
         let cooperativeSavings = 0;
         const userData = userDoc.data();
@@ -231,12 +247,17 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
 
         const userId = session.user.id;
 
-        // Fetch all export windows with escrow
-        const exportsSnapshot = await db
-            .collection(COLLECTIONS.EXPORT_WINDOWS)
-            .where("userId", "==", userId)
-            .where("status", "in", ["in_transit", "delivered"])
-            .get();
+        // Fetch both export windows and marketplace escrows in parallel
+        const [exportsSnapshot, marketplaceSnapshot] = await Promise.all([
+            db.collection(COLLECTIONS.EXPORT_WINDOWS)
+                .where("userId", "==", userId)
+                .where("status", "in", ["in_transit", "delivered"])
+                .get(),
+            db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
+                .where("participants", "array-contains", userId)
+                .where("status", "in", ["funded", "in_transit", "delivered", "disputed"])
+                .get()
+        ]);
 
         let totalLocked = 0;
         let pendingRelease = 0;
@@ -245,6 +266,7 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
 
         const now = new Date();
 
+        // 1. Process Export Escrows
         exportsSnapshot.forEach(docSnapshot => { const data = docSnapshot.data();
             const amount = data.amount || 0;
             const escrowReleaseDate: Date | undefined = data.escrowReleaseDate?.toDate?.();
@@ -266,6 +288,20 @@ export async function getEscrowStatusAction(): Promise<EscrowActionState> { try 
                         nextReleaseDateMs = escrowReleaseDate.getTime();
                     }
                 }
+            }
+        });
+
+        // 2. Process Marketplace Escrows
+        marketplaceSnapshot.forEach(docSnapshot => {
+            const data = docSnapshot.data();
+            const amount = data.amount || data.grossAmount || 0;
+
+            totalLocked += amount;
+
+            // If buyer has confirmed receipt (escrow status "delivered"),
+            // the funds are pending release by admin payout.
+            if (data.status === "delivered") {
+                pendingRelease += amount;
             }
         });
 

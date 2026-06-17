@@ -9,6 +9,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import type { ActionResponse } from "@/lib/safe-action";
 import { ProductSchema } from "@/lib/validations/marketplace";
+import { notifyOrderCancelled } from "@/lib/marketplace-notifications";
 
 // ============================================================================
 // PRODUCT BROWSING
@@ -274,5 +275,92 @@ async function _confirmOrderReceiptAction(orderId: string): Promise<ActionRespon
     }
 }
 export const confirmOrderReceiptAction = withSafeAction("confirmOrderReceiptAction", _confirmOrderReceiptAction);
+
+/**
+ * Cancel a pending order (reverts product inventory and updates status)
+ */
+async function _cancelOrderAction(orderId: string): Promise<ActionResponse<{ success: boolean }>> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: "Unauthorized", data: null };
+        const { session } = sessionResult;
+        const userId = session.user.id;
+
+        const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
+        const orderDoc = await orderRef.get();
+
+        if (!orderDoc.exists) {
+            return { success: false as const, error: "Order not found", data: null };
+        }
+
+        const orderData = orderDoc.data();
+        if (orderData?.buyerId !== userId) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        if (orderData?.status !== "pending_payment") {
+            return { success: false as const, error: "Only pending orders can be cancelled", data: null };
+        }
+
+        const items = orderData.items || [];
+        const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS).where("orderId", "==", orderId).get();
+
+        await db.runTransaction(async (transaction) => {
+            // 1. Revert product quantities
+            for (const item of items) {
+                if (item.productId && item.quantity) {
+                    const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                    const productDoc = await transaction.get(productRef);
+                    if (productDoc.exists) {
+                        const productData = productDoc.data();
+                        const currentQty = productData?.availableQuantity || 0;
+                        transaction.update(productRef, {
+                            availableQuantity: currentQty + item.quantity,
+                            _version: FieldValue.increment(1),
+                            updatedAt: FieldValue.serverTimestamp()
+                        });
+                    }
+                }
+            }
+
+            // 2. Update order status -> cancelled
+            transaction.update(orderRef, {
+                status: "cancelled",
+                paymentStatus: "cancelled",
+                updatedAt: FieldValue.serverTimestamp(),
+                _version: FieldValue.increment(1)
+            });
+
+            // 3. Update escrow transactions status -> cancelled
+            escrowQuery.docs.forEach(doc => {
+                transaction.update(doc.ref, {
+                    status: "cancelled",
+                    updatedAt: FieldValue.serverTimestamp(),
+                    _version: FieldValue.increment(1)
+                });
+            });
+        });
+
+        // 4. Trigger notification
+        const primarySellerId = items[0]?.sellerId;
+        if (primarySellerId) {
+            notifyOrderCancelled({
+                buyerId: userId,
+                sellerId: primarySellerId,
+                orderId,
+                orderNumber: orderData.orderNumber || orderId,
+                reason: "Cancelled by buyer",
+                cancelledBy: "buyer"
+            }).catch((e) => logger.error("[cancelOrderAction] Notification failed:", { userId, error: e }));
+        }
+
+        return { error: null, success: true as const, data: { success: true } };
+    } catch (error) {
+        logger.error("Cancel order error:", { userId: sessionResult?.session?.user?.id, orderId, error: error instanceof Error ? error.message : String(error) });
+        return { success: false as const, error: "Failed to cancel order", data: null };
+    }
+}
+export const cancelOrderAction = withSafeAction("cancelOrderAction", _cancelOrderAction);
 
 

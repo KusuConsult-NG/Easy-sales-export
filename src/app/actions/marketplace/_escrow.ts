@@ -30,6 +30,7 @@ export interface EscrowTransaction { id?: string;
     sellerId: string;
     sellerEmail: string;
     amount: number;
+    grossAmount?: number;
     productName: string;
     productDescription: string;
     /** participants[] is required so getUserEscrowTransactions' array-contains query resolves correctly */

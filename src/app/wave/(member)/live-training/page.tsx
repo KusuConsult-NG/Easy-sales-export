@@ -31,7 +31,7 @@ export default function WAVELiveTrainingPage() {
                 const res = await fetch("/api/wave/training-sessions");
                 if (res.ok) {
                     const data = await res.json();
-                    const all: TrainingSession[] = data.sessions || [];
+                    const all: TrainingSession[] = data.data?.sessions || [];
                     setSessions(all);
 
                     // Auto-activate a session that started in the last 2h and ends within durationMinutes

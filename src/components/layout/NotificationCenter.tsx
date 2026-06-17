@@ -251,14 +251,14 @@ export default function NotificationCenter() {
                                                         </div>
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-start justify-between gap-2 mb-1">
-                                                                <p className="font-semibold text-sm text-slate-900">
+                                                                <p className="font-semibold text-sm text-slate-900 break-words">
                                                                     {notification.title}
                                                                 </p>
                                                                 {!notification.read && (
                                                                     <div className="w-2 h-2 bg-blue-600 rounded-full shrink-0 mt-1" />
                                                                 )}
                                                             </div>
-                                                            <p className="text-xs text-slate-600 mb-2">
+                                                            <p className="text-xs text-slate-600 mb-2 break-words">
                                                                 {notification.message}
                                                             </p>
                                                             <p className="text-xs text-slate-500">

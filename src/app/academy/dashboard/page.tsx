@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
-import { Award, BookOpen, Clock, TrendingUp, Calendar, Download, Loader2, ChevronLeft } from "lucide-react";
+import { Award, BookOpen, Clock, TrendingUp, Calendar, Download, Loader2, ChevronLeft, Video } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { checkAcademyPaymentStatusAction } from "@/app/actions/academy";
+import { checkAcademyPaymentStatusAction, getLiveSessionsAction, type LiveSession } from "@/app/actions/academy";
 import { useMembershipStatus } from "@/hooks/useMembershipStatus";
 import { formatLocalDate } from "@/lib/date-utils";
 
@@ -45,6 +45,7 @@ export default function AcademyDashboardPage() {
         learningStreak: 0,
     });
     const [isUnpaid, setIsUnpaid] = useState(false);
+    const [liveSessions, setLiveSessions] = useState<LiveSession[]>([]);
 
     const { data: sessionData, update: updateSession } = useSession();
     const userId = (sessionData?.user as any)?.id;
@@ -100,6 +101,13 @@ export default function AcademyDashboardPage() {
                 setCourses(data.courses || []);
                 setCertificates(data.certificates || []);
                 setStats(data.stats || stats);
+            }
+
+            // Fetch live sessions
+            const liveRes = await getLiveSessionsAction();
+            if (liveRes.success && liveRes.data) {
+                const active = liveRes.data.filter((s: any) => s.status === "live");
+                setLiveSessions(active);
             }
         } catch (error) {
             logger.error("Failed to fetch dashboard data:", error);
@@ -173,6 +181,38 @@ export default function AcademyDashboardPage() {
                         Track your progress and achievements
                     </p>
                 </div>
+
+                {/* Active Live Sessions Banner */}
+                {liveSessions.length > 0 && (
+                    <div className="mb-8 space-y-4">
+                        {liveSessions.map((session) => (
+                            <div key={session.id} className="bg-red-50 border border-red-200 rounded-2xl p-6 shadow-md flex flex-col md:flex-row items-center justify-between gap-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center shrink-0">
+                                        <Video className="w-6 h-6 text-red-600 animate-pulse" />
+                                    </div>
+                                    <div>
+                                        <span className="inline-block text-[10px] bg-red-600 text-white font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse mb-1">
+                                            Live Now
+                                        </span>
+                                        <h3 className="font-bold text-slate-900 text-lg">
+                                            {session.title}
+                                        </h3>
+                                        <p className="text-sm text-slate-600">
+                                            Instructor: {session.instructor || "Super Admin"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => router.push(`/academy/live/${session.courseId}`)}
+                                    className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl text-sm transition flex items-center gap-2"
+                                >
+                                    Join Live Session
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

@@ -12,6 +12,7 @@ import {
     Search,
     Filter,
     Loader2,
+    Users,
 } from "lucide-react";
 import { checkWaveEligibilityAction } from "@/app/actions/wave";
 import { getResourcesAction, downloadResourceAction, type WaveResource } from "@/app/actions/resource-actions";
@@ -43,20 +44,21 @@ export default function WaveResourcesPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [downloading, setDownloading] = useState<string | null>(null);
 
-    // Check WAVE eligibility
+    // Check enrollment eligibility
     useEffect(() => {
+        if (sessionStatus === "loading") return;
+
+        if (sessionStatus === "unauthenticated" || !session?.user?.id) {
+            router.push("/auth/login?callbackUrl=/wave/resources");
+            return;
+        }
+
         async function checkEligibility() {
-            if (sessionStatus === "loading") return;
-
-            if (!session?.user?.id) {
-                router.push("/auth/login");
-                return;
-            }
-
-            const result = await checkWaveEligibilityAction(session.user.id);
-
-            if (!result.success || !result.data?.eligible) {
-                router.push("/wave/access-denied");
+            setChecking(true);
+            const eligibility = await checkWaveEligibilityAction(session!.user.id);
+            if (!eligibility.success) {
+                // If status is not active, redirect to wave application/landing page
+                router.push("/wave/application");
                 return;
             }
 
@@ -67,7 +69,6 @@ export default function WaveResourcesPage() {
     }, [session, sessionStatus, router]);
 
     // Load resources
-    // Load resources
     useEffect(() => {
         async function loadResources() {
             if (checking) return;
@@ -75,8 +76,15 @@ export default function WaveResourcesPage() {
             setLoading(true);
             const data = await getResourcesAction();
             if (data.success && data.data && data.data.length > 0) {
-                setResources(data.data);
-                setFilteredResources(data.data);
+                // Map the default resources to guides if their title matches
+                const mapped = data.data.map((r: WaveResource) => {
+                    if (r.title.includes("WAVE Cooperative Legal Framework Agreement")) {
+                        return { ...r, category: "guide" as const };
+                    }
+                    return r;
+                });
+                setResources(mapped);
+                setFilteredResources(mapped);
             } else {
                 const defaultResources: WaveResource[] = [
                     {
@@ -99,7 +107,7 @@ export default function WaveResourcesPage() {
                         id: "default-template-1",
                         title: "WAVE Cooperative Legal Framework Agreement",
                         description: "A standard legal partnership template designed for female agricultural cooperatives to establish governance, profit sharing, and membership protocols.",
-                        category: "template",
+                        category: "guide",
                         fileUrl: "https://www.ilo.org/wcmsp5/groups/public/---ed_emp/---emp_ent/---coop/documents/instructionalmaterial/wcms_645415.pdf",
                         fileName: "cooperative_legal_framework.pdf",
                         fileSize: 1258291,
@@ -108,7 +116,7 @@ export default function WaveResourcesPage() {
                         uploadedBy: "system",
                         uploadedByName: "System Admin",
                         downloads: 89,
-                        tags: ["cooperative", "legal", "template"],
+                        tags: ["cooperative", "legal", "guide"],
                         isActive: true
                     },
                     {
@@ -163,6 +171,15 @@ export default function WaveResourcesPage() {
 
     async function handleDownload(resource: WaveResource) {
         if (!resource.id) return;
+
+        if (resource.title.includes("Agripreneur Export Masterclass Guide")) {
+            router.push("/academy");
+            return;
+        }
+        if (resource.title.includes("WAVE Cooperative Legal Framework Agreement")) {
+            router.push("/cooperatives");
+            return;
+        }
 
         setDownloading(resource.id);
 
@@ -311,7 +328,7 @@ export default function WaveResourcesPage() {
                                         <span>{resource.downloads} downloads</span>
                                     </div>
 
-                                    {/* Download Button */}
+                                    {/* Download/Action Button */}
                                     <button
                                         onClick={() => handleDownload(resource)}
                                         disabled={downloading === resource.id}
@@ -321,6 +338,16 @@ export default function WaveResourcesPage() {
                                             <>
                                                 <Loader2 className="w-5 h-5 animate-spin" />
                                                 <span>Downloading...</span>
+                                            </>
+                                        ) : resource.title.includes("Agripreneur Export Masterclass Guide") ? (
+                                            <>
+                                                <BookOpen className="w-5 h-5" />
+                                                <span>Go to Academy</span>
+                                            </>
+                                        ) : resource.title.includes("WAVE Cooperative Legal Framework Agreement") ? (
+                                            <>
+                                                <Users className="w-5 h-5" />
+                                                <span>Go to Cooperatives</span>
                                             </>
                                         ) : (
                                             <>

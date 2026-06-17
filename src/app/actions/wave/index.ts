@@ -73,6 +73,7 @@ export {
     deleteResourceAction,
     createTrainingEventAction,
     updateTrainingEventAction,
+    startWaveLiveSessionAction,
     getEventParticipantsAction,
     getWaveApplicationsAction,
     approveWaveApplicationAction,

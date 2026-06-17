@@ -21,6 +21,7 @@ import {
     createTrainingEventAction,
     updateTrainingEventAction,
     getEventParticipantsAction,
+    startWaveLiveSessionAction,
 } from "@/app/actions/wave";
 import { getWaveTrainingEventsAction, type WaveTrainingEvent } from "@/app/actions/wave";
 import { useToast } from "@/contexts/ToastContext";
@@ -168,6 +169,24 @@ export default function AdminWaveTrainingPage() {
         }
     }
 
+    async function handleGoLive(event: WaveTrainingEvent) {
+        if (!event.id) return;
+        const confirmGoLive = confirm(`Are you sure you want to go live for "${event.title}"?`);
+        if (!confirmGoLive) return;
+
+        try {
+            const result = await startWaveLiveSessionAction(event.id);
+            if (result.success) {
+                showToast("Live session started! Redirecting to classroom...", "success");
+                router.push("/wave/live-training");
+            } else {
+                showToast(result.error || "Failed to start live session", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred starting live session", "error");
+        }
+    }
+
     function getStatusColor(status: string) {
         const option = STATUS_OPTIONS.find((s) => s.id === status);
         return option?.color || "gray";
@@ -305,6 +324,16 @@ export default function AdminWaveTrainingPage() {
                                                             </div>
 
                                                             <div className="flex items-center gap-2 ml-4">
+                                                                {event.status === "upcoming" && (
+                                                                    <button
+                                                                        onClick={() => handleGoLive(event)}
+                                                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+                                                                        title="Go Live"
+                                                                    >
+                                                                        <Video className="w-4 h-4 animate-pulse" />
+                                                                        Go Live
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => event.id && viewParticipants(event.id)}
                                                                     className="p-2 hover:bg-gray-100 rounded-lg transition"

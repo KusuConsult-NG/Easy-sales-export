@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Package, Clock, CheckCircle, XCircle, Search, Eye, AlertCircle, Loader2, ShieldCheck, Truck } from "lucide-react";
 import Link from "next/link";
-import { getBuyerOrdersAction, confirmOrderReceiptAction } from "@/app/actions/marketplace";
+import { getBuyerOrdersAction, confirmOrderReceiptAction, cancelOrderAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency } from "@/lib/utils";
 import { formatLocalDate } from "@/lib/date-utils";
@@ -93,6 +93,25 @@ export default function OrdersPage() {
         }
     };
 
+    async function handleCancelOrder(orderId: string) {
+        if (!confirm("Are you sure you want to cancel this order? This will release reserved inventory and cancel any pending escrow.")) return;
+
+        setProcessingId(orderId);
+        try {
+            const result = await cancelOrderAction(orderId);
+            if (result.success) {
+                showToast("Order cancelled successfully", "success");
+                setOrders(prev => prev.map(o => o.orderId === orderId ? { ...o, status: 'cancelled' } : o));
+            } else {
+                showToast(result.error || "Failed to cancel order", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred", "error");
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
     const getStatusConfig = (status: string) => {
         const configs = {
             pending_payment: {
@@ -168,7 +187,7 @@ export default function OrdersPage() {
 
                         {/* Status Filter */}
                         <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-                            {["all", "processing", "in_transit", "delivered"].map((status) => (
+                            {["all", "pending_payment", "processing", "in_transit", "delivered", "cancelled"].map((status) => (
                                 <button
                                     key={status}
                                     onClick={() => setFilterStatus(status)}
@@ -270,6 +289,21 @@ export default function OrdersPage() {
                                             <Eye className="w-4 h-4" />
                                             View Details
                                         </Link>
+
+                                        {order.status === "pending_payment" && (
+                                            <button
+                                                onClick={() => handleCancelOrder(order.orderId)}
+                                                disabled={processingId === order.orderId}
+                                                className="px-4 py-2 border border-red-500 text-red-500 hover:bg-red-50 rounded-lg text-sm font-bold disabled:opacity-50 flex items-center gap-1.5 transition"
+                                            >
+                                                {processingId === order.orderId ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <XCircle className="w-4 h-4" />
+                                                )}
+                                                Cancel Order
+                                            </button>
+                                        )}
 
                                         {(order.status === "processing" || order.status === "in_transit" || order.status === "shipped") && order.paymentStatus === "escrow_held" && (
                                             <button

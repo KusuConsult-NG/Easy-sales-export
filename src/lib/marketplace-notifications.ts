@@ -129,13 +129,13 @@ export async function notifyOrderPlaced(params: {
         }),
 
         // → All admin users (marketplace admin oversight)
-        _fanOut(adminIds, {
-            type: "marketplace",
-            title: `New Marketplace Order — #${orderNumber}`,
-            message: `A new order worth ${formatted} has been placed on the marketplace.`,
-            link: `/admin/marketplace/orders/${orderId}`,
-            linkText: "Review Order",
-        }),
+        // _fanOut(adminIds, {
+        //     type: "marketplace",
+        //     title: `New Marketplace Order — #${orderNumber}`,
+        //     message: `A new order worth ${formatted} has been placed on the marketplace.`,
+        //     link: `/admin/marketplace/orders/${orderId}`,
+        //     linkText: "Review Order",
+        // }),
     ]);
 }
 
@@ -259,13 +259,13 @@ export async function notifyOrderDelivered(params: {
             link: `/marketplace/seller/orders/${orderId}`,
             linkText: "View Order",
         }),
-        _fanOut(adminIds, {
-            type: "marketplace",
-            title: `Order Delivered — #${orderNumber}`,
-            message: `Order #${orderNumber} has been delivered. Awaiting buyer confirmation.`,
-            link: `/admin/marketplace/orders/${orderId}`,
-            linkText: "View Order",
-        }),
+        // _fanOut(adminIds, {
+        //     type: "marketplace",
+        //     title: `Order Delivered — #${orderNumber}`,
+        //     message: `Order #${orderNumber} has been delivered. Awaiting buyer confirmation.`,
+        //     link: `/admin/marketplace/orders/${orderId}`,
+        //     linkText: "View Order",
+        // }),
     ]);
 }
 
@@ -302,13 +302,13 @@ export async function notifyOrderCancelled(params: {
             link: `/marketplace/seller/orders/${orderId}`,
             linkText: "View Order",
         }),
-        _fanOut(adminIds, {
-            type: "marketplace",
-            title: `Order Cancelled — #${orderNumber}`,
-            message: `Order #${orderNumber} was cancelled.${reasonNote}${byLabel}`,
-            link: `/admin/marketplace/orders/${orderId}`,
-            linkText: "View Order",
-        }),
+        // _fanOut(adminIds, {
+        //     type: "marketplace",
+        //     title: `Order Cancelled — #${orderNumber}`,
+        //     message: `Order #${orderNumber} was cancelled.${reasonNote}${byLabel}`,
+        //     link: `/admin/marketplace/orders/${orderId}`,
+        //     linkText: "View Order",
+        // }),
     ]);
 }
 
@@ -376,13 +376,13 @@ export async function notifyVillageMarketCreated(params: {
             link: `/marketplace/village-market/${eventId}`,
             linkText: "View Event",
         }),
-        _fanOut(adminIds, {
-            type: "marketplace",
-            title: `Village Market Created — ${eventTitle}`,
-            message: `Event scheduled for ${dateStr}.`,
-            link: `/admin/marketplace/village-market/${eventId}`,
-            linkText: "Manage Event",
-        }),
+        // _fanOut(adminIds, {
+        //     type: "marketplace",
+        //     title: `Village Market Created — ${eventTitle}`,
+        //     message: `Event scheduled for ${dateStr}.`,
+        //     link: `/admin/marketplace/village-market/${eventId}`,
+        //     linkText: "Manage Event",
+        // }),
     ]);
 }
 

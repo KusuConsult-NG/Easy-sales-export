@@ -14,7 +14,7 @@ import {
     Star, Copy, Check
 } from "lucide-react";
 import { getOrderByIdAction } from "@/app/actions/orders";
-import { confirmOrderReceiptAction } from "@/app/actions/marketplace";
+import { confirmOrderReceiptAction, cancelOrderAction } from "@/app/actions/marketplace";
 import { useToast } from "@/contexts/ToastContext";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/marketplace";
@@ -57,6 +57,24 @@ export default function BuyerOrderDetailPage() {
                 setOrder(prev => prev ? { ...prev, status: "delivered" as OrderStatus, buyerConfirmed: true } : prev);
             } else {
                 showToast((result as any).error || "Failed to confirm", "error");
+            }
+        } catch {
+            showToast("An error occurred", "error");
+        } finally {
+            setConfirming(false);
+        }
+    };
+
+    async function handleCancelOrder() {
+        if (!confirm("Are you sure you want to cancel this order? This will release reserved inventory and cancel any pending escrow.")) return;
+        setConfirming(true);
+        try {
+            const result = await cancelOrderAction(id as string);
+            if (result.success) {
+                showToast("Order cancelled successfully", "success");
+                setOrder(prev => prev ? { ...prev, status: "cancelled" as OrderStatus } : prev);
+            } else {
+                showToast((result as any).error || "Failed to cancel order", "error");
             }
         } catch {
             showToast("An error occurred", "error");
@@ -289,6 +307,19 @@ export default function BuyerOrderDetailPage() {
 
                 {/* Actions */}
                 <div className="flex flex-col sm:flex-row gap-3">
+                    {order.status === "pending_payment" && (
+                        <button
+                            onClick={handleCancelOrder}
+                            disabled={confirming}
+                            className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 shadow-lg shadow-red-600/20 disabled:opacity-50 transition-all"
+                        >
+                            {confirming
+                                ? <Loader2 className="w-5 h-5 animate-spin" />
+                                : <XCircle className="w-5 h-5" />}
+                            Cancel Order
+                        </button>
+                    )}
+
                     {canConfirm && (
                         <button
                             onClick={handleConfirmReceipt}

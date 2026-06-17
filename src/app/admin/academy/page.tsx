@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw } from "lucide-react";
+import { Search, BookOpen, Edit, Trash2, Users, Loader2, RefreshCw, Video } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { getCoursesAction, deleteCourseAction, type Course } from "@/app/actions/academy";
+import { useRouter } from "next/navigation";
+import { getCoursesAction, deleteCourseAction, startAcademyLiveSessionAction, type Course } from "@/app/actions/academy";
 import { toast } from "sonner";
 import { Timestamp } from "firebase/firestore";
 import { useAdminData } from "@/hooks/useAdminData";
 import { formatDate } from "@/lib/utils";
 
 export default function AcademyAdminPage() {
+    const router = useRouter();
     const {
         data: courses,
         loading: isLoading,
@@ -70,6 +72,24 @@ export default function AcademyAdminPage() {
             }
         } catch (error: any) {
             toast.error("Failed to delete course");
+        }
+    };
+
+    const handleGoLive = async (course: Course) => {
+        if (!course.id) return;
+        const confirmGoLive = confirm(`Are you sure you want to go live for "${course.title}"?`);
+        if (!confirmGoLive) return;
+
+        try {
+            const res = await startAcademyLiveSessionAction(course.id);
+            if (res.success) {
+                toast.success("Live session started! Redirecting to classroom...");
+                router.push(`/academy/live/${course.id}`);
+            } else {
+                toast.error(res.error || "Failed to start live session");
+            }
+        } catch (error) {
+            toast.error("Failed to start live session");
         }
     };
 
@@ -154,6 +174,14 @@ export default function AcademyAdminPage() {
                                             Updated {formatDate(course.updatedAt)}
                                         </span>
                                         <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={() => handleGoLive(course)}
+                                                className="px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                                                title="Go Live"
+                                            >
+                                                <Video className="w-3.5 h-3.5 animate-pulse" />
+                                                Go Live
+                                            </button>
                                             <Link
                                                 href={`/admin/academy/${course.id}`}
                                                 className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
