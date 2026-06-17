@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect } from "react";
+import type { UserRole } from "@/lib/types/roles";
 import {
     Waves,
     Wheat,
@@ -98,7 +99,17 @@ export default function GetStartedPage() {
     }
 
     const isMale = session?.user?.gender?.toLowerCase() === "male";
-    const filteredModules = modules.filter(m => !(m.id === "wave" && isMale));
+    const roles = (session?.user?.roles as UserRole[]) || [];
+    const serviceRegistrations = session?.user?.serviceRegistrations || {};
+    const waveRegStatus = serviceRegistrations.wave?.status;
+    const hasWaveAccess = roles.includes("wave_participant") || 
+                          waveRegStatus === "approved" || 
+                          waveRegStatus === "active" || 
+                          waveRegStatus === "pending" || 
+                          waveRegStatus === "under_review" ||
+                          waveRegStatus === "revision_required";
+
+    const filteredModules = modules.filter(m => !(m.id === "wave" && isMale && !hasWaveAccess));
 
     return (
         <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 relative">

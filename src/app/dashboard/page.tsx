@@ -37,6 +37,14 @@ interface RecentNotification {
 /** Returns all platform modules with their dynamic application status */
 function getPlatformModules(serviceRegistrations: Record<string, any>, roles: UserRole[], gender?: string) {
     const isMale = gender?.toLowerCase() === "male";
+    const waveRegStatus = serviceRegistrations?.wave?.status;
+    const hasWaveAccess = roles.includes("wave_participant") || 
+                          waveRegStatus === "approved" || 
+                          waveRegStatus === "active" || 
+                          waveRegStatus === "pending" || 
+                          waveRegStatus === "under_review" ||
+                          waveRegStatus === "revision_required";
+
     const modulesDef = [
         {
             id: "academy",
@@ -98,7 +106,7 @@ function getPlatformModules(serviceRegistrations: Record<string, any>, roles: Us
             dashboardUrl: "/farm-nation/dashboard",
             pendingUrl: "/farm-nation/onboarding/pending",
         }
-    ].filter(mod => !(mod.id === "wave" && isMale));
+    ].filter(mod => !(mod.id === "wave" && isMale && !hasWaveAccess));
 
     return modulesDef.map(mod => {
         const registrationStatus = serviceRegistrations[mod.id]?.status 

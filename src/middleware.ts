@@ -61,8 +61,19 @@ const authMiddleware = auth((req: any) => {
     if (isLoggedIn) {
         const isMale = req.auth?.user?.gender?.toLowerCase() === "male";
         const userRoles = req.auth?.user?.roles || [];
+        const serviceRegs = req.auth?.user?.serviceRegistrations || {};
         const isAdmin = userRoles.includes("admin") || userRoles.includes("super_admin");
         const hasWaveRole = userRoles.includes("wave_participant");
+        
+        // Stale-safe check: also allow if serviceRegistrations.wave is approved/active/pending/reviewing.
+        const waveRegStatus = serviceRegs.wave?.status;
+        const hasWaveAccess = hasWaveRole || 
+                             waveRegStatus === "approved" || 
+                             waveRegStatus === "active" || 
+                             waveRegStatus === "pending" || 
+                             waveRegStatus === "under_review" ||
+                             waveRegStatus === "revision_required";
+
         const normalizedHostname = hostname.replace(/^www\./, "");
         
         let rewritePrefix = DOMAIN_MAP[normalizedHostname];
@@ -73,7 +84,7 @@ const authMiddleware = auth((req: any) => {
             }
         }
 
-        if (isMale && !isAdmin && !hasWaveRole && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
+        if (isMale && !isAdmin && !hasWaveAccess && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
             let hubOrigin = req.nextUrl.origin;
             if (normalizedHostname.endsWith(".easysalesexport.com")) {
                 hubOrigin = "https://www.easysalesexport.com";
