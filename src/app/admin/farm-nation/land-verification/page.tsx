@@ -21,7 +21,7 @@ type LandVerification = {
     totalPrice: number;
     price?: number;
     gpsCoordinates?: { latitude: number; longitude: number; };
-    documents: { landTitle: string; surveyPlan: string; taxClearance?: string; };
+    documents: any;
     images: string[];
     videoUrl?: string;
     verificationStatus: string;
@@ -30,6 +30,24 @@ type LandVerification = {
     verifiedBy?: string;
     verifiedAt?: Date;
 };
+
+function getNormalizedDocs(docs: any) {
+    if (!docs) return { landTitle: "", surveyPlan: "", taxClearance: "" };
+    if (Array.isArray(docs)) {
+        const landTitle = docs.find((url: string) => url && (url.includes("_title_") || url.includes("title"))) || docs[0] || "";
+        const surveyPlan = docs.find((url: string) => url && (url.includes("_survey_") || url.includes("survey"))) || docs[1] || "";
+        const taxClearance = docs.find((url: string) => url && (url.includes("_tax_") || url.includes("tax"))) || docs[2] || undefined;
+        return { landTitle, surveyPlan, taxClearance };
+    }
+    if (typeof docs === "object") {
+        return {
+            landTitle: docs.landTitle || "",
+            surveyPlan: docs.surveyPlan || "",
+            taxClearance: docs.taxClearance || undefined
+        };
+    }
+    return { landTitle: "", surveyPlan: "", taxClearance: "" };
+}
 
 export default function AdminLandVerificationPage() {
     const { showToast } = useToast();
@@ -53,6 +71,7 @@ export default function AdminLandVerificationPage() {
 
     const filterStatus = (filters.status as string) || "pending";
     const [selectedVerification, setSelectedVerification] = useState<LandVerification | null>(null);
+    const docs = selectedVerification ? getNormalizedDocs(selectedVerification.documents) : { landTitle: "", surveyPlan: "", taxClearance: "" };
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -446,12 +465,12 @@ export default function AdminLandVerificationPage() {
                                                     <FileText className="w-5 h-5" /> Legal Documents
                                                 </h3>
                                                 <div className="space-y-2">
-                                                    {selectedVerification.documents.landTitle && (
+                                                    {docs.landTitle && (
                                                         <div className="flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition group">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setPreviewUrl(selectedVerification.documents.landTitle);
+                                                                    setPreviewUrl(docs.landTitle);
                                                                     setPreviewTitle("Land Title Document");
                                                                 }}
                                                                 className="flex items-center gap-2 text-left"
@@ -459,17 +478,17 @@ export default function AdminLandVerificationPage() {
                                                                 <FileText className="w-5 h-5 text-blue-600" />
                                                                 <span className="text-sm font-semibold text-blue-700 group-hover:underline">Land Title Document</span>
                                                             </button>
-                                                            <a href={selectedVerification.documents.landTitle} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                                                            <a href={docs.landTitle} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
                                                                 Download
                                                             </a>
                                                         </div>
                                                     )}
-                                                    {selectedVerification.documents.surveyPlan && (
+                                                    {docs.surveyPlan && (
                                                         <div className="flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition group">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setPreviewUrl(selectedVerification.documents.surveyPlan);
+                                                                    setPreviewUrl(docs.surveyPlan);
                                                                     setPreviewTitle("Survey Plan Document");
                                                                 }}
                                                                 className="flex items-center gap-2 text-left"
@@ -477,17 +496,17 @@ export default function AdminLandVerificationPage() {
                                                                 <FileText className="w-5 h-5 text-green-600" />
                                                                 <span className="text-sm font-semibold text-green-700 group-hover:underline">Survey Plan Document</span>
                                                             </button>
-                                                            <a href={selectedVerification.documents.surveyPlan} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 hover:underline">
+                                                            <a href={docs.surveyPlan} target="_blank" rel="noopener noreferrer" className="text-xs text-green-600 hover:underline">
                                                                 Download
                                                             </a>
                                                         </div>
                                                     )}
-                                                    {selectedVerification.documents.taxClearance && (
+                                                    {docs.taxClearance && (
                                                         <div className="flex items-center justify-between p-3 bg-amber-50 hover:bg-amber-100 rounded-lg transition group">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
-                                                                    setPreviewUrl(selectedVerification.documents.taxClearance!);
+                                                                    setPreviewUrl(docs.taxClearance!);
                                                                     setPreviewTitle("Tax Clearance Document");
                                                                 }}
                                                                 className="flex items-center gap-2 text-left"
@@ -495,7 +514,7 @@ export default function AdminLandVerificationPage() {
                                                                 <FileText className="w-5 h-5 text-amber-600" />
                                                                 <span className="text-sm font-semibold text-amber-700 group-hover:underline">Tax Clearance Document</span>
                                                             </button>
-                                                            <a href={selectedVerification.documents.taxClearance} target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline">
+                                                            <a href={docs.taxClearance} target="_blank" rel="noopener noreferrer" className="text-xs text-amber-600 hover:underline">
                                                                 Download
                                                             </a>
                                                         </div>
