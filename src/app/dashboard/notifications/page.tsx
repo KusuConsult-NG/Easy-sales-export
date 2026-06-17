@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -11,13 +11,14 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { db } from "@/lib/firebase";
-import { collection, query, where, orderBy, limit, onSnapshot, doc, deleteDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, query, where, orderBy, limit, onSnapshot, doc, deleteDoc } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useToast } from "@/contexts/ToastContext";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
+import { isNotificationVisible, getVisibleFilterTabs } from "@/lib/notification-filter";
 
 /* ──────────────────────────────────────────────────────────────
- * Types — aligned with Firestore schema in actions/notifications.ts
+ * Types
  * ────────────────────────────────────────────────────────────── */
 type NotifType =
     | "info" | "success" | "warning" | "error"
@@ -36,7 +37,7 @@ interface Notification {
     link?: string;
     linkText?: string;
     read: boolean;
-    createdAt: any; // Firestore Timestamp
+    createdAt: any;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -82,18 +83,20 @@ function toDate(val: any): Date {
 }
 
 /* ──────────────────────────────────────────────────────────────
- * Filter Tab Config
+ * All possible filter tabs (label config)
  * ────────────────────────────────────────────────────────────── */
-const FILTER_TABS: { key: string; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "unread", label: "Unread" },
-    { key: "payment", label: "Payments" },
-    { key: "order", label: "Orders" },
-    { key: "wave", label: "WAVE" },
+const ALL_FILTER_TABS: { key: string; label: string }[] = [
+    { key: "all",         label: "All" },
+    { key: "unread",      label: "Unread" },
+    { key: "payment",     label: "Payments" },
+    { key: "order",       label: "Orders" },
+    { key: "wave",        label: "WAVE" },
     { key: "cooperative", label: "Cooperative" },
-    { key: "academy", label: "Academy" },
-    { key: "loan", label: "Loans" },
-    { key: "dispute", label: "Disputes" },
+    { key: "academy",     label: "Academy" },
+    { key: "loan",        label: "Loans" },
+    { key: "export",      label: "Export" },
+    { key: "farm_nation", label: "Farm Nation" },
+    { key: "dispute",     label: "Disputes" },
 ];
 
 export default function NotificationsPage() {
@@ -109,6 +112,10 @@ export default function NotificationsPage() {
     const userId = session?.user?.id;
     const isAuthed = useFirebaseAuthed(userId);
 
+    /* ── Subscription data from session (synced live via auth.config) ── */
+    const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
+    const roles = (session?.user as any)?.roles as string[] | undefined;
+
     /* ── Real-time Firestore listener ── */
     useEffect(() => {
         if (status === "unauthenticated") { router.push("/auth/login"); return; }
@@ -118,7 +125,7 @@ export default function NotificationsPage() {
             collection(db, COLLECTIONS.NOTIFICATIONS),
             where("userId", "==", userId),
             orderBy("createdAt", "desc"),
-            limit(100)
+            limit(200)
         );
 
         const unsub = onSnapshot(q, (snapshot) => {
@@ -136,17 +143,43 @@ export default function NotificationsPage() {
         return () => unsub();
     }, [userId, isAuthed, status, router]);
 
-    /* ── Filtered list ── */
+    /* ── Which tabs to show based on user's module subscriptions ── */
+    const visibleTabs = useMemo(() => {
+        const visibleKeys = new Set(getVisibleFilterTabs(serviceRegistrations, roles));
+        return ALL_FILTER_TABS.filter(t => visibleKeys.has(t.key));
+    }, [serviceRegistrations, roles]);
+
+    const visibleTabKeys = useMemo(
+        () => new Set(visibleTabs.map(t => t.key)),
+        [visibleTabs]
+    );
+
+    /* ── Filtered + subscription-gated list ── */
     const filtered = notifications.filter(n => {
+        // Subscription gate — hide module notifications the user isn't subscribed to
+        if (!isNotificationVisible(n.type, serviceRegistrations, roles)) return false;
+
+        // Tab filter
         if (filter === "all") return true;
         if (filter === "unread") return !n.read;
-        // Match on type — also treat "payment"/"payout" as same bucket, etc.
         if (filter === "payment") return n.type === "payment" || n.type === "payout" || n.type === "transaction";
         if (filter === "order") return n.type === "order" || n.type === "transaction";
+        if (filter === "farm_nation") return n.type === "farm_nation" || n.type === "land";
+        if (filter === "dispute") return n.type === "dispute";
+        if (filter === "export") return n.type === "export";
         return n.type === filter;
     });
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const unreadCount = notifications.filter(n =>
+        !n.read && isNotificationVisible(n.type, serviceRegistrations, roles)
+    ).length;
+
+    /* ── If current tab is now hidden (subscription changed), reset to "all" ── */
+    useEffect(() => {
+        if (filter !== "all" && !visibleTabKeys.has(filter)) {
+            setFilter("all");
+        }
+    }, [filter, visibleTabKeys]);
 
     /* ── Actions ── */
     async function handleMarkAsRead(id: string) {
@@ -183,7 +216,6 @@ export default function NotificationsPage() {
             await deleteDoc(doc(db, COLLECTIONS.NOTIFICATIONS, id));
         } catch {
             showToast("Failed to delete notification", "error");
-            // Re-fetch is handled by onSnapshot — deleted doc will disappear automatically
         } finally {
             setDeletingId(null);
         }
@@ -222,11 +254,11 @@ export default function NotificationsPage() {
                     )}
                 </div>
 
-                {/* Filters */}
+                {/* Filter Tabs — only shows tabs for subscribed modules */}
                 <div className="bg-white rounded-xl p-3 shadow-sm mb-5 overflow-x-auto">
                     <div className="flex items-center gap-2 min-w-max">
                         <Filter className="w-4 h-4 text-gray-400 shrink-0" />
-                        {FILTER_TABS.map((f) => (
+                        {visibleTabs.map((f) => (
                             <button
                                 key={f.key}
                                 onClick={() => setFilter(f.key)}

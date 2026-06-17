@@ -11,6 +11,7 @@ import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { markNotificationAsReadAction, markAllAsReadAction } from "@/app/actions/notifications";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
+import { isNotificationVisible } from "@/lib/notification-filter";
 
 import type { Notification as FirestoreNotification } from "@/lib/types/firestore";
 
@@ -27,6 +28,10 @@ export default function NotificationCenter() {
 
     const userId = session?.user?.id;
     const isAuthed = useFirebaseAuthed(userId);
+
+    // Subscription data for module-based filtering
+    const serviceRegistrations = (session?.user as any)?.serviceRegistrations as Record<string, any> | undefined;
+    const roles = (session?.user as any)?.roles as string[] | undefined;
 
     // Real-time Firestore listener
     useEffect(() => {
@@ -76,7 +81,12 @@ export default function NotificationCenter() {
         return () => unsubscribe();
     }, [userId, isAuthed]);
 
-    const unreadCount = notifications.filter((n) => !n.read).length;
+    // Filter to only show notifications for subscribed modules
+    const visibleNotifications = notifications.filter((n) =>
+        isNotificationVisible(n.type, serviceRegistrations, roles)
+    );
+
+    const unreadCount = visibleNotifications.filter((n) => !n.read).length;
 
     const markAsRead = async (id: string) => {
         try {
@@ -213,7 +223,7 @@ export default function NotificationCenter() {
                                             Loading notifications...
                                         </p>
                                     </div>
-                                ) : notifications.length === 0 ? (
+                                ) : visibleNotifications.length === 0 ? (
                                     <div className="px-6 py-8 text-center">
                                         <Bell className="w-12 h-12 mx-auto text-slate-300 mb-3" />
                                         <p className="text-sm text-slate-500">
@@ -221,7 +231,7 @@ export default function NotificationCenter() {
                                         </p>
                                     </div>
                                 ) : (
-                                    notifications.map((notification) => (
+                                    visibleNotifications.map((notification) => (
                                         <Menu.Item key={notification.id}>
                                             {({ active }) => (
                                                 <div
@@ -277,7 +287,7 @@ export default function NotificationCenter() {
                             </div>
 
                             {/* Footer */}
-                            {notifications.length > 0 && (
+                            {visibleNotifications.length > 0 && (
                                 <div className="px-6 py-3 border-t border-slate-200">
                                     <a
                                         href="/dashboard/notifications"
