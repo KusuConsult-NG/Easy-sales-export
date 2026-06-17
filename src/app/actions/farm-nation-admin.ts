@@ -878,3 +878,77 @@ async function _releaseFarmNationEscrowAction(transactionId: string): Promise<Ac
     }
 }
 export const releaseFarmNationEscrowAction = withFlexibleSafeAction("releaseFarmNationEscrowAction", _releaseFarmNationEscrowAction);
+
+/**
+ * Update Land Listing Details (Admin only)
+ */
+async function _updateAdminLandListingAction(data: {
+    listingId: string;
+    title: string;
+    category: string;
+    state: string;
+    lga: string;
+    address?: string;
+    size: number;
+    price: number;
+    gpsCoordinates?: { latitude: number; longitude: number };
+}): Promise<ActionResponse<null>> {
+    const sessionResult = await requireSession();
+    if (!sessionResult.session) return { success: false, error: sessionResult.error?.error ?? "Authentication required", data: null };
+    const { session } = sessionResult;
+    
+    if (!isAdmin(session.user.roles)) {
+        return { success: false, error: "Unauthorized: Admin access required", data: null };
+    }
+
+    try {
+        const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(data.listingId);
+        const doc = await docRef.get();
+        if (!doc.exists) {
+            return { success: false, error: "Land listing not found", data: null };
+        }
+
+        const updateData: any = {
+            title: data.title,
+            category: data.category,
+            location: {
+                state: data.state,
+                lga: data.lga,
+                address: data.address || doc.data()?.location?.address || ""
+            },
+            size: Number(data.size),
+            price: Number(data.price),
+            updatedAt: FieldValue.serverTimestamp()
+        };
+
+        if (data.gpsCoordinates) {
+            updateData.gpsCoordinates = {
+                latitude: Number(data.gpsCoordinates.latitude),
+                longitude: Number(data.gpsCoordinates.longitude)
+            };
+        }
+
+        await docRef.update(updateData);
+
+        // Create audit log
+        await createAdminAuditLog({
+            action: "land_updated",
+            userId: session.user.id,
+            userEmail: session.user.email || "",
+            targetId: data.listingId,
+            targetType: "land_listing",
+            metadata: {
+                title: data.title,
+                size: data.size,
+                price: data.price,
+                reason: "Admin corrected details"
+            }
+        });
+
+        return { success: true, error: null, data: null };
+    } catch (e: any) {
+        logger.error("updateAdminLandListingAction error:", e);
+        return { success: false, error: e.message || "Failed to update land listing details", data: null };
+    }
+}
+export const updateAdminLandListingAction = withFlexibleSafeAction("updateAdminLandListingAction", _updateAdminLandListingAction);

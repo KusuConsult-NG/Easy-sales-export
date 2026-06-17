@@ -3,10 +3,10 @@
 
 import { useState, useEffect } from "react";
 import { logger } from '@/lib/logger';
-import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter, ClipboardList, Send, Calendar, User } from "lucide-react";
+import { MapPin, FileText, Check, X, Eye, Loader2, Download, Filter, ClipboardList, Send, Calendar, User, Edit3, Save, RotateCcw } from "lucide-react";
 import { useToast } from "@/contexts/ToastContext";
 import { useAdminData } from "@/hooks/useAdminData";
-import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction } from "@/app/actions/farm-nation-admin";
+import { getAdminLandVerificationsAction, getFarmNationVerificationStatsAction, updateAdminLandListingAction } from "@/app/actions/farm-nation-admin";
 
 type LandVerification = {
     id: string;
@@ -29,6 +29,8 @@ type LandVerification = {
     createdAt: Date;
     verifiedBy?: string;
     verifiedAt?: Date;
+    location?: { state: string; lga: string; address: string; };
+    address?: string;
 };
 
 function getNormalizedDocs(docs: any) {
@@ -74,6 +76,35 @@ export default function AdminLandVerificationPage() {
     const docs = selectedVerification ? getNormalizedDocs(selectedVerification.documents) : { landTitle: "", surveyPlan: "", taxClearance: "" };
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Edit Land Details State
+    const [isEditingDetails, setIsEditingDetails] = useState(false);
+    const [editTitle, setEditTitle] = useState("");
+    const [editCategory, setEditCategory] = useState("");
+    const [editState, setEditState] = useState("");
+    const [editLga, setEditLga] = useState("");
+    const [editAddress, setEditAddress] = useState("");
+    const [editSize, setEditSize] = useState(0);
+    const [editUnit, setEditUnit] = useState("");
+    const [editPrice, setEditPrice] = useState(0);
+    const [editLat, setEditLat] = useState("");
+    const [editLng, setEditLng] = useState("");
+    const [isSavingDetails, setIsSavingDetails] = useState(false);
+
+    const startEditing = () => {
+        if (!selectedVerification) return;
+        setEditTitle(selectedVerification.title || "");
+        setEditCategory(selectedVerification.category || "");
+        setEditState(selectedVerification.state || "");
+        setEditLga(selectedVerification.lga || "");
+        setEditAddress(selectedVerification.location?.address || selectedVerification.address || "");
+        setEditSize(selectedVerification.size || 0);
+        setEditUnit(selectedVerification.unit || "Acres");
+        setEditPrice(selectedVerification.totalPrice ?? selectedVerification.price ?? 0);
+        setEditLat(selectedVerification.gpsCoordinates?.latitude?.toString() || "");
+        setEditLng(selectedVerification.gpsCoordinates?.longitude?.toString() || "");
+        setIsEditingDetails(true);
+    };
 
     // Inspector dispatch state
     const [inspectorName, setInspectorName] = useState("");
@@ -88,6 +119,7 @@ export default function AdminLandVerificationPage() {
         if (!isDetailsModalOpen) {
             setPreviewUrl(null);
             setPreviewTitle("");
+            setIsEditingDetails(false);
         }
     }, [isDetailsModalOpen]);
 
@@ -105,6 +137,79 @@ export default function AdminLandVerificationPage() {
     }, []);
 
     const filteredVerifications = verifications;
+
+    async function handleSaveDetails() {
+        if (!selectedVerification) return;
+        if (!editTitle.trim()) {
+            showToast("Title is required", "error");
+            return;
+        }
+        if (!editState.trim()) {
+            showToast("State is required", "error");
+            return;
+        }
+        if (!editLga.trim()) {
+            showToast("LGA is required", "error");
+            return;
+        }
+        if (Number(editSize) <= 0) {
+            showToast("Size must be positive", "error");
+            return;
+        }
+        if (Number(editPrice) <= 0) {
+            showToast("Price must be positive", "error");
+            return;
+        }
+
+        setIsSavingDetails(true);
+        try {
+            const gpsCoords = editLat && editLng ? {
+                latitude: Number(editLat),
+                longitude: Number(editLng)
+            } : undefined;
+
+            const result = await updateAdminLandListingAction({
+                listingId: selectedVerification.id,
+                title: editTitle,
+                category: editCategory,
+                state: editState,
+                lga: editLga,
+                address: editAddress,
+                size: Number(editSize),
+                price: Number(editPrice),
+                gpsCoordinates: gpsCoords
+            });
+
+            if (result.success) {
+                showToast("Land listing details updated successfully", "success");
+                
+                // Update local states
+                const updatedVerification = {
+                    ...selectedVerification,
+                    title: editTitle,
+                    category: editCategory,
+                    state: editState,
+                    lga: editLga,
+                    size: Number(editSize),
+                    unit: editUnit,
+                    totalPrice: Number(editPrice),
+                    price: Number(editPrice),
+                    gpsCoordinates: gpsCoords ? { latitude: gpsCoords.latitude, longitude: gpsCoords.longitude } : undefined
+                };
+
+                setVerifications(prev => prev.map(v => v.id === selectedVerification.id ? updatedVerification : v));
+                setSelectedVerification(updatedVerification);
+                setIsEditingDetails(false);
+            } else {
+                showToast(result.error || "Failed to update details", "error");
+            }
+        } catch (error) {
+            logger.error("Save details error:", error);
+            showToast("Failed to update details", "error");
+        } finally {
+            setIsSavingDetails(false);
+        }
+    }
 
     async function handleApprove(verificationId: string) {
         if (!confirm("Approve this land listing? Ensure the inspector report has been reviewed.")) return;
@@ -446,19 +551,176 @@ export default function AdminLandVerificationPage() {
                                 }`}>
                                     {activeTab === "details" && (
                                         <>
-                                            <section>
-                                                <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                                    <MapPin className="w-5 h-5" /> Land Information
-                                                </h3>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold">{selectedVerification.title}</p></div>
-                                                    <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold">{selectedVerification.category}</p></div>
-                                                    <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold">{selectedVerification.state}, {selectedVerification.lga}</p></div>
-                                                    <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
-                                                    {selectedVerification.gpsCoordinates && (
-                                                        <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
+                                            <section className="bg-slate-50 border border-slate-200 rounded-2xl p-6 relative">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                                        <MapPin className="w-5 h-5 text-blue-600" /> Land Information
+                                                    </h3>
+                                                    {!isEditingDetails ? (
+                                                        <button
+                                                            onClick={startEditing}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                                        >
+                                                            <Edit3 className="w-3.5 h-3.5" /> Edit Details
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-full">Editing Mode</span>
                                                     )}
                                                 </div>
+
+                                                {!isEditingDetails ? (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold text-slate-900">{selectedVerification.title}</p></div>
+                                                        <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold text-slate-900 capitalize">{selectedVerification.category?.replace(/_/g, " ") || "—"}</p></div>
+                                                        <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold text-slate-900">{selectedVerification.state}, {selectedVerification.lga}</p></div>
+                                                        <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold text-slate-900">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
+                                                        {selectedVerification.gpsCoordinates && (
+                                                            <div><p className="text-sm text-slate-600">GPS</p><p className="font-semibold text-slate-900">{selectedVerification.gpsCoordinates.latitude.toFixed(6)}, {selectedVerification.gpsCoordinates.longitude.toFixed(6)}</p></div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Property Title</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={editTitle}
+                                                                    onChange={e => setEditTitle(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Category</label>
+                                                                <select
+                                                                    value={editCategory}
+                                                                    onChange={e => setEditCategory(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                >
+                                                                    <option value="farmland">Farmland</option>
+                                                                    <option value="ranch">Ranch</option>
+                                                                    <option value="commercial_farm">Commercial Farm</option>
+                                                                    <option value="agricultural_land">Agricultural Land</option>
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Address</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={editAddress}
+                                                                    onChange={e => setEditAddress(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">State</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={editState}
+                                                                    onChange={e => setEditState(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">LGA</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={editLga}
+                                                                    onChange={e => setEditLga(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-3 gap-3">
+                                                            <div className="col-span-2">
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Size</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={editSize}
+                                                                    onChange={e => setEditSize(Number(e.target.value))}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Unit</label>
+                                                                <select
+                                                                    value={editUnit}
+                                                                    onChange={e => setEditUnit(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                >
+                                                                    <option value="Acres">Acres</option>
+                                                                    <option value="Hectares">Hectares</option>
+                                                                    <option value="Plots">Plots</option>
+                                                                </select>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">Price (₦)</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={editPrice}
+                                                                    onChange={e => setEditPrice(Number(e.target.value))}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">GPS Latitude</label>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    value={editLat}
+                                                                    onChange={e => setEditLat(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-semibold text-slate-600 mb-1">GPS Longitude</label>
+                                                                <input
+                                                                    type="number"
+                                                                    step="any"
+                                                                    value={editLng}
+                                                                    onChange={e => setEditLng(e.target.value)}
+                                                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex gap-2 justify-end pt-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsEditingDetails(false)}
+                                                                className="flex items-center gap-1 px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                                                            >
+                                                                <RotateCcw className="w-3.5 h-3.5" /> Cancel
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleSaveDetails}
+                                                                disabled={isSavingDetails}
+                                                                className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-xs font-bold transition-all disabled:opacity-50 cursor-pointer"
+                                                            >
+                                                                {isSavingDetails ? (
+                                                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                ) : (
+                                                                    <Save className="w-3.5 h-3.5" />
+                                                                )}
+                                                                Save Changes
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </section>
                                             <section>
                                                 <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
