@@ -91,6 +91,13 @@ export default function WalletPage() {
     const [wdLoading, setWdLoading] = useState(false);
     const [toggles, setToggles] = useState<Record<string, boolean>>({});
 
+    const [bankSearch, setBankSearch] = useState("");
+    const [showBankDropdown, setShowBankDropdown] = useState(false);
+
+    useEffect(() => {
+        setBankSearch(wdBank.bankName || "");
+    }, [wdBank.bankName]);
+
     const loadToggles = useCallback(async () => {
         const res = await getFeatureTogglesAction();
         if (res.success && res.data) setToggles(res.data);
@@ -366,26 +373,59 @@ export default function WalletPage() {
                                 <input type="number" value={wdAmount} onChange={(e) => setWdAmount(e.target.value)} placeholder="Min ₦5,000"
                                     className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent" />
                             </div>
-                            <div>
+                            <div className="relative">
                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Bank Name</label>
-                                <select
-                                    value={wdBank.bankCode}
+                                <input
+                                    type="text"
+                                    value={bankSearch}
+                                    onFocus={() => setShowBankDropdown(true)}
                                     onChange={(e) => {
-                                        const code = e.target.value;
-                                        const bank = NIGERIAN_BANKS.find(b => b.code === code);
-                                        setWdBank(b => ({
-                                            ...b,
-                                            bankCode: code,
-                                            bankName: bank ? bank.name : ""
-                                        }));
+                                        const val = e.target.value;
+                                        setBankSearch(val);
+                                        setShowBankDropdown(true);
+                                        if (!val) {
+                                            setWdBank(b => ({ ...b, bankName: "", bankCode: "" }));
+                                        }
                                     }}
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                                >
-                                    <option value="">Select Bank</option>
-                                    {NIGERIAN_BANKS.map(bank => (
-                                        <option key={bank.code} value={bank.code}>{bank.name}</option>
-                                    ))}
-                                </select>
+                                    placeholder="Type to search bank... (e.g. Access Bank)"
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                />
+                                {showBankDropdown && (
+                                    <>
+                                        <div 
+                                            className="fixed inset-0 z-40" 
+                                            onClick={() => setShowBankDropdown(false)} 
+                                        />
+                                        <div className="absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-lg divide-y divide-slate-100">
+                                            {NIGERIAN_BANKS.filter(bank =>
+                                                bank.name.toLowerCase().includes(bankSearch.toLowerCase())
+                                            ).length === 0 ? (
+                                                <div className="p-3 text-slate-500 text-sm">No banks found</div>
+                                            ) : (
+                                                NIGERIAN_BANKS.filter(bank =>
+                                                    bank.name.toLowerCase().includes(bankSearch.toLowerCase())
+                                                ).map(bank => (
+                                                    <button
+                                                        key={bank.code}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setWdBank(b => ({
+                                                                ...b,
+                                                                bankCode: bank.code,
+                                                                bankName: bank.name
+                                                            }));
+                                                            setBankSearch(bank.name);
+                                                            setShowBankDropdown(false);
+                                                        }}
+                                                        className="w-full text-left px-4 py-3 text-slate-900 hover:bg-slate-50 text-sm transition"
+                                                    >
+                                                        {bank.name}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Account Number</label>
