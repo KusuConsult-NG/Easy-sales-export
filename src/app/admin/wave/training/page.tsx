@@ -174,8 +174,8 @@ export default function AdminWaveTrainingPage() {
         
         const mode = prompt(
             `Go Live for "${event.title}":\n\n` +
-            `• To use Google Meet, Zoom, or another external call, PASTE the full link URL below.\n` +
-            `• To use the built-in Video Room (Jitsi), click OK or leave it blank.`
+            `• Google Meet is the default. Please PASTE the Google Meet, Zoom, or Teams link URL below:\n` +
+            `• (To use the built-in Jitsi classroom fallback, click OK or leave this blank)`
         );
         if (mode === null) return; // user cancelled
         
