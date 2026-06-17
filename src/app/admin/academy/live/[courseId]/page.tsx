@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import VideoClassroom from "@/components/VideoClassroom";
 import { Video, ArrowLeft, BookOpen, Users, PhoneOff, Loader2, AlertCircle } from "lucide-react";
-import { getCourseByIdAction, endAcademyLiveSessionAction } from "@/app/actions/academy";
+import { getCourseByIdAction, endAcademyLiveSessionAction, getLiveSessionsAction } from "@/app/actions/academy";
 import { toast } from "sonner";
 
 interface Props {
@@ -18,6 +18,7 @@ export default function AdminAcademyLivePage({ params }: Props) {
     const { data: session, status } = useSession();
 
     const [course, setCourse] = useState<any>(null);
+    const [liveSession, setLiveSession] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isEnding, setIsEnding] = useState(false);
     const [ended, setEnded] = useState(false);
@@ -37,6 +38,15 @@ export default function AdminAcademyLivePage({ params }: Props) {
                 } else {
                     // Fallback: render room with minimal info
                     setCourse({ id: courseId, title: courseId.replace(/-/g, " "), instructor: "Easy Sales Academy" });
+                }
+
+                // Load active live session link if it exists
+                const liveRes = await getLiveSessionsAction(courseId);
+                if (liveRes.success && liveRes.data) {
+                    const active = (liveRes.data as any[]).find((s: any) => s.status === "live");
+                    if (active) {
+                        setLiveSession(active);
+                    }
                 }
             } catch {
                 setCourse({ id: courseId, title: "Live Class", instructor: "Easy Sales Academy" });
@@ -162,14 +172,42 @@ export default function AdminAcademyLivePage({ params }: Props) {
             {/* Video Room — full remaining height */}
             <div className="flex-1 p-4">
                 <div className="h-full min-h-[500px]">
-                    <VideoClassroom
-                        roomName={roomName}
-                        userName={userName}
-                        userEmail={userEmail}
-                        isModerator={true}
-                        subject={`Academy: ${course?.title || courseId}`}
-                        onMeetingEnd={handleMeetingLeft}
-                    />
+                    {liveSession?.customMeetingLink ? (
+                        <div className="flex items-center justify-center h-full bg-slate-800 rounded-xl border border-slate-700">
+                            <div className="text-center p-8 max-w-lg">
+                                <Video className="w-16 h-16 text-purple-500 mx-auto mb-4 animate-pulse" />
+                                <h3 className="text-2xl font-bold text-white mb-2">
+                                    Google Meet / External Live Call
+                                </h3>
+                                <p className="text-slate-400 mb-6">
+                                    This live classroom is configured to run externally. Click below to join and host the call.
+                                </p>
+                                <div className="space-y-4 flex flex-col items-center">
+                                    <a
+                                        href={liveSession.customMeetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-semibold rounded-xl transition shadow-lg hover:shadow-primary/20 transform hover:-translate-y-0.5"
+                                    >
+                                        <Video className="w-5 h-5" />
+                                        Launch External Call
+                                    </a>
+                                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                                        Note: Students visiting the live classroom page will be presented with a direct button to join this exact external call URL.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <VideoClassroom
+                            roomName={roomName}
+                            userName={userName}
+                            userEmail={userEmail}
+                            isModerator={true}
+                            subject={`Academy: ${course?.title || courseId}`}
+                            onMeetingEnd={handleMeetingLeft}
+                        />
+                    )}
                 </div>
             </div>
         </div>

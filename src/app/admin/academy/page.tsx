@@ -77,11 +77,18 @@ export default function AcademyAdminPage() {
 
     const handleGoLive = async (course: Course) => {
         if (!course.id) return;
-        const confirmGoLive = confirm(`Are you sure you want to go live for "${course.title}"?`);
-        if (!confirmGoLive) return;
+        
+        const mode = prompt(
+            `Go Live for "${course.title}":\n\n` +
+            `• To use Google Meet, Zoom, or another external call, PASTE the full link URL below.\n` +
+            `• To use the built-in Classroom (Jitsi), click OK or leave it blank.`
+        );
+        if (mode === null) return; // user cancelled
+        
+        const customMeetingLink = mode.trim();
 
         try {
-            const res = await startAcademyLiveSessionAction(course.id);
+            const res = await startAcademyLiveSessionAction(course.id, customMeetingLink);
             if (res.success) {
                 toast.success("Live session started! Redirecting to classroom...");
                 router.push(`/admin/academy/live/${course.id}`);

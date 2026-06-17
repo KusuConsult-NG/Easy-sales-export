@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import VideoClassroom from "@/components/VideoClassroom";
 import { Video, BookOpen, ArrowLeft, Users } from "lucide-react";
-import { getCourseByIdAction } from "@/app/actions/academy";
+import { getCourseByIdAction, getLiveSessionsAction } from "@/app/actions/academy";
 
 interface AcademyLiveClassPageProps {
     params: Promise<{ courseId: string }>;
@@ -17,6 +17,7 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
     const router = useRouter();
     const { data: session, status } = useSession();
     const [course, setCourse] = useState<any>(null);
+    const [liveSession, setLiveSession] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const courseId = params.courseId;
@@ -37,6 +38,15 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
                 } else {
                     // Fallback with courseId as title
                     setCourse({ id: courseId, title: courseId.replace(/-/g, " "), instructor: "Easy Sales Academy" });
+                }
+
+                // Check if active live session has an external link
+                const liveRes = await getLiveSessionsAction(courseId);
+                if (liveRes.success && liveRes.data) {
+                    const active = (liveRes.data as any[]).find((s: any) => s.status === "live");
+                    if (active) {
+                        setLiveSession(active);
+                    }
                 }
             } catch (error) {
                 logger.error("Failed to load course:", error);
@@ -126,14 +136,37 @@ export default function AcademyLiveClassPage(props: AcademyLiveClassPageProps) {
 
                 {/* Video Classroom */}
                 <div className="h-[calc(100vh-300px)] min-h-[500px]">
-                    <VideoClassroom
-                        roomName={`academy-${courseId}`}
-                        userName={user.name || user.email || "Student"}
-                        userEmail={user.email}
-                        isModerator={isInstructor}
-                        subject={`Academy: ${course?.title || courseId}`}
-                        onMeetingEnd={handleMeetingEnd}
-                    />
+                    {liveSession?.customMeetingLink ? (
+                        <div className="flex items-center justify-center h-full bg-white border border-slate-200 rounded-2xl shadow-lg p-8 text-center">
+                            <div className="max-w-md mx-auto">
+                                <Video className="w-16 h-16 text-primary mx-auto mb-4 animate-pulse" />
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">Live Class on Google Meet</h2>
+                                <p className="text-slate-600 mb-6 font-medium">
+                                    This class session is being hosted externally on Google Meet (or another meeting service). Click below to join the call in a new tab.
+                                </p>
+                                <div className="flex flex-col items-center">
+                                    <a
+                                        href={liveSession.customMeetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                                    >
+                                        <Video className="w-5 h-5" />
+                                        Join Google Meet Call
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <VideoClassroom
+                            roomName={`academy-${courseId}`}
+                            userName={user.name || user.email || "Student"}
+                            userEmail={user.email}
+                            isModerator={isInstructor}
+                            subject={`Academy: ${course?.title || courseId}`}
+                            onMeetingEnd={handleMeetingEnd}
+                        />
+                    )}
                 </div>
 
                 {/* Guidelines */}

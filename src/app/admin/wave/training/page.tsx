@@ -171,11 +171,18 @@ export default function AdminWaveTrainingPage() {
 
     async function handleGoLive(event: WaveTrainingEvent) {
         if (!event.id) return;
-        const confirmGoLive = confirm(`Are you sure you want to go live for "${event.title}"?`);
-        if (!confirmGoLive) return;
+        
+        const mode = prompt(
+            `Go Live for "${event.title}":\n\n` +
+            `• To use Google Meet, Zoom, or another external call, PASTE the full link URL below.\n` +
+            `• To use the built-in Video Room (Jitsi), click OK or leave it blank.`
+        );
+        if (mode === null) return; // user cancelled
+        
+        const customMeetingLink = mode.trim();
 
         try {
-            const result = await startWaveLiveSessionAction(event.id);
+            const result = await startWaveLiveSessionAction(event.id, customMeetingLink);
             if (result.success) {
                 showToast("Live session started! Redirecting to classroom...", "success");
                 router.push(`/admin/wave/training/live/${event.id}`);

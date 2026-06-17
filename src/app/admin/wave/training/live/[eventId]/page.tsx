@@ -167,14 +167,42 @@ export default function AdminWaveLivePage({ params }: Props) {
             {/* Video Room — full remaining height */}
             <div className="flex-1 p-4">
                 <div className="h-full min-h-[500px]">
-                    <VideoClassroom
-                        roomName={roomName}
-                        userName={userName}
-                        userEmail={userEmail}
-                        isModerator={true}
-                        subject={event?.title || "WAVE Live Training"}
-                        onMeetingEnd={handleMeetingLeft}
-                    />
+                    {event?.meetingLink && event.meetingLink.startsWith("http") ? (
+                        <div className="flex items-center justify-center h-full bg-slate-800 rounded-xl border border-slate-700">
+                            <div className="text-center p-8 max-w-lg">
+                                <Video className="w-16 h-16 text-pink-500 mx-auto mb-4 animate-pulse" />
+                                <h3 className="text-2xl font-bold text-white mb-2">
+                                    Google Meet / External Live Call
+                                </h3>
+                                <p className="text-slate-400 mb-6">
+                                    This live session is configured to run externally. Click below to join and host the call.
+                                </p>
+                                <div className="space-y-4 flex flex-col items-center">
+                                    <a
+                                        href={event.meetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-8 py-4 bg-pink-600 hover:bg-pink-700 text-white font-semibold rounded-xl transition shadow-lg hover:shadow-pink-600/20 transform hover:-translate-y-0.5"
+                                    >
+                                        <Video className="w-5 h-5" />
+                                        Launch External Call
+                                    </a>
+                                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                                        Note: Cohort members visiting the live training page will be presented with a direct button to join this exact external call URL.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <VideoClassroom
+                            roomName={roomName}
+                            userName={userName}
+                            userEmail={userEmail}
+                            isModerator={true}
+                            subject={event?.title || "WAVE Live Training"}
+                            onMeetingEnd={handleMeetingLeft}
+                        />
+                    )}
                 </div>
             </div>
         </div>

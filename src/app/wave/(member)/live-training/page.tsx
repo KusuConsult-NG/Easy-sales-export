@@ -15,6 +15,7 @@ interface TrainingSession {
     durationMinutes: number;
     roomName: string;
     isActive: boolean;
+    customMeetingLink?: string;
 }
 
 export default function WAVELiveTrainingPage() {
@@ -94,23 +95,44 @@ export default function WAVELiveTrainingPage() {
                     </div>
                 </div>
 
-                {/* If there's an active session → show the Jitsi room */}
+                {/* If there's an active session → show Jitsi or custom meeting link */}
                 {activeSession ? (
                     <div>
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 flex items-center gap-3">
                             <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse shrink-0" />
                             <p className="font-semibold text-emerald-800">Live now: {activeSession.title}</p>
                         </div>
-                        <div className="h-[calc(100vh-300px)] min-h-[500px]">
-                            <VideoClassroom
-                                roomName={activeSession.roomName}
-                                userName={session?.user?.name || session?.user?.email || "WAVE Member"}
-                                userEmail={session?.user?.email || ""}
-                                isModerator={isTrainer}
-                                subject={activeSession.title}
-                                onMeetingEnd={handleMeetingEnd}
-                            />
-                        </div>
+                        {activeSession.customMeetingLink ? (
+                            <div className="bg-white border border-slate-200 rounded-2xl shadow-lg p-8 text-center max-w-2xl mx-auto my-8">
+                                <Video className="w-16 h-16 text-primary mx-auto mb-4 animate-pulse" />
+                                <h2 className="text-2xl font-bold text-slate-900 mb-2">Live Session on Google Meet</h2>
+                                <p className="text-slate-600 mb-6 font-medium">
+                                    This training session is being hosted externally on Google Meet (or another meeting service). Click below to join the call in a new tab.
+                                </p>
+                                <div className="flex flex-col items-center">
+                                    <a
+                                        href={activeSession.customMeetingLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-8 py-4 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                                    >
+                                        <Video className="w-5 h-5" />
+                                        Join Google Meet Call
+                                    </a>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-[calc(100vh-300px)] min-h-[500px]">
+                                <VideoClassroom
+                                    roomName={activeSession.roomName}
+                                    userName={session?.user?.name || session?.user?.email || "WAVE Member"}
+                                    userEmail={session?.user?.email || ""}
+                                    isModerator={isTrainer}
+                                    subject={activeSession.title}
+                                    onMeetingEnd={handleMeetingEnd}
+                                />
+                            </div>
+                        )}
                         <div className="mt-6 bg-blue-50 rounded-xl p-6">
                             <h3 className="font-bold text-blue-900 mb-3">Training Tips:</h3>
                             <ul className="space-y-2 text-sm text-blue-800">

@@ -926,7 +926,8 @@ async function _getLiveSessionsAction(courseId?: string): Promise<ActionResponse
 export const getLiveSessionsAction = withFlexibleSafeAction("getLiveSessionsAction", _getLiveSessionsAction);
 
 async function _startAcademyLiveSessionAction(
-    courseId: string
+    courseId: string,
+    customMeetingLink?: string
 ): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
@@ -954,6 +955,7 @@ async function _startAcademyLiveSessionAction(
 
         const title = `Live Class: ${courseData.title}`;
         const instructor = courseData.instructor || "Super Admin";
+        const meetingLink = customMeetingLink || `/academy/live/${courseId}`;
 
         // 2. Look for active session
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
@@ -970,7 +972,8 @@ async function _startAcademyLiveSessionAction(
                 instructor,
                 scheduledAt: new Date(),
                 duration: "2 hours",
-                meetingLink: `/academy/live/${courseId}`,
+                meetingLink,
+                customMeetingLink: customMeetingLink || null,
                 maxParticipants: 100,
                 currentParticipants: 0,
                 status: "live",
@@ -983,6 +986,8 @@ async function _startAcademyLiveSessionAction(
             await ref.doc(sessionId).update({
                 status: "live",
                 scheduledAt: new Date(),
+                meetingLink,
+                customMeetingLink: customMeetingLink || null,
             });
         }
 

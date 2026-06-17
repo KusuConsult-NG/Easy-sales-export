@@ -31,21 +31,41 @@ export default function VideoClassroom({
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string>("");
 
+    const onMeetingEndRef = useRef(onMeetingEnd);
+    const userNameRef = useRef(userName);
+    const userEmailRef = useRef(userEmail);
+    const subjectRef = useRef(subject);
+    const isModeratorRef = useRef(isModerator);
+
     useEffect(() => {
+        onMeetingEndRef.current = onMeetingEnd;
+        userNameRef.current = userName;
+        userEmailRef.current = userEmail;
+        subjectRef.current = subject;
+        isModeratorRef.current = isModerator;
+    }, [onMeetingEnd, userName, userEmail, subject, isModerator]);
+
+    useEffect(() => {
+        let active = true;
+
         // Load Jitsi Meet API
         function loadJitsiScript() {
             if (window.JitsiMeetExternalAPI) {
-                initializeJitsi();
+                if (active) initializeJitsi();
                 return;
             }
 
             const script = document.createElement("script");
             script.src = "https://meet.jit.si/external_api.js";
             script.async = true;
-            script.onload = () => initializeJitsi();
+            script.onload = () => {
+                if (active) initializeJitsi();
+            };
             script.onerror = () => {
-                setError("Failed to load video conferencing. Please refresh the page.");
-                setIsLoading(false);
+                if (active) {
+                    setError("Failed to load video conferencing. Please refresh the page.");
+                    setIsLoading(false);
+                }
             };
             document.body.appendChild(script);
         };
@@ -65,10 +85,10 @@ export default function VideoClassroom({
                         startWithVideoMuted: false,
                         enableWelcomePage: false,
                         prejoinPageEnabled: false,
-                        disableInviteFunctions: !isModerator,
+                        disableInviteFunctions: !isModeratorRef.current,
                         enableClosePage: false,
-                        hideConferenceSubject: !subject,
-                        subject: subject || `Easy Sales Export - ${roomName}`,
+                        hideConferenceSubject: !subjectRef.current,
+                        subject: subjectRef.current || `Easy Sales Export - ${roomName}`,
                     },
                     interfaceConfigOverwrite: {
                         TOOLBAR_BUTTONS: [
@@ -100,42 +120,39 @@ export default function VideoClassroom({
                         DISABLE_JOIN_LEAVE_NOTIFICATIONS: false,
                     },
                     userInfo: {
-                        displayName: userName,
-                        email: userEmail,
+                        displayName: userNameRef.current,
+                        email: userEmailRef.current,
                     },
                 };
 
                 apiRef.current = new window.JitsiMeetExternalAPI(domain, options);
 
                 // Set moderator role
-                if (isModerator) {
+                if (isModeratorRef.current) {
                     apiRef.current.executeCommand("toggleLobby", false);
                 }
 
                 // Event listeners
                 apiRef.current.addListener("videoConferenceJoined", () => {
-                    setIsLoading(false);
-                    if (process.env.NODE_ENV !== 'production') {
-                        // joined video conference
-                    }
+                    if (active) setIsLoading(false);
                 });
 
                 apiRef.current.addListener("videoConferenceLeft", () => {
-                    if (process.env.NODE_ENV !== 'production') {
-                        // left video conference
-                    }
-                    onMeetingEnd?.();
+                    onMeetingEndRef.current?.();
                 });
 
                 apiRef.current.addListener("readyToClose", () => {
                     apiRef.current?.dispose();
-                    onMeetingEnd?.();
+                    apiRef.current = null;
+                    onMeetingEndRef.current?.();
                 });
 
             } catch (err) {
                 console.error("Failed to initialize Jitsi:", err);
-                setError("Failed to start video call. Please try again.");
-                setIsLoading(false);
+                if (active) {
+                    setError("Failed to start video call. Please try again.");
+                    setIsLoading(false);
+                }
             }
         };
 
@@ -143,12 +160,13 @@ export default function VideoClassroom({
 
         // Cleanup
         return () => {
+            active = false;
             if (apiRef.current) {
                 apiRef.current.dispose();
                 apiRef.current = null;
             }
         };
-    }, [roomName, userName, userEmail, isModerator, subject, onMeetingEnd]);
+    }, [roomName]);
 
     if (error) {
         return (

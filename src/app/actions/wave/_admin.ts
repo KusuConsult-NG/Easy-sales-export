@@ -280,7 +280,8 @@ async function _updateTrainingEventAction(
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
 async function _startWaveLiveSessionAction(
-    eventId: string
+    eventId: string,
+    customMeetingLink?: string
 ): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
@@ -319,11 +320,12 @@ async function _startWaveLiveSessionAction(
         }
 
         const roomName = `wave-training-${eventId}`;
+        const finalMeetingLink = customMeetingLink || `/wave/live-training`;
 
         // 3. Update event status to ongoing
         await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
             status: "ongoing",
-            meetingLink: `/wave/live-training`,
+            meetingLink: finalMeetingLink,
             updatedAt: FieldValue.serverTimestamp(),
         });
 
@@ -340,6 +342,7 @@ async function _startWaveLiveSessionAction(
                 durationMinutes,
                 roomName,
                 isActive: true,
+                customMeetingLink: customMeetingLink || null,
                 createdAt: new Date(),
                 createdBy: session.user.id,
             });
@@ -350,6 +353,7 @@ async function _startWaveLiveSessionAction(
                 scheduledAt: new Date(),
                 isActive: true,
                 durationMinutes,
+                customMeetingLink: customMeetingLink || null,
                 updatedAt: new Date(),
             });
         }
