@@ -84,7 +84,7 @@ export default function AcademyAdminPage() {
             const res = await startAcademyLiveSessionAction(course.id);
             if (res.success) {
                 toast.success("Live session started! Redirecting to classroom...");
-                router.push(`/academy/live/${course.id}`);
+                router.push(`/admin/academy/live/${course.id}`);
             } else {
                 toast.error(res.error || "Failed to start live session");
             }

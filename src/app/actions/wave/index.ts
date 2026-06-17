@@ -74,6 +74,7 @@ export {
     createTrainingEventAction,
     updateTrainingEventAction,
     startWaveLiveSessionAction,
+    endWaveLiveSessionAction,
     getEventParticipantsAction,
     getWaveApplicationsAction,
     approveWaveApplicationAction,
@@ -82,6 +83,7 @@ export {
     getStandardWaveWithdrawalsAction,
     processWaveWithdrawalAction,
 } from "./_admin";
+
 
 // ─── Briefing actions ─────────────────────────────────────────────────────────
 export {

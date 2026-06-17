@@ -178,7 +178,7 @@ export default function AdminWaveTrainingPage() {
             const result = await startWaveLiveSessionAction(event.id);
             if (result.success) {
                 showToast("Live session started! Redirecting to classroom...", "success");
-                router.push("/wave/live-training");
+                router.push(`/admin/wave/training/live/${event.id}`);
             } else {
                 showToast(result.error || "Failed to start live session", "error");
             }

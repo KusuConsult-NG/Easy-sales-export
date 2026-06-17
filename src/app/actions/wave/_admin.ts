@@ -372,6 +372,65 @@ async function _startWaveLiveSessionAction(
 }
 export const startWaveLiveSessionAction = withFlexibleSafeAction("startWaveLiveSessionAction", _startWaveLiveSessionAction);
 
+async function _endWaveLiveSessionAction(
+    eventId: string
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated", data: null };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized", data: null };
+        }
+
+        // 1. Mark the training event as completed
+        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).update({
+            status: "completed",
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        // 2. Mark the training session document as inactive
+        const roomName = `wave-training-${eventId}`;
+        const sessionQuery = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
+            .where("roomName", "==", roomName)
+            .get();
+
+        for (const doc of sessionQuery.docs) {
+            await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS).doc(doc.id).update({
+                isActive: false,
+                endedAt: new Date(),
+                updatedAt: new Date(),
+            });
+        }
+
+        await createAdminAuditLog({
+            action: "wave_training_updated",
+            userId: session.user.id,
+            targetType: "wave_training_event",
+            targetId: eventId,
+        });
+
+        return { error: null, success: true as const, data: null };
+    } catch (error) {
+        logger.error("End live session error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false as const, error: "Failed to end live session", data: null };
+    }
+}
+export const endWaveLiveSessionAction = withFlexibleSafeAction("endWaveLiveSessionAction", _endWaveLiveSessionAction);
+
+
+
 async function _getEventParticipantsAction(eventId: string): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
