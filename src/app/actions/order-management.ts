@@ -72,7 +72,8 @@ async function _updateOrderStatusAction(
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
 
-            if (currentOrder.sellerId !== userId) {
+            const isAuthorized = currentOrder.sellerId === userId || (Array.isArray(currentOrder.sellerIds) && currentOrder.sellerIds.includes(userId));
+            if (!isAuthorized) {
                 throw new Error("Not authorized to update this order");
             }
 
@@ -178,7 +179,10 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) });
 
-            const sellerRef = db.collection(COLLECTIONS.USERS).doc(currentOrder.sellerId);
+            const sellerId = currentOrder.sellerId || (Array.isArray(currentOrder.sellerIds) ? currentOrder.sellerIds[0] : undefined);
+            if (!sellerId) throw new Error("Seller ID not found on order");
+
+            const sellerRef = db.collection(COLLECTIONS.USERS).doc(sellerId);
             const sellerDoc = await transaction.get(sellerRef);
             const sellerData = sellerDoc.data();
 
@@ -276,7 +280,8 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
         const data = orderDoc.data()!;
         const isAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
 
-        if (data.sellerId !== session.user.id && !isAdmin) { return { success: false as const, error: "Unauthorized", data: null };
+        const isAuthorized = data.sellerId === session.user.id || (Array.isArray(data.sellerIds) && data.sellerIds.includes(session.user.id));
+        if (!isAuthorized && !isAdmin) { return { success: false as const, error: "Unauthorized", data: null };
         }
 
         const escrowQuery = await db.collection(COLLECTIONS.ESCROW_TRANSACTIONS)
@@ -284,6 +289,9 @@ async function _getOrderDetailsAction(orderId: string) { let sessionResult;
             .get();
 
         const order = serializeDoc<Order>(orderDoc.id, orderDoc.data()) as any;
+        if (!order.sellerId && Array.isArray(order.sellerIds) && order.sellerIds.length > 0) {
+            order.sellerId = order.sellerIds[0];
+        }
 
         if (!escrowQuery.empty) {
             order.escrowTransactionId = escrowQuery.docs[0].id;

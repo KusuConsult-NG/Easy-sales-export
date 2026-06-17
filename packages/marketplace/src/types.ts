@@ -216,6 +216,7 @@ export interface Order {
     // Parties
     buyerId: string;
     sellerId: string;
+    sellerIds?: string[];
 
     // Items
     productIds: string[]; // For efficient querying

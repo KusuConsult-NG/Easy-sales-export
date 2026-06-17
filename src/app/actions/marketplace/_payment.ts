@@ -191,6 +191,7 @@ async function _initializeOrderPaymentAction(
         const orderId = `ORD-${Date.now()}-${userId.substring(0, 8)}`;
         await db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId).set({ 
             sellerIds,
+            sellerId: sellerIds[0] || "",
             orderId,
             buyerId: userId,
             buyerEmail,
@@ -697,6 +698,7 @@ async function _createBankTransferOrderAction(
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
             transaction.set(orderRef, { 
                 sellerIds,
+                sellerId: sellerIds[0] || "",
                 orderId,
                 buyerId: session.user.id,
                 buyerEmail,
@@ -811,6 +813,7 @@ async function _createPaymentOnDeliveryOrderAction(
                 buyerId: session.user.id,
                 buyerPhone,
                 sellerIds,
+                sellerId: sellerIds[0] || "",
                 items: validatedItems,
                 productIds: validatedItems.map((i) => i.productId),
                 subtotal,
