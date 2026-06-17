@@ -130,11 +130,11 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ""} 'unsafe-inline' https://js.paystack.co https://www.googletagmanager.com https://meet.jit.si`,
+              `script-src 'self'${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ""} 'unsafe-inline' https://js.paystack.co https://www.googletagmanager.com https://meet.jit.si https://maps.googleapis.com`,
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co https://api.cloudinary.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.jit.si wss://*.jit.si",
+              "connect-src 'self' https://*.firebaseio.com https://firebaseinstallations.googleapis.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.paystack.co https://api.cloudinary.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.jit.si wss://*.jit.si https://maps.googleapis.com https://maps.google.com",
               "frame-src 'self' https://js.paystack.co https://checkout.paystack.com https://www.youtube.com https://youtube.com https://firebasestorage.googleapis.com https://docs.google.com https://*.jit.si",
               "media-src 'self' https://firebasestorage.googleapis.com https://storage.googleapis.com blob:",
               "object-src 'none'",
