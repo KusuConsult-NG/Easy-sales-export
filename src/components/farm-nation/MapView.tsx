@@ -98,7 +98,7 @@ export default function MapView({ listings }: { listings: LandListing[] }) {
                     <p style="color: #64748b; font-size: 12px; margin-bottom: 4px;">${listing.state}</p>
                     <p style="font-size: 12px; margin-bottom: 4px;"><strong>Size:</strong> ${listing.size} ${listing.unit}</p>
                     <p style="font-size: 12px; margin-bottom: 8px;"><strong>Price:</strong> <span style="color: #10b981; font-weight: bold;">₦${(listing.totalPrice ?? listing.price ?? 0).toLocaleString()}</span></p>
-                    <a href="/farm-nation/${listing.id}" style="
+                    <a href="/farm-nation/property/${listing.id}" style="
                         display: inline-block;
                         background-color: #10b981;
                         color: white;
