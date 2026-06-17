@@ -74,7 +74,6 @@ export default function PersonalInfoStep({ data, onChange, errors }: PersonalInf
                     <option value="">Select gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
-                    <option value="other">Other</option>
                 </FormSelect>
             </div>
 

@@ -27,7 +27,7 @@ const profileUpdateSchema = z.object({ firstName: z.string().max(50).optional(),
     bio: z.string().max(500).optional(),
     identityDocument: z.string().optional(),
     photoURL: z.string().optional(),
-    gender: z.enum(["male", "female", "other"]).optional(),
+    gender: z.enum(["male", "female"]).optional(),
     version: z.number().optional() });
 
 const notificationPreferencesSchema = z.object({ email: z.boolean(),

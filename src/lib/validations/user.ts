@@ -14,7 +14,7 @@ export const UserSchema = z.object({
     fullName: z.string().default("Easy Sales User"),
     email: z.string().email().default("user@easysales.local"),
     phone: z.string().optional(),
-    gender: z.enum(["male", "female", "other"]).optional(),
+    gender: z.enum(["male", "female"]).optional(),
     stateOfOrigin: z.string().optional(),
     lga: z.string().optional(),
     residentialAddress: z.string().optional(),

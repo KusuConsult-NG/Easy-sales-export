@@ -39,7 +39,7 @@ export default function ProfilePage() {
         bio: "",
         identityDocument: "",
         photoURL: "",
-        gender: "" as "male" | "female" | "other" | "",
+        gender: "" as "male" | "female" | "",
         notifications: {
             email: true,
             push: false,
@@ -553,7 +553,6 @@ export default function ProfilePage() {
                                                     <option value="">Select Gender</option>
                                                     <option value="male">Male</option>
                                                     <option value="female">Female</option>
-                                                    <option value="other">Other</option>
                                                 </select>
                                             </div>
                                         </div>

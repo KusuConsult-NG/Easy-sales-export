@@ -59,7 +59,7 @@ export const registerSchema = z
         fullName: strictNameSchema,
         email: strictEmailSchema,
         phone: strictPhoneSchema,
-        gender: z.enum(["Male", "Female", "Other", "male", "female", "other"], { message: "Please select your gender" }),
+        gender: z.enum(["Male", "Female", "male", "female"], { message: "Please select your gender" }),
         password: z
             .string()
             .min(8, "Password must be at least 8 characters")
