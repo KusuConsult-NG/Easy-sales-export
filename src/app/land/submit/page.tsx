@@ -28,8 +28,7 @@ interface FormData {
     price: string;
     soilType: string;
     waterSource: string;
-    availableForSale: boolean;
-    availableForRent: boolean;
+    type: "sale" | "rent" | "lease";
 }
 
 export default function SubmitLandListingPage() {
@@ -49,8 +48,7 @@ export default function SubmitLandListingPage() {
         price: "",
         soilType: "",
         waterSource: "",
-        availableForSale: true,
-        availableForRent: false,
+        type: "sale",
     });
 
     const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -77,7 +75,7 @@ export default function SubmitLandListingPage() {
             return !!(formData.title && formData.description && formData.state && formData.lga);
         }
         if (currentStep === 2) {
-            return !!(formData.size && formData.price) && (formData.availableForSale || formData.availableForRent);
+            return !!(formData.size && formData.price && formData.type);
         }
         if (currentStep === 3) {
             return imageFiles.length > 0;
@@ -139,8 +137,10 @@ export default function SubmitLandListingPage() {
                 price: parseFloat(formData.price),
                 soilType: formData.soilType,
                 waterSource: formData.waterSource,
-                availableForSale: formData.availableForSale,
-                availableForRent: formData.availableForRent,
+                availableForSale: formData.type === "sale",
+                availableForRent: formData.type === "rent" || formData.type === "lease",
+                availableForLease: formData.type === "lease",
+                type: formData.type,
                 imageUrls,
                 documentUrls,
             });
@@ -401,35 +401,27 @@ export default function SubmitLandListingPage() {
 
                             <div className="space-y-3">
                                 <label className="block text-sm font-semibold text-slate-900">
-                                    Availability Options *
+                                    Listing Type *
                                 </label>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                                        <input
-                                            type="checkbox"
-                                            id="availableForSale"
-                                            name="availableForSale"
-                                            checked={formData.availableForSale}
-                                            onChange={(e) => setFormData({ ...formData, availableForSale: e.target.checked })}
-                                            className="w-5 h-5 text-green-600 rounded-sm focus:ring-2 focus:ring-green-600 cursor-pointer"
-                                        />
-                                        <label htmlFor="availableForSale" className="text-sm font-semibold text-slate-900 cursor-pointer select-none">
-                                            Available for Sale
-                                        </label>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                                        <input
-                                            type="checkbox"
-                                            id="availableForRent"
-                                            name="availableForRent"
-                                            checked={formData.availableForRent}
-                                            onChange={(e) => setFormData({ ...formData, availableForRent: e.target.checked })}
-                                            className="w-5 h-5 text-green-600 rounded-sm focus:ring-2 focus:ring-green-600 cursor-pointer"
-                                        />
-                                        <label htmlFor="availableForRent" className="text-sm font-semibold text-slate-900 cursor-pointer select-none">
-                                            Available for Rent/Lease
-                                        </label>
-                                    </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                    {[
+                                        { value: "sale", label: "For Sale", icon: "🏷️" },
+                                        { value: "rent", label: "For Rent", icon: "🔑" },
+                                        { value: "lease", label: "For Lease", icon: "📄" }
+                                    ].map((option) => (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, type: option.value as "sale" | "rent" | "lease" })}
+                                            className={`p-4 border-2 rounded-xl transition-all text-center flex flex-col items-center justify-center gap-1 cursor-pointer ${formData.type === option.value
+                                                ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
+                                                : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
+                                                }`}
+                                        >
+                                            <span className="text-2xl">{option.icon}</span>
+                                            <span className="font-bold text-slate-950 text-sm">{option.label}</span>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>

@@ -26,7 +26,7 @@ export interface Property { id: string;
     lga: string;
     price: number;
     size: number; // hectares
-    type: "sale" | "lease";
+    type: "sale" | "rent" | "lease";
     category: "farming-arable" | "farming-irrigated" | "farming-commercial" | "farming-mixed" | "leasing" | "poultry" | "fishery" | "greenhouse" | "mixed-use";
     images: string[];
     ownerId: string;
@@ -58,7 +58,7 @@ export interface PropertyListingInput { name: string;
     lga: string;
     price: number;
     size: number;
-    type: "sale" | "lease";
+    type: "sale" | "rent" | "lease";
     category: string | string[];
     features: string[];
     leaseDuration?: number; }

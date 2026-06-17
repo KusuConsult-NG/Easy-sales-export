@@ -1005,7 +1005,8 @@ async function _startAcademyLiveSessionAction(
 export const startAcademyLiveSessionAction = withFlexibleSafeAction("startAcademyLiveSessionAction", _startAcademyLiveSessionAction);
 
 async function _endAcademyLiveSessionAction(
-    courseId: string
+    courseId: string,
+    recordingUrl?: string
 ): Promise<
     | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
     | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
@@ -1026,13 +1027,20 @@ async function _endAcademyLiveSessionAction(
 
         // Delete or end live sessions for this course
         const ref = db.collection(COLLECTIONS.ACADEMY_LIVE_SESSIONS);
-        const query = ref.where("courseId", "==", courseId).where("status", "==", "live");
-        const snapshot = await query.get();
+        let snapshot = await ref.where("courseId", "==", courseId).where("status", "==", "live").get();
+
+        if (snapshot.empty && recordingUrl) {
+            snapshot = await ref.where("courseId", "==", courseId).where("status", "==", "ended").get();
+        }
 
         for (const doc of snapshot.docs) {
-            await ref.doc(doc.id).update({
+            const updateData: any = {
                 status: "ended",
-            });
+            };
+            if (recordingUrl) {
+                updateData.recordingUrl = recordingUrl;
+            }
+            await ref.doc(doc.id).update(updateData);
         }
 
         return { success: true as const, error: null, data: null };

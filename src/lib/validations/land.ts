@@ -42,7 +42,7 @@ export const farmNationListingSchema = z.object({
     lga: z.string().min(2, "LGA is required"),
     price: z.number().positive("Price must be positive"),
     size: z.number().positive("Size must be positive"),
-    type: z.enum(["sale", "lease"]),
+    type: z.enum(["sale", "rent", "lease"]),
     category: z.union([z.string(), z.array(z.string())]),
     features: z.array(z.string()),
     leaseDuration: z.number().optional(),
