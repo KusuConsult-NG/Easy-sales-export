@@ -216,7 +216,9 @@ async function _approveFarmNationSellerAction(userId: string): Promise<ActionRes
         return { success: false as const, data: null, error: error.message, meta: null };
     }
 }
-export const approveFarmNationSellerAction = withFlexibleSafeAction("approveFarmNationSellerAction", _approveFarmNationSellerAction);
+export async function approveFarmNationSellerAction(...args: Parameters<typeof _approveFarmNationSellerAction>) {
+    return withFlexibleSafeAction("approveFarmNationSellerAction", _approveFarmNationSellerAction)(...args);
+}
 
 async function _rejectFarmNationSellerAction(userId: string, reason: string): Promise<ActionResponse<null>> { 
     try {
@@ -276,7 +278,9 @@ async function _rejectFarmNationSellerAction(userId: string, reason: string): Pr
         return { success: false as const, data: null, error: error.message, meta: null };
     }
 }
-export const rejectFarmNationSellerAction = withFlexibleSafeAction("rejectFarmNationSellerAction", _rejectFarmNationSellerAction);
+export async function rejectFarmNationSellerAction(...args: Parameters<typeof _rejectFarmNationSellerAction>) {
+    return withFlexibleSafeAction("rejectFarmNationSellerAction", _rejectFarmNationSellerAction)(...args);
+}
 
 /**
  * Get property by ID
@@ -577,7 +581,9 @@ async function _getMyPurchaseRequestsAction(): Promise<ActionResponse<{ requests
         return { success: false as const, error: error.message, data: null, meta: null };
     }
 }
-export const getMyPurchaseRequestsAction = withFlexibleSafeAction("getMyPurchaseRequestsAction", _getMyPurchaseRequestsAction);
+export async function getMyPurchaseRequestsAction(...args: Parameters<typeof _getMyPurchaseRequestsAction>) {
+    return withFlexibleSafeAction("getMyPurchaseRequestsAction", _getMyPurchaseRequestsAction)(...args);
+}
 
 /**
  * Cancel a purchase/lease request
@@ -643,7 +649,9 @@ async function _cancelPurchaseRequestAction(requestId: string): Promise<ActionRe
         return { success: false as const, error: error.message, data: null, meta: null };
     }
 }
-export const cancelPurchaseRequestAction = withFlexibleSafeAction("cancelPurchaseRequestAction", _cancelPurchaseRequestAction);
+export async function cancelPurchaseRequestAction(...args: Parameters<typeof _cancelPurchaseRequestAction>) {
+    return withFlexibleSafeAction("cancelPurchaseRequestAction", _cancelPurchaseRequestAction)(...args);
+}
 
 /**
  * Delete a property listing
@@ -925,7 +933,9 @@ async function _submitFarmNationOnboardingAction(data: FarmNationOnboardingData)
         return { success: false as const, error: "An error occurred while processing your onboarding. Please try again.", data: null, meta: null };
     }
 }
-export const submitFarmNationOnboardingAction = withFlexibleSafeAction("submitFarmNationOnboardingAction", _submitFarmNationOnboardingAction);
+export async function submitFarmNationOnboardingAction(...args: Parameters<typeof _submitFarmNationOnboardingAction>) {
+    return withFlexibleSafeAction("submitFarmNationOnboardingAction", _submitFarmNationOnboardingAction)(...args);
+}
 
 // ============================================
 // Check Farm Nation Application Status Action
@@ -1056,7 +1066,9 @@ async function _checkFarmNationStatusAction(): Promise<ActionResponse<string | n
         return { success: false as const, error: "Failed to check status", data: null };
     }
 }
-export const checkFarmNationStatusAction = withFlexibleSafeAction("checkFarmNationStatusAction", _checkFarmNationStatusAction);
+export async function checkFarmNationStatusAction(...args: Parameters<typeof _checkFarmNationStatusAction>) {
+    return withFlexibleSafeAction("checkFarmNationStatusAction", _checkFarmNationStatusAction)(...args);
+}
 
 /**
  * Verify Property (Admin Only)
@@ -1260,7 +1272,9 @@ async function _getFarmNationApplicationAction(): Promise<ActionResponse<any>> {
         return { success: false as const, data: null, error: 'Failed to fetch application', meta: null };
     }
 }
-export const getFarmNationApplicationAction = withFlexibleSafeAction("getFarmNationApplicationAction", _getFarmNationApplicationAction);
+export async function getFarmNationApplicationAction(...args: Parameters<typeof _getFarmNationApplicationAction>) {
+    return withFlexibleSafeAction("getFarmNationApplicationAction", _getFarmNationApplicationAction)(...args);
+}
 
 /**
  * Resubmit a rejected Farm Nation onboarding application with corrected data.
@@ -1398,7 +1412,9 @@ async function _resubmitFarmNationApplicationAction(
         return { success: false as const, data: null, error: 'Failed to resubmit application', meta: null };
     }
 }
-export const resubmitFarmNationApplicationAction = withFlexibleSafeAction("resubmitFarmNationApplicationAction", _resubmitFarmNationApplicationAction);
+export async function resubmitFarmNationApplicationAction(...args: Parameters<typeof _resubmitFarmNationApplicationAction>) {
+    return withFlexibleSafeAction("resubmitFarmNationApplicationAction", _resubmitFarmNationApplicationAction)(...args);
+}
 
 // ============================================================================
 // DASHBOARD STATS — Farm Nation Member Dashboard
@@ -1574,4 +1590,6 @@ async function _checkFarmNationAccessAction(): Promise<ActionResponse<boolean>> 
         return { success: false as const, error: error.message ?? "Failed to verify access", data: null };
     }
 }
-export const checkFarmNationAccessAction = withFlexibleSafeAction("checkFarmNationAccessAction", _checkFarmNationAccessAction);
+export async function checkFarmNationAccessAction(...args: Parameters<typeof _checkFarmNationAccessAction>) {
+    return withFlexibleSafeAction("checkFarmNationAccessAction", _checkFarmNationAccessAction)(...args);
+}

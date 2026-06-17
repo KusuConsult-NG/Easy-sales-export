@@ -33,6 +33,16 @@ const NIGERIAN_STATES = [
     "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
 ];
 
+const PROPERTY_TYPES = [
+    "Cropland",
+    "Pasture/Rangeland",
+    "Fish Pond",
+    "Poultry Farm",
+    "Mixed Farm",
+    "Orchard",
+    "Greenhouse",
+    "Livestock Farm",
+];
 
 const STEPS = ["Identity", "Location", "Next of Kin", "Documents", "Financial", "Module Details"] as const;
 type Step = (typeof STEPS)[number];
@@ -81,6 +91,8 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
         farmNationRole: "farmer" as "farmer" | "buyer" | "seller" | "both",
         farmNationFarmSize: "",
         farmNationCropTypes: "",
+        farmNationPropertyTypes: [] as string[],
+        farmNationListingTypes: [] as string[],
         cooperativeAmount: "",
         services: {
             cooperative: module === "cooperative",
@@ -206,7 +218,9 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
             payload.farmNationInfo = {
                 role: formData.farmNationRole || undefined,
                 farmSize: formData.farmNationFarmSize || undefined,
-                cropTypes: formData.farmNationCropTypes ? formData.farmNationCropTypes.split(",") : undefined,
+                cropTypes: formData.farmNationCropTypes ? formData.farmNationCropTypes.split(",").map(c => c.trim()).filter(Boolean) : undefined,
+                propertyTypes: formData.farmNationPropertyTypes.length > 0 ? formData.farmNationPropertyTypes : undefined,
+                listingTypes: formData.farmNationListingTypes.length > 0 ? formData.farmNationListingTypes : undefined,
             };
         } else if (module === "cooperative") {
             payload.cooperativeInfo = {
@@ -246,6 +260,8 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
             waveSurname: "", waveResidentialState: "",
             farmNationRole: "farmer" as "farmer" | "buyer" | "seller" | "both",
             farmNationFarmSize: "", farmNationCropTypes: "",
+            farmNationPropertyTypes: [] as string[],
+            farmNationListingTypes: [] as string[],
             cooperativeAmount: "",
             services: {
                 cooperative: module === "cooperative",
@@ -577,7 +593,7 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
                         <ShieldCheck className="w-3.5 h-3.5" /> Other Services
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 mb-4">
                         {serviceList.map((svc) => (
                             <div key={svc.id}
                                 className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-xl border border-slate-100">
@@ -592,6 +608,167 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                             </div>
                         ))}
                     </div>
+
+                    {/* Cooperative Service Details */}
+                    {formData.services.cooperative && (
+                        <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-2 mb-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <label htmlFor="coop-amount" className="block text-xs font-bold text-slate-500 uppercase">Membership Share Amount (₦)</label>
+                            <input
+                                type="number"
+                                id="coop-amount"
+                                value={formData.cooperativeAmount}
+                                onChange={(e) => field("cooperativeAmount", e.target.value)}
+                                className={inputCls}
+                                placeholder="e.g. 50000"
+                            />
+                        </div>
+                    )}
+
+                    {/* Export Hub Service Details */}
+                    {formData.services.export && (
+                        <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-3 mb-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="text-xs font-bold text-slate-500 uppercase">Export Hub Details</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label htmlFor="export-companyName" className="block text-[11px] font-semibold text-slate-600 mb-1">Company Name</label>
+                                    <input type="text" id="export-companyName" value={formData.exportCompanyName} onChange={(e) => field("exportCompanyName", e.target.value)} className={inputCls} placeholder="e.g. AgriExport Ltd" />
+                                </div>
+                                <div>
+                                    <label htmlFor="export-rcNumber" className="block text-[11px] font-semibold text-slate-600 mb-1">RC Number</label>
+                                    <input type="text" id="export-rcNumber" value={formData.exportRcNumber} onChange={(e) => field("exportRcNumber", e.target.value)} className={inputCls} placeholder="e.g. RC123456" />
+                                </div>
+                                <div>
+                                    <label htmlFor="export-year" className="block text-[11px] font-semibold text-slate-600 mb-1">Year Established</label>
+                                    <input type="text" id="export-year" value={formData.exportYearEstablished} onChange={(e) => field("exportYearEstablished", e.target.value)} className={inputCls} placeholder="e.g. 2020" />
+                                </div>
+                                <div>
+                                    <label htmlFor="export-businessType" className="block text-[11px] font-semibold text-slate-600 mb-1">Business Type</label>
+                                    <select id="export-businessType" value={formData.exportBusinessType} onChange={(e) => field("exportBusinessType", e.target.value)} className={inputCls}>
+                                        <option value="sole_proprietorship">Sole Proprietorship</option>
+                                        <option value="partnership">Partnership</option>
+                                        <option value="limited_liability_company">Limited Liability Company</option>
+                                        <option value="cooperative">Cooperative</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="export-industry" className="block text-[11px] font-semibold text-slate-600 mb-1">Industry</label>
+                                <select id="export-industry" value={formData.exportIndustry} onChange={(e) => field("exportIndustry", e.target.value)} className={inputCls}>
+                                    <option value="agriculture">Agriculture</option>
+                                    <option value="manufacturing">Manufacturing</option>
+                                    <option value="services">Services</option>
+                                    <option value="tech">Technology</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* WAVE Service Details */}
+                    {formData.services.wave && (
+                        <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-3 mb-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="text-xs font-bold text-slate-500 uppercase">WAVE Details</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label htmlFor="wave-surname" className="block text-[11px] font-semibold text-slate-600 mb-1">WAVE Surname</label>
+                                    <input type="text" id="wave-surname" value={formData.waveSurname} onChange={(e) => field("waveSurname", e.target.value)} className={inputCls} placeholder="e.g. Johnson" />
+                                </div>
+                                <div>
+                                    <label htmlFor="wave-state" className="block text-[11px] font-semibold text-slate-600 mb-1">Residential State</label>
+                                    <select id="wave-state" value={formData.waveResidentialState} onChange={(e) => field("waveResidentialState", e.target.value)} className={inputCls}>
+                                        <option value="">Select State</option>
+                                        {NIGERIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Farm Nation Service Details */}
+                    {formData.services.farmNation && (
+                        <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-2xl space-y-3 mb-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="text-xs font-bold text-slate-500 uppercase">Farm Nation Details</div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label htmlFor="farmNation-role" className="block text-[11px] font-semibold text-slate-600 mb-1">Farm Nation Role</label>
+                                    <select id="farmNation-role" value={formData.farmNationRole} onChange={(e) => field("farmNationRole", e.target.value as any)} className={inputCls}>
+                                        <option value="farmer">Farmer</option>
+                                        <option value="buyer">Buyer / Investor</option>
+                                        <option value="seller">Land Seller</option>
+                                        <option value="both">Both (Buyer & Seller)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="farmNation-size" className="block text-[11px] font-semibold text-slate-600 mb-1">Farm/Land Size (Acres)</label>
+                                    <input type="text" id="farmNation-size" value={formData.farmNationFarmSize} onChange={(e) => field("farmNationFarmSize", e.target.value)} className={inputCls} placeholder="e.g. 10 acres" />
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="farmNation-crops" className="block text-[11px] font-semibold text-slate-600 mb-1">Crop Types (comma-separated)</label>
+                                <input type="text" id="farmNation-crops" value={formData.farmNationCropTypes} onChange={(e) => field("farmNationCropTypes", e.target.value)} className={inputCls} placeholder="e.g. Maize, Cassava, Yam" />
+                            </div>
+
+                            {/* Property Types */}
+                            {(formData.farmNationRole === "seller" || formData.farmNationRole === "both" || formData.farmNationRole === "farmer") && (
+                                <div className="space-y-1.5">
+                                    <label className="block text-[11px] font-semibold text-slate-600">Property Types to List</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        {PROPERTY_TYPES.map((type) => {
+                                            const isSelected = formData.farmNationPropertyTypes.includes(type);
+                                            return (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const current = formData.farmNationPropertyTypes;
+                                                        const updated = isSelected ? current.filter(t => t !== type) : [...current, type];
+                                                        field("farmNationPropertyTypes", updated);
+                                                    }}
+                                                    className={`px-2 py-1.5 rounded-lg border text-xs font-semibold text-center transition-all ${
+                                                        isSelected ? "border-emerald-600 bg-emerald-100 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300"
+                                                    }`}
+                                                >
+                                                    {type}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Listing Types */}
+                            {(formData.farmNationRole === "seller" || formData.farmNationRole === "both") && (
+                                <div className="space-y-1.5">
+                                    <label className="block text-[11px] font-semibold text-slate-600">Listing/Transaction Types Offered</label>
+                                    <div className="flex gap-2">
+                                        {[
+                                            { value: "sale", label: "For Sale" },
+                                            { value: "rent", label: "For Rent" },
+                                            { value: "lease", label: "For Lease" }
+                                        ].map((opt) => {
+                                            const isSelected = formData.farmNationListingTypes.includes(opt.value);
+                                            return (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const current = formData.farmNationListingTypes;
+                                                        const updated = isSelected ? current.filter(t => t !== opt.value) : [...current, opt.value];
+                                                        field("farmNationListingTypes", updated);
+                                                    }}
+                                                    className={`flex-1 py-1.5 rounded-lg border text-xs font-semibold text-center transition-all ${
+                                                        isSelected ? "border-emerald-600 bg-emerald-100 text-emerald-900" : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300"
+                                                    }`}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         );

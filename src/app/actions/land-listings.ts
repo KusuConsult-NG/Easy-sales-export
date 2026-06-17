@@ -93,7 +93,9 @@ async function _createLandListingAction(data: {
         return { success: false, error: "Failed to create land listing", data: null };
     }
 }
-export const createLandListingAction = withFlexibleSafeAction("createLandListingAction", _createLandListingAction);
+export async function createLandListingAction(...args: Parameters<typeof _createLandListingAction>) {
+    return withFlexibleSafeAction("createLandListingAction", _createLandListingAction)(...args);
+}
 
 /**
  * Submit listing for verification
@@ -127,7 +129,9 @@ async function _submitForVerificationAction(
         return { success: false, error: "Failed to submit for verification", data: null };
     }
 }
-export const submitForVerificationAction = withFlexibleSafeAction("submitForVerificationAction", _submitForVerificationAction);
+export async function submitForVerificationAction(...args: Parameters<typeof _submitForVerificationAction>) {
+    return withFlexibleSafeAction("submitForVerificationAction", _submitForVerificationAction)(...args);
+}
 
 /**
  * Admin: Verify land listing
@@ -179,7 +183,9 @@ async function _verifyLandListingAction(
         return { success: false, error: "Failed to verify listing", data: null };
     }
 }
-export const verifyLandListingAction = withFlexibleSafeAction("verifyLandListingAction", _verifyLandListingAction);
+export async function verifyLandListingAction(...args: Parameters<typeof _verifyLandListingAction>) {
+    return withFlexibleSafeAction("verifyLandListingAction", _verifyLandListingAction)(...args);
+}
 
 /**
  * Admin: Reject land listing
@@ -234,7 +240,9 @@ async function _rejectLandListingAction(
         return { success: false, error: "Failed to reject listing", data: null };
     }
 }
-export const rejectLandListingAction = withFlexibleSafeAction("rejectLandListingAction", _rejectLandListingAction);
+export async function rejectLandListingAction(...args: Parameters<typeof _rejectLandListingAction>) {
+    return withFlexibleSafeAction("rejectLandListingAction", _rejectLandListingAction)(...args);
+}
 
 const CROP_SOIL_MATRIX: Record<string, string[]> = {
     rice: ["clayey", "loamy"],
@@ -270,6 +278,7 @@ async function _searchLandListingsAction(filters: {
     cropType?: string;
     limit?: number;
     lastDocId?: string; 
+    type?: "sale" | "rent" | "lease";
 }): Promise<ActionResponse<{ listings: LandListing[]; lastDocId: string | null }>> { 
     const cacheKeyParts = [
         "land-listings",
@@ -283,7 +292,8 @@ async function _searchLandListingsAction(filters: {
         filters.waterSource || "all",
         filters.cropType || "all",
         filters.limit?.toString() || "12",
-        filters.lastDocId || "start"
+        filters.lastDocId || "start",
+        filters.type || "all"
     ];
 
     const getCachedListings = unstable_cache(
@@ -353,6 +363,7 @@ async function _searchLandListingsAction(filters: {
                 if (filters.maxPrice) { results = results.filter((l) => l.price <= filters.maxPrice!); }
                 if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
                 if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
+                if (filters.type) { results = results.filter((l) => l.type === filters.type); }
 
                 // Client-side filtering for category (supports legacy string and new string array)
                 if (filters.category) {
@@ -405,7 +416,9 @@ async function _searchLandListingsAction(filters: {
     const result = await getCachedListings();
     return { success: true, error: null, data: result };
 }
-export const searchLandListingsAction = withFlexibleSafeAction("searchLandListingsAction", _searchLandListingsAction);
+export async function searchLandListingsAction(...args: Parameters<typeof _searchLandListingsAction>) {
+    return withFlexibleSafeAction("searchLandListingsAction", _searchLandListingsAction)(...args);
+}
 
 /**
  * Get pending land listings (admin)
@@ -431,7 +444,9 @@ async function _getPendingLandListingsAction(): Promise<ActionResponse<LandListi
         return { success: false, error: "Failed to fetch pending listings", data: null };
     }
 }
-export const getPendingLandListingsAction = withFlexibleSafeAction("getPendingLandListingsAction", _getPendingLandListingsAction);
+export async function getPendingLandListingsAction(...args: Parameters<typeof _getPendingLandListingsAction>) {
+    return withFlexibleSafeAction("getPendingLandListingsAction", _getPendingLandListingsAction)(...args);
+}
 
 /**
  * Submit land listing with file uploads
@@ -521,7 +536,9 @@ async function _submitLandListingAction(data: {
         return { success: false, error: error.message || "Failed to submit land listing", data: null };
     }
 }
-export const submitLandListingAction = withFlexibleSafeAction("submitLandListingAction", _submitLandListingAction);
+export async function submitLandListingAction(...args: Parameters<typeof _submitLandListingAction>) {
+    return withFlexibleSafeAction("submitLandListingAction", _submitLandListingAction)(...args);
+}
 
 /**
  * Get single land listing by ID
@@ -556,7 +573,9 @@ async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandLi
         return { success: false, error: "Failed to fetch property", data: null };
     }
 }
-export const getPropertyByIdAction = withFlexibleSafeAction("getPropertyByIdAction", _getPropertyByIdAction);
+export async function getPropertyByIdAction(...args: Parameters<typeof _getPropertyByIdAction>) {
+    return withFlexibleSafeAction("getPropertyByIdAction", _getPropertyByIdAction)(...args);
+}
 
 /**
  * Submit inquiry for a land listing
@@ -602,7 +621,9 @@ async function _submitLandInquiryAction(data: {
         return { success: false, error: error.message || "Failed to send message", data: null };
     }
 }
-export const submitLandInquiryAction = withFlexibleSafeAction("submitLandInquiryAction", _submitLandInquiryAction);
+export async function submitLandInquiryAction(...args: Parameters<typeof _submitLandInquiryAction>) {
+    return withFlexibleSafeAction("submitLandInquiryAction", _submitLandInquiryAction)(...args);
+}
 
 /**
  * Get inquiries for a user (as seller)
@@ -623,7 +644,9 @@ async function _getLandInquiriesAction(userId: string): Promise<ActionResponse<a
         return { success: false, error: error.message || "Failed to fetch inquiries", data: null };
     }
 }
-export const getLandInquiriesAction = withFlexibleSafeAction("getLandInquiriesAction", _getLandInquiriesAction);
+export async function getLandInquiriesAction(...args: Parameters<typeof _getLandInquiriesAction>) {
+    return withFlexibleSafeAction("getLandInquiriesAction", _getLandInquiriesAction)(...args);
+}
 
 /**
  * Get single inquiry by ID
@@ -647,7 +670,9 @@ async function _getLandInquiryByIdAction(inquiryId: string): Promise<ActionRespo
         return { success: false, error: error.message || "Failed to fetch inquiry", data: null };
     }
 }
-export const getLandInquiryByIdAction = withFlexibleSafeAction("getLandInquiryByIdAction", _getLandInquiryByIdAction);
+export async function getLandInquiryByIdAction(...args: Parameters<typeof _getLandInquiryByIdAction>) {
+    return withFlexibleSafeAction("getLandInquiryByIdAction", _getLandInquiryByIdAction)(...args);
+}
 
 /**
  * Admin: Delete land listing
@@ -692,4 +717,6 @@ async function _deleteLandListingAction(
         return { success: false, error: "Failed to delete listing", data: null };
     }
 }
-export const deleteLandListingAction = withFlexibleSafeAction("deleteLandListingAction", _deleteLandListingAction);
+export async function deleteLandListingAction(...args: Parameters<typeof _deleteLandListingAction>) {
+    return withFlexibleSafeAction("deleteLandListingAction", _deleteLandListingAction)(...args);
+}

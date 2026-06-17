@@ -24,6 +24,12 @@ export const landListingSchema = z.object({
     waterSource: z.enum(["borehole", "river", "rain", "dam", "none"]).optional(),
     category: z.union([z.string(), z.array(z.string())]).optional(),
 
+    availableForSale: z.boolean().optional(),
+    availableForRent: z.boolean().optional(),
+    availableForLease: z.boolean().optional(),
+    type: z.enum(["sale", "rent", "lease"]).optional(),
+    escrowAvailable: z.boolean().optional(),
+
     features: z.array(z.string()),
     images: z.array(z.string().url()).min(1, "At least one image required"),
 });

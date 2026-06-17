@@ -72,7 +72,9 @@ async function _createLandListing(
         return { success: false, error: "Failed to create land listing", data: null };
     }
 }
-export const createLandListing = withFlexibleSafeAction("createLandListing", _createLandListing);
+export async function createLandListing(...args: Parameters<typeof _createLandListing>) {
+    return withFlexibleSafeAction("createLandListing", _createLandListing)(...args);
+}
 
 /**
  * Get all land listings with optional filters
@@ -138,7 +140,9 @@ async function _getLandListings(filters?: z.infer<typeof landSearchSchema>): Pro
         return { success: false, error: "Failed to fetch land listings", data: null };
     }
 }
-export const getLandListings = withFlexibleSafeAction("getLandListings", _getLandListings);
+export async function getLandListings(...args: Parameters<typeof _getLandListings>) {
+    return withFlexibleSafeAction("getLandListings", _getLandListings)(...args);
+}
 
 /**
  * Get verified land listings only (public view)
@@ -146,7 +150,9 @@ export const getLandListings = withFlexibleSafeAction("getLandListings", _getLan
 async function _getVerifiedLandListings(filters?: z.infer<typeof landSearchSchema>): Promise<ActionResponse<LandListing[]>> { 
     return _getLandListings({ ...filters, status: 'verified' });
 }
-export const getVerifiedLandListings = withFlexibleSafeAction("getVerifiedLandListings", _getVerifiedLandListings);
+export async function getVerifiedLandListings(...args: Parameters<typeof _getVerifiedLandListings>) {
+    return withFlexibleSafeAction("getVerifiedLandListings", _getVerifiedLandListings)(...args);
+}
 
 /**
  * Get a specific land listing by ID
@@ -180,7 +186,9 @@ async function _getLandListing(listingId: string): Promise<ActionResponse<LandLi
         return { success: false, error: "Failed to fetch listing", data: null };
     }
 }
-export const getLandListing = withFlexibleSafeAction("getLandListing", _getLandListing);
+export async function getLandListing(...args: Parameters<typeof _getLandListing>) {
+    return withFlexibleSafeAction("getLandListing", _getLandListing)(...args);
+}
 
 /**
  * Get user's own land listings
@@ -221,7 +229,9 @@ async function _getMyLandListings(): Promise<ActionResponse<LandListing[]>> {
         return { success: false, error: "Failed to fetch your listings", data: null };
     }
 }
-export const getMyLandListings = withFlexibleSafeAction("getMyLandListings", _getMyLandListings);
+export async function getMyLandListings(...args: Parameters<typeof _getMyLandListings>) {
+    return withFlexibleSafeAction("getMyLandListings", _getMyLandListings)(...args);
+}
 
 /**
  * Update a land listing (owner only)
@@ -283,7 +293,9 @@ async function _updateLandListing(
         return { success: false, error: "Failed to update listing", data: null };
     }
 }
-export const updateLandListing = withFlexibleSafeAction("updateLandListing", _updateLandListing);
+export async function updateLandListing(...args: Parameters<typeof _updateLandListing>) {
+    return withFlexibleSafeAction("updateLandListing", _updateLandListing)(...args);
+}
 
 /**
  * Verify or reject a land listing (Admin only)
@@ -337,7 +349,9 @@ async function _verifyLandListing(
         return { success: false, error: "Failed to verify listing", data: null };
     }
 }
-export const verifyLandListing = withFlexibleSafeAction("verifyLandListing", _verifyLandListing);
+export async function verifyLandListing(...args: Parameters<typeof _verifyLandListing>) {
+    return withFlexibleSafeAction("verifyLandListing", _verifyLandListing)(...args);
+}
 
 /**
  * Delete a land listing (owner or admin only)
@@ -381,7 +395,9 @@ async function _deleteLandListing(listingId: string): Promise<ActionResponse<nul
         return { success: false, error: "Failed to delete listing", data: null };
     }
 }
-export const deleteLandListing = withFlexibleSafeAction("deleteLandListing", _deleteLandListing);
+export async function deleteLandListing(...args: Parameters<typeof _deleteLandListing>) {
+    return withFlexibleSafeAction("deleteLandListing", _deleteLandListing)(...args);
+}
 
 /**
  * Get land listing statistics (Admin only)
@@ -443,4 +459,6 @@ async function _getLandStatistics(): Promise<ActionResponse<any>> {
         return { success: false, error: "Failed to fetch statistics", data: null };
     }
 }
-export const getLandStatistics = withFlexibleSafeAction("getLandStatistics", _getLandStatistics);
+export async function getLandStatistics(...args: Parameters<typeof _getLandStatistics>) {
+    return withFlexibleSafeAction("getLandStatistics", _getLandStatistics)(...args);
+}

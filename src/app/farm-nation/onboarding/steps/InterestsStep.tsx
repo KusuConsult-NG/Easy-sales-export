@@ -48,10 +48,11 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
     const [formData, setFormData] = useState({
         // Buyer fields
-        propertyTypes: initialData?.propertyTypes || [],
+        buyerPropertyTypes: role === "both" || role === "buyer" ? (initialData?.propertyTypes || []) : [],
         budgetRange: initialData?.budgetRange || "",
         preferredSize: initialData?.preferredSize || "",
         // Seller fields
+        sellerPropertyTypes: role === "both" || role === "seller" ? (initialData?.propertyTypes || []) : [],
         listingTypes: initialData?.listingTypes || [],
         totalAcreage: initialData?.totalAcreage || "",
         readyToList: initialData?.readyToList || false,
@@ -63,15 +64,27 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const togglePropertyType = (type: string) => {
+    const toggleBuyerPropertyType = (type: string) => {
         setFormData((prev) => ({
             ...prev,
-            propertyTypes: prev.propertyTypes.includes(type)
-                ? prev.propertyTypes.filter((t: string) => t !== type)
-                : [...prev.propertyTypes, type],
+            buyerPropertyTypes: prev.buyerPropertyTypes.includes(type)
+                ? prev.buyerPropertyTypes.filter((t: string) => t !== type)
+                : [...prev.buyerPropertyTypes, type],
         }));
-        if (errors.propertyTypes) {
-            setErrors((prev) => ({ ...prev, propertyTypes: "" }));
+        if (errors.buyerPropertyTypes) {
+            setErrors((prev) => ({ ...prev, buyerPropertyTypes: "" }));
+        }
+    };
+
+    const toggleSellerPropertyType = (type: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            sellerPropertyTypes: prev.sellerPropertyTypes.includes(type)
+                ? prev.sellerPropertyTypes.filter((t: string) => t !== type)
+                : [...prev.sellerPropertyTypes, type],
+        }));
+        if (errors.sellerPropertyTypes) {
+            setErrors((prev) => ({ ...prev, sellerPropertyTypes: "" }));
         }
     };
 
@@ -117,8 +130,8 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
         const newErrors: Record<string, string> = {};
 
         if (isBuyer) {
-            if (formData.propertyTypes.length === 0) {
-                newErrors.propertyTypes = "Select at least one property type";
+            if (formData.buyerPropertyTypes.length === 0) {
+                newErrors.buyerPropertyTypes = "Select at least one property type";
             }
             if (!formData.budgetRange) {
                 newErrors.budgetRange = "Select your budget range";
@@ -126,8 +139,11 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
         }
 
         if (isSeller) {
+            if (formData.sellerPropertyTypes.length === 0) {
+                newErrors.sellerPropertyTypes = "Select at least one property type to list";
+            }
             if (formData.listingTypes.length === 0) {
-                newErrors.listingTypes = "Select at least one property type to list";
+                newErrors.listingTypes = "Select at least one transaction option (Sale, Rent, Lease)";
             }
             if (!formData.farmLocation || !formData.farmLocation.trim()) {
                 newErrors.farmLocation = "Exact farm location is required";
@@ -141,7 +157,25 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (validate()) {
-            onNext({ interests: formData });
+            const mergedPropertyTypes = Array.from(new Set([
+                ...(isBuyer ? formData.buyerPropertyTypes : []),
+                ...(isSeller ? formData.sellerPropertyTypes : [])
+            ]));
+
+            onNext({
+                interests: {
+                    propertyTypes: mergedPropertyTypes,
+                    budgetRange: formData.budgetRange,
+                    preferredSize: formData.preferredSize,
+                    listingTypes: formData.listingTypes,
+                    totalAcreage: formData.totalAcreage,
+                    readyToList: formData.readyToList,
+                    farmLocation: formData.farmLocation,
+                    latitude: formData.latitude,
+                    longitude: formData.longitude,
+                    farmDocuments: formData.farmDocuments,
+                }
+            });
         }
     }
 
@@ -173,8 +207,8 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                 <button
                                     key={type}
                                     type="button"
-                                    onClick={() => togglePropertyType(type)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.propertyTypes.includes(type)
+                                    onClick={() => toggleBuyerPropertyType(type)}
+                                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.buyerPropertyTypes.includes(type)
                                             ? "border-teal-600 bg-teal-50 text-teal-900"
                                             : "border-slate-200 text-slate-900 hover:border-teal-300"
                                         }`}
@@ -183,8 +217,8 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                 </button>
                             ))}
                         </div>
-                        {errors.propertyTypes && (
-                            <p className="mt-2 text-sm text-red-500">{errors.propertyTypes}</p>
+                        {errors.buyerPropertyTypes && (
+                            <p className="mt-2 text-sm text-red-500">{errors.buyerPropertyTypes}</p>
                         )}
                     </div>
 
@@ -239,7 +273,7 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                         Farm Information
                     </h3>
 
-                    {/* Listing Types */}
+                    {/* Property Types */}
                     <div>
                         <label className="block text-sm font-semibold text-slate-900 mb-3">
                             What type of properties do you want to list? <span className="text-red-500">*</span>
@@ -249,8 +283,8 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                 <button
                                     key={type}
                                     type="button"
-                                    onClick={() => toggleListingType(type)}
-                                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.listingTypes.includes(type)
+                                    onClick={() => toggleSellerPropertyType(type)}
+                                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${formData.sellerPropertyTypes.includes(type)
                                             ? "border-teal-600 bg-teal-50 text-teal-900"
                                             : "border-slate-200 text-slate-900 hover:border-teal-300"
                                         }`}
@@ -258,6 +292,41 @@ export default function InterestsStep({ onNext, onBack, initialData, role }: Int
                                     {type}
                                 </button>
                             ))}
+                        </div>
+                        {errors.sellerPropertyTypes && (
+                            <p className="mt-2 text-sm text-red-500">{errors.sellerPropertyTypes}</p>
+                        )}
+                    </div>
+
+                    {/* Transaction / Listing Types */}
+                    <div>
+                        <label className="block text-sm font-semibold text-slate-900 mb-3">
+                            What listing options do you want to offer? <span className="text-red-500">*</span>
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            {[
+                                { value: "sale", label: "For Sale", description: "Permanent land purchase", icon: "🏷️" },
+                                { value: "rent", label: "For Rent", description: "Short-term rental", icon: "🔑" },
+                                { value: "lease", label: "For Lease", description: "Long-term agricultural lease", icon: "📄" }
+                            ].map((opt) => {
+                                const isSelected = formData.listingTypes.includes(opt.value);
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => toggleListingType(opt.value)}
+                                        className={`p-4 rounded-xl border-2 transition-all text-left flex flex-col gap-1 cursor-pointer ${
+                                            isSelected
+                                                ? "border-teal-600 bg-teal-50/50 ring-2 ring-teal-600/25"
+                                                : "border-slate-200 hover:border-teal-400 hover:bg-slate-50/50 text-slate-900"
+                                        }`}
+                                    >
+                                        <div className="text-2xl mb-1">{opt.icon}</div>
+                                        <div className="font-bold text-slate-950 text-sm">{opt.label}</div>
+                                        <div className="text-[11px] text-slate-500 leading-normal">{opt.description}</div>
+                                    </button>
+                                );
+                            })}
                         </div>
                         {errors.listingTypes && (
                             <p className="mt-2 text-sm text-red-500">{errors.listingTypes}</p>

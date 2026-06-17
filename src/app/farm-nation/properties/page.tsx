@@ -18,6 +18,7 @@ function PropertiesContent() {
         propertyType: searchParams.get("type") || "",
         location: searchParams.get("location") || "",
         priceRange: "",
+        listingType: searchParams.get("listingType") || "",
     });
 
     // State for data
@@ -53,6 +54,7 @@ function PropertiesContent() {
                 maxPrice,
                 limit: 12,
                 lastDocId: currentLastDoc,
+                type: (filters.listingType || undefined) as "sale" | "rent" | "lease" | undefined,
             });
 
             if (result.success && result.data) {
@@ -94,7 +96,7 @@ function PropertiesContent() {
         }, 500);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filters.propertyType, filters.location, filters.priceRange, searchTerm]);
+    }, [filters.propertyType, filters.location, filters.priceRange, filters.listingType, searchTerm]);
 
     function handleLoadMore() {
         if (!loadingMore && hasMore) {
@@ -162,6 +164,18 @@ function PropertiesContent() {
                             <option value="mixed">Mixed Use</option>
                         </select>
 
+                        {/* Listing Type Filter */}
+                        <select
+                            value={filters.listingType}
+                            onChange={(e) => handleFilterChange("listingType", e.target.value)}
+                            className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500 transition"
+                        >
+                            <option value="">All Listing Types</option>
+                            <option value="sale">For Sale</option>
+                            <option value="rent">For Rent</option>
+                            <option value="lease">For Lease</option>
+                        </select>
+
                         {/* Location Filter */}
                         <select
                             value={filters.location}
@@ -213,7 +227,7 @@ function PropertiesContent() {
                         </p>
                         <button
                             onClick={() => {
-                                setFilters({ propertyType: "", location: "", priceRange: "" });
+                                setFilters({ propertyType: "", location: "", priceRange: "", listingType: "" });
                                 setSearchTerm("");
                             }}
                             className="px-6 py-3 bg-teal-600 text-white rounded-xl font-semibold hover:bg-teal-700 transition"

@@ -31,6 +31,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
         size: 0,
         category: [] as string[],
         features: [] as string[],
+        listingType: "sale" as "sale" | "rent" | "lease",
     });
 
     const nigerianStates = [
@@ -69,6 +70,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                             ? prop.category
                             : (prop.category ? [prop.category] : ["farmland"]),
                         features: (prop as any).features || [],
+                        listingType: (prop.type || "sale") as "sale" | "rent" | "lease",
                     });
                 } else {
                     showToast(result.error || "Property not found", "error");
@@ -121,6 +123,10 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                 size: formData.size,
                 category: formData.category,
                 features: formData.features,
+                availableForSale: formData.listingType === "sale",
+                availableForRent: formData.listingType === "rent" || formData.listingType === "lease",
+                availableForLease: formData.listingType === "lease",
+                type: formData.listingType,
             });
 
             if (result.success) {
@@ -310,6 +316,42 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                         step="1000"
                                         required
                                     />
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Availability Options */}
+                        <section>
+                            <h2 className="text-2xl font-bold text-slate-900 mb-6">
+                                Availability Options
+                            </h2>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-semibold text-slate-900 mb-3">
+                                        Listing Type *
+                                    </label>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {[
+                                            { value: "sale", label: "For Sale", description: "List this land for permanent purchase", icon: "🏷️" },
+                                            { value: "rent", label: "For Rent", description: "List this land for short-term rental/lease", icon: "🔑" },
+                                            { value: "lease", label: "For Lease", description: "List this land for long-term agricultural lease", icon: "📄" }
+                                        ].map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, listingType: option.value as "sale" | "rent" | "lease" })}
+                                                className={`p-5 border-2 rounded-xl transition-all text-left flex flex-col ${formData.listingType === option.value
+                                                    ? "border-green-600 bg-green-50/50 ring-2 ring-green-600/25"
+                                                    : "border-slate-200 hover:border-green-400 hover:bg-slate-50/50"
+                                                    }`}
+                                            >
+                                                <div className="text-3xl mb-3">{option.icon}</div>
+                                                <h3 className="font-bold text-slate-950 mb-1">{option.label}</h3>
+                                                <p className="text-xs text-slate-600 leading-relaxed">{option.description}</p>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </section>
