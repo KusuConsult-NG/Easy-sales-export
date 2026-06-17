@@ -22,6 +22,7 @@ export const landListingSchema = z.object({
 
     soilQuality: z.nativeEnum(SoilQuality).optional(),
     waterSource: z.enum(["borehole", "river", "rain", "dam", "none"]).optional(),
+    category: z.union([z.string(), z.array(z.string())]).optional(),
 
     features: z.array(z.string()),
     images: z.array(z.string().url()).min(1, "At least one image required"),
@@ -42,7 +43,7 @@ export const farmNationListingSchema = z.object({
     price: z.number().positive("Price must be positive"),
     size: z.number().positive("Size must be positive"),
     type: z.enum(["sale", "lease"]),
-    category: z.string().min(1, "Category is required"),
+    category: z.union([z.string(), z.array(z.string())]),
     features: z.array(z.string()),
     leaseDuration: z.number().optional(),
 });

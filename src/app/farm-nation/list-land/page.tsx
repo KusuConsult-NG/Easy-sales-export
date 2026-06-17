@@ -25,7 +25,7 @@ export default function ListLandPage() {
 
     const [formData, setFormData] = useState({
         title: "",
-        category: "" as LandCategory | "",
+        category: [] as LandCategory[],
         description: "",
         state: "",
         lga: "",
@@ -50,6 +50,16 @@ export default function ListLandPage() {
         surveyPlan: null as File | null,
         taxClearance: null as File | null,
     });
+
+    const toggleCategory = (value: LandCategory) => {
+        setFormData(prev => {
+            const current = Array.isArray(prev.category) ? prev.category : (prev.category ? [prev.category as LandCategory] : []);
+            const updated = current.includes(value)
+                ? current.filter(c => c !== value)
+                : [...current, value];
+            return { ...prev, category: updated };
+        });
+    };
 
     const landCategories = [
         { value: "farmland", label: "Farmland (Crop Cultivation)", icon: "🌾" },
@@ -95,6 +105,11 @@ export default function ListLandPage() {
         if (!session?.user) {
             showToast("Authentication Required: Please login to list your land.", "error");
             router.push("/auth/login?callbackUrl=/farm-nation/list-land");
+            return;
+        }
+
+        if (!formData.category || formData.category.length === 0) {
+            showToast("Validation Error: Please select at least one land category.", "error");
             return;
         }
 
@@ -245,8 +260,8 @@ export default function ListLandPage() {
                                             <button
                                                 key={cat.value}
                                                 type="button"
-                                                onClick={() => setFormData({ ...formData, category: cat.value as LandCategory })}
-                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category === cat.value
+                                                onClick={() => toggleCategory(cat.value as LandCategory)}
+                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category.includes(cat.value as LandCategory)
                                                     ? "border-green-600 bg-green-50"
                                                     : "border-slate-200 hover:border-green-400"
                                                     }`}

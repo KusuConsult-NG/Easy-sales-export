@@ -29,7 +29,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
         address: "",
         price: 0,
         size: 0,
-        category: "",
+        category: [] as string[],
         features: [] as string[],
     });
 
@@ -65,7 +65,9 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                         address: location.address || "",
                         price: prop.price || 0,
                         size: prop.size || 0,
-                        category: prop.category || "farmland",
+                        category: Array.isArray(prop.category)
+                            ? prop.category
+                            : (prop.category ? [prop.category] : ["farmland"]),
                         features: (prop as any).features || [],
                     });
                 } else {
@@ -81,6 +83,16 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
 
         loadProperty();
     }, [params.id, session, router, showToast]);
+
+    const toggleCategory = (value: string) => {
+        setFormData(prev => {
+            const current = Array.isArray(prev.category) ? prev.category : (prev.category ? [prev.category] : []);
+            const updated = current.includes(value)
+                ? current.filter(c => c !== value)
+                : [...current, value];
+            return { ...prev, category: updated };
+        });
+    };
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -107,6 +119,7 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                 },
                 price: formData.price,
                 size: formData.size,
+                category: formData.category,
                 features: formData.features,
             });
 
@@ -180,8 +193,8 @@ export default function EditPropertyPage(props: EditPropertyPageProps) {
                                             <button
                                                 key={type.value}
                                                 type="button"
-                                                onClick={() => setFormData({ ...formData, category: type.value })}
-                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category === type.value
+                                                onClick={() => toggleCategory(type.value)}
+                                                className={`p-4 border-2 rounded-lg transition-all text-left ${formData.category.includes(type.value)
                                                     ? "border-green-600 bg-green-50"
                                                     : "border-slate-200 hover:border-green-400"
                                                     }`}

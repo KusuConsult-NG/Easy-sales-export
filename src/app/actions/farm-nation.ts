@@ -59,7 +59,7 @@ export interface PropertyListingInput { name: string;
     price: number;
     size: number;
     type: "sale" | "lease";
-    category: string;
+    category: string | string[];
     features: string[];
     leaseDuration?: number; }
 
@@ -113,7 +113,17 @@ async function _getPropertiesAction(filters?: {
                 properties = properties.filter((p) => p.state === filters.state);
             }
             if (filters.category && filters.category !== "all") { 
-                properties = properties.filter((p) => p.category === filters.category);
+                properties = properties.filter((p) => {
+                    if (!p.category) return false;
+                    if (Array.isArray(p.category)) {
+                        return p.category.includes(filters.category!);
+                    }
+                    if (typeof p.category === "string") {
+                        const cats = p.category.split(",").map(c => c.trim().toLowerCase());
+                        return cats.includes(filters.category!.toLowerCase()) || p.category === filters.category;
+                    }
+                    return false;
+                });
             }
             if (filters.type && filters.type !== "all") { 
                 properties = properties.filter((p) => p.type === filters.type);

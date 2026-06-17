@@ -33,7 +33,7 @@ export interface LandListing {
     };
     size: number; // in hectares
     price: number;
-    category?: string;
+    category?: string | string[];
     soilType?: string;
     waterSource?: string;
     images: string[];
@@ -296,9 +296,7 @@ async function _searchLandListingsAction(filters: {
                 if (filters.state) {
                     q = q.where("location.state", "==", filters.state);
                 }
-                if (filters.category) { 
-                    q = q.where("category", "==", filters.category);
-                }
+
 
                 if (filters.lastDocId) { 
                     const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
@@ -322,7 +320,7 @@ async function _searchLandListingsAction(filters: {
                         // Fallback without orderBy
                         let fallbackQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified");
                         if (filters.state) fallbackQuery = fallbackQuery.where("location.state", "==", filters.state);
-                        if (filters.category) fallbackQuery = fallbackQuery.where("category", "==", filters.category);
+                        
                         if (filters.lastDocId) { 
                             const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
                             if (lastDoc.exists) fallbackQuery = fallbackQuery.startAfter(lastDoc);
@@ -356,6 +354,21 @@ async function _searchLandListingsAction(filters: {
                 if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
                 if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
 
+                // Client-side filtering for category (supports legacy string and new string array)
+                if (filters.category) {
+                    results = results.filter((l) => {
+                        if (!l.category) return false;
+                        if (Array.isArray(l.category)) {
+                            return l.category.includes(filters.category!);
+                        }
+                        if (typeof l.category === "string") {
+                            const cats = l.category.split(",").map(c => c.trim().toLowerCase());
+                            return cats.includes(filters.category!.toLowerCase()) || l.category === filters.category;
+                        }
+                        return false;
+                    });
+                }
+
                 // Crop-Soil Suitability Matrix filtering
                 if (filters.cropType) {
                     const suitableSoils = CROP_SOIL_MATRIX[filters.cropType.toLowerCase()] || [];
@@ -368,7 +381,9 @@ async function _searchLandListingsAction(filters: {
                         results = results.filter((l) => {
                             const desc = l.description?.toLowerCase() || "";
                             const title = l.title?.toLowerCase() || "";
-                            const cat = l.category?.toLowerCase() || "";
+                            const cat = (Array.isArray(l.category) 
+                                ? l.category.join(", ") 
+                                : l.category)?.toLowerCase() || "";
                             const searchTerm = filters.cropType!.toLowerCase();
                             return desc.includes(searchTerm) || title.includes(searchTerm) || cat.includes(searchTerm);
                         });
@@ -430,7 +445,7 @@ async function _submitLandListingAction(data: {
     location: { state: string; lga: string; address: string };
     size: number;
     price: number;
-    category?: string;
+    category?: string | string[];
     soilType?: string;
     waterSource?: string;
     imageUrls: string[];
