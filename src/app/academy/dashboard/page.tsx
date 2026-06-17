@@ -60,7 +60,8 @@ export default function AcademyDashboardPage() {
         if (status === "authenticated" && membershipStatus !== "loading") {
             if (membershipStatus === "approved" || membershipStatus === "active") {
                 // SILENT REFRESH: If local session is stale, refresh it
-                if ((sessionData?.user as any)?.serviceRegistrations?.academy?.status !== "approved") {
+                const currentStatus = (sessionData?.user as any)?.serviceRegistrations?.academy?.status;
+                if (currentStatus !== "approved" && currentStatus !== "active") {
                     updateSession();
                 }
                 setIsUnpaid(false);
@@ -90,7 +91,7 @@ export default function AcademyDashboardPage() {
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [status, router, membershipStatus]);
+    }, [status, router, membershipStatus, sessionData, updateSession]);
 
     async function fetchDashboardData() {
         try {
