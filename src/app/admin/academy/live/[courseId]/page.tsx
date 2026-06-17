@@ -171,7 +171,7 @@ export default function AdminAcademyLivePage({ params }: Props) {
 
             {/* Video Room — full remaining height */}
             <div className="flex-1 p-4">
-                <div className="h-full min-h-[500px]">
+                <div className="h-[calc(100vh-200px)] min-h-[600px]">
                     {liveSession?.customMeetingLink ? (
                         <div className="flex items-center justify-center h-full bg-slate-800 rounded-xl border border-slate-700">
                             <div className="text-center p-8 max-w-lg">
