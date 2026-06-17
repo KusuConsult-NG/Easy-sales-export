@@ -816,6 +816,7 @@ async function _getStandardAcademyApplicationsAction(options: {
         const fetchLimit = options.search ? 5000 : (options.limit || 50);
         const orderDirection = options.sortOrder || "desc";
         
+        let snapshot: any = null;
         let applications: any[] = [];
 
         if (options.search) {
@@ -884,7 +885,7 @@ async function _getStandardAcademyApplicationsAction(options: {
             }
             q = q.limit(fetchLimit);
 
-            const snapshot = await q.get();
+            snapshot = await q.get();
             applications = serializeDocs(snapshot.docs);
         }
 

@@ -930,6 +930,24 @@ async function _getStandardWaveApplicationsAction(options: {
             return { success: false as const, error: "Unauthorized" };
         }
 
+        const useMemoryPagination = !!options.search || !!options.dateFrom || !!options.dateTo;
+        const fetchLimit = useMemoryPagination ? 5000 : (options.limit || 50);
+        const orderDirection = options.sortOrder || "desc";
+
+        let countQ: any = db.collection(COLLECTIONS.WAVE_APPLICATIONS);
+        if (options.status && options.status !== "all") {
+            countQ = countQ.where("status", "==", options.status);
+        }
+
+        const cacheKey = `admin:wave-applications-count:${options.status || "all"}`;
+        let totalCount = 0;
+        try {
+            const cachedCount = await getCached<number>(cacheKey);
+            if (cachedCount !== null) {
+                totalCount = cachedCount;
+            }
+        } catch (e) { }
+
         let applications: any[] = [];
         let hasMoreRaw = false;
         let nextCursor: string | undefined = undefined;
