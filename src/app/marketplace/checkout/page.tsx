@@ -86,6 +86,13 @@ export default function CheckoutPage() {
     const [productCoords, setProductCoords] = useState<Record<string, { lat: number; lng: number }>>({});
     const [destinationCoords, setDestinationCoords] = useState<{ lat: number; lng: number } | null>(null);
 
+    // Set mapsLoaded if google is already defined on mount (handles Next.js Script caching)
+    useEffect(() => {
+        if (typeof window !== "undefined" && (window as any).google) {
+            setMapsLoaded(true);
+        }
+    }, []);
+
     const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
         const R = 6371; // Radius of the Earth in km
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -197,7 +204,7 @@ export default function CheckoutPage() {
 
     // Manual geocoding function for input addresses
     const geocodeManualAddress = () => {
-        if (!deliveryAddress.street.trim() || !(window as any).google || !mapsLoaded) return;
+        if (!deliveryAddress.street.trim() || !(window as any).google) return;
 
         setIsGeocoding(true);
         setVerificationError(null);
@@ -258,7 +265,7 @@ export default function CheckoutPage() {
 
         // Geocode the saved address
         const fullAddressStr = `${savedAddress.street}, ${savedAddress.city || ""}, ${savedAddress.state}, Nigeria`;
-        if ((window as any).google && mapsLoaded) {
+        if ((window as any).google) {
             const geocoder = new (window as any).google.maps.Geocoder();
             geocoder.geocode({ address: fullAddressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
                 if (status === "OK" && results && results[0] && results[0].geometry) {
