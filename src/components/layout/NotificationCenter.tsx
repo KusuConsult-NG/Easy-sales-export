@@ -186,7 +186,7 @@ export default function NotificationCenter() {
                         leaveFrom="transform opacity-100 scale-100"
                         leaveTo="transform opacity-0 scale-95"
                     >
-                        <Menu.Items className="absolute right-0 mt-2 w-96 max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl bg-white shadow-xl ring-1 ring-black/5 focus:outline-none z-50">
+                        <Menu.Items className="absolute left-0 mt-2 w-96 max-w-[calc(100vw-2rem)] origin-top-left rounded-2xl bg-white shadow-xl ring-1 ring-black/5 focus:outline-none z-50">
                             {/* Header */}
                             <div className="px-6 py-4 border-b border-slate-200">
                                 <div className="flex items-center justify-between">
