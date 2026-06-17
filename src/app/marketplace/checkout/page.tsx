@@ -110,127 +110,158 @@ export default function CheckoutPage() {
     useEffect(() => {
         if (!isClient || !mapsLoaded || !(window as any).google || cart.length === 0) return;
 
-        const geocoder = new (window as any).google.maps.Geocoder();
-        const newCoords = { ...productCoords };
-        let updated = false;
+        try {
+            if (!(window as any).google.maps?.Geocoder) {
+                console.warn("Google Maps Geocoder is not loaded yet.");
+                return;
+            }
 
-        const geocodePromises = cart.map((item) => {
-            const lga = item.location?.lga && item.location.lga.toLowerCase() !== "unknown" ? item.location.lga : "";
-            const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
-            
-            const locKey = `${lga}, ${state}`.trim();
-            if (!locKey || productCoords[item.id]) return Promise.resolve();
+            const geocoder = new (window as any).google.maps.Geocoder();
+            const newCoords = { ...productCoords };
+            let updated = false;
 
-            const addressStr = `${lga ? lga + ", " : ""}${state}, Nigeria`;
-            
-            return new Promise<void>((resolve) => {
-                geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                    if (status === "OK" && results && results[0] && results[0].geometry) {
-                        const loc = results[0].geometry.location;
-                        newCoords[item.id] = { lat: loc.lat(), lng: loc.lng() };
-                        updated = true;
-                    } else {
-                        console.error(`Geocoding failed for product ${item.id} (${addressStr}):`, status);
-                    }
-                    resolve();
+            const geocodePromises = cart.map((item) => {
+                const lga = item.location?.lga && item.location.lga.toLowerCase() !== "unknown" ? item.location.lga : "";
+                const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
+                
+                const locKey = `${lga}, ${state}`.trim();
+                if (!locKey || productCoords[item.id]) return Promise.resolve();
+
+                const addressStr = `${lga ? lga + ", " : ""}${state}, Nigeria`;
+                
+                return new Promise<void>((resolve) => {
+                    geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                        if (status === "OK" && results && results[0] && results[0].geometry) {
+                            const loc = results[0].geometry.location;
+                            newCoords[item.id] = { lat: loc.lat(), lng: loc.lng() };
+                            updated = true;
+                        } else {
+                            console.error(`Geocoding failed for product ${item.id} (${addressStr}):`, status);
+                        }
+                        resolve();
+                    });
                 });
             });
-        });
 
-        Promise.all(geocodePromises).then(() => {
-            if (updated) {
-                setProductCoords(newCoords);
-            }
-        });
+            Promise.all(geocodePromises).then(() => {
+                if (updated) {
+                    setProductCoords(newCoords);
+                }
+            });
+        } catch (e) {
+            console.error("Failed to geocode product locations:", e);
+        }
     }, [mapsLoaded, cart, isClient, productCoords]);
 
     // Initialize Google Places Autocomplete
     useEffect(() => {
         if (!mapsLoaded || !(window as any).google) return;
 
-        const inputEl = document.getElementById("delivery-street-input") as HTMLInputElement;
-        if (!inputEl) return;
+        try {
+            const inputEl = document.getElementById("delivery-street-input") as HTMLInputElement;
+            if (!inputEl) return;
 
-        const autocomplete = new (window as any).google.maps.places.Autocomplete(inputEl, {
-            componentRestrictions: { country: "ng" },
-            fields: ["address_components", "geometry"],
-        });
-
-        autocomplete.addListener("place_changed", () => {
-            const place = autocomplete.getPlace();
-            if (!place.geometry || !place.geometry.location) {
-                showToast("No geometry details available for the selected place.", "warning");
+            if (!(window as any).google.maps?.places?.Autocomplete) {
+                console.warn("Google Places Autocomplete library is not loaded yet.");
                 return;
             }
 
-            const lat = place.geometry.location.lat();
-            const lng = place.geometry.location.lng();
-            setDestinationCoords({ lat, lng });
-            setIsAddressVerified(true);
-            setVerificationError(null);
-            
-            // Extract address components
-            let street = "";
-            let city = "";
-            let state = "";
-            let lga = "";
+            const autocomplete = new (window as any).google.maps.places.Autocomplete(inputEl, {
+                componentRestrictions: { country: "ng" },
+                fields: ["address_components", "geometry"],
+            });
 
-            const components = place.address_components || [];
-            
-            components.forEach((c: any) => {
-                const types = c.types;
-                if (types.includes("street_number")) {
-                    street = c.long_name + " " + street;
-                } else if (types.includes("route")) {
-                    street = street + c.long_name;
-                } else if (types.includes("locality") || types.includes("sublocality")) {
-                    city = c.long_name;
-                } else if (types.includes("administrative_area_level_1")) {
-                    state = c.long_name.replace(/\s*state$/i, "").trim();
-                } else if (types.includes("administrative_area_level_2")) {
-                    lga = c.long_name;
+            autocomplete.addListener("place_changed", () => {
+                const place = autocomplete.getPlace();
+                if (!place.geometry || !place.geometry.location) {
+                    showToast("No geometry details available for the selected place.", "warning");
+                    return;
                 }
-            });
 
-            if (!street) {
-                street = inputEl.value.split(",")[0] || "";
-            }
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                setDestinationCoords({ lat, lng });
+                setIsAddressVerified(true);
+                setVerificationError(null);
+                
+                // Extract address components
+                let street = "";
+                let city = "";
+                let state = "";
+                let lga = "";
 
-            setDeliveryAddress({
-                street: street.trim(),
-                city: city || lga || "",
-                state: state,
-                lga: lga,
+                const components = place.address_components || [];
+                
+                components.forEach((c: any) => {
+                    const types = c.types;
+                    if (types.includes("street_number")) {
+                        street = c.long_name + " " + street;
+                    } else if (types.includes("route")) {
+                        street = street + c.long_name;
+                    } else if (types.includes("locality") || types.includes("sublocality")) {
+                        city = c.long_name;
+                    } else if (types.includes("administrative_area_level_1")) {
+                        state = c.long_name.replace(/\s*state$/i, "").trim();
+                    } else if (types.includes("administrative_area_level_2")) {
+                        lga = c.long_name;
+                    }
+                });
+
+                if (!street) {
+                    street = inputEl.value.split(",")[0] || "";
+                }
+
+                setDeliveryAddress({
+                    street: street.trim(),
+                    city: city || lga || "",
+                    state: state,
+                    lga: lga,
+                });
             });
-        });
+        } catch (e) {
+            console.error("Failed to initialize Google Places Autocomplete:", e);
+        }
     }, [mapsLoaded, showToast]);
 
     // Manual geocoding function for input addresses
     const geocodeManualAddress = () => {
-        if (!deliveryAddress.street.trim() || !(window as any).google) return;
+        if (!deliveryAddress.street.trim()) return;
 
         setIsGeocoding(true);
         setVerificationError(null);
 
         const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city || ""}, ${deliveryAddress.state}, Nigeria`;
 
-        const geocoder = new (window as any).google.maps.Geocoder();
-        geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-            setIsGeocoding(false);
-            if (status === "OK" && results && results[0] && results[0].geometry) {
-                const loc = results[0].geometry.location;
-                setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
-                setIsAddressVerified(true);
-                setVerificationError(null);
-                showToast("Location successfully verified on Google Maps!", "success");
-            } else {
-                console.error("Geocoding failed for manual address:", status);
-                setDestinationCoords(null);
-                setIsAddressVerified(false);
-                setVerificationError("Google Places could not find this location. Try selecting from dropdown.");
-                showToast("Could not verify address. Please use the dropdown options.", "error");
+        try {
+            if (typeof window === "undefined" || !(window as any).google?.maps?.Geocoder) {
+                throw new Error("Google Maps Geocoder is not loaded. Please ensure you have an active internet connection or click 'Use Address Anyway' below.");
             }
-        });
+
+            const geocoder = new (window as any).google.maps.Geocoder();
+            geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                setIsGeocoding(false);
+                if (status === "OK" && results && results[0] && results[0].geometry) {
+                    const loc = results[0].geometry.location;
+                    setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+                    setIsAddressVerified(true);
+                    setVerificationError(null);
+                    showToast("Location successfully verified on Google Maps!", "success");
+                } else {
+                    console.error("Geocoding failed for manual address:", status);
+                    setDestinationCoords(null);
+                    setIsAddressVerified(false);
+                    setVerificationError(`Google Places could not find this location (Status: ${status}). Try selecting from the dropdown or click 'Use Address Anyway' to bypass.`);
+                    showToast("Could not verify address. Please use the dropdown options or bypass.", "error");
+                }
+            });
+        } catch (e: any) {
+            console.error("Error in geocodeManualAddress:", e);
+            setIsGeocoding(false);
+            setDestinationCoords(null);
+            setIsAddressVerified(false);
+            setVerificationError(e?.message || "Google Maps could not be loaded. Please check your connection or use the bypass below.");
+            showToast("Address verification failed.", "error");
+        }
     };
 
     // Recalculate distance when destination or product coordinates change
@@ -268,20 +299,30 @@ export default function CheckoutPage() {
 
         // Geocode the saved address
         const fullAddressStr = `${savedAddress.street}, ${savedAddress.city || ""}, ${savedAddress.state}, Nigeria`;
-        if ((window as any).google) {
-            const geocoder = new (window as any).google.maps.Geocoder();
-            geocoder.geocode({ address: fullAddressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                if (status === "OK" && results && results[0] && results[0].geometry) {
-                    const loc = results[0].geometry.location;
-                    setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
-                    setIsAddressVerified(true);
-                    setVerificationError(null);
-                } else {
-                    console.error("Geocoding failed for saved address:", status);
-                    setIsAddressVerified(false);
-                    setVerificationError("Saved address could not be verified by Google Places.");
-                }
-            });
+        try {
+            if (typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
+                const geocoder = new (window as any).google.maps.Geocoder();
+                geocoder.geocode({ address: fullAddressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                    if (status === "OK" && results && results[0] && results[0].geometry) {
+                        const loc = results[0].geometry.location;
+                        setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+                        setIsAddressVerified(true);
+                        setVerificationError(null);
+                    } else {
+                        console.error("Geocoding failed for saved address:", status);
+                        setIsAddressVerified(false);
+                        setVerificationError(`Saved address could not be verified by Google Places (Status: ${status}).`);
+                    }
+                });
+            } else {
+                console.error("Google Maps Geocoder is not loaded yet.");
+                setIsAddressVerified(false);
+                setVerificationError("Google Maps Geocoder is not loaded yet. Click 'Verify Address' when loaded or use the bypass below.");
+            }
+        } catch (e: any) {
+            console.error("Error in handleUseSavedAddress geocoding:", e);
+            setIsAddressVerified(false);
+            setVerificationError(e?.message || "An error occurred during saved address geocoding.");
         }
         showToast("Address populated from your profile!", "success");
     };
