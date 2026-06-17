@@ -6,9 +6,9 @@ import { useSession } from "next-auth/react";
 import Image from "next/image";
 import {
     ArrowLeft, MapPin, Maximize, DollarSign, Calendar, Heart, Share2,
-    CheckCircle, AlertCircle, Lock, Loader2, Phone, Mail, User, Send, X
+    CheckCircle, AlertCircle, Lock, Loader2, Mail, User
 } from "lucide-react";
-import { getPropertyByIdAction, submitLandInquiryAction, type LandListing } from "@/app/actions/land-listings";
+import { getPropertyByIdAction, type LandListing } from "@/app/actions/land-listings";
 import { getUserTierAction } from "@/app/actions/cooperative";
 import { useToast } from "@/contexts/ToastContext";
 
@@ -22,18 +22,8 @@ export default function PropertyDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    const [showInquiryModal, setShowInquiryModal] = useState(false);
     const [isFavorite, setIsFavorite] = useState(false);
     const { showToast } = useToast();
-
-    // Inquiry State
-    const [inquiryForm, setInquiryForm] = useState({
-        name: "",
-        email: "",
-        phone: "",
-        message: ""
-    });
-    const [submittingInquiry, setSubmittingInquiry] = useState(false);
 
     async function loadProperty() {
         try {
@@ -54,57 +44,6 @@ export default function PropertyDetailsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [propertyId]);
 
-    useEffect(() => {
-        if (status === "authenticated" && session?.user) {
-            // Pre-fill inquiry form
-            setInquiryForm(prev => ({
-                ...prev,
-                name: session.user.name || "",
-                email: session.user.email || ""
-            }));
-
-        }
-    }, [status, session]);
-
-    function handleContactSeller() {
-        if (status === "unauthenticated") {
-            localStorage.setItem("pendingPropertyInquiry", params.id as string);
-            router.push("/auth/login?callbackUrl=/farm-nation");
-            return;
-        }
-        setShowInquiryModal(true);
-    };
-
-    const submitInquiry = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!property) return;
-
-        setSubmittingInquiry(true);
-        try {
-            const result = await submitLandInquiryAction({
-                listingId: property.id || "",
-                listingTitle: property.title,
-                listingOwnerId: property.ownerId,
-                buyerName: inquiryForm.name,
-                buyerEmail: inquiryForm.email,
-                buyerPhone: inquiryForm.phone,
-                message: inquiryForm.message,
-            });
-
-            if (result.success) {
-                showToast("Inquiry Sent! The seller has been notified.", "success");
-                setShowInquiryModal(false);
-                setInquiryForm({ ...inquiryForm, message: "" });
-            } else {
-                showToast("Failed to send inquiry: " + result.error, "error");
-            }
-        } catch (error) {
-            showToast("An error occurred while sending your inquiry.", "error");
-        } finally {
-            setSubmittingInquiry(false);
-        }
-    };
-
     async function handleShare() {
         const url = window.location.href;
         if (navigator.share) {
@@ -118,6 +57,7 @@ export default function PropertyDetailsPage() {
             showToast("Link copied to clipboard!", "success");
         }
     };
+
 
     if (loading) {
         return (
@@ -375,13 +315,6 @@ export default function PropertyDetailsPage() {
                                         <Lock className="w-5 h-5" />
                                         {property.availableForRent ? "Lock Lease/Rental Reservation" : "Lock Land Reservation"}
                                     </button>
-                                    <button
-                                        onClick={handleContactSeller}
-                                        className="w-full px-6 py-4 border-2 border-green-600 text-green-700 font-bold rounded-xl hover:bg-green-50 transition flex items-center justify-center gap-2"
-                                    >
-                                        <Mail className="w-5 h-5" />
-                                        Contact Seller
-                                    </button>
                                 </div>
                             ) : (
                                 <div className={`p-4 border rounded-xl text-center font-bold ${
@@ -421,74 +354,6 @@ export default function PropertyDetailsPage() {
                     </div>
                 </div>
             </div>
-
-            {/* Inquiry Modal */}
-            {showInquiryModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-2xl p-6 max-w-lg w-full">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-slate-900">Contact Seller</h2>
-                            <button onClick={() => setShowInquiryModal(false)} className="p-2 hover:bg-slate-100 rounded-full">
-                                <X className="w-6 h-6 text-slate-500" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={submitInquiry} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-900 mb-1">Your Name</label>
-                                <input
-                                    type="text"
-                                    value={inquiryForm.name}
-                                    onChange={e => setInquiryForm({ ...inquiryForm, name: e.target.value })}
-                                    required
-                                    className="w-full px-4 py-2 border rounded-lg"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-1">Email</label>
-                                    <input
-                                        type="email"
-                                        value={inquiryForm.email}
-                                        onChange={e => setInquiryForm({ ...inquiryForm, email: e.target.value })}
-                                        required
-                                        className="w-full px-4 py-2 border rounded-lg"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-semibold text-slate-900 mb-1">Phone</label>
-                                    <input
-                                        type="tel"
-                                        value={inquiryForm.phone}
-                                        onChange={e => setInquiryForm({ ...inquiryForm, phone: e.target.value })}
-                                        required
-                                        className="w-full px-4 py-2 border rounded-lg"
-                                    />
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-900 mb-1">Message</label>
-                                <textarea
-                                    value={inquiryForm.message}
-                                    onChange={e => setInquiryForm({ ...inquiryForm, message: e.target.value })}
-                                    required
-                                    rows={4}
-                                    className="w-full px-4 py-2 border rounded-lg"
-                                    placeholder="I am interested in this property..."
-                                />
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={submittingInquiry}
-                                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition flex items-center justify-center gap-2"
-                            >
-                                {submittingInquiry ? <Loader2 className="animate-spin" /> : <Send className="w-4 h-4" />}
-                                Send Inquiry
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
 
         </div>
     );

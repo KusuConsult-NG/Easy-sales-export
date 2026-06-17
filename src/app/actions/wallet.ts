@@ -56,7 +56,10 @@ async function _getOrCreateWallet(userId: string): Promise<Wallet> {
 // GET: Retrieve current user's wallet
 // ---------------------------------------------------------------------------
 
-export async function getWalletAction(): Promise<ActionResponse<Wallet>> {
+export async function getWalletAction(): Promise<ActionResponse<Wallet & { 
+    stats?: { totalFunded: number; totalSpent: number; pendingWithdrawals: number };
+    bankDetails?: { accountNumber: string; bankCode: string; accountName: string; bankName: string } | null;
+}>> {
     try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: "Unauthorized" , data: null };
@@ -64,7 +67,61 @@ export async function getWalletAction(): Promise<ActionResponse<Wallet>> {
         const userId = session.user.id;
 
         const wallet = await _getOrCreateWallet(userId);
-        return { error: null, success: true as const, data: wallet };
+
+        // Fetch aggregate stats over all transactions
+        const txnsSnap = await db.collection(TXN_COLLECTION)
+            .where("userId", "==", userId)
+            .get();
+
+        let totalFunded = 0;
+        let totalSpent = 0;
+        let pendingWithdrawals = 0;
+
+        txnsSnap.docs.forEach((doc) => {
+            const data = doc.data();
+            const amount = data.amount || 0;
+            const status = data.status;
+            const type = data.type;
+
+            if (type === "funding" && status === "completed") {
+                totalFunded += amount;
+            } else if (type === "purchase") {
+                totalSpent += Math.abs(amount);
+            } else if (type === "withdrawal" && status === "pending") {
+                pendingWithdrawals += Math.abs(amount);
+            }
+        });
+
+        // Fetch user default bank details from profile
+        const userDoc = await db.collection(COLLECTIONS.USERS).doc(userId).get();
+        const userData = userDoc.exists ? userDoc.data() : null;
+        let bankDetails = null;
+
+        if (userData) {
+            const accountNumber = userData.bankAccountNumber || userData.bankDetails?.accountNumber || userData.bankAccount?.accountNumber || "";
+            const bankCode = userData.bankCode || userData.bankDetails?.bankCode || userData.bankAccount?.bankCode || "";
+            const bankName = userData.bankName || userData.bankDetails?.bankName || userData.bankAccount?.bankName || "";
+            const accountName = userData.bankAccountName || userData.bankDetails?.accountName || userData.bankAccount?.accountName || userData.name || userData.fullName || "";
+
+            if (accountNumber && bankName) {
+                bankDetails = {
+                    accountNumber,
+                    bankCode,
+                    bankName,
+                    accountName
+                };
+            }
+        }
+
+        return { 
+            error: null, 
+            success: true as const, 
+            data: { 
+                ...wallet, 
+                stats: { totalFunded, totalSpent, pendingWithdrawals },
+                bankDetails
+            } 
+        };
     } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to retrieve wallet";
         logger.error("getWalletAction error:", err);
@@ -104,7 +161,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<Ac
                 email: userEmail,
                 amount: amountKobo,
                 reference,
-                channels: ["bank_transfer"],
+                channels: ["card", "bank_transfer", "bank", "ussd"],
                 callback_url: callbackUrl,
                 metadata: {
                     userId,
@@ -293,6 +350,7 @@ export async function walletCheckoutAction(
             }
 
             // Record the transaction
+            const shortId = orderId.substring(0, 8).toUpperCase();
             const txnRef = db.collection(TXN_COLLECTION).doc();
             t.set(txnRef, {
                 walletId: userId,
@@ -302,7 +360,7 @@ export async function walletCheckoutAction(
                 balanceBefore: currentBalance,
                 balanceAfter: updatedBalance,
                 orderId,
-                description: `Marketplace purchase — Order`,
+                description: `Marketplace purchase — Order #${shortId}`,
                 status: "completed",
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
@@ -318,7 +376,7 @@ export async function walletCheckoutAction(
                 status: "completed",
                 date: FieldValue.serverTimestamp(),
                 reference: orderId,
-                description: "Marketplace purchase — Order"
+                description: `Marketplace purchase — Order #${shortId}`
             });
 
             return updatedBalance;
@@ -455,10 +513,11 @@ export async function getWalletTransactionsAction(options?: {
         const userId = session.user.id;
 
         const pageSize = options?.limit || 20;
+        // Fetch more to ensure we can satisfy the page limit after filtering
         let query = db.collection(TXN_COLLECTION)
             .where("userId", "==", userId)
             .orderBy("createdAt", "desc")
-            .limit(pageSize + 1); // +1 to detect hasMore
+            .limit(pageSize * 3 + 1);
 
         if (options?.startAfter) {
             const cursorDoc = await db.collection(TXN_COLLECTION).doc(options.startAfter).get();
@@ -468,10 +527,16 @@ export async function getWalletTransactionsAction(options?: {
         }
 
         const snap = await query.get();
-        const hasMore = snap.docs.length > pageSize;
-        const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+        const rawTransactions = serializeDocs<WalletTransaction>(snap.docs);
+        
+        // Filter out pending fundings
+        const filtered = rawTransactions.filter(
+            (t) => !(t.type === "funding" && t.status === "pending")
+        );
 
-        const transactions = serializeDocs<WalletTransaction>(docs);
+        const hasMore = filtered.length > pageSize;
+        const transactions = hasMore ? filtered.slice(0, pageSize) : filtered;
+
         return { error: null, success: true as const, data: { transactions, hasMore } };
     } catch (err) {
         const message = err instanceof Error ? err.message : "Failed to fetch transactions";
@@ -570,35 +635,72 @@ export async function processWalletWithdrawalAction(
             }
         } else {
             // Approval Flow — 1. State Lock
+            try {
+                await db.runTransaction(async (t) => {
+                    const freshTxn = await t.get(txnRef);
+                    if (!freshTxn.exists) throw new Error("Transaction not found");
+                    if (freshTxn.data()?.status !== "pending") throw new Error("Withdrawal is no longer pending");
+
+                    t.update(txnRef, {
+                        status: "payout_initiated",
+                        processedBy: adminId,
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                });
+            } catch (err: any) {
+                return { success: false as const, error: err.message || "Failed to lock transaction state", data: null };
+            }
+
+            // 2. Execute payout
+            const { paystackPayout } = await import("@/lib/paystack-transfer");
+            const bankDetails = txnData.bankDetails || {};
+            const payoutAmount = Math.abs(txnData.amount);
+
+            const payoutRes = await paystackPayout(
+                {
+                    accountNumber: bankDetails.accountNumber,
+                    bankCode: bankDetails.bankCode,
+                    accountName: bankDetails.accountName || "Recipient",
+                },
+                payoutAmount,
+                `Wallet withdrawal: ${transactionId}`
+            );
+
+            if (!payoutRes.success) {
+                // Revert lock to pending with error message
+                await txnRef.update({
+                    status: "pending",
+                    adminNote: `Payout attempt failed: ${payoutRes.error || "Unknown error"}`,
+                    updatedAt: FieldValue.serverTimestamp(),
+                });
+                return { success: false as const, error: payoutRes.error || "Paystack payout failed", data: null };
+            }
+
+            // 3. Mark as completed (Final status update + Ledger)
             await db.runTransaction(async (t) => {
                 const freshTxn = await t.get(txnRef);
                 if (!freshTxn.exists) throw new Error("Transaction not found");
-                if (freshTxn.data()?.status !== "pending") throw new Error("Withdrawal is no longer pending");
+                if (freshTxn.data()?.status !== "payout_initiated") {
+                    throw new Error("Withdrawal has been modified outside the lock");
+                }
 
-                t.update(txnRef, {
-                    status: "payout_initiated",
-                    processedBy: adminId,
-                    updatedAt: FieldValue.serverTimestamp(),
-                });
-            });
-
-            // 2. Mark as completed (Final status update + Ledger)
-            await db.runTransaction(async (t) => {
                 t.update(txnRef, {
                     status: "completed",
                     adminNote: note || null,
+                    transferCode: payoutRes.transferCode || null,
+                    payoutReference: payoutRes.reference || null,
                     updatedAt: FieldValue.serverTimestamp(),
                 });
 
                 // Global Ledger Record (Unified Tracking)
-                const reference = `WALLET-WITHDRAW-${transactionId}`;
+                const reference = payoutRes.reference || `WALLET-WITHDRAW-${transactionId}`;
                 const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(reference);
                 t.set(globalTxRef, {
                     id: reference,
                     userId: txnData.userId,
                     type: "withdrawal",
                     module: "wallet",
-                    amount: Math.abs(txnData.amount), // Withdrawal is stored as negative in wallet_txns, absolute in ledger
+                    amount: payoutAmount, // Withdrawal is stored as negative in wallet_txns, absolute in ledger
                     currency: "NGN",
                     status: "completed",
                     date: FieldValue.serverTimestamp(),
@@ -613,7 +715,7 @@ export async function processWalletWithdrawalAction(
                     userId: txnData.userId,
                     type: "payment",
                     title: "Withdrawal Processed ✅",
-                    message: `Your withdrawal of ₦${Math.abs(txnData.amount).toLocaleString()} has been processed and transferred to your bank account.`,
+                    message: `Your withdrawal of ₦${payoutAmount.toLocaleString()} has been processed and transferred to your bank account.`,
                     link: "/dashboard/wallet",
                     linkText: "View Wallet",
                     read: false,
@@ -623,8 +725,8 @@ export async function processWalletWithdrawalAction(
                 const userDocApprove = await db.collection(COLLECTIONS.USERS).doc(txnData.userId).get();
                 const phoneApprove: string | undefined = userDocApprove.data()?.phone ?? userDocApprove.data()?.phoneNumber;
                 await Promise.allSettled([
-                    phoneApprove ? smsWithdrawalApproved(phoneApprove, Math.abs(txnData.amount)) : Promise.resolve(),
-                    pushWithdrawalDecision(txnData.userId, true, Math.abs(txnData.amount)),
+                    phoneApprove ? smsWithdrawalApproved(phoneApprove, payoutAmount) : Promise.resolve(),
+                    pushWithdrawalDecision(txnData.userId, true, payoutAmount),
                 ]);
             } catch (notifyErr) {
                 logger.error("Approval notification error:", notifyErr);

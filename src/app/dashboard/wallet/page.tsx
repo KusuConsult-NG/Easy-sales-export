@@ -29,6 +29,19 @@ const fmtDate = (val: any) => {
     return new Intl.DateTimeFormat("en-NG", { dateStyle: "medium", timeStyle: "short" }).format(d);
 };
 
+const NIGERIAN_BANKS = [
+    { name: "Access Bank", code: "044" },
+    { name: "Zenith Bank", code: "057" },
+    { name: "GTBank", code: "058" },
+    { name: "First Bank", code: "011" },
+    { name: "UBA", code: "033" },
+    { name: "Fidelity Bank", code: "070" },
+    { name: "FCMB", code: "214" },
+    { name: "Stanbic IBTC", code: "221" },
+    { name: "Sterling Bank", code: "232" },
+    { name: "Wema Bank", code: "035" },
+];
+
 function StatusBadge({ status }: { status: string }) {
     const map: Record<string, string> = {
         completed: "bg-green-100 text-green-700",
@@ -45,7 +58,21 @@ function StatusBadge({ status }: { status: string }) {
 export default function WalletPage() {
     const { showToast } = useToast();
 
-    const [wallet, setWallet] = useState<{ balance: number; currency: string } | null>(null);
+    const [wallet, setWallet] = useState<{
+        balance: number;
+        currency: string;
+        stats?: {
+            totalFunded: number;
+            totalSpent: number;
+            pendingWithdrawals: number;
+        };
+        bankDetails?: {
+            accountNumber: string;
+            bankCode: string;
+            accountName: string;
+            bankName: string;
+        } | null;
+    } | null>(null);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [hasMore, setHasMore] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -72,7 +99,12 @@ export default function WalletPage() {
     const loadWallet = useCallback(async () => {
         setLoading(true);
         const res = await getWalletAction();
-        if (res.success && res.data) setWallet(res.data);
+        if (res.success && res.data) {
+            setWallet(res.data);
+            if (res.data.bankDetails) {
+                setWdBank(res.data.bankDetails);
+            }
+        }
         else showToast(res.error || "Failed to load wallet", "error");
         setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,17 +223,17 @@ export default function WalletPage() {
                     {[
                         {
                             label: "Total Funded",
-                            value: fmt(transactions.filter(t => t.type === "funding" && t.status === "completed").reduce((s: number, t: any) => s + t.amount, 0)),
+                            value: fmt(wallet?.stats?.totalFunded || 0),
                             icon: ArrowDownCircle, color: "text-green-600 bg-green-50",
                         },
                         {
                             label: "Total Spent",
-                            value: fmt(Math.abs(transactions.filter(t => t.type === "purchase").reduce((s: number, t: any) => s + t.amount, 0))),
+                            value: fmt(wallet?.stats?.totalSpent || 0),
                             icon: ArrowUpCircle, color: "text-orange-600 bg-orange-50",
                         },
                         {
                             label: "Pending Withdrawals",
-                            value: fmt(Math.abs(transactions.filter(t => t.type === "withdrawal" && t.status === "pending").reduce((s: number, t: any) => s + t.amount, 0))),
+                            value: fmt(wallet?.stats?.pendingWithdrawals || 0),
                             icon: Clock, color: "text-yellow-600 bg-yellow-50",
                         },
                     ].map(({ label, value, icon: Icon, color }) => (
@@ -326,7 +358,7 @@ export default function WalletPage() {
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowWithdraw(false)}>
                     <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-xl font-bold text-slate-900 mb-1">Withdraw Funds</h3>
-                        <p className="text-slate-500 text-sm mb-5">Minimum withdrawal: ₦5,000. Processed within 24 hours.</p>
+                        <p className="text-slate-500 text-sm mb-5">Minimum withdrawal: ₦5,000. Withdrawals are subject to a 24-hour processing hold.</p>
 
                         <div className="space-y-4">
                             <div>
@@ -336,8 +368,24 @@ export default function WalletPage() {
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Bank Name</label>
-                                <input type="text" value={wdBank.bankName} onChange={(e) => setWdBank(b => ({ ...b, bankName: e.target.value }))} placeholder="e.g. Access Bank"
-                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                                <select
+                                    value={wdBank.bankCode}
+                                    onChange={(e) => {
+                                        const code = e.target.value;
+                                        const bank = NIGERIAN_BANKS.find(b => b.code === code);
+                                        setWdBank(b => ({
+                                            ...b,
+                                            bankCode: code,
+                                            bankName: bank ? bank.name : ""
+                                        }));
+                                    }}
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl bg-white text-slate-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                >
+                                    <option value="">Select Bank</option>
+                                    {NIGERIAN_BANKS.map(bank => (
+                                        <option key={bank.code} value={bank.code}>{bank.name}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Account Number</label>
@@ -353,7 +401,7 @@ export default function WalletPage() {
 
                         <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mt-4 flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 text-yellow-600 shrink-0 mt-0.5" />
-                            <p className="text-xs text-yellow-800">The withdrawal amount will be immediately reserved from your balance pending admin processing.</p>
+                            <p className="text-xs text-yellow-800">The withdrawal amount will be reserved from your balance. Withdrawals are subject to a 24-hour security hold before they can be approved.</p>
                         </div>
 
                         <div className="flex gap-3 mt-6">

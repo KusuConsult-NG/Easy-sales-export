@@ -555,7 +555,61 @@ async function _refundEscrowToBuyer(
                 createdBy: userId,
                 _version: 0 });
 
-            tx.update(txRef, { status: "cancelled",
+            // 1. Credit Buyer's Wallet directly
+            const walletRef = db.collection(COLLECTIONS.WALLETS).doc(data.buyerId);
+            const walletSnap = await tx.get(walletRef);
+            let balanceBefore = 0;
+            if (!walletSnap.exists) {
+                tx.set(walletRef, {
+                    userId: data.buyerId,
+                    balance: escrowAmount,
+                    currency: "NGN",
+                    createdAt: FieldValue.serverTimestamp(),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            } else {
+                balanceBefore = walletSnap.data()?.balance || 0;
+                tx.update(walletRef, {
+                    balance: FieldValue.increment(escrowAmount),
+                    updatedAt: FieldValue.serverTimestamp()
+                });
+            }
+
+            // 2. Record transaction in buyer's wallet_transactions history
+            const buyerTxnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc();
+            tx.set(buyerTxnRef, {
+                id: buyerTxnRef.id,
+                walletId: data.buyerId,
+                userId: data.buyerId,
+                type: "refund",
+                amount: escrowAmount,
+                balanceBefore,
+                balanceAfter: balanceBefore + escrowAmount,
+                reference: transactionId,
+                description: `Refund for order #${data.orderId} (Escrow refunded)`,
+                status: "completed",
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp()
+            });
+
+            // 3. Record in Global Ledger
+            const globalTxId = `ESCROW-REFUND-${transactionId}`;
+            const globalTxRef = db.collection(COLLECTIONS.TRANSACTIONS).doc(globalTxId);
+            tx.set(globalTxRef, {
+                id: globalTxId,
+                userId: data.buyerId,
+                type: "escrow_refund",
+                module: "escrow",
+                amount: escrowAmount,
+                currency: "NGN",
+                status: "completed",
+                date: FieldValue.serverTimestamp(),
+                reference: transactionId,
+                description: `Escrow Refund for "${data.productName}"`
+            });
+
+            // 4. Update Escrow status
+            tx.update(txRef, { status: "refunded",
                 refundedAt: FieldValue.serverTimestamp(),
                 refundedBy: userId,
                 updatedAt: FieldValue.serverTimestamp(),
