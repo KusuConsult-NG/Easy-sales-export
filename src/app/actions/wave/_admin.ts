@@ -279,6 +279,55 @@ async function _updateTrainingEventAction(
 }
 export const updateTrainingEventAction = withFlexibleSafeAction("updateTrainingEventAction", _updateTrainingEventAction);
 
+async function _deleteTrainingEventAction(
+    eventId: string
+): Promise<
+    | { success: true; error: null; data?: any; meta?: any; [key: string]: any }
+    | { success: false; error: string; data?: null; meta?: any; [key: string]: any }
+> {
+    let sessionResult;
+    try {
+        sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required" , data: null };
+        const { session } = sessionResult;
+        if (!session?.user?.id) {
+            return { success: false as const, error: "Not authenticated" , data: null };
+        }
+
+        if (!isAdmin(session.user.roles)) {
+            return { success: false as const, error: "Unauthorized" , data: null };
+        }
+
+        await db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS).doc(eventId).delete();
+
+        // Clean up associated training sessions if any exist
+        const sessionQuery = await db.collection(COLLECTIONS.WAVE_TRAINING_SESSIONS)
+            .where("roomName", "==", `wave-training-${eventId}`)
+            .get();
+        if (!sessionQuery.empty) {
+            const deleteBatch = db.batch();
+            sessionQuery.docs.forEach(doc => deleteBatch.delete(doc.ref));
+            await deleteBatch.commit();
+        }
+
+        await createAdminAuditLog({
+            action: "wave_training_deleted",
+            userId: session.user.id,
+            targetType: "wave_training_event",
+            targetId: eventId,
+        });
+
+        return { error: null, success: true as const, data: null };
+    } catch (error) {
+        logger.error("Delete event error:", {
+            userId: sessionResult?.session?.user?.id,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        return { success: false as const, error: "Failed to delete event" , data: null };
+    }
+}
+export const deleteTrainingEventAction = withFlexibleSafeAction("deleteTrainingEventAction", _deleteTrainingEventAction);
+
 async function _startWaveLiveSessionAction(
     eventId: string,
     customMeetingLink?: string

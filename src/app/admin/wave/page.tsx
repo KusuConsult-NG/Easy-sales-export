@@ -1,6 +1,6 @@
 "use client";
 
-import { Waves, FileText, CheckCircle, Users } from "lucide-react";
+import { Waves, FileText, CheckCircle, Users, Calendar } from "lucide-react";
 import Link from "next/link";
 
 export default function AdminWavePage() {
@@ -28,6 +28,14 @@ export default function AdminWavePage() {
             href: "/admin/wave/members", // Need to verify if this exists or is also top-level
             color: "text-purple-600",
             bg: "bg-purple-100"
+        },
+        {
+            title: "Training & Events",
+            description: "Manage training events and schedules",
+            icon: Calendar,
+            href: "/admin/wave/training",
+            color: "text-rose-600",
+            bg: "bg-rose-100"
         },
         {
             title: "Compliance",

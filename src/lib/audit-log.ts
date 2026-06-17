@@ -95,6 +95,7 @@ export type AuditAction =
     | 'wave_enrollment'
     | 'wave_training_created'
     | 'wave_training_updated'
+    | 'wave_training_deleted'
     | 'wave_application_approved'
     | 'wave_application_rejected'
     | 'wave_approve'
@@ -166,6 +167,7 @@ export function getSeverityForAction(action: AuditAction): AuditSeverity {
         'data_export',
         'resource_delete',
         'mfa_disabled',
+        'wave_training_deleted',
     ];
 
     const warningActions: AuditAction[] = [

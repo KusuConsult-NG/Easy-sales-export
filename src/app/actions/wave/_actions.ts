@@ -670,7 +670,8 @@ export const getWaveResourcesAction = withFlexibleSafeAction("getWaveResourcesAc
  */
 async function _getWaveTrainingEventsAction(
     cursor?: string | null,
-    limit = 20
+    limit = 20,
+    includeAllStatuses = false
 ): Promise<ActionResponse<WaveTrainingEvent[], { cursor: string | null; hasMore: boolean }>> {
     try {
         const sessionResult = await requireSession();
@@ -680,8 +681,13 @@ async function _getWaveTrainingEventsAction(
 
         const pageSize = Math.min(Math.max(limit, 1), 50);
 
-        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS)
-            .where("status", "in", ["upcoming", "ongoing"])
+        let queryRef: FirebaseFirestore.Query = db.collection(COLLECTIONS.WAVE_TRAINING_EVENTS);
+
+        if (!includeAllStatuses) {
+            queryRef = queryRef.where("status", "in", ["upcoming", "ongoing"]);
+        }
+
+        queryRef = queryRef
             .orderBy("date", "asc")
             .limit(pageSize + 1);
 

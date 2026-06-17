@@ -20,6 +20,7 @@ import {
 import {
     createTrainingEventAction,
     updateTrainingEventAction,
+    deleteTrainingEventAction,
     getEventParticipantsAction,
     startWaveLiveSessionAction,
 } from "@/app/actions/wave";
@@ -49,7 +50,7 @@ export default function AdminWaveTrainingPage() {
         refresh: loadEvents
     } = useAdminData<WaveTrainingEvent>({
         fetchAction: async (opts) => {
-            const result = await getWaveTrainingEventsAction(opts.lastDocId, opts.limit || 20);
+            const result = await getWaveTrainingEventsAction(opts.lastDocId, opts.limit || 20, true);
             return {
                 success: result.success,
                 data: result.data as any,
@@ -191,6 +192,24 @@ export default function AdminWaveTrainingPage() {
             }
         } catch (error) {
             showToast("An error occurred starting live session", "error");
+        }
+    }
+
+    async function handleDeleteEvent(eventId: string) {
+        if (!confirm("Are you sure you want to delete this training event? This action cannot be undone.")) {
+            return;
+        }
+
+        try {
+            const result = await deleteTrainingEventAction(eventId);
+            if (result.success) {
+                showToast("Training event deleted successfully", "success");
+                loadEvents();
+            } else {
+                showToast(result.error || "Failed to delete event", "error");
+            }
+        } catch (error) {
+            showToast("An error occurred deleting event", "error");
         }
     }
 
@@ -354,6 +373,13 @@ export default function AdminWaveTrainingPage() {
                                                                     title="Edit Event"
                                                                 >
                                                                     <Edit className="w-5 h-5 text-gray-600" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => event.id && handleDeleteEvent(event.id)}
+                                                                    className="p-2 hover:bg-red-50 rounded-lg transition text-red-600 hover:text-red-700"
+                                                                    title="Delete Event"
+                                                                >
+                                                                    <Trash2 className="w-5 h-5" />
                                                                 </button>
                                                             </div>
                                                         </div>
