@@ -18,7 +18,7 @@ export default function MyCoursesPage() {
             .finally(() => setLoading(false));
     }, []);
 
-    const inProgressCourses = courses.filter((c) => c.status === "in-progress");
+    const inProgressCourses = courses.filter((c) => c.status === "in-progress" || c.status === "not-started");
     const completedCourses = courses.filter((c) => c.status === "completed");
 
     if (loading) {
@@ -71,7 +71,7 @@ export default function MyCoursesPage() {
                         </div>
                         <div>
                             <p className="text-sm text-slate-600">In Progress</p>
-                            <p className="text-2xl font-bold text-slate-900">{inProgressCourses.length}</p>
+                            <p className="text-2xl font-bold text-slate-900">{courses.filter((c) => c.status === "in-progress").length}</p>
                         </div>
                     </div>
                 </div>
@@ -80,7 +80,9 @@ export default function MyCoursesPage() {
             {/* In Progress Courses */}
             {inProgressCourses.length > 0 && (
                 <div>
-                    <h2 className="text-xl font-bold text-slate-900 mb-4">Continue Learning</h2>
+                    <h2 className="text-xl font-bold text-slate-900 mb-4">
+                        {inProgressCourses.some(c => c.progress > 0) ? "Continue Learning" : "Start Learning"}
+                    </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {inProgressCourses.map((course) => (
                             <div
@@ -125,7 +127,7 @@ export default function MyCoursesPage() {
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition"
                                         >
                                             <Play className="w-4 h-4" />
-                                            Continue
+                                            {course.progress > 0 ? "Continue" : "Start"}
                                         </Link>
                                     </div>
                                 </div>

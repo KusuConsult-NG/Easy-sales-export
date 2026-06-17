@@ -439,7 +439,7 @@ export default function LessonPage(props: LessonPageProps) {
                 {/* Mark Complete Button */}
                 {!isCompleted && (() => {
                     const hasVideo = !!currentLesson.videoUrl;
-                    const watchedEnough = !hasVideo || videoWatchPercent >= WATCH_THRESHOLD || initialVideoProgress >= WATCH_THRESHOLD;
+                    const watchedEnough = true;
                     return (
                         <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
                             <div className="flex items-center justify-between">

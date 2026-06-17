@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
             enrolledAt: doc.data().enrolledAt?.toDate?.() || new Date(),
             lastAccessedAt: doc.data().lastAccessedAt?.toDate?.() || new Date(),
             completedAt: doc.data().completedAt?.toDate?.() || null,
-        }));
+        } as any));
 
         // Get certificates (Admin SDK)
         const certSnapshot = await db.collection(COLLECTIONS.CERTIFICATES)
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
         const stats = {
             totalCourses: courses.length,
-            inProgress: courses.filter(c => !c.completedAt).length,
+            inProgress: courses.filter(c => !c.completedAt && (c.progressPercent || c.completionPercentage || 0) > 0).length,
             completed: courses.filter(c => c.completedAt).length,
             certificatesEarned: certificates.length,
         };

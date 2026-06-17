@@ -614,7 +614,8 @@ async function _completeLessonAction(
 
         if (!targetLesson) return { success: false as const, error: "Lesson not found", data: null };
 
-        // 2. If it has a video, verify progress
+        // 2. If it has a video, verify progress (Bypassed to allow self-paced manual completion)
+        /*
         if (targetLesson.videoUrl) {
             const progressId = `${userId}_${lessonId}`;
             const videoProgressDoc = await db.collection(COLLECTIONS.LESSON_VIDEO_PROGRESS).doc(progressId).get();
@@ -637,6 +638,7 @@ async function _completeLessonAction(
                 };
             }
         }
+        */
 
         // Use transaction to prevent concurrent lesson completions from overwriting each other
         await db.runTransaction(async (t) => {
@@ -848,7 +850,7 @@ async function _getUserAggregateProgressAction(userId: string): Promise<ActionRe
         const enrolledCourses = snapshot.docs.map(doc => doc.data() as UserProgress);
 
         const completedCourses = enrolledCourses.filter(p => p.completedAt).length;
-        const inProgressCourses = enrolledCourses.length - completedCourses;
+        const inProgressCourses = enrolledCourses.filter(p => !p.completedAt && (p.completedLessons?.length || 0) > 0).length;
         const totalCompletedLessons = enrolledCourses.reduce((sum, p) => sum + p.completedLessons.length, 0);
 
         // Calculate total lessons: batch all course reads in parallel (N+1 → 1 burst)
@@ -1378,7 +1380,7 @@ export interface EnrolledCourseWithDetails {
     totalLessons: number;
     completedLessons: number;
     progress: number;
-    status: "in-progress" | "completed";
+    status: "in-progress" | "completed" | "not-started";
     startedAt: string;
 }
 
@@ -1516,7 +1518,7 @@ async function _getEnrolledCoursesWithDetailsAction(): Promise<ActionResponse<an
                 totalLessons,
                 completedLessons: completedCount,
                 progress: progressPct,
-                status: progress.completedAt ? "completed" : "in-progress",
+                status: progress.completedAt ? "completed" : (completedCount > 0 ? "in-progress" : "not-started"),
                 startedAt: progress.startedAt
                     ? new Date((progress.startedAt as Timestamp).toDate()).toLocaleDateString()
                     : "",
