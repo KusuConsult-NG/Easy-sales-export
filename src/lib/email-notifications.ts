@@ -38,9 +38,9 @@ export function getBaseUrl(): string {
                 }
             }
         } else {
-            // In production, map subdomains and known module domains back to the apex domain: www.easysalesexport.com
-            if (hostname.endsWith('.easysalesexport.com') && hostname !== 'easysalesexport.com' && hostname !== 'www.easysalesexport.com') {
-                parsed.hostname = 'www.easysalesexport.com';
+            // In production, map subdomains and known module domains back to the apex domain: easysalesexport.com
+            if (hostname.endsWith('.easysalesexport.com') && hostname !== 'easysalesexport.com') {
+                parsed.hostname = 'easysalesexport.com';
                 url = parsed.toString();
             } else {
                 const knownModuleDomains = [
@@ -52,7 +52,7 @@ export function getBaseUrl(): string {
                     'www.farmnation.ng',
                 ];
                 if (knownModuleDomains.includes(hostname)) {
-                    parsed.hostname = 'www.easysalesexport.com';
+                    parsed.hostname = 'easysalesexport.com';
                     url = parsed.toString();
                 }
             }

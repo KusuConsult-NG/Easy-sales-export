@@ -59,22 +59,22 @@ describe('Email Notifications', () => {
             expect(getBaseUrl()).toBe('https://easysalesexport.com');
         });
 
-        it('should strip subdomains and return www.easysalesexport.com in production', () => {
+        it('should strip subdomains and return easysalesexport.com in production', () => {
             delete process.env.NEXTAUTH_URL;
             process.env.NEXT_PUBLIC_APP_URL = 'https://wave.easysalesexport.com';
-            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
 
             process.env.NEXT_PUBLIC_APP_URL = 'https://cooperatives.easysalesexport.com/';
-            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
         });
 
-        it('should strip independent module domains and return www.easysalesexport.com', () => {
+        it('should strip independent module domains and return easysalesexport.com', () => {
             delete process.env.NEXTAUTH_URL;
             process.env.NEXT_PUBLIC_APP_URL = 'https://easysalescooperative.com';
-            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
 
             process.env.NEXT_PUBLIC_APP_URL = 'https://easysalesmarket.com/';
-            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
         });
 
         it('should handle localhost without subdomains correctly', () => {
