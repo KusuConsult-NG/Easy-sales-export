@@ -191,14 +191,19 @@ export default function LoginForm({ defaultCallbackUrl = "/dashboard" }: { defau
                 "session_expired": "Your session has expired. Please log in again.",
                 "security_refresh": "For your security, please sign in again to continue.",
                 "access_denied": "You do not have permission to access that resource.",
+                "AccessDenied": "You do not have permission to access that resource.",
+                "SessionRequired": "", // Silent bypass for standard redirect when user is not logged in
                 "Default": "Authentication failed."
             };
-            const message = errorMap[errorParam] || errorMap["Default"];
-            if (errorParam !== "CredentialsSignin") {
-                setTimeout(() => showToast(message, "error"), 500);
-            } else {
-                 
-                setError(message);
+            
+            const message = errorParam in errorMap ? errorMap[errorParam] : errorMap["Default"];
+            
+            if (message) {
+                if (errorParam !== "CredentialsSignin") {
+                    setTimeout(() => showToast(message, "error"), 500);
+                } else {
+                    setError(message);
+                }
             }
         }
     }, [errorParam, showToast]);
