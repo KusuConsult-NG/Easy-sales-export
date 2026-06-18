@@ -8,7 +8,6 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { createAdminAuditLog, logAdminAction } from "@/lib/audit-log";
 import { serializeDocs, serializeValue } from "@/lib/firestore-serialize";
 import { createNotificationAction } from "@/app/actions/notifications";
-import { unstable_cache } from "next/cache";
 import { isAdmin } from "@/lib/admin-permissions";
 import { revalidateTag } from "next/cache";
 import { invalidateAdminGlobalStats } from "@/lib/cache-invalidation";
@@ -281,141 +280,115 @@ async function _searchLandListingsAction(filters: {
     lastDocId?: string; 
     type?: "sale" | "rent" | "lease";
 }): Promise<ActionResponse<{ listings: LandListing[]; lastDocId: string | null }>> { 
-    const cacheKeyParts = [
-        "land-listings",
-        filters.state || "all",
-        filters.category || "all",
-        filters.minSize?.toString() || "0",
-        filters.maxSize?.toString() || "max",
-        filters.minPrice?.toString() || "0",
-        filters.maxPrice?.toString() || "max",
-        filters.soilType || "all",
-        filters.waterSource || "all",
-        filters.cropType || "all",
-        filters.limit?.toString() || "12",
-        filters.lastDocId || "start",
-        filters.type || "all"
-    ];
+    try {
+        let q = db.collection(COLLECTIONS.LAND_LISTINGS)
+            .where("status", "==", "verified")
+            .orderBy("createdAt", "desc");
 
-    const getCachedListings = unstable_cache(
-        async () => {
-            try {
-                let q = db.collection(COLLECTIONS.LAND_LISTINGS)
-                    .where("status", "==", "verified")
-                    .orderBy("createdAt", "desc");
+        if (filters.state) {
+            q = q.where("location.state", "==", filters.state);
+        }
 
-                if (filters.state) {
-                    q = q.where("location.state", "==", filters.state);
-                }
+        if (filters.lastDocId) { 
+            const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
+            if (lastDoc.exists) {
+                q = q.startAfter(lastDoc);
+            }
+        }
 
+        const limit = filters.limit || 12;
+        q = q.limit(limit);
 
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await q.get();
+        } catch (e: any) {
+            if (e.message && e.message.toLowerCase().includes("index")) {
+                logger.warn("Land search failed due to missing index. Falling back.", { error: e.message });
+                indexError = true;
+                
+                // Fallback without orderBy
+                let fallbackQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified");
+                if (filters.state) fallbackQuery = fallbackQuery.where("location.state", "==", filters.state);
+                
                 if (filters.lastDocId) { 
                     const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
-                    if (lastDoc.exists) {
-                        q = q.startAfter(lastDoc);
-                    }
+                    if (lastDoc.exists) fallbackQuery = fallbackQuery.startAfter(lastDoc);
                 }
-
-                const limit = filters.limit || 12;
-                q = q.limit(limit);
-
-                let snapshot;
-                let indexError = false;
-                try {
-                    snapshot = await q.get();
-                } catch (e: any) {
-                    if (e.message && e.message.toLowerCase().includes("index")) {
-                        logger.warn("Land search failed due to missing index. Falling back.", { error: e.message });
-                        indexError = true;
-                        
-                        // Fallback without orderBy
-                        let fallbackQuery = db.collection(COLLECTIONS.LAND_LISTINGS).where("status", "==", "verified");
-                        if (filters.state) fallbackQuery = fallbackQuery.where("location.state", "==", filters.state);
-                        
-                        if (filters.lastDocId) { 
-                            const lastDoc = await db.collection(COLLECTIONS.LAND_LISTINGS).doc(filters.lastDocId).get();
-                            if (lastDoc.exists) fallbackQuery = fallbackQuery.startAfter(lastDoc);
-                        }
-                        fallbackQuery = fallbackQuery.limit(limit);
-                        snapshot = await fallbackQuery.get();
-                    } else {
-                        throw e;
-                    }
-                }
-
-                let results = serializeDocs(snapshot.docs) as unknown as LandListing[];
-                
-                if (indexError) {
-                    results.sort((a: any, b: any) => {
-                        let aVal = a.createdAt || 0;
-                        let bVal = b.createdAt || 0;
-                        if (aVal instanceof Date) aVal = aVal.getTime();
-                        if (bVal instanceof Date) bVal = bVal.getTime();
-                        if (typeof aVal === 'string') aVal = new Date(aVal).getTime();
-                        if (typeof bVal === 'string') bVal = new Date(bVal).getTime();
-                        return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
-                    });
-                }
-
-                // Client-side filtering for numeric ranges
-                if (filters.minSize) { results = results.filter((l) => l.size >= filters.minSize!); }
-                if (filters.maxSize) { results = results.filter((l) => l.size <= filters.maxSize!); }
-                if (filters.minPrice) { results = results.filter((l) => l.price >= filters.minPrice!); }
-                if (filters.maxPrice) { results = results.filter((l) => l.price <= filters.maxPrice!); }
-                if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
-                if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
-                if (filters.type) { results = results.filter((l) => l.type === filters.type); }
-
-                // Client-side filtering for category (supports legacy string and new string array)
-                if (filters.category) {
-                    results = results.filter((l) => {
-                        if (!l.category) return false;
-                        if (Array.isArray(l.category)) {
-                            return l.category.includes(filters.category!);
-                        }
-                        if (typeof l.category === "string") {
-                            const cats = l.category.split(",").map(c => c.trim().toLowerCase());
-                            return cats.includes(filters.category!.toLowerCase()) || l.category === filters.category;
-                        }
-                        return false;
-                    });
-                }
-
-                // Crop-Soil Suitability Matrix filtering
-                if (filters.cropType) {
-                    const suitableSoils = CROP_SOIL_MATRIX[filters.cropType.toLowerCase()] || [];
-                    if (suitableSoils.length > 0) {
-                        results = results.filter((l) => {
-                            if (!l.soilType) return false;
-                            return suitableSoils.includes(l.soilType.toLowerCase());
-                        });
-                    } else {
-                        results = results.filter((l) => {
-                            const desc = l.description?.toLowerCase() || "";
-                            const title = l.title?.toLowerCase() || "";
-                            const cat = (Array.isArray(l.category) 
-                                ? l.category.join(", ") 
-                                : l.category)?.toLowerCase() || "";
-                            const searchTerm = filters.cropType!.toLowerCase();
-                            return desc.includes(searchTerm) || title.includes(searchTerm) || cat.includes(searchTerm);
-                        });
-                    }
-                }
-
-                const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
-
-                return { listings: results, lastDocId };
-            } catch (error: any) { 
-                logger.error("Land search error:", error);
-                return { listings: [], lastDocId: null };
+                fallbackQuery = fallbackQuery.limit(limit);
+                snapshot = await fallbackQuery.get();
+            } else {
+                throw e;
             }
-        },
-        cacheKeyParts,
-        { revalidate: 3600, tags: ["land-listings"] }
-    );
+        }
 
-    const result = await getCachedListings();
-    return { success: true, error: null, data: result };
+        let results = serializeDocs(snapshot.docs) as unknown as LandListing[];
+        
+        if (indexError) {
+            results.sort((a: any, b: any) => {
+                let aVal = a.createdAt || 0;
+                let bVal = b.createdAt || 0;
+                if (aVal instanceof Date) aVal = aVal.getTime();
+                if (bVal instanceof Date) bVal = bVal.getTime();
+                if (typeof aVal === 'string') aVal = new Date(aVal).getTime();
+                if (typeof bVal === 'string') bVal = new Date(bVal).getTime();
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            });
+        }
+
+        // Client-side filtering for numeric ranges
+        if (filters.minSize) { results = results.filter((l) => l.size >= filters.minSize!); }
+        if (filters.maxSize) { results = results.filter((l) => l.size <= filters.maxSize!); }
+        if (filters.minPrice) { results = results.filter((l) => l.price >= filters.minPrice!); }
+        if (filters.maxPrice) { results = results.filter((l) => l.price <= filters.maxPrice!); }
+        if (filters.soilType) { results = results.filter((l) => l.soilType === filters.soilType); }
+        if (filters.waterSource) { results = results.filter((l) => l.waterSource === filters.waterSource); }
+        if (filters.type) { results = results.filter((l) => l.type === filters.type); }
+
+        // Client-side filtering for category (supports legacy string and new string array)
+        if (filters.category) {
+            results = results.filter((l) => {
+                if (!l.category) return false;
+                if (Array.isArray(l.category)) {
+                    return l.category.includes(filters.category!);
+                }
+                if (typeof l.category === "string") {
+                    const cats = l.category.split(",").map(c => c.trim().toLowerCase());
+                    return cats.includes(filters.category!.toLowerCase()) || l.category === filters.category;
+                }
+                return false;
+            });
+        }
+
+        // Crop-Soil Suitability Matrix filtering
+        if (filters.cropType) {
+            const suitableSoils = CROP_SOIL_MATRIX[filters.cropType.toLowerCase()] || [];
+            if (suitableSoils.length > 0) {
+                results = results.filter((l) => {
+                    if (!l.soilType) return false;
+                    return suitableSoils.includes(l.soilType.toLowerCase());
+                });
+            } else {
+                results = results.filter((l) => {
+                    const desc = l.description?.toLowerCase() || "";
+                    const title = l.title?.toLowerCase() || "";
+                    const cat = (Array.isArray(l.category) 
+                        ? l.category.join(", ") 
+                        : l.category)?.toLowerCase() || "";
+                    const searchTerm = filters.cropType!.toLowerCase();
+                    return desc.includes(searchTerm) || title.includes(searchTerm) || cat.includes(searchTerm);
+                });
+            }
+        }
+
+        const lastDocId = snapshot.docs.length === limit ? snapshot.docs[snapshot.docs.length - 1].id : null;
+
+        return { success: true, error: null, data: { listings: results, lastDocId } };
+    } catch (error: any) { 
+        logger.error("Land search error:", error);
+        return { success: false, error: "Failed to search land listings", data: null };
+    }
 }
 export async function searchLandListingsAction(...args: Parameters<typeof _searchLandListingsAction>) {
     return withFlexibleSafeAction("searchLandListingsAction", _searchLandListingsAction)(...args);
@@ -546,29 +519,17 @@ export async function submitLandListingAction(...args: Parameters<typeof _submit
  */
 async function _getPropertyByIdAction(id: string): Promise<ActionResponse<LandListing | null>> { 
     try {
-        const result = await unstable_cache(
-            async () => { 
-                try {
-                    const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
-                    const docSnap = await docRef.get();
+        const docRef = db.collection(COLLECTIONS.LAND_LISTINGS).doc(id);
+        const docSnap = await docRef.get();
 
-                    if (docSnap.exists) {
-                        // ✅ FIX: serializeValue converts Firestore Timestamps to ISO strings
-                        // so the result is safe to pass across the server→client boundary.
-                        return { id: docSnap.id, ...serializeValue(docSnap.data()) } as LandListing;
-                    } else { 
-                        return null;
-                    }
-                } catch (error: any) { 
-                    logger.error("Error fetching property:", error);
-                    return null;
-                }
-            },
-            [`property-${id}`],
-            { revalidate: 3600, tags: [`property-${id}`] }
-        )();
-        
-        return { success: true, error: null, data: result };
+        if (docSnap.exists) {
+            // ✅ FIX: serializeValue converts Firestore Timestamps to ISO strings
+            // so the result is safe to pass across the server→client boundary.
+            const data = { id: docSnap.id, ...serializeValue(docSnap.data()) } as LandListing;
+            return { success: true, error: null, data };
+        } else { 
+            return { success: true, error: null, data: null };
+        }
     } catch (error: any) {
         logger.error("getPropertyByIdAction error:", error);
         return { success: false, error: "Failed to fetch property", data: null };

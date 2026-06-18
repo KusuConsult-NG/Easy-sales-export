@@ -1249,7 +1249,23 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
             .orderBy("createdAt", "desc")
             .limit(limitCount);
 
-        const snapshot = await query.get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await query.get();
+        } catch (e: any) {
+            if (e.message && e.message.toLowerCase().includes("index")) {
+                logger.warn("Get recommended products failed due to missing index. Falling back.", { error: e.message });
+                indexError = true;
+                const fallbackQuery = db.collection(COLLECTIONS.PRODUCTS)
+                    .where("status", "==", "active")
+                    .limit(limitCount);
+                snapshot = await fallbackQuery.get();
+            } else {
+                throw e;
+            }
+        }
+
         const { serializeValue } = await import("@/lib/firestore-serialize");
         const products = snapshot.docs.map((doc: any) => { 
             const data = doc.data();
@@ -1261,6 +1277,18 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
             }
         });
 
+        if (indexError) {
+            products.sort((a: any, b: any) => {
+                let aVal = a.createdAt || 0;
+                let bVal = b.createdAt || 0;
+                if (aVal instanceof Date) aVal = aVal.getTime();
+                if (bVal instanceof Date) bVal = bVal.getTime();
+                if (typeof aVal === 'string') aVal = new Date(aVal).getTime();
+                if (typeof bVal === 'string') bVal = new Date(bVal).getTime();
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            });
+        }
+
         return { error: null, success: true as const, data: { products } };
     } catch (error) { 
         logger.error("Get recommended products error:", {
@@ -1269,6 +1297,8 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
         return { success: false as const, error: "Failed to fetch recommended products", data: null };
     }
 }
+
+
 export const getRecommendedProductsAction = withSafeAction("getRecommendedProductsAction", _getRecommendedProductsAction);
 
 /**
