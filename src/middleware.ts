@@ -140,6 +140,26 @@ const authMiddleware = auth((req: any) => {
     }
 
     if (rewritePrefix && !pathname.startsWith("/api") && !pathname.startsWith("/_next") && !pathname.startsWith("/__session")) {
+        // Redirect requests with redundant module prefix on subdomains/dedicated domains to the clean apex domain
+        if (rewritePrefix !== "/" && (pathname === rewritePrefix || pathname.startsWith(rewritePrefix + "/"))) {
+            let hubOrigin = req.nextUrl.origin;
+            const hostParts = hostname.split(".");
+            const isLocalhost = hostname.endsWith("localhost");
+            const hasSubdomain = isLocalhost ? hostParts.length > 1 : hostParts.length > 2;
+            
+            if (normalizedHostname.endsWith(".easysalesexport.com")) {
+                hubOrigin = "https://www.easysalesexport.com";
+            } else if (hasSubdomain) {
+                const apexHost = isLocalhost ? "localhost" : hostParts.slice(1).join(".");
+                const portStr = req.nextUrl.port ? `:${req.nextUrl.port}` : "";
+                hubOrigin = `${req.nextUrl.protocol}//${apexHost}${portStr}`;
+            } else {
+                hubOrigin = isLocalhost ? `http://localhost:${req.nextUrl.port || 3000}` : "https://www.easysalesexport.com";
+            }
+            
+            const redirectUrl = new URL(pathname + req.nextUrl.search, hubOrigin);
+            return NextResponse.redirect(redirectUrl, { status: 301 });
+        }
         // Handle landing page redirects for modules with sub-landing pages
         const MODULES_WITH_LANDING_SUBPAGE = new Set(["/wave", "/cooperatives"]);
         if (pathname === "/" && MODULES_WITH_LANDING_SUBPAGE.has(rewritePrefix)) {
