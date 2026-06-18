@@ -30,34 +30,48 @@ export async function GET(request: NextRequest) {
         const rawLimit = parseInt(searchParams.get("limit") || "20");
         const limit = Math.min(Math.max(rawLimit, 1), 50);
 
-        // Base query — always filter active + in-stock, ordered by createdAt desc
-        let query: FirebaseFirestore.Query = db
+        // Base query — always filter active + in-stock
+        let baseQuery: FirebaseFirestore.Query = db
             .collection(COLLECTIONS.PRODUCTS)
             .where("status", "==", "active")
-            .where("inStock", "==", true)
-            .orderBy("createdAt", "desc")
-            .limit(limit + 1); // +1 to detect hasMore
+            .where("inStock", "==", true);
 
         // Apply category filter at DB level (replaces the compound query)
         if (category && category !== "all") {
-            query = db
-                .collection(COLLECTIONS.PRODUCTS)
-                .where("status", "==", "active")
-                .where("inStock", "==", true)
-                .where("category", "==", category)
-                .orderBy("createdAt", "desc")
-                .limit(limit + 1);
+            baseQuery = baseQuery.where("category", "==", category);
         }
+
+        let orderedQuery = baseQuery.orderBy("createdAt", "desc").limit(limit + 1);
 
         // Apply cursor (startAfter the last createdAt timestamp)
         if (cursorParam) {
             const cursorDate = new Date(cursorParam);
             if (!isNaN(cursorDate.getTime())) {
-                query = query.startAfter(cursorDate);
+                orderedQuery = orderedQuery.startAfter(cursorDate);
             }
         }
 
-        const snapshot = await query.get();
+        let snapshot;
+        let indexError = false;
+        try {
+            snapshot = await orderedQuery.get();
+        } catch (e: any) {
+            if (e.message && e.message.toLowerCase().includes("index")) {
+                logger.warn("Marketplace API products search failed due to missing index. Falling back.", { error: e.message });
+                indexError = true;
+
+                let fallbackQuery = baseQuery.limit(limit + 1);
+                if (cursorParam) {
+                    const cursorDate = new Date(cursorParam);
+                    if (!isNaN(cursorDate.getTime())) {
+                        fallbackQuery = fallbackQuery.startAfter(cursorDate);
+                    }
+                }
+                snapshot = await fallbackQuery.get();
+            } else {
+                throw e;
+            }
+        }
 
         const hasMore = snapshot.docs.length > limit;
         const docs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
@@ -87,6 +101,16 @@ export async function GET(request: NextRequest) {
                 createdAt: data.createdAt?.toDate?.()?.toISOString() ?? new Date().toISOString(),
             };
         });
+
+        if (indexError) {
+            products.sort((a: any, b: any) => {
+                let aVal = a.createdAt || 0;
+                let bVal = b.createdAt || 0;
+                if (typeof aVal === 'string') aVal = new Date(aVal).getTime();
+                if (typeof bVal === 'string') bVal = new Date(bVal).getTime();
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            });
+        }
 
         // In-memory filters for search and price (compound Firestore queries
         // require index creation for every combination — kept as in-memory)

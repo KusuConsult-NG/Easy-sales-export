@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { logger } from '@/lib/logger';
-import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2, RefreshCw } from "lucide-react";
+import { MapPin, ArrowRight, Filter, Search, Home, TrendingUp, Layers, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { searchLandListingsAction, type LandListing } from "@/app/actions/land-listings";
@@ -27,6 +27,7 @@ function PropertiesContent() {
     const [loadingMore, setLoadingMore] = useState(false);
     const [lastDocId, setLastDocId] = useState<string | null>(null);
     const [hasMore, setHasMore] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     // Initial load & Filter change
     async function loadProperties(reset = true) {
@@ -36,6 +37,7 @@ function PropertiesContent() {
         } else {
             setLoadingMore(true);
         }
+        setError(null);
 
         try {
             // Parse price range
@@ -86,10 +88,13 @@ function PropertiesContent() {
 
                 setLastDocId(result.data.lastDocId);
                 setHasMore(!!result.data.lastDocId);
+            } else if (result.error) {
+                setError(result.error);
             }
 
-        } catch (error) {
-            logger.error("Error:", error);
+        } catch (err: any) {
+            logger.error("Error:", err);
+            setError(err.message || "An unexpected error occurred");
         } finally {
             setLoading(false);
             setLoadingMore(false);
@@ -220,6 +225,13 @@ function PropertiesContent() {
                         + List Your Land
                     </Link>
                 </div>
+
+                {error && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 shrink-0" />
+                        <span>{error}</span>
+                    </div>
+                )}
 
                 {/* Properties Grid */}
                 {loading ? (

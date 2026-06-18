@@ -1161,7 +1161,7 @@ async function _getMarketplaceProductsAction(params: {
         logger.error("Get products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch products", data: null };
+        throw error;
     }
 }
 export const getMarketplaceProductsAction = withSafeAction("getMarketplaceProductsAction", _getMarketplaceProductsAction);
@@ -1294,7 +1294,7 @@ async function _getRecommendedProductsAction(limitCount: number = 3): Promise<Ac
         logger.error("Get recommended products error:", {
             error: error instanceof Error ? error.message : String(error)
         });
-        return { success: false as const, error: "Failed to fetch recommended products", data: null };
+        throw error;
     }
 }
 

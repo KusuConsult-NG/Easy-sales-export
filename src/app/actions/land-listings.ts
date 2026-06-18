@@ -387,7 +387,7 @@ async function _searchLandListingsAction(filters: {
         return { success: true, error: null, data: { listings: results, lastDocId } };
     } catch (error: any) { 
         logger.error("Land search error:", error);
-        return { success: false, error: "Failed to search land listings", data: null };
+        throw error;
     }
 }
 export async function searchLandListingsAction(...args: Parameters<typeof _searchLandListingsAction>) {
