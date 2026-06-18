@@ -39,7 +39,7 @@ export function getBaseUrl(): string {
             }
         } else {
             // In production, map subdomains and known module domains back to the apex domain: www.easysalesexport.com
-            if (hostname.endsWith('.easysalesexport.com') && hostname !== 'easysalesexport.com' && hostname !== 'www.easysalesexport.com') {
+            if (hostname === 'easysalesexport.com' || (hostname.endsWith('.easysalesexport.com') && hostname !== 'www.easysalesexport.com')) {
                 parsed.hostname = 'www.easysalesexport.com';
                 url = parsed.toString();
             } else {

@@ -45,18 +45,18 @@ describe('Email Notifications', () => {
         it('should return default apex domain if no env variables are set', () => {
             delete process.env.NEXTAUTH_URL;
             delete process.env.NEXT_PUBLIC_APP_URL;
-            expect(getBaseUrl()).toBe('https://easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
         });
 
-        it('should return NEXTAUTH_URL when set', () => {
+        it('should return www.easysalesexport.com if NEXTAUTH_URL is the apex domain', () => {
             process.env.NEXTAUTH_URL = 'https://easysalesexport.com';
-            expect(getBaseUrl()).toBe('https://easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
         });
 
-        it('should prioritize NEXTAUTH_URL over NEXT_PUBLIC_APP_URL', () => {
+        it('should prioritize NEXTAUTH_URL over NEXT_PUBLIC_APP_URL and map to www.easysalesexport.com', () => {
             process.env.NEXTAUTH_URL = 'https://easysalesexport.com';
             process.env.NEXT_PUBLIC_APP_URL = 'https://wave.easysalesexport.com';
-            expect(getBaseUrl()).toBe('https://easysalesexport.com');
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
         });
 
         it('should strip subdomains and return www.easysalesexport.com in production', () => {
