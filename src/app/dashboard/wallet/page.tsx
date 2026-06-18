@@ -63,7 +63,8 @@ export default function WalletPage() {
     const userName = session?.user?.name || "User";
     const userEmail = session?.user?.email;
 
-    const [selectedTxn, setSelectedTxn] = useState<any | null>(null);
+    const [showReceiptModal, setShowReceiptModal] = useState(false);
+    const [receiptTxn, setReceiptTxn] = useState<any | null>(null);
 
     const [wallet, setWallet] = useState<{
         balance: number;
@@ -103,10 +104,8 @@ export default function WalletPage() {
     const [showBankDropdown, setShowBankDropdown] = useState(false);
 
     const downloadAsPDF = async (txn: any) => {
-        setSelectedTxn(txn);
-        await new Promise(resolve => setTimeout(resolve, 50));
         const cardElement = document.getElementById("receipt-download-card");
-        if (!cardElement) return;
+        if (!cardElement) return showToast("Receipt element not found", "error");
 
         try {
             const html2canvas = (await import("html2canvas")).default;
@@ -115,6 +114,7 @@ export default function WalletPage() {
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",
+                useCORS: true,
             });
 
             const imgData = canvas.toDataURL("image/jpeg", 1.0);
@@ -134,16 +134,15 @@ export default function WalletPage() {
     };
 
     const downloadAsJPEG = async (txn: any) => {
-        setSelectedTxn(txn);
-        await new Promise(resolve => setTimeout(resolve, 50));
         const cardElement = document.getElementById("receipt-download-card");
-        if (!cardElement) return;
+        if (!cardElement) return showToast("Receipt element not found", "error");
 
         try {
             const html2canvas = (await import("html2canvas")).default;
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",
+                useCORS: true,
             });
 
             const link = document.createElement("a");
@@ -158,16 +157,15 @@ export default function WalletPage() {
     };
 
     const shareReceipt = async (txn: any) => {
-        setSelectedTxn(txn);
-        await new Promise(resolve => setTimeout(resolve, 50));
         const cardElement = document.getElementById("receipt-download-card");
-        if (!cardElement) return;
+        if (!cardElement) return showToast("Receipt element not found", "error");
 
         try {
             const html2canvas = (await import("html2canvas")).default;
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",
+                useCORS: true,
             });
 
             const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
@@ -450,29 +448,12 @@ export default function WalletPage() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            downloadAsPDF(txn);
+                                                            setReceiptTxn(txn);
+                                                            setShowReceiptModal(true);
                                                         }}
-                                                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition font-semibold"
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition font-semibold text-xs"
                                                     >
-                                                        <Download className="w-3.5 h-3.5" /> PDF Receipt
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            downloadAsJPEG(txn);
-                                                        }}
-                                                        className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition font-semibold"
-                                                    >
-                                                        <ImageIcon className="w-3.5 h-3.5" /> JPEG Receipt
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            shareReceipt(txn);
-                                                        }}
-                                                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-semibold"
-                                                    >
-                                                        <Share2 className="w-3.5 h-3.5" /> Share
+                                                        <Share2 className="w-3.5 h-3.5" /> View & Share Receipt
                                                     </button>
                                                 </div>
                                             </div>
@@ -641,104 +622,140 @@ export default function WalletPage() {
                 </div>
             )}
 
-            {/* Hidden Receipt Element for PDF/JPEG generation */}
-            <div className="absolute -left-[9999px] -top-[9999px]">
-                <div 
-                    id="receipt-download-card" 
-                    className="w-[480px] bg-white text-slate-800 p-8 border border-slate-100 flex flex-col font-sans"
-                >
-                    {/* Brand Header */}
-                    <div className="flex items-center justify-between border-b-2 border-emerald-500 pb-4 mb-6">
-                        <div>
-                            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-                                <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block"></span>
-                                EASY SALES
-                            </h2>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Export & Agro-Allied</p>
-                        </div>
-                        <div className="text-right">
-                            <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                                Receipt
-                            </span>
-                        </div>
-                    </div>
+            {/* Receipt Preview Modal */}
+            {showReceiptModal && receiptTxn && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in" onClick={() => setShowReceiptModal(false)}>
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-6 relative" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                            onClick={() => setShowReceiptModal(false)}
+                            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+                        >
+                            <XCircle className="w-6 h-6" />
+                        </button>
 
-                    {/* Transaction Amount & Status */}
-                    <div className="text-center bg-slate-50 rounded-2xl py-6 px-4 mb-6 border border-slate-100">
-                        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Amount</p>
-                        <p className={`text-3xl font-black ${selectedTxn?.amount < 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
-                            {selectedTxn ? `${selectedTxn.amount < 0 ? '-' : '+'}${fmt(Math.abs(selectedTxn.amount))}` : '₦0'}
-                        </p>
-                        <div className="mt-2.5 inline-block">
-                            {selectedTxn && (
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                    selectedTxn.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                    selectedTxn.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                    'bg-red-100 text-red-700'
-                                }`}>
-                                    {selectedTxn.status}
-                                </span>
-                            )}
-                        </div>
-                    </div>
+                        <h3 className="text-lg font-bold text-slate-900 text-center">Transaction Receipt</h3>
 
-                    {/* Transaction Details */}
-                    <div className="space-y-3.5 text-xs pb-6 border-b border-dashed border-slate-200">
-                        <div className="flex justify-between items-start gap-4">
-                            <span className="text-slate-400 font-medium">Date & Time</span>
-                            <span className="text-slate-800 font-semibold text-right">{selectedTxn ? fmtDate(selectedTxn.createdAt) : '—'}</span>
-                        </div>
-                        <div className="flex justify-between items-start gap-4">
-                            <span className="text-slate-400 font-medium">Transaction ID</span>
-                            <span className="text-slate-800 font-mono font-medium text-right select-all">{selectedTxn?.id || '—'}</span>
-                        </div>
-                        {selectedTxn?.reference && (
-                            <div className="flex justify-between items-start gap-4">
-                                <span className="text-slate-400 font-medium">Reference</span>
-                                <span className="text-slate-800 font-mono font-medium text-right">{selectedTxn.reference}</span>
-                            </div>
-                        )}
-                        {selectedTxn?.orderId && (
-                            <div className="flex justify-between items-start gap-4">
-                                <span className="text-slate-400 font-medium">Order ID</span>
-                                <span className="text-slate-800 font-mono font-medium text-right">{selectedTxn.orderId}</span>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-start gap-4">
-                            <span className="text-slate-400 font-medium">Type</span>
-                            <span className="text-slate-800 font-semibold capitalize text-right">{selectedTxn?.type || '—'}</span>
-                        </div>
-                        <div className="flex justify-between items-start gap-4">
-                            <span className="text-slate-400 font-medium">Description</span>
-                            <span className="text-slate-800 font-semibold text-right max-w-[200px] truncate">{selectedTxn?.description || '—'}</span>
-                        </div>
-
-                        {/* Customer Details */}
-                        <div className="pt-3 border-t border-slate-100 mt-2 space-y-3.5">
-                            <div className="flex justify-between items-start gap-4">
-                                <span className="text-slate-400 font-medium">Customer</span>
-                                <span className="text-slate-800 font-semibold text-right">{userName}</span>
-                            </div>
-                            {userEmail && (
-                                <div className="flex justify-between items-start gap-4">
-                                    <span className="text-slate-400 font-medium">Email</span>
-                                    <span className="text-slate-800 font-semibold text-right truncate max-w-[200px]">{userEmail}</span>
+                        {/* The visible preview card to be captured */}
+                        <div className="border border-slate-100 rounded-xl p-1 bg-slate-50 flex justify-center overflow-x-auto">
+                            <div 
+                                id="receipt-download-card" 
+                                className="w-[360px] bg-white text-slate-800 p-6 flex flex-col font-sans shrink-0"
+                            >
+                                {/* Brand Header */}
+                                <div className="flex items-center justify-between border-b-2 border-emerald-500 pb-3 mb-5">
+                                    <div>
+                                        <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                            EASY SALES
+                                        </h2>
+                                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Export & Agro-Allied</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                            Receipt
+                                        </span>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    </div>
 
-                    {/* Footer */}
-                    <div className="text-center mt-6">
-                        <p className="text-[10px] text-slate-400 font-medium">
-                            Thank you for transacting with Easy Sales & Export.
-                        </p>
-                        <p className="text-[9px] text-slate-300 mt-1">
-                            This is an official computer-generated receipt and requires no signature.
-                        </p>
+                                {/* Transaction Amount & Status */}
+                                <div className="text-center bg-slate-50 rounded-xl py-5 px-3 mb-5 border border-slate-100">
+                                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Amount</p>
+                                    <p className={`text-xl font-black ${receiptTxn.amount < 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
+                                        {receiptTxn.amount < 0 ? '-' : '+'}{fmt(Math.abs(receiptTxn.amount))}
+                                    </p>
+                                    <div className="mt-1.5 inline-block">
+                                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider ${
+                                            receiptTxn.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                            receiptTxn.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-red-100 text-red-700'
+                                        }`}>
+                                            {receiptTxn.status}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Transaction Details */}
+                                <div className="space-y-2.5 text-[10px] pb-5 border-b border-dashed border-slate-200">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <span className="text-slate-400 font-medium">Date & Time</span>
+                                        <span className="text-slate-800 font-semibold text-right">{fmtDate(receiptTxn.createdAt)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-start gap-4">
+                                        <span className="text-slate-400 font-medium">Transaction ID</span>
+                                        <span className="text-slate-800 font-mono font-medium text-right select-all truncate max-w-[140px]">{receiptTxn.id}</span>
+                                    </div>
+                                    {receiptTxn.reference && (
+                                        <div className="flex justify-between items-start gap-4">
+                                            <span className="text-slate-400 font-medium">Reference</span>
+                                            <span className="text-slate-800 font-mono font-medium text-right truncate max-w-[140px]">{receiptTxn.reference}</span>
+                                        </div>
+                                    )}
+                                    {receiptTxn.orderId && (
+                                        <div className="flex justify-between items-start gap-4">
+                                            <span className="text-slate-400 font-medium">Order ID</span>
+                                            <span className="text-slate-800 font-mono font-medium text-right truncate max-w-[140px]">{receiptTxn.orderId}</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-start gap-4">
+                                        <span className="text-slate-400 font-medium">Type</span>
+                                        <span className="text-slate-800 font-semibold capitalize text-right">{receiptTxn.type}</span>
+                                    </div>
+                                    <div className="flex justify-between items-start gap-4">
+                                        <span className="text-slate-400 font-medium">Description</span>
+                                        <span className="text-slate-800 font-semibold text-right max-w-[150px] truncate">{receiptTxn.description}</span>
+                                    </div>
+
+                                    {/* Customer Details */}
+                                    <div className="pt-2.5 border-t border-slate-100 mt-2 space-y-2.5">
+                                        <div className="flex justify-between items-start gap-4">
+                                            <span className="text-slate-400 font-medium">Customer</span>
+                                            <span className="text-slate-800 font-semibold text-right">{userName}</span>
+                                        </div>
+                                        {userEmail && (
+                                            <div className="flex justify-between items-start gap-4">
+                                                <span className="text-slate-400 font-medium">Email</span>
+                                                <span className="text-slate-800 font-semibold text-right truncate max-w-[150px]">{userEmail}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className="text-center mt-5">
+                                    <p className="text-[8px] text-slate-400 font-medium">
+                                        Thank you for transacting with Easy Sales & Export.
+                                    </p>
+                                    <p className="text-[7px] text-slate-300 mt-1">
+                                        This is an official computer-generated receipt and requires no signature.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                            <button
+                                onClick={() => downloadAsPDF(receiptTxn)}
+                                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow cursor-pointer"
+                            >
+                                <Download className="w-4 h-4" /> PDF
+                            </button>
+                            <button
+                                onClick={() => downloadAsJPEG(receiptTxn)}
+                                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 shadow cursor-pointer"
+                            >
+                                <ImageIcon className="w-4 h-4" /> JPEG
+                            </button>
+                            <button
+                                onClick={() => shareReceipt(receiptTxn)}
+                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                                <Share2 className="w-4 h-4" /> Share
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }
