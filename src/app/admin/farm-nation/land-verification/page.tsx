@@ -13,7 +13,7 @@ type LandVerification = {
     userId: string;
     ownerName: string;
     title: string;
-    category: string;
+    category: string | string[];
     state: string;
     lga: string;
     size: number;
@@ -94,7 +94,10 @@ export default function AdminLandVerificationPage() {
     const startEditing = () => {
         if (!selectedVerification) return;
         setEditTitle(selectedVerification.title || "");
-        setEditCategory(selectedVerification.category || "");
+        const catVal = Array.isArray(selectedVerification.category)
+            ? selectedVerification.category[0] || ""
+            : (selectedVerification.category || "");
+        setEditCategory(catVal);
         setEditState(selectedVerification.state || "");
         setEditLga(selectedVerification.lga || "");
         setEditAddress(selectedVerification.location?.address || selectedVerification.address || "");
@@ -437,7 +440,13 @@ export default function AdminLandVerificationPage() {
                                             </td>
                                             <td className="px-6 py-4">
                                                 <p className="font-semibold text-slate-900">{verification.title}</p>
-                                                <p className="text-sm text-slate-500">{verification.category}</p>
+                                                <p className="text-sm text-slate-500">
+                                                    {Array.isArray(verification.category)
+                                                        ? verification.category.map(c => String(c).replace(/_/g, " ")).join(", ")
+                                                        : (typeof verification.category === "string"
+                                                            ? verification.category.replace(/_/g, " ")
+                                                            : (verification.category || "—"))}
+                                                </p>
                                             </td>
                                             <td className="px-6 py-4">
                                                 <p className="text-sm text-slate-900">{verification.state}</p>
@@ -571,7 +580,13 @@ export default function AdminLandVerificationPage() {
                                                 {!isEditingDetails ? (
                                                     <div className="grid grid-cols-2 gap-4">
                                                         <div><p className="text-sm text-slate-600">Title</p><p className="font-semibold text-slate-900">{selectedVerification.title}</p></div>
-                                                        <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold text-slate-900 capitalize">{selectedVerification.category?.replace(/_/g, " ") || "—"}</p></div>
+                                                        <div><p className="text-sm text-slate-600">Category</p><p className="font-semibold text-slate-900 capitalize">
+                                                            {Array.isArray(selectedVerification.category)
+                                                                ? selectedVerification.category.map(c => String(c).replace(/_/g, " ")).join(", ")
+                                                                : (typeof selectedVerification.category === "string"
+                                                                    ? selectedVerification.category.replace(/_/g, " ")
+                                                                    : (selectedVerification.category || "—"))}
+                                                        </p></div>
                                                         <div><p className="text-sm text-slate-600">Location</p><p className="font-semibold text-slate-900">{selectedVerification.state}, {selectedVerification.lga}</p></div>
                                                         <div><p className="text-sm text-slate-600">Size &amp; Price</p><p className="font-semibold text-slate-900">{selectedVerification.size} {selectedVerification.unit} — ₦{(selectedVerification.totalPrice ?? selectedVerification.price ?? 0).toLocaleString()}</p></div>
                                                         {selectedVerification.gpsCoordinates && (
