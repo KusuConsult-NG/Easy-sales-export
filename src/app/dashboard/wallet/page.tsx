@@ -108,8 +108,10 @@ export default function WalletPage() {
         if (!cardElement) return showToast("Receipt element not found", "error");
 
         try {
-            const html2canvas = (await import("html2canvas")).default;
-            const { jsPDF } = await import("jspdf");
+            const html2canvasModule = await import("html2canvas");
+            const html2canvas = html2canvasModule.default || html2canvasModule;
+            const jspdfModule = await import("jspdf");
+            const jsPDF = jspdfModule.jsPDF || jspdfModule.default || jspdfModule;
 
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
@@ -127,9 +129,9 @@ export default function WalletPage() {
             pdf.addImage(imgData, "JPEG", 0, 0, canvas.width / 2, canvas.height / 2);
             pdf.save(`receipt-${txn.id}.pdf`);
             showToast("PDF receipt downloaded", "success");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to download PDF:", error);
-            showToast("Could not generate PDF", "error");
+            showToast(`Could not generate PDF: ${error?.message || error}`, "error");
         }
     };
 
@@ -138,7 +140,8 @@ export default function WalletPage() {
         if (!cardElement) return showToast("Receipt element not found", "error");
 
         try {
-            const html2canvas = (await import("html2canvas")).default;
+            const html2canvasModule = await import("html2canvas");
+            const html2canvas = html2canvasModule.default || html2canvasModule;
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",
@@ -150,9 +153,9 @@ export default function WalletPage() {
             link.href = canvas.toDataURL("image/jpeg", 0.95);
             link.click();
             showToast("JPEG receipt downloaded", "success");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to download JPEG:", error);
-            showToast("Could not generate image", "error");
+            showToast(`Could not generate image: ${error?.message || error}`, "error");
         }
     };
 
@@ -161,7 +164,8 @@ export default function WalletPage() {
         if (!cardElement) return showToast("Receipt element not found", "error");
 
         try {
-            const html2canvas = (await import("html2canvas")).default;
+            const html2canvasModule = await import("html2canvas");
+            const html2canvas = html2canvasModule.default || html2canvasModule;
             const canvas = await html2canvas(cardElement, {
                 scale: 2,
                 backgroundColor: "#ffffff",
@@ -191,9 +195,9 @@ export default function WalletPage() {
                 link.click();
                 showToast("Sharing not supported, downloading instead", "info");
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error sharing receipt:", error);
-            showToast("Could not share receipt", "error");
+            showToast(`Could not share receipt: ${error?.message || error}`, "error");
         }
     };
 
