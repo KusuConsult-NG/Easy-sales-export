@@ -21,6 +21,7 @@ type CourseProgress = {
     quizScore?: number;
     quizPassed?: boolean;
     certificateId?: string;
+    modules?: any[];
 };
 
 type Certificate = {
@@ -161,6 +162,30 @@ export default function AcademyDashboardPage() {
         );
     }
 
+    // Flatten modules from all enrolled courses
+    const allModules = courses.flatMap(course => {
+        return (course.modules || []).map((mod: any, index: number) => {
+            const moduleLessonIds = (mod.lessons || []).map((l: any) => l.id);
+            const completedInModule = (course.completedLessons || []).filter((id: string) => 
+                moduleLessonIds.includes(id)
+            );
+            const totalInModule = moduleLessonIds.length;
+            const completionPercentage = totalInModule > 0 
+                ? Math.round((completedInModule.length / totalInModule) * 100) 
+                : 0;
+
+            return {
+                ...mod,
+                courseId: course.courseId,
+                courseTitle: course.courseTitle,
+                completedLessonsCount: completedInModule.length,
+                totalLessonsCount: totalInModule,
+                completionPercentage,
+                moduleIndex: index + 1,
+            };
+        });
+    });
+
     return (
         <div className="min-h-screen bg-slate-50 py-8">
             <div className="max-w-7xl mx-auto px-4">
@@ -251,20 +276,20 @@ export default function AcademyDashboardPage() {
                     </div>
                 </div>
 
-                {/* My Courses */}
+                {/* My Modules */}
                 <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
                     <h2 className="text-2xl font-bold text-slate-900 mb-6">
-                        My Courses
+                        My Modules
                     </h2>
 
-                    {courses.length === 0 ? (
+                    {allModules.length === 0 ? (
                         <div className="text-center py-12">
                             <BookOpen className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                             <p className="text-slate-500 mb-4">
                                 You haven't enrolled in any courses yet
                             </p>
                             <Link
-                                href="/academy/courses"
+                                href="/academy"
                                 className="inline-block px-6 py-3 bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg transition-all"
                             >
                                 Browse Courses
@@ -272,53 +297,52 @@ export default function AcademyDashboardPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {courses.map((course) => (
+                            {allModules.map((module) => (
                                 <Link
-                                    key={course.courseId}
-                                    href={`/academy/${course.courseId}`}
+                                    key={`${module.courseId}_${module.id}`}
+                                    href={`/academy/${module.courseId}`}
                                     className="block"
                                 >
                                     <div className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all border border-slate-200">
-                                        <div className="flex items-start justify-between mb-4">
-                                            <h3 className="text-lg font-bold text-slate-900">
-                                                {course.courseTitle}
-                                            </h3>
-                                            {course.certificateId && (
-                                                <Award className="w-6 h-6 text-yellow-500" />
-                                            )}
+                                        <div className="flex items-start justify-between mb-2">
+                                            <div>
+                                                <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">
+                                                    {module.courseTitle} • Module {module.moduleIndex}
+                                                </span>
+                                                <h3 className="text-lg font-bold text-slate-900 mt-1">
+                                                    {module.title}
+                                                </h3>
+                                            </div>
                                         </div>
+
+                                        <p className="text-xs text-slate-500 mb-4 line-clamp-2">
+                                            {module.description}
+                                        </p>
 
                                         {/* Progress Bar */}
                                         <div className="mb-4">
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-semibold text-slate-900">
-                                                    Progress
+                                                <span className="text-xs font-semibold text-slate-600">
+                                                    Module Progress
                                                 </span>
-                                                <span className="text-sm font-bold text-primary">
-                                                    {course.completionPercentage}%
+                                                <span className="text-xs font-bold text-blue-600">
+                                                    {module.completionPercentage}%
                                                 </span>
                                             </div>
-                                            <div className="w-full bg-slate-200 rounded-full h-2">
+                                            <div className="w-full bg-slate-200 rounded-full h-1.5">
                                                 <div
-                                                    className="bg-primary h-2 rounded-full transition-all"
-                                                    style={{ width: `${course.completionPercentage}%` }}
+                                                    className="bg-blue-600 h-1.5 rounded-full transition-all"
+                                                    style={{ width: `${module.completionPercentage}%` }}
                                                 />
                                             </div>
                                         </div>
 
                                         {/* Stats */}
-                                        <div className="flex items-center gap-4 text-sm text-slate-600">
+                                        <div className="flex items-center gap-4 text-xs text-slate-500">
                                             <div className="flex items-center gap-1">
-                                                <BookOpen className="w-4 h-4" />
-                                                {(course.completedLessons || []).length}/{course.totalLessons} lessons
+                                                <BookOpen className="w-3.5 h-3.5" />
+                                                {module.completedLessonsCount}/{module.totalLessonsCount} lessons
                                             </div>
-                                            {course.quizPassed !== undefined && (
-                                                <div className={`flex items-center gap-1 ${course.quizPassed ? 'text-green-600' : 'text-yellow-600'
-                                                    }`}>
-                                                    <Award className="w-4 h-4" />
-                                                    Quiz: {course.quizScore}%
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 </Link>
