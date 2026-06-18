@@ -275,7 +275,9 @@ export default function FarmNationDashboard() {
                                                 )}
                                             </div>
                                             <p className="text-xs text-slate-500 mb-2">
-                                                {prop.location}, {prop.state} · {prop.size} Ha ·{" "}
+                                                {typeof prop.location === "object" && prop.location
+                                                    ? `${(prop.location as any).address || (prop.location as any).lga || ""}, ${(prop.location as any).state || ""}`.trim().replace(/^,\s*/, "")
+                                                    : (prop.location || prop.state || "")} · {prop.size} Ha ·{" "}
                                                 <span className="capitalize">{prop.type}</span>
                                             </p>
                                             <div className="flex items-center gap-2">

@@ -212,7 +212,11 @@ export default function PropertyDetailsPage() {
                                     </h1>
                                     <div className="flex items-center gap-2 text-slate-600">
                                         <MapPin className="w-4 h-4" />
-                                        <span>{property.location.address}, {property.location.lga}, {property.location.state}</span>
+                                        <span>
+                                            {typeof property.location === "object" && property.location
+                                                ? `${property.location.address || ""}, ${property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "").replace(/,\s*,/g, ",").replace(/,\s*$/, "")
+                                                : (property.location || "Nigeria")}
+                                        </span>
                                     </div>
                                 </div>
                                 <div className={`px-4 py-2 rounded-lg font-semibold ${

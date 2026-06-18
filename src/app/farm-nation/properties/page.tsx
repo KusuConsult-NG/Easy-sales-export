@@ -62,12 +62,20 @@ function PropertiesContent() {
                 let filteredResults = result.data.listings;
                 if (searchTerm) {
                     const lowerTerm = searchTerm.toLowerCase();
-                    filteredResults = result.data.listings.filter(p =>
-                        p.title.toLowerCase().includes(lowerTerm) ||
-                        p.description.toLowerCase().includes(lowerTerm) ||
-                        p.location.lga.toLowerCase().includes(lowerTerm) ||
-                        p.location.address.toLowerCase().includes(lowerTerm)
-                    );
+                    filteredResults = result.data.listings.filter(p => {
+                        const titleMatch = p.title?.toLowerCase().includes(lowerTerm);
+                        const descMatch = p.description?.toLowerCase().includes(lowerTerm);
+                        
+                        let locMatch = false;
+                        if (typeof p.location === "object" && p.location) {
+                            locMatch = !!(p.location.lga?.toLowerCase().includes(lowerTerm) || 
+                                         p.location.address?.toLowerCase().includes(lowerTerm) || 
+                                         p.location.state?.toLowerCase().includes(lowerTerm));
+                        } else {
+                            locMatch = String(p.location || "").toLowerCase().includes(lowerTerm);
+                        }
+                        return titleMatch || descMatch || locMatch;
+                    });
                 }
 
                 if (reset) {
@@ -286,7 +294,9 @@ function PropertiesContent() {
                                         <div className="flex items-center gap-2 text-slate-600 mb-4">
                                             <MapPin className="w-4 h-4 shrink-0" />
                                             <span className="text-sm line-clamp-1">
-                                                {property.location.address}, {property.location.state}
+                                                {typeof property.location === "object" && property.location
+                                                    ? `${property.location.address || property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "")
+                                                    : (property.location || "Nigeria")}
                                             </span>
                                         </div>
 
