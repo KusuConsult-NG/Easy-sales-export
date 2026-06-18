@@ -391,3 +391,43 @@ export async function getAdminVillageMarketEventsAction(options: {
         return { success: false as const, error: err.message || "Failed to fetch market events" , data: null };
     }
 }
+
+// ---------------------------------------------------------------------------
+// Public: Get All Active Flash Sale Products (across all events)
+// ---------------------------------------------------------------------------
+export async function getActiveFlashSaleProductsAction(): Promise<FlashSaleProduct[]> {
+    try {
+        const snap = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS)
+            .where("status", "==", "active")
+            .orderBy("createdAt", "desc")
+            .limit(100)
+            .get();
+
+        const products = serializeDocs(snap.docs) as unknown as FlashSaleProduct[];
+        
+        // Fetch seller names to populate sellerName
+        const uniqueSellerIds = Array.from(new Set(products.map(p => p.sellerId).filter(Boolean)));
+        const sellerNames: Record<string, string> = {};
+        
+        if (uniqueSellerIds.length > 0) {
+            const sellerDocs = await Promise.all(
+                uniqueSellerIds.map(id => db.collection(COLLECTIONS.USERS).doc(id).get())
+            );
+            sellerDocs.forEach(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    sellerNames[doc.id] = data?.displayName || data?.businessName || data?.name || "Verified Seller";
+                }
+            });
+        }
+        
+        return products.map(p => ({
+            ...p,
+            sellerName: sellerNames[p.sellerId] || "Verified Seller"
+        }));
+    } catch (err) {
+        logger.error("getActiveFlashSaleProductsAction error:", err);
+        return [];
+    }
+}
+

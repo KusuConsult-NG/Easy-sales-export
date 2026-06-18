@@ -183,6 +183,8 @@ export interface CartItem {
     selectedTier: "retail" | "bulk" | "export";
     price: number;
     addedAt: FieldValue | Timestamp | Date;
+    isFlashSale?: boolean;
+    eventId?: string;
 }
 
 export interface ShoppingCart {

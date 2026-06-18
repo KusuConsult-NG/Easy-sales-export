@@ -2,7 +2,7 @@ import { ArrowRight, ShoppingCart, Star, TrendingUp, Shield, Package, CheckCircl
 import { logger } from '@/lib/logger';
 import Image from "next/image";
 import Link from "next/link";
-import { getRecommendedProductsAction } from "@/app/actions/marketplace";
+import { getRecommendedProductsAction, getMarketplaceStatsAction } from "@/app/actions/marketplace";
 import BackToHub from "@/components/common/BackToHub";
 import MarketplaceRouteGuard from "@/components/marketplace/MarketplaceRouteGuard";
 import type { Metadata } from "next";
@@ -32,6 +32,17 @@ export default async function MarketplaceLandingPage() {
     } catch (error) {
         logger.error("Failed to fetch recommended products:", error);
         // Products will remain empty array, component will handle gracefully
+    }
+
+    const stats = { productsCount: 5000, tradersCount: 12000 };
+    try {
+        const statsRes = await getMarketplaceStatsAction();
+        if (statsRes.success && statsRes.data) {
+            stats.productsCount = statsRes.data.productsCount || 5000;
+            stats.tradersCount = statsRes.data.tradersCount || 12000;
+        }
+    } catch (error) {
+        logger.error("Failed to fetch stats:", error);
     }
 
     return (
@@ -87,11 +98,15 @@ export default async function MarketplaceLandingPage() {
             <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-16 relative z-10">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-12 md:mb-16">
                     <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">5,000+</div>
+                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
+                            {stats.productsCount.toLocaleString()}+
+                        </div>
                         <div className="text-xs md:text-base text-slate-600 font-medium">Products Listed</div>
                     </div>
                     <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">
-                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">12,000+</div>
+                        <div className="text-2xl md:text-4xl font-bold text-green-600 mb-1 md:mb-2">
+                            {stats.tradersCount.toLocaleString()}+
+                        </div>
                         <div className="text-xs md:text-base text-slate-600 font-medium">Active Traders</div>
                     </div>
                     <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 elevation-2 text-center">

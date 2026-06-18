@@ -15,6 +15,7 @@ import { withSafeAction } from "@/lib/safe-action";
 import { getBaseUrl } from "@/lib/server-utils";
 import type { CartItem } from "@/lib/types/marketplace";
 import type { ActionResponse } from "@/lib/safe-action";
+import { createNotification } from "@/infrastructure/notifications/service";
 
 const paymentLimiter = rateLimit(rateLimitConfig.payment);
 
@@ -31,6 +32,8 @@ interface ValidatedItem {
     unit: string;
     pricePerUnit: number;
     totalPrice: number; 
+    isFlashSale?: boolean;
+    eventId?: string;
 }
 
 /**
@@ -42,21 +45,28 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
     const validatedItems = [];
 
     for (const item of clientItems) {
-        const productDoc = await db.collection(COLLECTIONS.PRODUCTS).doc(item.id).get();
+        const isFlashSale = item.isFlashSale === true;
+        const col = isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
+        const productDoc = await db.collection(col).doc(item.id).get();
 
         if (!productDoc.exists) {
             throw new Error(`Product not found: ${item.title}`);
         }
 
         const productData = productDoc.data();
+        let dbPrice = 0;
         
-        // Find correct price from database pricing tiers based on client selectedTier
-        const selectedTierType = item.selectedTier || "retail";
-        const matchedTier = productData?.pricingTiers?.find((t: any) => t.type === selectedTierType);
-        const dbPrice = matchedTier?.price 
-            || productData?.pricingTiers?.[0]?.price 
-            || productData?.price 
-            || 0;
+        if (isFlashSale) {
+            dbPrice = productData?.flashPrice || productData?.price || 0;
+        } else {
+            // Find correct price from database pricing tiers based on client selectedTier
+            const selectedTierType = item.selectedTier || "retail";
+            const matchedTier = productData?.pricingTiers?.find((t: any) => t.type === selectedTierType);
+            dbPrice = matchedTier?.price 
+                || productData?.pricingTiers?.[0]?.price 
+                || productData?.price 
+                || 0;
+        }
 
         // Force DB price for security
         const effectivePrice = dbPrice;
@@ -70,7 +80,9 @@ async function validateCartItems(clientItems: CartItem[]): Promise<{ subtotal: n
             quantity: item.quantity,
             unit: item.unit,
             pricePerUnit: effectivePrice,
-            totalPrice: itemTotal 
+            totalPrice: itemTotal,
+            isFlashSale: isFlashSale,
+            eventId: productData?.eventId || undefined
         });
     }
 
@@ -413,13 +425,16 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             })
         );
 
+        const lowStockProducts: { sellerId: string; title: string; qty: number; isFlashSale: boolean; id: string }[] = [];
+
         await db.runTransaction(async (transaction) => { 
             const items = orderData.items || [];
 
             // 1. All Reads First
             const productSnapshots: { ref: any; doc: any; item: any }[] = [];
             for (const item of items) {
-                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
+                const productRef = db.collection(col).doc(item.productId);
                 const doc = await transaction.get(productRef);
                 productSnapshots.push({ ref: productRef, doc, item });
             }
@@ -455,12 +470,23 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             for (const { ref, doc, item } of productSnapshots) { 
                 if (doc.exists) {
                     const currentQty = doc.data()?.availableQuantity || 0;
+                    const newQty = currentQty - item.quantity;
                     if (currentQty >= item.quantity) {
                         transaction.update(ref, {
                             availableQuantity: FieldValue.increment(-item.quantity),
                             orders: FieldValue.increment(1),
                             _version: FieldValue.increment(1) 
                         });
+                        
+                        if (newQty <= 5) {
+                            lowStockProducts.push({
+                                sellerId: doc.data()?.sellerId || item.sellerId,
+                                title: doc.data()?.title || item.productTitle,
+                                qty: newQty,
+                                isFlashSale: !!item.isFlashSale,
+                                id: item.productId
+                            });
+                        }
                     } else {
                         throw new Error(`Insufficient stock for product: ${item.productTitle}`);
                     }
@@ -608,6 +634,25 @@ async function _verifyOrderPaymentAction(reference: string): Promise<ActionRespo
             });
         });
 
+        // Send low-stock warnings to sellers
+        for (const p of lowStockProducts) {
+            try {
+                const message = p.qty === 0 
+                    ? `Your product "${p.title}" is out of stock! Please restock soon.` 
+                    : `Your product "${p.title}" is running out of stock! Only ${p.qty} units remaining.`;
+                await createNotification({
+                    userId: p.sellerId,
+                    type: "warning",
+                    title: p.qty === 0 ? "Out of Stock Alert" : "Low Stock Warning",
+                    message,
+                    link: p.isFlashSale ? `/marketplace/village-market` : `/marketplace/seller/products`,
+                    linkText: "Manage Products"
+                });
+            } catch (err) {
+                logger.error("Failed to send low stock notification:", err);
+            }
+        }
+
         revalidatePath("/dashboard");
         revalidatePath("/marketplace/buyer/orders");
 
@@ -675,9 +720,12 @@ async function _createBankTransferOrderAction(
         const orderId = `ORD-${Date.now()}-${session.user.id.substring(0, 8)}`;
         const orderReference = `BT-${Date.now()}`;
 
+        const lowStockProducts: { sellerId: string; title: string; qty: number; isFlashSale: boolean; id: string }[] = [];
+
         await db.runTransaction(async (transaction) => {
             for (const item of validatedItems) {
-                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
+                const productRef = db.collection(col).doc(item.productId);
                 const productDoc = await transaction.get(productRef);
                 if (productDoc.exists) {
                     const currentQty = productDoc.data()?.availableQuantity || 0;
@@ -690,12 +738,27 @@ async function _createBankTransferOrderAction(
             }
 
             for (const item of validatedItems) { 
-                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
+                const productRef = db.collection(col).doc(item.productId);
+                const doc = await transaction.get(productRef);
+                const currentQty = doc.data()?.availableQuantity || 0;
+                const newQty = currentQty - item.quantity;
+
                 transaction.update(productRef, {
                     availableQuantity: FieldValue.increment(-item.quantity),
                     orders: FieldValue.increment(1),
                     _version: FieldValue.increment(1) 
                 });
+
+                if (newQty <= 5) {
+                    lowStockProducts.push({
+                        sellerId: doc.data()?.sellerId || item.sellerId,
+                        title: doc.data()?.title || item.productTitle,
+                        qty: newQty,
+                        isFlashSale: !!item.isFlashSale,
+                        id: item.productId
+                    });
+                }
             }
 
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
@@ -720,6 +783,25 @@ async function _createBankTransferOrderAction(
                 _version: 0 
             });
         });
+
+        // Send low-stock warnings to sellers
+        for (const p of lowStockProducts) {
+            try {
+                const message = p.qty === 0 
+                    ? `Your product "${p.title}" is out of stock! Please restock soon.` 
+                    : `Your product "${p.title}" is running out of stock! Only ${p.qty} units remaining.`;
+                await createNotification({
+                    userId: p.sellerId,
+                    type: "warning",
+                    title: p.qty === 0 ? "Out of Stock Alert" : "Low Stock Warning",
+                    message,
+                    link: p.isFlashSale ? `/marketplace/village-market` : `/marketplace/seller/products`,
+                    linkText: "Manage Products"
+                });
+            } catch (err) {
+                logger.error("Failed to send low stock notification:", err);
+            }
+        }
 
         return { error: null, success: true as const, data: null };
     } catch (error) { 
@@ -787,9 +869,12 @@ async function _createPaymentOnDeliveryOrderAction(
 
         const orderId = `POD-${Date.now()}-${session.user.id.substring(0, 8)}`;
 
+        const lowStockProducts: { sellerId: string; title: string; qty: number; isFlashSale: boolean; id: string }[] = [];
+
         await db.runTransaction(async (transaction) => {
             for (const item of validatedItems) {
-                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
+                const productRef = db.collection(col).doc(item.productId);
                 const productDoc = await transaction.get(productRef);
                 if (productDoc.exists) {
                     const currentQty = productDoc.data()?.availableQuantity || 0;
@@ -802,12 +887,27 @@ async function _createPaymentOnDeliveryOrderAction(
             }
 
             for (const item of validatedItems) { 
-                const productRef = db.collection(COLLECTIONS.PRODUCTS).doc(item.productId);
+                const col = item.isFlashSale ? COLLECTIONS.FLASH_SALE_PRODUCTS : COLLECTIONS.PRODUCTS;
+                const productRef = db.collection(col).doc(item.productId);
+                const doc = await transaction.get(productRef);
+                const currentQty = doc.data()?.availableQuantity || 0;
+                const newQty = currentQty - item.quantity;
+
                 transaction.update(productRef, {
                     availableQuantity: FieldValue.increment(-item.quantity),
                     orders: FieldValue.increment(1),
                     _version: FieldValue.increment(1) 
                 });
+
+                if (newQty <= 5) {
+                    lowStockProducts.push({
+                        sellerId: doc.data()?.sellerId || item.sellerId,
+                        title: doc.data()?.title || item.productTitle,
+                        qty: newQty,
+                        isFlashSale: !!item.isFlashSale,
+                        id: item.productId
+                    });
+                }
             }
 
             const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderId);
@@ -833,6 +933,25 @@ async function _createPaymentOnDeliveryOrderAction(
                 _version: 0 
             });
         });
+
+        // Send low-stock warnings to sellers
+        for (const p of lowStockProducts) {
+            try {
+                const message = p.qty === 0 
+                    ? `Your product "${p.title}" is out of stock! Please restock soon.` 
+                    : `Your product "${p.title}" is running out of stock! Only ${p.qty} units remaining.`;
+                await createNotification({
+                    userId: p.sellerId,
+                    type: "warning",
+                    title: p.qty === 0 ? "Out of Stock Alert" : "Low Stock Warning",
+                    message,
+                    link: p.isFlashSale ? `/marketplace/village-market` : `/marketplace/seller/products`,
+                    linkText: "Manage Products"
+                });
+            } catch (err) {
+                logger.error("Failed to send low stock notification:", err);
+            }
+        }
 
         notifyOrderPlaced({ 
             buyerId: session.user.id,

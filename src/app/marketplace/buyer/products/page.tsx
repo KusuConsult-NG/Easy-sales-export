@@ -21,12 +21,14 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { getProductsAction } from "@/app/actions/marketplace";
+import { getActiveFlashSaleProductsAction } from "@/app/actions/village-market";
 import type { Product, ProductCategory } from "@/lib/types/marketplace";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CATEGORIES: { id: string; name: string }[] = [
     { id: "all",         name: "All Products" },
+    { id: "flash_sales", name: "Flash Sales ⚡" },
     { id: "grains",      name: "Grains & Cereals" },
     { id: "roots",       name: "Roots & Tubers" },
     { id: "vegetables",  name: "Vegetables" },
@@ -39,6 +41,22 @@ const CATEGORIES: { id: string; name: string }[] = [
     { id: "processed",   name: "Processed Foods" },
     { id: "organic",     name: "Organic Products" },
 ];
+
+const categoryMapping: Record<string, string[]> = {
+    grains: ["grains"],
+    roots: ["roots", "roots_tubers", "roots & tubers"],
+    vegetables: ["vegetables", "fruits"],
+    fruits: ["fruits"],
+    nuts: ["nuts"],
+    spices: ["spices", "spices_herbs_seasonings"],
+    livestock: ["livestock"],
+    poultry: ["poultry"],
+    dairy: ["dairy"],
+    processed: ["processed"],
+    organic: ["organic", "organics"],
+    sea_foods: ["sea_foods", "fishery"],
+    fishery: ["fishery", "sea_foods"],
+};
 
 const NIGERIAN_STATES = [
     "Abia","Adamawa","Akwa Ibom","Anambra","Bauchi","Bayelsa","Benue","Borno",
@@ -96,31 +114,71 @@ export default function ProductsPage() {
         setError(null);
         try {
             const { minPrice, maxPrice } = priceRangeToFilter(priceRange);
-            const result = await getProductsAction({
-                category:   selectedCategory !== "all" ? (selectedCategory as ProductCategory) : undefined,
+            
+            // Fetch regular products
+            const productsPromise = getProductsAction({
                 state:      selectedState !== "all" ? selectedState : undefined,
                 searchTerm: searchQuery || undefined,
                 minPrice,
                 maxPrice,
             });
 
-            if (result.success && result.data?.products) {
-                const sorted = [...result.data.products];
-                if (sortBy === "price_low")  sorted.sort((a, b) => (a.pricingTiers[0]?.price ?? 0) - (b.pricingTiers[0]?.price ?? 0));
-                if (sortBy === "price_high") sorted.sort((a, b) => (b.pricingTiers[0]?.price ?? 0) - (a.pricingTiers[0]?.price ?? 0));
-                if (sortBy === "rating")     sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-                setProducts(sorted);
-            } else {
-                setError((result as any).error ?? "Failed to load products");
-                setProducts([]);
+            // Fetch flash sales products
+            const flashPromise = getActiveFlashSaleProductsAction();
+
+            const [productsRes, flashRes] = await Promise.all([productsPromise, flashPromise]);
+
+            let regularProducts: Product[] = [];
+            if (productsRes.success && productsRes.data?.products) {
+                regularProducts = productsRes.data.products;
+            } else if (productsRes.error) {
+                setError(productsRes.error);
             }
+
+            // Map FlashSaleProducts to Product-like shape
+            const mappedFlashProducts: Product[] = (flashRes || []).map((fp: any) => ({
+                id: fp.id,
+                sellerId: fp.sellerId,
+                title: fp.title,
+                description: fp.description || "",
+                category: "flash_sales" as any,
+                images: fp.imageUrl ? [fp.imageUrl] : [],
+                pricingTiers: [{ type: "retail", price: fp.flashPrice || fp.price, minQuantity: 1 }],
+                availableQuantity: fp.availableQuantity ?? 0,
+                minimumOrderQuantity: 1,
+                unit: fp.unit || "unit",
+                location: {
+                    state: fp.location?.state || "Nigeria",
+                    lga: fp.location?.lga || "",
+                },
+                deliveryMethod: "delivery",
+                status: fp.availableQuantity === 0 ? "out_of_stock" : "active",
+                bulkAvailable: false,
+                rating: 5.0,
+                reviewCount: 0,
+                sellerName: fp.sellerName || "Verified Seller",
+                sellerVerified: true,
+                isFlashSale: true,
+                originalPrice: fp.price,
+                flashPrice: fp.flashPrice,
+                eventId: fp.eventId,
+            } as any));
+
+            // Merge products
+            const allProducts = [...mappedFlashProducts, ...regularProducts];
+
+            const sorted = [...allProducts];
+            if (sortBy === "price_low")  sorted.sort((a, b) => (a.pricingTiers[0]?.price ?? 0) - (b.pricingTiers[0]?.price ?? 0));
+            if (sortBy === "price_high") sorted.sort((a, b) => (b.pricingTiers[0]?.price ?? 0) - (a.pricingTiers[0]?.price ?? 0));
+            if (sortBy === "rating")     sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+            setProducts(sorted);
         } catch (e: any) {
             setError(e.message ?? "Unexpected error");
             setProducts([]);
         } finally {
             setLoading(false);
         }
-    }, [selectedCategory, selectedState, priceRange, sortBy, searchQuery]);
+    }, [selectedState, priceRange, sortBy, searchQuery]);
 
     // Re-fetch when filters change (debounce search)
     useEffect(() => {
@@ -132,9 +190,26 @@ export default function ProductsPage() {
     const categoryCounts = CATEGORIES.reduce((acc, cat) => {
         acc[cat.id] = cat.id === "all"
             ? products.length
-            : products.filter(p => p.category === cat.id).length;
+            : products.filter(p => {
+                if (cat.id === "flash_sales") return (p as any).isFlashSale === true;
+                if ((p as any).isFlashSale) return false;
+                const pCat = p.category?.toLowerCase() || "";
+                const mapped = categoryMapping[cat.id] || [cat.id];
+                return mapped.includes(pCat);
+              }).length;
         return acc;
     }, {} as Record<string, number>);
+
+    // Client-side category filtering
+    const displayedProducts = products.filter(p => {
+        if (selectedCategory === "all") return true;
+        if (selectedCategory === "flash_sales") return (p as any).isFlashSale === true;
+        if ((p as any).isFlashSale) return false;
+        
+        const pCat = p.category?.toLowerCase() || "";
+        const mapped = categoryMapping[selectedCategory] || [selectedCategory];
+        return mapped.includes(pCat);
+    });
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -248,7 +323,7 @@ export default function ProductsPage() {
                                 {loading ? (
                                     "Loading products…"
                                 ) : (
-                                    <>Showing <span className="font-semibold text-slate-900">{products.length}</span> product{products.length !== 1 ? "s" : ""}</>
+                                    <>Showing <span className="font-semibold text-slate-900">{displayedProducts.length}</span> product{displayedProducts.length !== 1 ? "s" : ""}</>
                                 )}
                             </p>
                             {!loading && (
@@ -285,7 +360,7 @@ export default function ProductsPage() {
                         )}
 
                         {/* Empty State */}
-                        {!loading && !error && products.length === 0 && (
+                        {!loading && !error && displayedProducts.length === 0 && (
                             <div className="flex flex-col items-center justify-center min-h-[30vh] gap-3">
                                 <Package className="w-14 h-14 text-slate-300" />
                                 <h3 className="font-semibold text-slate-800">No products found</h3>
@@ -309,17 +384,20 @@ export default function ProductsPage() {
                         )}
 
                         {/* Product Cards */}
-                        {!loading && !error && products.length > 0 && (
+                        {!loading && !error && displayedProducts.length > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {products.map((product) => {
+                                {displayedProducts.map((product) => {
                                     const basePrice = product.pricingTiers?.[0]?.price ?? 0;
                                     const minQty    = product.pricingTiers?.[0]?.minQuantity ?? 1;
                                     const productId = (product as any).id ?? (product as any).productId;
+                                    const isFS      = (product as any).isFlashSale === true;
 
                                     return (
                                         <div
                                             key={productId}
-                                            className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow group flex flex-col"
+                                            className={`bg-white rounded-xl border overflow-hidden hover:shadow-lg transition-all duration-300 group flex flex-col ${
+                                                isFS ? "border-red-200 ring-1 ring-red-50" : "border-slate-200"
+                                            }`}
                                         >
                                             {/* Product Image */}
                                             <div className="h-44 bg-slate-100 relative overflow-hidden">
@@ -350,11 +428,18 @@ export default function ProductsPage() {
                                                         Out of Stock
                                                     </span>
                                                 )}
+                                                {isFS && (
+                                                    <span className="absolute top-3 right-3 bg-red-600 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow animate-pulse">
+                                                        FLASH DEAL
+                                                    </span>
+                                                )}
                                             </div>
 
                                             {/* Product Info */}
                                             <div className="p-5 flex flex-col flex-1">
-                                                <h3 className="font-bold text-slate-900 mb-1 group-hover:text-green-600 transition-colors line-clamp-1">
+                                                <h3 className={`font-bold text-slate-900 mb-1 transition-colors line-clamp-1 ${
+                                                    isFS ? "group-hover:text-red-600" : "group-hover:text-green-600"
+                                                }`}>
                                                     {product.title}
                                                 </h3>
                                                 <p className="text-sm text-slate-500 mb-3 line-clamp-2 flex-1">
@@ -385,16 +470,34 @@ export default function ProductsPage() {
                                                 {/* Price + CTA */}
                                                 <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
                                                     <div>
-                                                        <div className="text-lg font-bold text-green-600">
-                                                            {formatCurrency(basePrice)}
-                                                        </div>
-                                                        <div className="text-xs text-slate-400">
-                                                            per {product.unit} · Min: {minQty} {product.unit}
-                                                        </div>
+                                                        {isFS ? (
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-lg font-bold text-red-600">
+                                                                        {formatCurrency((product as any).flashPrice || basePrice)}
+                                                                    </span>
+                                                                    <span className="text-xs text-slate-400 line-through">
+                                                                        {formatCurrency((product as any).originalPrice || basePrice)}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[10px] text-red-600 font-extrabold">Village Market Flash Sale</span>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="text-lg font-bold text-green-600">
+                                                                    {formatCurrency(basePrice)}
+                                                                </div>
+                                                                <div className="text-xs text-slate-400">
+                                                                    per {product.unit} · Min: {minQty} {product.unit}
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                     <Link
-                                                        href={`/marketplace/products/${productId}`}
-                                                        className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-semibold"
+                                                        href={isFS ? `/marketplace/village-market/${(product as any).eventId}` : `/marketplace/products/${productId}`}
+                                                        className={`flex items-center gap-2 px-3 py-2 text-white rounded-lg transition text-sm font-semibold ${
+                                                            isFS ? "bg-red-600 hover:bg-red-700 shadow-red-600/10" : "bg-green-600 hover:bg-green-700"
+                                                        }`}
                                                     >
                                                         <ShoppingCart className="w-4 h-4" />
                                                         View

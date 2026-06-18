@@ -363,4 +363,26 @@ async function _cancelOrderAction(orderId: string): Promise<ActionResponse<{ suc
 }
 export const cancelOrderAction = withSafeAction("cancelOrderAction", _cancelOrderAction);
 
+async function _getMarketplaceStatsAction(): Promise<ActionResponse<{ productsCount: number; tradersCount: number }>> {
+    try {
+        const [productsSnap, sellersSnap] = await Promise.all([
+            db.collection(COLLECTIONS.PRODUCTS).where("status", "==", "active").count().get(),
+            db.collection(COLLECTIONS.USERS).where("sellerVerificationStatus", "==", "approved").count().get()
+        ]);
+        return {
+            error: null,
+            success: true as const,
+            data: {
+                productsCount: productsSnap.data().count,
+                tradersCount: sellersSnap.data().count
+            }
+        };
+    } catch (error) {
+        logger.error("getMarketplaceStatsAction error:", error);
+        return { success: false as const, error: "Failed to fetch marketplace statistics", data: null };
+    }
+}
+export const getMarketplaceStatsAction = withSafeAction("getMarketplaceStatsAction", _getMarketplaceStatsAction);
+
+
 

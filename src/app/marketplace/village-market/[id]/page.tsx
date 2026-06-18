@@ -11,9 +11,10 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { useSession } from "next-auth/react";
 import {
     MapPin, Clock, Zap, Users, ExternalLink, ShoppingBag,
-    ArrowLeft, Loader2, Camera,
+    ArrowLeft, Loader2, Camera, X,
 } from "lucide-react";
 import {
     getVillageMarketEventAction,
@@ -42,6 +43,7 @@ export default function VillageMarketEventPage() {
     const router = useRouter();
     const { showToast } = useToast();
     const eventId = params.id as string;
+    const { data: session } = useSession();
 
     const [event, setEvent] = useState<VillageMarketEvent | null>(null);
     const [products, setProducts] = useState<FlashSaleProduct[]>([]);
@@ -50,6 +52,8 @@ export default function VillageMarketEventPage() {
     const [showAddProduct, setShowAddProduct] = useState(false);
     const [addingProduct, setAddingProduct] = useState(false);
     const [productForm, setProductForm] = useState({ title: "", price: "", flashPrice: "", unit: "", availableQuantity: "" });
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
 
     async function loadEvent() {
         setLoading(true);
@@ -61,6 +65,66 @@ export default function VillageMarketEventPage() {
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { loadEvent(); }, [eventId]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setSelectedFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleClearImage = () => {
+        setSelectedFile(null);
+        setImagePreview(null);
+    };
+
+    const handleBuyProduct = (p: FlashSaleProduct) => {
+        try {
+            const userId = session?.user?.id;
+            const cartKey = userId ? `marketplace_cart_${userId}` : "marketplace_cart";
+            
+            const savedCart = localStorage.getItem(cartKey);
+            const cart: any[] = savedCart ? JSON.parse(savedCart) : [];
+
+            const existingItemIndex = cart.findIndex(item => item.id === p.id);
+
+            if (existingItemIndex > -1) {
+                cart[existingItemIndex].quantity += 1;
+            } else {
+                cart.push({
+                    id: p.id,
+                    title: p.title,
+                    description: p.description || "",
+                    sellerId: p.sellerId,
+                    images: p.imageUrl ? [p.imageUrl] : [],
+                    pricingTiers: [{ type: "retail", price: p.flashPrice || p.price, minQuantity: 1 }],
+                    availableQuantity: p.availableQuantity ?? 999,
+                    unit: p.unit || "unit",
+                    location: {
+                        state: event?.state || "Nigeria",
+                        lga: event?.lga || "",
+                    },
+                    status: "active",
+                    isFlashSale: true,
+                    eventId: p.eventId,
+                    originalPrice: p.price,
+                    flashPrice: p.flashPrice,
+                    quantity: 1
+                });
+            }
+
+            localStorage.setItem(cartKey, JSON.stringify(cart));
+            showToast("Added to checkout cart!", "success");
+            router.push("/marketplace/checkout");
+        } catch (err) {
+            showToast("Failed to add product to checkout", "error");
+        }
+    };
 
     async function handleJoin() {
         setJoining(true);
@@ -77,6 +141,36 @@ export default function VillageMarketEventPage() {
     async function handleAddProduct() {
         if (!productForm.title || !productForm.price) return showToast("Title and price are required", "error");
         setAddingProduct(true);
+        
+        let uploadedUrl: string | undefined = undefined;
+        if (selectedFile) {
+            try {
+                const formData = new FormData();
+                formData.append("file", selectedFile);
+                formData.append("folder", "flash-sale-products");
+                formData.append("documentType", "product-image");
+                
+                const uploadRes = await fetch("/api/upload", {
+                    method: "POST",
+                    body: formData
+                });
+                
+                if (!uploadRes.ok) {
+                    throw new Error("Failed to upload image to service");
+                }
+                
+                const uploadData = await uploadRes.json();
+                if (uploadData.success && uploadData.url) {
+                    uploadedUrl = uploadData.url;
+                } else {
+                    throw new Error(uploadData.error || "Failed to upload image");
+                }
+            } catch (err: any) {
+                setAddingProduct(false);
+                return showToast(err.message || "Failed to upload product image", "error");
+            }
+        }
+
         const res = await addFlashSaleProductAction({
             eventId,
             title: productForm.title,
@@ -84,12 +178,15 @@ export default function VillageMarketEventPage() {
             flashPrice: productForm.flashPrice ? Number(productForm.flashPrice) : undefined,
             unit: productForm.unit || undefined,
             availableQuantity: productForm.availableQuantity ? Number(productForm.availableQuantity) : undefined,
+            imageUrl: uploadedUrl,
         });
         setAddingProduct(false);
         if (res.success) {
             showToast("Product listed for this event!", "success");
             setShowAddProduct(false);
             setProductForm({ title: "", price: "", flashPrice: "", unit: "", availableQuantity: "" });
+            setSelectedFile(null);
+            setImagePreview(null);
             loadEvent();
         } else {
             showToast(res.error || "Failed to add product", "error");
@@ -114,6 +211,8 @@ export default function VillageMarketEventPage() {
     }
 
     const live = isEventLive(event);
+    const userId = session?.user?.id;
+    const hasJoined = !!(userId && event.participantSellerIds?.includes(userId));
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -136,11 +235,21 @@ export default function VillageMarketEventPage() {
                         </div>
                         <button
                             onClick={handleJoin}
-                            disabled={joining}
-                            className="px-5 py-2.5 bg-white text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition shadow flex items-center gap-2 shrink-0"
+                            disabled={joining || hasJoined}
+                            className={`px-5 py-2.5 font-bold rounded-xl transition shadow flex items-center gap-2 shrink-0 ${
+                                hasJoined
+                                    ? "bg-emerald-100 text-emerald-800 cursor-default shadow-none"
+                                    : "bg-white text-emerald-700 hover:bg-emerald-50"
+                            }`}
                         >
-                            {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                            Join as Seller
+                            {joining ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : hasJoined ? (
+                                <span className="flex items-center gap-1">✓ Joined</span>
+                            ) : (
+                                <Users className="w-4 h-4" />
+                            )}
+                            {!joining && !hasJoined && "Join as Seller"}
                         </button>
                     </div>
 
@@ -206,6 +315,12 @@ export default function VillageMarketEventPage() {
                                             {p.availableQuantity != null && (
                                                 <p className="text-xs text-slate-400 mt-1">{p.availableQuantity} available</p>
                                             )}
+                                            <button
+                                                onClick={() => handleBuyProduct(p)}
+                                                className="mt-3 w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm"
+                                            >
+                                                <Zap className="w-3.5 h-3.5" /> Buy Now
+                                            </button>
                                         </div>
                                     </div>
                                 ))}
@@ -249,7 +364,7 @@ export default function VillageMarketEventPage() {
             {/* Add Product Modal */}
             {showAddProduct && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowAddProduct(false)}>
-                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-xl font-bold text-slate-900 mb-5">List a Flash Sale Product</h3>
                         <div className="space-y-4">
                             {[
@@ -270,6 +385,34 @@ export default function VillageMarketEventPage() {
                                     />
                                 </div>
                             ))}
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Product Image</label>
+                                {imagePreview ? (
+                                    <div className="relative h-44 w-full rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                                        <Image src={imagePreview} alt="Preview" fill className="object-cover" />
+                                        <button
+                                            type="button"
+                                            onClick={handleClearImage}
+                                            className="absolute top-2.5 right-2.5 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full transition shadow-md hover:scale-105"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <label className="border-2 border-dashed border-slate-300 hover:border-emerald-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition bg-slate-50 hover:bg-emerald-50/20 group">
+                                        <Camera className="w-8 h-8 text-slate-400 mb-2 group-hover:text-emerald-500 transition" />
+                                        <span className="text-sm font-medium text-slate-600 group-hover:text-emerald-600 transition">Click to upload image</span>
+                                        <span className="text-xs text-slate-400 mt-1">PNG, JPG up to 5MB</span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                )}
+                            </div>
                         </div>
                         <div className="flex gap-3 mt-6">
                             <button onClick={() => setShowAddProduct(false)} className="flex-1 py-3 border border-slate-300 rounded-xl text-slate-700 font-semibold hover:bg-slate-50 transition">Cancel</button>
