@@ -303,17 +303,19 @@ export default function VillageMarketEventPage() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {products.map((p) => (
                                     <div key={p.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-md transition">
-                                        <div className="h-36 bg-slate-100 flex items-center justify-center">
+                                        <Link href={`/marketplace/products/${p.id}`} className="block h-36 bg-slate-100 relative overflow-hidden">
                                             {p.imageUrl ? (
-                                                <div className="relative w-full h-full">
-                                                    <Image src={p.imageUrl} alt={p.title} fill sizes="300px" className="object-cover" />
-                                                </div>
+                                                <Image src={p.imageUrl} alt={p.title} fill sizes="300px" className="object-cover hover:scale-105 transition duration-300" />
                                             ) : (
-                                                <Camera className="w-10 h-10 text-slate-300" />
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <Camera className="w-10 h-10 text-slate-300" />
+                                                </div>
                                             )}
-                                        </div>
+                                        </Link>
                                         <div className="p-4">
-                                            <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{p.title}</h3>
+                                            <Link href={`/marketplace/products/${p.id}`}>
+                                                <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1 hover:text-red-600 transition-colors">{p.title}</h3>
+                                            </Link>
                                             <div className="flex items-center gap-2">
                                                 {p.flashPrice ? (
                                                     <>

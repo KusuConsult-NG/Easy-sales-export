@@ -116,6 +116,7 @@ export default function ProductDetailPage() {
         );
     }
 
+    const isFS = (product as any).isFlashSale === true;
     const mainImage = product.images && product.images.length > 0 ? product.images[0] : "/images/placeholder-product.jpg";
     const priceDisplay = product.pricingTiers && product.pricingTiers.length > 0
         ? formatCurrency(product.pricingTiers[0].price)
@@ -123,7 +124,8 @@ export default function ProductDetailPage() {
 
     // Determine badge based on product attributes
     let badge = "In Stock";
-    if (product.exportReady) badge = "Export Ready";
+    if (isFS) badge = "Flash Sale Deal";
+    else if (product.exportReady) badge = "Export Ready";
     else if (product.bulkAvailable) badge = "Bulk Available";
 
     return (
@@ -203,10 +205,27 @@ export default function ProductDetailPage() {
                                 </div>
                             </div>
 
-                            <div className="text-5xl font-bold text-green-600 mb-6">
-                                {priceDisplay}
-                                <span className="text-xl font-normal text-slate-500 ml-2">/{product.unit}</span>
-                            </div>
+                            {isFS ? (
+                                <div className="mb-6 flex flex-col">
+                                    <div className="flex items-baseline gap-3">
+                                        <span className="text-5xl font-bold text-red-600">
+                                            {formatCurrency((product as any).flashPrice || (product.pricingTiers?.[0]?.price ?? 0))}
+                                        </span>
+                                        <span className="text-2xl text-slate-400 line-through">
+                                            {formatCurrency((product as any).originalPrice || (product.pricingTiers?.[0]?.price ?? 0))}
+                                        </span>
+                                        <span className="px-2.5 py-1 bg-red-100 text-red-700 text-sm font-extrabold rounded-lg shadow-sm">
+                                            FLASH DEAL
+                                        </span>
+                                    </div>
+                                    <span className="text-xs text-red-600 font-bold mt-1">Village Market Flash Sale Price</span>
+                                </div>
+                            ) : (
+                                <div className="text-5xl font-bold text-green-600 mb-6">
+                                    {priceDisplay}
+                                    <span className="text-xl font-normal text-slate-500 ml-2">/{product.unit}</span>
+                                </div>
+                            )}
 
                             <p className="text-lg text-slate-900 leading-relaxed mb-6">
                                 {product.description}
@@ -251,14 +270,18 @@ export default function ProductDetailPage() {
                             <button 
                                 onClick={handleAddToCart}
                                 disabled={isAddingToCart || product.availableQuantity === 0 || product.status === "out_of_stock"}
-                                className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                className={`flex-1 flex items-center justify-center gap-2 px-8 py-4 text-white font-bold text-lg rounded-xl transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    isFS
+                                        ? "bg-red-600 hover:bg-red-700 shadow-red-600/10"
+                                        : "bg-green-600 hover:bg-green-700 shadow-green-600/10"
+                                }`}
                             >
                                 {isAddingToCart ? (
                                     <Loader2 className="w-5 h-5 animate-spin" />
                                 ) : (
                                     <ShoppingCart className="w-5 h-5" />
                                 )}
-                                {isAddingToCart ? "Adding..." : (product.availableQuantity === 0 || product.status === "out_of_stock") ? "Out of Stock" : "Add to Cart"}
+                                {isAddingToCart ? "Adding..." : (product.availableQuantity === 0 || product.status === "out_of_stock") ? "Out of Stock" : isFS ? "Buy Flash Deal" : "Add to Cart"}
                             </button>
                             <button 
                                 onClick={() => setShowQuoteModal(true)}

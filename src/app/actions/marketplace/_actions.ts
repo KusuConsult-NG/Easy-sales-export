@@ -1171,18 +1171,85 @@ export const getMarketplaceProductsAction = withSafeAction("getMarketplaceProduc
  */
 async function _getProductByIdAction(productId: string): Promise<ActionResponse<Product>> { 
     try {
-        const doc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
-        if (!doc.exists) {
-            return { success: false as const, error: "Product not found", data: null };
+        let doc = await db.collection(COLLECTIONS.PRODUCTS).doc(productId).get();
+        let data;
+        let isFlashSale = false;
+
+        if (doc.exists) {
+            data = doc.data();
+        } else {
+            // Fallback to flash_sale_products
+            doc = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS).doc(productId).get();
+            if (doc.exists) {
+                data = doc.data();
+                isFlashSale = true;
+            } else {
+                return { success: false as const, error: "Product not found", data: null };
+            }
         }
 
-        const data = doc.data();
         const { serializeValue } = await import("@/lib/firestore-serialize");
         let product: Product;
-        try {
-            product = serializeValue(ProductSchema.parse({ id: doc.id, ...data })) as Product;
-        } catch (e) {
-            product = serializeValue({ id: doc.id, ...data }) as Product;
+
+        if (isFlashSale && data) {
+            // Map to standard product structure
+            let sellerName = "Verified Seller";
+            try {
+                if (data.sellerId) {
+                    const sellerDoc = await db.collection(COLLECTIONS.USERS).doc(data.sellerId).get();
+                    if (sellerDoc.exists) {
+                        sellerName = sellerDoc.data()?.businessName || sellerDoc.data()?.displayName || "Verified Seller";
+                    }
+                }
+            } catch (err) {
+                logger.error("Failed to fetch seller name for flash sale product:", err);
+            }
+
+            const mappedData = {
+                id: doc.id,
+                sellerId: data.sellerId || "unknown",
+                title: data.title || "Flash Sale Product",
+                description: data.description || "",
+                category: "other",
+                images: data.imageUrl ? [data.imageUrl] : [],
+                pricingTiers: [{ type: "retail", price: data.flashPrice || data.price, minQuantity: 1 }],
+                availableQuantity: data.availableQuantity ?? 0,
+                minimumOrderQuantity: 1,
+                unit: data.unit || "unit",
+                location: {
+                    state: data.location?.state || "Nigeria",
+                    lga: data.location?.lga || "Unknown",
+                    nearestMarket: "Unknown"
+                },
+                deliveryMethod: "delivery",
+                status: "active",
+                bulkAvailable: false,
+                exportReady: false,
+                views: 0,
+                orders: 0,
+                rating: 5,
+                reviewCount: 0,
+                sellerName: sellerName,
+                sellerVerified: true,
+                createdAt: data.createdAt || new Date(),
+                updatedAt: data.createdAt || new Date(),
+                isFlashSale: true,
+                originalPrice: data.price,
+                flashPrice: data.flashPrice,
+                eventId: data.eventId
+            };
+
+            try {
+                product = serializeValue(ProductSchema.parse(mappedData)) as Product;
+            } catch (e) {
+                product = serializeValue(mappedData) as Product;
+            }
+        } else {
+            try {
+                product = serializeValue(ProductSchema.parse({ id: doc.id, ...data })) as Product;
+            } catch (e) {
+                product = serializeValue({ id: doc.id, ...data }) as Product;
+            }
         }
 
         return { error: null, success: true as const, data: product };
