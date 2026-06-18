@@ -16,9 +16,52 @@ interface EmailData {
  * Helper to get the application base URL with fallbacks.
  * Prioritizes NEXT_PUBLIC_APP_URL, then NEXTAUTH_URL, and finally the production fallback.
  */
-function getBaseUrl(): string {
-    const url = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://easysalesexport.com';
-    return url.endsWith('/') ? url.slice(0, -1) : url;
+export function getBaseUrl(): string {
+    let url = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com';
+    if (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
+    try {
+        const parsed = new URL(url);
+        const hostname = parsed.hostname.toLowerCase();
+        const isLocalhost = hostname.endsWith('localhost');
+        
+        if (isLocalhost) {
+            // Strip any subdomains on localhost (e.g. wave.localhost -> localhost)
+            const parts = hostname.split('.');
+            if (parts.length > 1) {
+                const firstPart = parts[0];
+                const knownSubdomains = ['wave', 'cooperatives', 'academy', 'marketplace', 'farm-nation', 'farmnation', 'export', 'finance'];
+                if (knownSubdomains.includes(firstPart)) {
+                    parsed.hostname = 'localhost';
+                    url = parsed.toString();
+                }
+            }
+        } else {
+            // In production, map subdomains and known module domains back to the apex domain: www.easysalesexport.com
+            if (hostname.endsWith('.easysalesexport.com') && hostname !== 'easysalesexport.com' && hostname !== 'www.easysalesexport.com') {
+                parsed.hostname = 'www.easysalesexport.com';
+                url = parsed.toString();
+            } else {
+                const knownModuleDomains = [
+                    'easysalescooperative.com',
+                    'www.easysalescooperative.com',
+                    'easysalesmarket.com',
+                    'www.easysalesmarket.com',
+                    'farmnation.ng',
+                    'www.farmnation.ng',
+                ];
+                if (knownModuleDomains.includes(hostname)) {
+                    parsed.hostname = 'www.easysalesexport.com';
+                    url = parsed.toString();
+                }
+            }
+        }
+        if (url.endsWith('/')) {
+            url = url.slice(0, -1);
+        }
+    } catch {}
+    return url;
 }
 
 /**

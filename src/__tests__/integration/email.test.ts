@@ -12,7 +12,8 @@ import {
     sendMembershipApprovalEmail,
     sendPasswordResetEmail,
     sendWithdrawalConfirmationEmail,
-    sendWaveApplicationEmail
+    sendWaveApplicationEmail,
+    getBaseUrl
 } from '@/lib/email-notifications';
 
 // Mock Resend
@@ -38,6 +39,55 @@ describe('Email Notifications', () => {
 
     afterEach(() => {
         process.env = originalEnv;
+    });
+
+    describe('getBaseUrl', () => {
+        it('should return default apex domain if no env variables are set', () => {
+            delete process.env.NEXTAUTH_URL;
+            delete process.env.NEXT_PUBLIC_APP_URL;
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
+        });
+
+        it('should return NEXTAUTH_URL when set', () => {
+            process.env.NEXTAUTH_URL = 'https://easysalesexport.com';
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
+        });
+
+        it('should prioritize NEXTAUTH_URL over NEXT_PUBLIC_APP_URL', () => {
+            process.env.NEXTAUTH_URL = 'https://easysalesexport.com';
+            process.env.NEXT_PUBLIC_APP_URL = 'https://wave.easysalesexport.com';
+            expect(getBaseUrl()).toBe('https://easysalesexport.com');
+        });
+
+        it('should strip subdomains and return www.easysalesexport.com in production', () => {
+            delete process.env.NEXTAUTH_URL;
+            process.env.NEXT_PUBLIC_APP_URL = 'https://wave.easysalesexport.com';
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+
+            process.env.NEXT_PUBLIC_APP_URL = 'https://cooperatives.easysalesexport.com/';
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+        });
+
+        it('should strip independent module domains and return www.easysalesexport.com', () => {
+            delete process.env.NEXTAUTH_URL;
+            process.env.NEXT_PUBLIC_APP_URL = 'https://easysalescooperative.com';
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+
+            process.env.NEXT_PUBLIC_APP_URL = 'https://easysalesmarket.com/';
+            expect(getBaseUrl()).toBe('https://www.easysalesexport.com');
+        });
+
+        it('should handle localhost without subdomains correctly', () => {
+            delete process.env.NEXTAUTH_URL;
+            process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+            expect(getBaseUrl()).toBe('http://localhost:3000');
+        });
+
+        it('should strip subdomains on localhost', () => {
+            delete process.env.NEXTAUTH_URL;
+            process.env.NEXT_PUBLIC_APP_URL = 'http://wave.localhost:3000/';
+            expect(getBaseUrl()).toBe('http://localhost:3000');
+        });
     });
 
     describe('sendEmailNotification', () => {
