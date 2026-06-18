@@ -183,18 +183,27 @@ async function exportUsers() {
     const summaryHeaders = ["State", "Total Users"];
     const summaryRows = [summaryHeaders.join(",")];
     
-    // Sort states alphabetically
     const sortedStates = Array.from(stateGroups.keys()).sort();
-    
+
+    // Clear out any old files in statesDir first to avoid stale counts
+    if (fs.existsSync(statesDir)) {
+        const files = fs.readdirSync(statesDir);
+        for (const file of files) {
+            fs.unlinkSync(path.join(statesDir, file));
+        }
+    } else {
+        fs.mkdirSync(statesDir, { recursive: true });
+    }
+
     sortedStates.forEach(state => {
         const users = stateGroups.get(state)!;
         summaryRows.push(`${escapeCsv(state)},${users.length}`);
         
-        // 3. Write individual state files
+        // 3. Write individual state files with user count in filename
         const stateRows = [headers.join(","), ...users];
-        // Clean state name for file systems (remove slashes, etc)
-        const safeStateName = state.replace(/[^a-zA-Z0-9]/g, "_");
-        const stateFilePath = path.join(statesDir, `${safeStateName}.csv`);
+        // Clean state name for file systems (keep alphanumeric and spaces)
+        const safeStateName = state.replace(/[^a-zA-Z0-9 ]/g, "_");
+        const stateFilePath = path.join(statesDir, `${safeStateName} - ${users.length} users.csv`);
         fs.writeFileSync(stateFilePath, stateRows.join("\n"));
     });
 
