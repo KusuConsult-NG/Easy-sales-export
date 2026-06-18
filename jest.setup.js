@@ -44,6 +44,8 @@ global.mockFirestoreDoc = jest.fn();
 global.mockFirestoreGet = jest.fn();
 global.mockFirestoreUpdate = jest.fn();
 global.mockFirestoreTxGet = jest.fn();
+global.mockFirestoreTxUpdate = jest.fn();
+global.mockFirestoreTxSet = jest.fn();
 
 jest.mock('@/lib/firebase-admin', () => {
     const mockDb = {
@@ -77,8 +79,14 @@ jest.mock('@/lib/firebase-admin', () => {
         runTransaction: (cb) => {
             const tx = {
                 get: (ref) => global.mockFirestoreTxGet(ref),
-                set: jest.fn(),
-                update: jest.fn(),
+                set: (ref, data) => {
+                    global.mockFirestoreTxSet(ref, data);
+                    return Promise.resolve();
+                },
+                update: (ref, fields) => {
+                    global.mockFirestoreTxUpdate(ref, fields);
+                    return Promise.resolve();
+                },
             };
             return cb(tx);
         }

@@ -89,7 +89,8 @@ async function _updateOrderStatusAction(
             if (!currentOrderDoc.exists) throw new Error("Order not found");
             const currentOrder = currentOrderDoc.data() as Order;
 
-            const isAuthorized = currentOrder.sellerId === userId || (Array.isArray(currentOrder.sellerIds) && currentOrder.sellerIds.includes(userId));
+            const isUserAdmin = hasRole(session.user.roles || [], "admin") || hasRole(session.user.roles || [], "super_admin");
+            const isAuthorized = isUserAdmin || currentOrder.sellerId === userId || (Array.isArray(currentOrder.sellerIds) && currentOrder.sellerIds.includes(userId));
             if (!isAuthorized) {
                 throw new Error("Not authorized to update this order");
             }
@@ -102,6 +103,10 @@ async function _updateOrderStatusAction(
             const updateData: any = { status: newStatus,
                 updatedAt: FieldValue.serverTimestamp(),
                 _version: FieldValue.increment(1) };
+
+            if (!currentOrder.sellerId && Array.isArray(currentOrder.sellerIds) && currentOrder.sellerIds.length > 0) {
+                updateData.sellerId = currentOrder.sellerIds[0];
+            }
 
             if (finalTrackingNumber) updateData.trackingNumber = finalTrackingNumber;
             if (newStatus === "shipped") { const estimatedDate = new Date();
@@ -242,8 +247,8 @@ async function _confirmDeliveryAction(orderId: string) { let sessionResult;
                 const txnId = `WAVE-CR-${orderId}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
                 const txnRef = db.collection(COLLECTIONS.WALLET_TRANSACTIONS).doc(txnId);
                 transaction.set(txnRef, {
-                    walletId: currentOrder.sellerId,
-                    userId: currentOrder.sellerId,
+                    walletId: sellerId,
+                    userId: sellerId,
                     type: "credit",
                     module: "wave",
                     amount: earningsAmount,
