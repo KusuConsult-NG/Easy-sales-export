@@ -3,6 +3,22 @@ import { revalidateTag, revalidatePath } from 'next/cache';
 
 export { deleteCache };
 
+function safeRevalidatePath(path: string, type?: "layout" | "page") {
+    try {
+        revalidatePath(path, type);
+    } catch (e) {
+        // Safe to ignore outside Next.js request context (e.g. standalone scripts)
+    }
+}
+
+function safeRevalidateTag(tag: string, type?: string) {
+    try {
+        (revalidateTag as any)(tag);
+    } catch (e) {
+        // Safe to ignore outside Next.js request context (e.g. standalone scripts)
+    }
+}
+
 /**
  * Cache Invalidation Functions
  * Call these when user data changes to ensure cache stays fresh
@@ -25,7 +41,7 @@ export async function invalidateUserCache(userId: string): Promise<void> {
         ]);
         
         // Trigger Next.js revalidation
-        revalidatePath("/", "layout"); 
+        safeRevalidatePath("/", "layout"); 
         
         console.log(`[Cache Invalidation] Cleared all cache for user: ${userId}`);
     } catch (error) {
@@ -44,11 +60,11 @@ export async function invalidateSellerCache(userId: string): Promise<void> {
             deleteCache(CacheKeys.userProfile(userId)), // Also clear profile
         ]);
 
-        revalidatePath("/admin/marketplace", "page");
-        revalidatePath("/admin/marketplace/sellers", "page");
-        revalidatePath("/admin/marketplace/buyers", "page");
-        revalidatePath("/dashboard", "page");
-        revalidateTag("module-registration-stats-service", "page");
+        safeRevalidatePath("/admin/marketplace", "page");
+        safeRevalidatePath("/admin/marketplace/sellers", "page");
+        safeRevalidatePath("/admin/marketplace/buyers", "page");
+        safeRevalidatePath("/dashboard", "page");
+        safeRevalidateTag("module-registration-stats-service", "page");
 
         console.log(`[Cache Invalidation] Cleared seller cache for: ${userId}`);
     } catch (error) {
@@ -74,10 +90,10 @@ export async function invalidateCooperativeCache(userId: string, cooperativeId?:
         }
         await Promise.all(keysToDelete.map(k => deleteCache(k)));
 
-        revalidatePath("/admin/cooperatives", "page");
-        revalidatePath("/admin/cooperatives/members", "page");
-        revalidatePath("/dashboard", "page");
-        revalidateTag("module-registration-stats-service", "page");
+        safeRevalidatePath("/admin/cooperatives", "page");
+        safeRevalidatePath("/admin/cooperatives/members", "page");
+        safeRevalidatePath("/dashboard", "page");
+        safeRevalidateTag("module-registration-stats-service", "page");
 
         console.log(`[Cache Invalidation] Cleared cooperative cache for: ${userId}${cooperativeId ? ` (coop: ${cooperativeId})` : ""}`);
     } catch (error) {
@@ -95,15 +111,15 @@ export async function invalidateServiceCache(userId: string, service?: string): 
         // Always clear user profile (contains serviceRegistrations)
         await deleteCache(CacheKeys.userProfile(userId));
 
-        revalidatePath("/dashboard", "page");
+        safeRevalidatePath("/dashboard", "page");
         if (service) {
-            revalidatePath(`/admin/${service}`, "page");
-            revalidatePath(`/admin/${service}/applications`, "page");
-            revalidatePath(`/admin/${service}/members`, "page");
+            safeRevalidatePath(`/admin/${service}`, "page");
+            safeRevalidatePath(`/admin/${service}/applications`, "page");
+            safeRevalidatePath(`/admin/${service}/members`, "page");
             if (service === "wave") {
-                revalidatePath("/wave/dashboard", "page");
+                safeRevalidatePath("/wave/dashboard", "page");
             }
-            revalidateTag("module-registration-stats-service", "page");
+            safeRevalidateTag("module-registration-stats-service", "page");
         }
 
         console.log(`[Cache Invalidation] Cleared ${service || 'service'} cache for: ${userId}`);
@@ -125,9 +141,9 @@ export async function invalidateAdminGlobalStats(): Promise<void> {
             deleteCache("admin:coop-reports:global"),
         ]);
         // Also trigger Next.js tag and path revalidation
-        revalidateTag("module-registration-stats-service", "page");
-        revalidatePath("/admin", "layout");
-        revalidatePath("/admin/dashboard", "page");
+        safeRevalidateTag("module-registration-stats-service", "page");
+        safeRevalidatePath("/admin", "layout");
+        safeRevalidatePath("/admin/dashboard", "page");
         console.log(`[Cache Invalidation] Cleared global admin stats and tags`);
     } catch (error) {
         console.error(`[Cache Invalidation] Error clearing global admin stats:`, error);

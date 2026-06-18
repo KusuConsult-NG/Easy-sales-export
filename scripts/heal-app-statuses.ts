@@ -2,49 +2,85 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
+import { invalidateUserCache } from "../src/lib/cache-invalidation";
 
 async function healApplicationStatuses() {
-    console.log("Healing application statuses for paid users...");
+    console.log("Starting resilient application status healing for paid/approved users...");
     
+    // 1. Pre-load all users to check service registrations and roles
+    console.log("Pre-loading users...");
+    const usersSnap = await db.collection(COLLECTIONS.USERS).get();
+    const usersMap = new Map<string, any>();
+    usersSnap.docs.forEach(doc => {
+        usersMap.set(doc.id, doc.data());
+    });
+    console.log(`Loaded ${usersMap.size} users.`);
+
     let batch = db.batch();
     let updates = 0;
+    const modifiedUserIds = new Set<string>();
 
     const collectionsToHeal = [
-        COLLECTIONS.COOPERATIVE_MEMBERS,
-        COLLECTIONS.ACADEMY_APPLICATIONS,
-        COLLECTIONS.WAVE_APPLICATIONS,
-        COLLECTIONS.EXPORT_APPLICATIONS
+        { id: COLLECTIONS.COOPERATIVE_MEMBERS, module: "cooperative" },
+        { id: COLLECTIONS.ACADEMY_APPLICATIONS, module: "academy" },
+        { id: COLLECTIONS.WAVE_APPLICATIONS, module: "wave" },
+        { id: COLLECTIONS.EXPORT_APPLICATIONS, module: "export" },
+        { id: COLLECTIONS.FARM_NATION_APPLICATIONS, module: "farmNation" }
     ];
 
-    for (const collection of collectionsToHeal) {
-        console.log(`Checking ${collection}...`);
+    for (const item of collectionsToHeal) {
+        const collection = item.id;
+        const moduleKey = item.module;
+        console.log(`\nChecking collection: ${collection}...`);
         
-        let docsToProcess: any[] = [];
-        
-        // For large collections, use queries. For smaller ones, load all to catch legacy formats.
-        if (collection === COLLECTIONS.WAVE_APPLICATIONS) {
-            const snap = await db.collection(collection).where("paymentStatus", "in", ["completed", "paid"]).get();
-            docsToProcess = snap.docs;
-        } else {
-            const snap = await db.collection(collection).get();
-            docsToProcess = snap.docs.filter(doc => {
-                const data = doc.data();
-                return data.paymentStatus === "completed" || data.paymentStatus === "paid" || data.paid === true;
-            });
-        }
-        
-        console.log(`Found ${docsToProcess.length} paid/completed records in ${collection}.`);
+        const snap = await db.collection(collection).get();
+        console.log(`Found ${snap.size} documents in ${collection}.`);
 
-        for (const doc of docsToProcess) {
+        for (const doc of snap.docs) {
             const data = doc.data();
             
+            // Resolve userId safely
+            let userId = data.userId || "";
+            if (!userId) {
+                if (doc.id.startsWith("legacy_")) {
+                    userId = doc.id.replace("legacy_", "");
+                } else if (doc.id.length >= 20 && !doc.id.includes("@")) {
+                    userId = doc.id;
+                }
+            }
+
+            if (!userId) continue;
+
+            const userDoc = usersMap.get(userId);
+            const serviceRegs = userDoc?.serviceRegistrations || {};
+            
+            // Map module key to potential variations stored in serviceRegistrations
+            const moduleReg = serviceRegs[moduleKey] || 
+                            serviceRegs[moduleKey === "farmNation" ? "farm_nation" : 
+                                        moduleKey === "cooperative" ? "cooperatives" : ""] || {};
+
+            // Determine if this document represents a paid, approved, or role-granted service enrollment
+            const isPaidInApp = data.paymentStatus === "completed" || data.paymentStatus === "paid" || data.paid === true;
+            const isPaidInUser = moduleReg.paymentStatus === "completed" || moduleReg.status === "approved" || moduleReg.status === "active";
+            const hasUserRole = userDoc?.roles?.includes(
+                moduleKey === "cooperative" ? "cooperative_member" :
+                moduleKey === "academy" ? "academy_participant" :
+                moduleKey === "wave" ? "wave_participant" :
+                moduleKey === "export" ? "export_participant" :
+                moduleKey === "farmNation" ? "farmer" : ""
+            );
+
+            const isEligibleForHealing = isPaidInApp || isPaidInUser || hasUserRole;
+
+            if (!isEligibleForHealing) continue;
+
             let needsUpdate = false;
             const updateData: any = {
                 updatedAt: new Date()
             };
             
             if (collection === COLLECTIONS.COOPERATIVE_MEMBERS) {
-                // For cooperative members, status and membershipStatus should be 'active'
+                // Cooperative members should be active/active/completed
                 const currentStatus = data.status || "pending";
                 const currentMemberStatus = data.membershipStatus || "pending";
                 
@@ -53,21 +89,22 @@ async function healApplicationStatuses() {
                     updateData.status = "active";
                     updateData.membershipStatus = "active";
                     
-                    // Also canonicalize payment status
                     if (data.paymentStatus !== "completed") {
                         updateData.paymentStatus = "completed";
                     }
                 }
             } else {
-                // For other applications, status should be 'approved'
+                // Other applications should be status: approved
                 const currentStatus = data.status || "pending";
                 if (currentStatus !== "approved") {
                     needsUpdate = true;
                     updateData.status = "approved";
                     
-                    // Also canonicalize payment status
-                    if (data.paymentStatus !== "completed" && data.paymentStatus !== "paid") {
-                        updateData.paymentStatus = "completed";
+                    // Populate paymentStatus only for paid applications
+                    if (moduleKey === "academy" || moduleKey === "wave") {
+                        if (data.paymentStatus !== "completed" && data.paymentStatus !== "paid") {
+                            updateData.paymentStatus = "completed";
+                        }
                     }
                 }
             }
@@ -75,7 +112,8 @@ async function healApplicationStatuses() {
             if (needsUpdate) {
                 batch.update(doc.ref, updateData);
                 updates++;
-                console.log(`[${collection}] Queued update for doc ${doc.id} (User ${data.userId || "unknown"}) -> ${JSON.stringify(updateData)}`);
+                modifiedUserIds.add(userId);
+                console.log(`[${collection}] Queued update for doc ${doc.id} (User ${userId}) -> ${JSON.stringify(updateData)}`);
 
                 if (updates >= 450) {
                     await batch.commit();
@@ -92,7 +130,16 @@ async function healApplicationStatuses() {
         console.log("Committed final batch.");
     }
     
-    console.log("Status heal complete!");
+    console.log(`\nStatus heal complete! Firestore updated for ${modifiedUserIds.size} users.`);
+
+    // 2. Perform Redis invalidation for all healed users
+    if (modifiedUserIds.size > 0) {
+        console.log(`Invalidating Upstash Redis cache for ${modifiedUserIds.size} users...`);
+        for (const userId of modifiedUserIds) {
+            await invalidateUserCache(userId);
+        }
+        console.log("Redis cache invalidation complete.");
+    }
 }
 
 healApplicationStatuses().catch(console.error);

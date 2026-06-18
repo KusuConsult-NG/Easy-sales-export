@@ -47,6 +47,12 @@ const PROPERTY_TYPES = [
 const STEPS = ["Identity", "Location", "Next of Kin", "Documents", "Financial", "Module Details"] as const;
 type Step = (typeof STEPS)[number];
 
+const LOCAL_ACADEMY_PLANS = [
+    { id: "foundation", name: "Foundation Program", fee: 45000 },
+    { id: "standard", name: "Standard Program", fee: 90000 },
+    { id: "elite", name: "Elite Program", fee: 270000 },
+];
+
 export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }: ImportLegacyModalProps) {
     const [step, setStep] = useState<number>(0);
     const [formData, setFormData] = useState({
@@ -554,6 +560,10 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
             { id: "farmNation", label: "Farm Nation" },
         ];
 
+        const academyPlans = (ACADEMY_CONFIG && ACADEMY_CONFIG.plans)
+            ? Object.values(ACADEMY_CONFIG.plans)
+            : LOCAL_ACADEMY_PLANS;
+
         return (
             <div className="space-y-5">
                 {/* Academy */}
@@ -571,13 +581,13 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
                                 Enable Academy Enrollment
                             </label>
                         </div>
-                        {formData.services.academy && ACADEMY_CONFIG?.plans && (
+                        {formData.services.academy && (
                             <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                                 <label className="block text-xs font-bold text-slate-500 mb-1 uppercase">Academy Tier</label>
                                 <select value={formData.academyPlan}
                                     onChange={(e) => field("academyPlan", e.target.value as "foundation" | "standard" | "elite")}
                                     className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                                    {Object.values(ACADEMY_CONFIG.plans).map((plan) => (
+                                    {academyPlans.map((plan) => (
                                         <option key={plan.id} value={plan.id}>
                                             {plan.name} ({CURRENCY_CONFIG?.symbol || "₦"}{(plan.fee || 0).toLocaleString()} Value)
                                         </option>
@@ -775,14 +785,25 @@ export default function ImportLegacyModal({ isOpen, onClose, onSuccess, module }
     }
 
     function renderStepContent() {
-        switch (step) {
-            case 0: return renderStepIdentity();
-            case 1: return renderStepLocation();
-            case 2: return renderStepNextOfKin();
-            case 3: return renderStepDocuments();
-            case 4: return renderStepFinancial();
-            case 5: return renderStepServices();
-            default: return null;
+        try {
+            switch (step) {
+                case 0: return renderStepIdentity();
+                case 1: return renderStepLocation();
+                case 2: return renderStepNextOfKin();
+                case 3: return renderStepDocuments();
+                case 4: return renderStepFinancial();
+                case 5: return renderStepServices();
+                default: return null;
+            }
+        } catch (error) {
+            console.error("Error rendering step content:", error);
+            return (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-800 text-sm space-y-2">
+                    <p className="font-bold">Failed to render this step.</p>
+                    <p className="text-xs text-red-600">{(error as Error)?.message || "Unknown rendering exception occurred."}</p>
+                    <p className="text-xs text-slate-500 font-medium">Please check if the required configuration or profile data fields are complete.</p>
+                </div>
+            );
         }
     }
 

@@ -1,7 +1,8 @@
 import { config } from "dotenv";
 config({ path: ".env.local" });
-import { db, auth } from "../src/lib/firebase-admin";
+import { db } from "../src/lib/firebase-admin";
 import { COLLECTIONS } from "../src/lib/types/firestore";
+import { invalidateUserCache } from "../src/lib/cache-invalidation";
 
 async function globalStateSync() {
     console.log("Starting Global State Sync...");
@@ -152,6 +153,8 @@ async function globalStateSync() {
     let batch = db.batch();
     let count = 0;
 
+    const modifiedUserIds = new Set<string>();
+
     for (const [userId, updates] of updatesMap.entries()) {
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const currentUserData = usersMap.get(userId);
@@ -217,6 +220,7 @@ async function globalStateSync() {
         batch.update(userRef, finalUpdate);
         count++;
         updatedCount++;
+        modifiedUserIds.add(userId);
 
         if (count >= 450) {
             await batch.commit();
@@ -231,7 +235,15 @@ async function globalStateSync() {
         console.log(`Committed final batch... (${updatedCount} total)`);
     }
 
-    console.log("Global State Sync Complete! All dashboards and modules should now accurately reflect exact payment and approval states.");
+    console.log(`\nGlobal State Sync Complete! Firestore updated for ${updatedCount} users.`);
+
+    if (modifiedUserIds.size > 0) {
+        console.log(`Invalidating Upstash Redis cache for ${modifiedUserIds.size} users...`);
+        for (const userId of modifiedUserIds) {
+            await invalidateUserCache(userId);
+        }
+        console.log("Redis cache invalidation complete.");
+    }
 }
 
 globalStateSync().catch(console.error);
