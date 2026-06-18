@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { logger } from "@/lib/logger";
 import { generateAndSendWhatsAppInvite } from "@/lib/whatsapp-invites";
@@ -10,7 +10,7 @@ import { normalizeUserDoc } from "@/lib/schema-normalizer";
 /**
  * Handle Marketplace Order Fulfillment
  */
-export async function processMarketplaceOrder(reference: string, amount: number, userId: string) {
+export async function processMarketplaceOrder(reference: string, amount: number, userId: string, paidAt?: Date) {
     const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
 
     // Find order
@@ -88,11 +88,13 @@ export async function processMarketplaceOrder(reference: string, amount: number,
 
         const orderRef = db.collection(COLLECTIONS.MARKETPLACE_ORDERS).doc(orderDoc.id);
 
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
         // 1. Update Order
         transaction.update(orderRef, {
             paymentStatus: "escrow_held",
             status: "processing",
-            paymentVerifiedAt: FieldValue.serverTimestamp(),
+            paymentVerifiedAt: paymentTimestamp,
             paidAmount: amount,
             updatedAt: FieldValue.serverTimestamp(),
             paymentMethod: "paystack_webhook"
@@ -100,7 +102,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
 
         // 2. Set Outbox Document Status to completed
         transaction.set(processedRef, {
-            processedAt: FieldValue.serverTimestamp(),
+            processedAt: paymentTimestamp,
             userId: buyerId,
             amount: amount,
             type: "marketplace_order",
@@ -119,7 +121,7 @@ export async function processMarketplaceOrder(reference: string, amount: number,
             amount: amount,
             currency: "NGN",
             status: "completed",
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             reference,
             description: "Marketplace order payment"
         });
@@ -299,7 +301,7 @@ export async function reconcilePendingFulfillments() {
 /**
  * Handle Export Investment Fulfillment
  */
-export async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string) {
+export async function processExportInvestment(reference: string, amount: number, userId: string, exportId: string, paidAt?: Date) {
     if (!exportId) throw new Error("Missing exportId in metadata");
 
     const exportSnap = await db.collection(COLLECTIONS.EXPORT_WINDOWS).doc(exportId).get();
@@ -338,6 +340,8 @@ export async function processExportInvestment(reference: string, amount: number,
         const fundingGoal = freshExportData.fundingGoal || freshExportData.goal || 0;
         const currentFunded = freshExportData.fundedAmount || 0;
 
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
         if (currentFunded + amount > fundingGoal) {
             // Overfunded! Route to manual review/audit queue
             t.set(db.collection(COLLECTIONS.FAILED_PAYMENTS).doc(reference), {
@@ -348,7 +352,7 @@ export async function processExportInvestment(reference: string, amount: number,
                 amount,
                 status: "overfunded_review",
                 gatewayResponse: "Investment exceeds export window funding goal",
-                failedAt: FieldValue.serverTimestamp(),
+                failedAt: paymentTimestamp,
             }, { merge: true });
 
             t.set(processedRef, {
@@ -357,7 +361,7 @@ export async function processExportInvestment(reference: string, amount: number,
                 userId,
                 exportId,
                 amount,
-                processedAt: FieldValue.serverTimestamp(),
+                processedAt: paymentTimestamp,
                 status: "overfunded_review",
                 source: "webhook"
             });
@@ -373,8 +377,8 @@ export async function processExportInvestment(reference: string, amount: number,
             amount,
             status: "active",
             paymentReference: reference,
-            purchaseDate: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
+            purchaseDate: paymentTimestamp,
+            createdAt: paymentTimestamp,
             roi: roiLabel,
             returnMultiplier,
             expectedReturn,
@@ -397,7 +401,7 @@ export async function processExportInvestment(reference: string, amount: number,
             userId,
             exportId,
             amount,
-            processedAt: FieldValue.serverTimestamp(),
+            processedAt: paymentTimestamp,
             status: "completed",
             source: "webhook"
         });
@@ -411,7 +415,7 @@ export async function processExportInvestment(reference: string, amount: number,
             amount: amount,
             currency: "NGN",
             status: "completed",
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             reference,
             description: "Export window investment"
         });
@@ -429,7 +433,7 @@ export async function processExportInvestment(reference: string, amount: number,
 /**
  * Handle Cooperative Membership Registration Fulfillment
  */
-export async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string) {
+export async function processCooperativeRegistration(reference: string, amount: number, userId: string, tier: string, membershipId?: string, paidAt?: Date) {
     const normalisedTier = "Member";
 
     const expectedAmount = 10000; // Registration fee is 10,000 NGN
@@ -468,14 +472,16 @@ export async function processCooperativeRegistration(reference: string, amount: 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
         const transactionRef = db.collection(COLLECTIONS.COOPERATIVE_TRANSACTIONS).doc();
 
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
         transaction.set(memberRef, {
             userId,
             paymentStatus: "completed",
             paymentReference: reference,
             membershipTier: normalisedTier,
             membershipStatus: "pending", // awaiting admin approval
-            paymentVerifiedAt: FieldValue.serverTimestamp(),
-            createdAt: FieldValue.serverTimestamp(),
+            paymentVerifiedAt: paymentTimestamp,
+            createdAt: paymentTimestamp,
             updatedAt: FieldValue.serverTimestamp(),
         }, { merge: true });
 
@@ -493,7 +499,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
                     paymentAmount: amount,
                     membershipTier: normalisedTier,
                     status: "legacy_pending_onboarding",
-                    paidAt: FieldValue.serverTimestamp(),
+                    paidAt: paymentTimestamp,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -505,7 +511,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
             cooperativeId: "default",
             type: "registration_fee",
             amount,
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             status: "completed",
             description: "Cooperative Registration Fee",
             reference
@@ -517,7 +523,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
             userId,
             amount,
             tier,
-            processedAt: FieldValue.serverTimestamp(),
+            processedAt: paymentTimestamp,
             status: "completed",
             source: "webhook"
         });
@@ -530,7 +536,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
             amount: amount,
             currency: "NGN",
             status: "completed",
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             reference,
             description: "Cooperative membership payment"
         });
@@ -572,7 +578,7 @@ export async function processCooperativeRegistration(reference: string, amount: 
 /**
  * Handle Academy Registration Fulfillment
  */
-export async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string) {
+export async function processAcademyRegistration(reference: string, amount: number, userId: string, plan: string, paidAt?: Date) {
     const normalisedPlan = (plan || "foundation").toLowerCase();
 
     let expectedAmount = ACADEMY_CONFIG.plans.foundation.fee;
@@ -597,6 +603,8 @@ export async function processAcademyRegistration(reference: string, amount: numb
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
         // DISEASE 2 FIX: normalizeUserDoc ensures academy key is canonical.
         transaction.set(userRef, normalizeUserDoc({
             serviceRegistrations: {
@@ -605,7 +613,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
                     paymentReference: reference,
                     paymentAmount: amount,
                     plan: planToStore,
-                    paidAt: FieldValue.serverTimestamp(),
+                    paidAt: paymentTimestamp,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -617,7 +625,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
             userId,
             amount,
             plan: planToStore,
-            processedAt: FieldValue.serverTimestamp(),
+            processedAt: paymentTimestamp,
             status: "completed",
             source: "webhook"
         });
@@ -630,7 +638,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
             amount: amount,
             currency: "NGN",
             status: "completed",
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             reference,
             description: "Academy registration payment"
         });
@@ -662,7 +670,7 @@ export async function processAcademyRegistration(reference: string, amount: numb
 /**
  * Handle Farm Nation Fulfillment
  */
-export async function processFarmNationRegistration(reference: string, amount: number, userId: string) {
+export async function processFarmNationRegistration(reference: string, amount: number, userId: string, paidAt?: Date) {
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const processedSnap = await transaction.get(processedRef);
@@ -674,6 +682,8 @@ export async function processFarmNationRegistration(reference: string, amount: n
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
         // DISEASE 2 FIX: normalizeUserDoc mirrors farm_nation→farmNation so both keys
         // are always in sync.
         transaction.set(userRef, normalizeUserDoc({
@@ -682,6 +692,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
                     paymentStatus: "completed",
                     paymentReference: reference,
                     status: "pending",
+                    paidAt: paymentTimestamp,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -692,7 +703,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
             type: "farm_nation_registration",
             userId,
             amount,
-            processedAt: FieldValue.serverTimestamp(),
+            processedAt: paymentTimestamp,
             status: "completed",
             source: "webhook"
         });
@@ -705,7 +716,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
             amount: amount,
             currency: "NGN",
             status: "completed",
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             reference,
             description: "Farm Nation onboarding payment"
         });
@@ -724,7 +735,7 @@ export async function processFarmNationRegistration(reference: string, amount: n
 /**
  * Handle WAVE Fulfillment
  */
-export async function processWaveRegistration(reference: string, amount: number, userId: string) {
+export async function processWaveRegistration(reference: string, amount: number, userId: string, paidAt?: Date) {
     const result = await db.runTransaction(async (transaction) => {
         const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
         const processedSnap = await transaction.get(processedRef);
@@ -736,6 +747,8 @@ export async function processWaveRegistration(reference: string, amount: number,
 
         const userRef = db.collection(COLLECTIONS.USERS).doc(userId);
 
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
+
         // DISEASE 2 FIX: normalizeUserDoc mirrors wave key and ensures canonical form.
         transaction.set(userRef, normalizeUserDoc({
             serviceRegistrations: {
@@ -743,6 +756,7 @@ export async function processWaveRegistration(reference: string, amount: number,
                     paymentStatus: "completed",
                     paymentReference: reference,
                     status: "pending",
+                    paidAt: paymentTimestamp,
                 }
             },
             updatedAt: FieldValue.serverTimestamp(),
@@ -753,7 +767,7 @@ export async function processWaveRegistration(reference: string, amount: number,
             type: "wave_registration",
             userId,
             amount,
-            processedAt: FieldValue.serverTimestamp(),
+            processedAt: paymentTimestamp,
             status: "completed",
             source: "webhook"
         });
@@ -766,7 +780,7 @@ export async function processWaveRegistration(reference: string, amount: number,
             amount: amount,
             currency: "NGN",
             status: "completed",
-            date: FieldValue.serverTimestamp(),
+            date: paymentTimestamp,
             reference,
             description: "WAVE onboarding payment"
         });

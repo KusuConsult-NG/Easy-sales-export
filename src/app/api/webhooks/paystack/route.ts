@@ -42,6 +42,8 @@ export async function POST(req: NextRequest) {
 
             logger.info(`[Paystack Webhook] Processing success for ${reference}`, { type, amount: amountPaidv });
 
+            const paidAtDate = data.paid_at ? new Date(data.paid_at) : undefined;
+
             // Check if already processed
             const processedRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
             const processedDoc = await processedRef.get();
@@ -56,21 +58,21 @@ export async function POST(req: NextRequest) {
             // Without await, the function returns before the Firestore transaction completes.
             try {
                 if (type === "marketplace_order") {
-                    await processMarketplaceOrder(reference, amountPaidv, userId);
+                    await processMarketplaceOrder(reference, amountPaidv, userId, paidAtDate);
                 } else if (type === "export_investment") {
                     const exportId = metadata.exportId;
-                    await processExportInvestment(reference, amountPaidv, userId, exportId);
+                    await processExportInvestment(reference, amountPaidv, userId, exportId, paidAtDate);
                 } else if (type === "cooperative_membership_registration") {
                     const tier = metadata.membershipTier || metadata.plan || "Member";
                     // Legacy payments from old portal may not have membershipId — fall back to userId
                     const membershipId = metadata.membershipId || userId;
-                    await processCooperativeRegistration(reference, amountPaidv, userId, tier, membershipId);
+                    await processCooperativeRegistration(reference, amountPaidv, userId, tier, membershipId, paidAtDate);
                 } else if (type === "academy_registration") {
                     const plan = metadata.plan;
-                    await processAcademyRegistration(reference, amountPaidv, userId, plan);
+                    await processAcademyRegistration(reference, amountPaidv, userId, plan, paidAtDate);
                 } else if (type === "wallet_funding") {
                     const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
-                    const res = await confirmWalletFundingAction(reference);
+                    const res = await confirmWalletFundingAction(reference, paidAtDate);
                     if (!res.success && res.error !== "Already processed") {
                         throw new Error(res.error || "Wallet funding verification failed");
                     }

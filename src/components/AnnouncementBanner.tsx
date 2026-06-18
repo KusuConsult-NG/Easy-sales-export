@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { Bell, X } from "lucide-react";
 import type { Announcement } from "@/app/actions/cms";
 
+import { db } from "@/lib/firebase";
+import { collection, query, onSnapshot } from "firebase/firestore";
+
 export default function AnnouncementBanner() {
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -12,25 +15,49 @@ export default function AnnouncementBanner() {
         // Load dismissed from localStorage
         const stored = localStorage.getItem("dismissed_announcements");
         if (stored) {
-             
             setDismissed(new Set(JSON.parse(stored)));
         }
 
-        // Mock announcements - in real app, fetch from API
-        setAnnouncements([
-            {
-                id: "1",
-                title: "Platform Maintenance Notice",
-                content: "Scheduled maintenance on Sunday 3AM - 6AM WAT",
-                type: "warning",
-                targetAudience: "all",
-                priority: "high",
-                publishedAt: { seconds: Date.now() / 1000 } as any,
-                createdBy: "admin",
-                createdAt: { seconds: Date.now() / 1000 } as any,
-                active: true,
-            },
-        ]);
+        // Real-time subscription to announcements in Firestore
+        const q = query(collection(db, "announcements"));
+        const unsub = onSnapshot(q, (snap) => {
+            const list: Announcement[] = [];
+            snap.forEach((doc) => {
+                const data = doc.data();
+                const isActive = data.active !== false;
+                if (isActive) {
+                    list.push({
+                        id: doc.id,
+                        title: data.title || "Announcement",
+                        content: data.message || data.content || "",
+                        type: data.type || "info",
+                        targetAudience: data.targetAudience || "all",
+                        priority: data.priority || "medium",
+                        publishedAt: data.publishedAt || data.createdAt,
+                        createdBy: data.createdBy || "admin",
+                        createdAt: data.createdAt,
+                        active: true
+                    } as Announcement);
+                }
+            });
+
+            // Sort by createdAt desc
+            list.sort((a, b) => {
+                const dateA = a.createdAt?.seconds 
+                    ? a.createdAt.seconds * 1000 
+                    : (a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime());
+                const dateB = b.createdAt?.seconds 
+                    ? b.createdAt.seconds * 1000 
+                    : (b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime());
+                return dateB - dateA;
+            });
+
+            setAnnouncements(list);
+        }, (error) => {
+            console.error("Announcements listener failed:", error);
+        });
+
+        return () => unsub();
     }, []);
 
     function handleDismiss(id: string) {

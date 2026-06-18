@@ -132,6 +132,7 @@ async function paystackSyncHandler(_req: NextRequest) {
                         // COMPATIBILITY: Old cooperative portal used `purpose` instead of `type`.
                         const type = metadata.type || metadata.purpose || "payment";
                         const userId = metadata.userId ?? null;
+                        const paidAtDate = tx.paid_at ? new Date(tx.paid_at) : undefined;
 
                         if (isSuccess) {
                             const docRef = db.collection(COLLECTIONS.PROCESSED_PAYMENTS).doc(reference);
@@ -147,20 +148,23 @@ async function paystackSyncHandler(_req: NextRequest) {
                             // webhook processors here, we ensure that resolving a 'pending' payment
                             // automatically updates the user's cooperative/academy/etc documents too!
                             if (type === "marketplace_order") {
-                                await processMarketplaceOrder(reference, amountNGN, userId);
+                                await processMarketplaceOrder(reference, amountNGN, userId, paidAtDate);
                             } else if (type === "export_investment") {
-                                await processExportInvestment(reference, amountNGN, userId, metadata.exportId);
+                                await processExportInvestment(reference, amountNGN, userId, metadata.exportId, paidAtDate);
                             } else if (type === "cooperative_membership_registration") {
                                 const tier = metadata.membershipTier || metadata.plan || "Member";
                                 // Legacy payments from old portal may not have membershipId — fall back to userId
                                 const membershipId = metadata.membershipId || userId;
-                                await processCooperativeRegistration(reference, amountNGN, userId, tier, membershipId);
+                                await processCooperativeRegistration(reference, amountNGN, userId, tier, membershipId, paidAtDate);
                             } else if (type === "academy_registration") {
-                                await processAcademyRegistration(reference, amountNGN, userId, metadata.plan);
+                                await processAcademyRegistration(reference, amountNGN, userId, metadata.plan, paidAtDate);
                             } else if (type === "farm_nation_registration" || type === "farm_nation_subscription") {
-                                await processFarmNationRegistration(reference, amountNGN, userId);
+                                await processFarmNationRegistration(reference, amountNGN, userId, paidAtDate);
                             } else if (type === "wave_registration" || type === "wave_application") {
-                                await processWaveRegistration(reference, amountNGN, userId);
+                                await processWaveRegistration(reference, amountNGN, userId, paidAtDate);
+                            } else if (type === "wallet_funding") {
+                                const { confirmWalletFundingAction } = await import("@/app/actions/wallet");
+                                await confirmWalletFundingAction(reference, paidAtDate);
                             } else {
                                 await docRef.set({
                                     reference,

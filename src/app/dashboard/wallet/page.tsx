@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
     Wallet, ArrowDownCircle, ArrowUpCircle, Plus, History,
     Loader2, AlertCircle, CheckCircle, Clock, XCircle, RefreshCw,
-    ChevronDown,
+    ChevronDown, Download, Share2, Image as ImageIcon
 } from "lucide-react";
 import {
     getWalletAction,
@@ -20,6 +20,7 @@ import {
 } from "@/app/actions/wallet";
 import { getFeatureTogglesAction } from "@/app/actions/health";
 import { useToast } from "@/contexts/ToastContext";
+import { useSession } from "next-auth/react";
 
 const fmt = (n: number = 0) =>
     new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(n || 0);
@@ -58,6 +59,11 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function WalletPage() {
     const { showToast } = useToast();
+    const { data: session } = useSession();
+    const userName = session?.user?.name || "User";
+    const userEmail = session?.user?.email;
+
+    const [selectedTxn, setSelectedTxn] = useState<any | null>(null);
 
     const [wallet, setWallet] = useState<{
         balance: number;
@@ -95,6 +101,103 @@ export default function WalletPage() {
 
     const [bankSearch, setBankSearch] = useState("");
     const [showBankDropdown, setShowBankDropdown] = useState(false);
+
+    const downloadAsPDF = async (txn: any) => {
+        setSelectedTxn(txn);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const cardElement = document.getElementById("receipt-download-card");
+        if (!cardElement) return;
+
+        try {
+            const html2canvas = (await import("html2canvas")).default;
+            const { jsPDF } = await import("jspdf");
+
+            const canvas = await html2canvas(cardElement, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+            });
+
+            const imgData = canvas.toDataURL("image/jpeg", 1.0);
+            const pdf = new jsPDF({
+                orientation: "portrait",
+                unit: "px",
+                format: [canvas.width / 2, canvas.height / 2],
+            });
+
+            pdf.addImage(imgData, "JPEG", 0, 0, canvas.width / 2, canvas.height / 2);
+            pdf.save(`receipt-${txn.id}.pdf`);
+            showToast("PDF receipt downloaded", "success");
+        } catch (error) {
+            console.error("Failed to download PDF:", error);
+            showToast("Could not generate PDF", "error");
+        }
+    };
+
+    const downloadAsJPEG = async (txn: any) => {
+        setSelectedTxn(txn);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const cardElement = document.getElementById("receipt-download-card");
+        if (!cardElement) return;
+
+        try {
+            const html2canvas = (await import("html2canvas")).default;
+            const canvas = await html2canvas(cardElement, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+            });
+
+            const link = document.createElement("a");
+            link.download = `receipt-${txn.id}.jpg`;
+            link.href = canvas.toDataURL("image/jpeg", 0.95);
+            link.click();
+            showToast("JPEG receipt downloaded", "success");
+        } catch (error) {
+            console.error("Failed to download JPEG:", error);
+            showToast("Could not generate image", "error");
+        }
+    };
+
+    const shareReceipt = async (txn: any) => {
+        setSelectedTxn(txn);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        const cardElement = document.getElementById("receipt-download-card");
+        if (!cardElement) return;
+
+        try {
+            const html2canvas = (await import("html2canvas")).default;
+            const canvas = await html2canvas(cardElement, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+            });
+
+            const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.95));
+            if (!blob) throw new Error("Failed to create blob");
+
+            const file = new File([blob], `receipt-${txn.id}.jpg`, { type: "image/jpeg" });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    files: [file],
+                    title: "Transaction Receipt",
+                    text: `Transaction receipt for ${fmt(Math.abs(txn.amount))}`,
+                });
+            } else if (navigator.share) {
+                await navigator.share({
+                    title: "Transaction Receipt",
+                    text: `Easy Sales transaction receipt for ${fmt(Math.abs(txn.amount))}. ID: ${txn.id}`,
+                });
+            } else {
+                const link = document.createElement("a");
+                link.download = `receipt-${txn.id}.jpg`;
+                link.href = canvas.toDataURL("image/jpeg", 0.95);
+                link.click();
+                showToast("Sharing not supported, downloading instead", "info");
+            }
+        } catch (error) {
+            console.error("Error sharing receipt:", error);
+            showToast("Could not share receipt", "error");
+        }
+    };
 
     useEffect(() => {
         setBankSearch(wdBank.bankName || "");
@@ -342,6 +445,36 @@ export default function WalletPage() {
                                                         </div>
                                                     </div>
                                                 )}
+
+                                                <div className="col-span-1 md:col-span-2 border-t border-slate-200/60 pt-3 mt-1 flex flex-wrap gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadAsPDF(txn);
+                                                        }}
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition font-semibold"
+                                                    >
+                                                        <Download className="w-3.5 h-3.5" /> PDF Receipt
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            downloadAsJPEG(txn);
+                                                        }}
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition font-semibold"
+                                                    >
+                                                        <ImageIcon className="w-3.5 h-3.5" /> JPEG Receipt
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            shareReceipt(txn);
+                                                        }}
+                                                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition font-semibold"
+                                                    >
+                                                        <Share2 className="w-3.5 h-3.5" /> Share
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -507,6 +640,105 @@ export default function WalletPage() {
                     </div>
                 </div>
             )}
+
+            {/* Hidden Receipt Element for PDF/JPEG generation */}
+            <div className="absolute -left-[9999px] -top-[9999px]">
+                <div 
+                    id="receipt-download-card" 
+                    className="w-[480px] bg-white text-slate-800 p-8 border border-slate-100 flex flex-col font-sans"
+                >
+                    {/* Brand Header */}
+                    <div className="flex items-center justify-between border-b-2 border-emerald-500 pb-4 mb-6">
+                        <div>
+                            <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+                                <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 inline-block"></span>
+                                EASY SALES
+                            </h2>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Export & Agro-Allied</p>
+                        </div>
+                        <div className="text-right">
+                            <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                                Receipt
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Transaction Amount & Status */}
+                    <div className="text-center bg-slate-50 rounded-2xl py-6 px-4 mb-6 border border-slate-100">
+                        <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">Amount</p>
+                        <p className={`text-3xl font-black ${selectedTxn?.amount < 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
+                            {selectedTxn ? `${selectedTxn.amount < 0 ? '-' : '+'}${fmt(Math.abs(selectedTxn.amount))}` : '₦0'}
+                        </p>
+                        <div className="mt-2.5 inline-block">
+                            {selectedTxn && (
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                    selectedTxn.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                    selectedTxn.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-red-100 text-red-700'
+                                }`}>
+                                    {selectedTxn.status}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Transaction Details */}
+                    <div className="space-y-3.5 text-xs pb-6 border-b border-dashed border-slate-200">
+                        <div className="flex justify-between items-start gap-4">
+                            <span className="text-slate-400 font-medium">Date & Time</span>
+                            <span className="text-slate-800 font-semibold text-right">{selectedTxn ? fmtDate(selectedTxn.createdAt) : '—'}</span>
+                        </div>
+                        <div className="flex justify-between items-start gap-4">
+                            <span className="text-slate-400 font-medium">Transaction ID</span>
+                            <span className="text-slate-800 font-mono font-medium text-right select-all">{selectedTxn?.id || '—'}</span>
+                        </div>
+                        {selectedTxn?.reference && (
+                            <div className="flex justify-between items-start gap-4">
+                                <span className="text-slate-400 font-medium">Reference</span>
+                                <span className="text-slate-800 font-mono font-medium text-right">{selectedTxn.reference}</span>
+                            </div>
+                        )}
+                        {selectedTxn?.orderId && (
+                            <div className="flex justify-between items-start gap-4">
+                                <span className="text-slate-400 font-medium">Order ID</span>
+                                <span className="text-slate-800 font-mono font-medium text-right">{selectedTxn.orderId}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-start gap-4">
+                            <span className="text-slate-400 font-medium">Type</span>
+                            <span className="text-slate-800 font-semibold capitalize text-right">{selectedTxn?.type || '—'}</span>
+                        </div>
+                        <div className="flex justify-between items-start gap-4">
+                            <span className="text-slate-400 font-medium">Description</span>
+                            <span className="text-slate-800 font-semibold text-right max-w-[200px] truncate">{selectedTxn?.description || '—'}</span>
+                        </div>
+
+                        {/* Customer Details */}
+                        <div className="pt-3 border-t border-slate-100 mt-2 space-y-3.5">
+                            <div className="flex justify-between items-start gap-4">
+                                <span className="text-slate-400 font-medium">Customer</span>
+                                <span className="text-slate-800 font-semibold text-right">{userName}</span>
+                            </div>
+                            {userEmail && (
+                                <div className="flex justify-between items-start gap-4">
+                                    <span className="text-slate-400 font-medium">Email</span>
+                                    <span className="text-slate-800 font-semibold text-right truncate max-w-[200px]">{userEmail}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="text-center mt-6">
+                        <p className="text-[10px] text-slate-400 font-medium">
+                            Thank you for transacting with Easy Sales & Export.
+                        </p>
+                        <p className="text-[9px] text-slate-300 mt-1">
+                            This is an official computer-generated receipt and requires no signature.
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

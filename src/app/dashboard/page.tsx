@@ -9,6 +9,7 @@ import {
     TrendingUp, Users, BookOpen, Landmark, ExternalLink, Settings,
 } from "lucide-react";
 import { db } from "@/lib/firebase";
+import AnnouncementBanner from "@/components/AnnouncementBanner";
 import { collection, doc, query, where, onSnapshot, orderBy, limit } from "firebase/firestore";
 import { COLLECTIONS } from "@/lib/types/firestore";
 import { useFirebaseAuthed } from "@/hooks/useFirebaseAuthed";
@@ -32,6 +33,30 @@ interface RecentNotification {
     type: string;
     read: boolean;
     createdAt: any;
+}
+
+interface DashboardEvent {
+    id: string;
+    title: string;
+    description: string;
+    date: Date;
+    status: string;
+    type: "wave" | "village_market";
+    location?: string;
+    meetingLink?: string;
+    instructor?: string;
+}
+
+interface DashboardResource {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    fileUrl: string;
+    fileName: string;
+    fileSize: number;
+    downloads: number;
+    uploadedAt: Date;
 }
 
 /** Returns all platform modules with their dynamic application status */
@@ -172,6 +197,8 @@ function DashboardHomeContent() {
     });
     const [serviceRegistrations, setServiceRegistrations] = useState<Record<string, any>>({});
     const [recentNotifications, setRecentNotifications] = useState<RecentNotification[]>([]);
+    const [upcomingEvents, setUpcomingEvents] = useState<DashboardEvent[]>([]);
+    const [recentResources, setRecentResources] = useState<DashboardResource[]>([]);
 
     // Real-time user profile (for serviceRegistrations)
     useEffect(() => {
@@ -256,6 +283,111 @@ function DashboardHomeContent() {
         return () => unsub();
     }, [userId, isAuthed]);
 
+    // Subscribe to both WAVE Training Events and Village Market Events
+    useEffect(() => {
+        if (!userId || !isAuthed) return;
+
+        let activeWaveEvents: DashboardEvent[] = [];
+        let activeMarketEvents: DashboardEvent[] = [];
+
+        const updateEvents = () => {
+            const combined = [...activeWaveEvents, ...activeMarketEvents];
+            // Sort by date ascending (closest events first)
+            combined.sort((a, b) => a.date.getTime() - b.date.getTime());
+            setUpcomingEvents(combined.slice(0, 3)); // show top 3
+        };
+
+        // 1. WAVE Training Events
+        const qWave = query(
+            collection(db, COLLECTIONS.WAVE_TRAINING_EVENTS)
+        );
+        const unsubWave = onSnapshot(qWave, (snap) => {
+            const now = new Date();
+            activeWaveEvents = snap.docs.map((doc) => {
+                const data = doc.data();
+                const eventDate = data.date?.toDate ? data.date.toDate() : new Date(data.date || 0);
+                return {
+                    id: doc.id,
+                    title: data.title || "Training Session",
+                    description: data.description || "",
+                    date: eventDate,
+                    status: data.status || "upcoming",
+                    type: "wave",
+                    meetingLink: data.meetingLink || "",
+                    instructor: data.instructor || "",
+                } as DashboardEvent;
+            }).filter(e => e.status !== "cancelled" && e.status !== "completed" && e.date >= now);
+            updateEvents();
+        }, (error) => {
+            console.error("WAVE events subscription failed:", error);
+        });
+
+        // 2. Village Market Events
+        const qMarket = query(
+            collection(db, COLLECTIONS.VILLAGE_MARKET_EVENTS)
+        );
+        const unsubMarket = onSnapshot(qMarket, (snap) => {
+            const now = new Date();
+            activeMarketEvents = snap.docs.map((doc) => {
+                const data = doc.data();
+                const eventDate = data.startTime?.toDate ? data.startTime.toDate() : new Date(data.startTime || 0);
+                return {
+                    id: doc.id,
+                    title: data.title || "Village Market",
+                    description: data.description || "",
+                    date: eventDate,
+                    status: data.status || "upcoming",
+                    type: "village_market",
+                    location: data.location ? `${data.location}, ${data.state || ""}` : (data.state || ""),
+                } as DashboardEvent;
+            }).filter(e => e.status !== "cancelled" && e.status !== "completed" && e.date >= now);
+            updateEvents();
+        }, (error) => {
+            console.error("Village Market events subscription failed:", error);
+        });
+
+        return () => {
+            unsubWave();
+            unsubMarket();
+        };
+    }, [userId, isAuthed]);
+
+    // Subscribe to WAVE resources
+    useEffect(() => {
+        if (!userId || !isAuthed) return;
+
+        const q = query(collection(db, COLLECTIONS.WAVE_RESOURCES));
+        const unsub = onSnapshot(q, (snap) => {
+            const list: DashboardResource[] = [];
+            snap.forEach((doc) => {
+                const data = doc.data();
+                const isActive = data.isActive !== false;
+                if (isActive) {
+                    const uploadedAt = data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(data.uploadedAt || data.createdAt || 0);
+                    list.push({
+                        id: doc.id,
+                        title: data.title || "Resource File",
+                        description: data.description || "",
+                        category: data.category || "document",
+                        fileUrl: data.fileUrl || "",
+                        fileName: data.fileName || "",
+                        fileSize: data.fileSize || 0,
+                        downloads: data.downloads || 0,
+                        uploadedAt,
+                    });
+                }
+            });
+
+            // Sort by uploadedAt desc
+            list.sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+            setRecentResources(list.slice(0, 3)); // show top 3
+        }, (error) => {
+            console.error("Resources subscription failed:", error);
+        });
+
+        return () => unsub();
+    }, [userId, isAuthed]);
+
     // Active orders count — real-time onSnapshot (avoids getDocs stale count and composite index crash).
     // ⚠️ Firestore requires a composite index for (buyerId + orderStatus IN [...]) which may not exist.
     // Safe alternative: listen on buyerId only, then filter client-side (resultset is small per-user).
@@ -318,6 +450,7 @@ function DashboardHomeContent() {
             </div>
 
             <div className="max-w-5xl mx-auto px-4 lg:px-6 py-8 space-y-10">
+                <AnnouncementBanner />
 
                 {/* ── Stats Grid ─────────────────────────────────── */}
                 <section>
@@ -392,6 +525,102 @@ function DashboardHomeContent() {
                         ))}
                     </div>
                 </section>
+
+                {/* ── Upcoming Events ─────────────────────────────── */}
+                {upcomingEvents.length > 0 && (
+                    <section>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-slate-900">Upcoming Events</h2>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {upcomingEvents.map((event) => (
+                                <div
+                                    key={event.id}
+                                    className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                                event.type === 'wave' 
+                                                    ? 'bg-purple-100 text-purple-700' 
+                                                    : 'bg-emerald-100 text-emerald-700'
+                                            }`}>
+                                                {event.type === 'wave' ? 'WAVE Training' : 'Village Market'}
+                                            </span>
+                                            <span className="text-xs text-slate-500 font-semibold">
+                                                {new Intl.DateTimeFormat("en-NG", { dateStyle: "short", timeStyle: "short" }).format(event.date)}
+                                            </span>
+                                        </div>
+                                        <h3 className="font-bold text-slate-900 text-base mb-1 truncate">{event.title}</h3>
+                                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-4">{event.description}</p>
+                                    </div>
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-slate-600">
+                                        {event.type === 'wave' ? (
+                                            <>
+                                                <span className="truncate">Instructor: {event.instructor || 'Staff'}</span>
+                                                {event.meetingLink ? (
+                                                    <a href={event.meetingLink} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline flex items-center gap-0.5 shrink-0">
+                                                        Join <ChevronRight className="w-3.5 h-3.5" />
+                                                    </a>
+                                                ) : <span className="text-slate-400 shrink-0">No Link</span>}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="truncate">📍 {event.location || 'Online'}</span>
+                                                <Link href="/marketplace/buyer/dashboard" className="text-emerald-600 hover:underline flex items-center gap-0.5 shrink-0">
+                                                    View Market <ChevronRight className="w-3.5 h-3.5" />
+                                                </Link>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* ── Resource Center ────────────────────────────── */}
+                {recentResources.length > 0 && (
+                    <section>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-slate-900">Resource Center</h2>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {recentResources.map((res) => (
+                                <div
+                                    key={res.id}
+                                    className="bg-white rounded-2xl border border-slate-200 p-5 hover:shadow-md transition-shadow flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700">
+                                                {res.category}
+                                            </span>
+                                            <span className="text-xs text-slate-400 font-medium">
+                                                {res.fileSize ? `${(res.fileSize / (1024 * 1024)).toFixed(1)} MB` : 'PDF'}
+                                            </span>
+                                        </div>
+                                        <h3 className="font-bold text-slate-900 text-base mb-1 truncate">{res.title}</h3>
+                                        <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed mb-4">{res.description}</p>
+                                    </div>
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-semibold">
+                                        <span className="text-slate-400 font-medium">{res.downloads} downloads</span>
+                                        {res.fileUrl ? (
+                                            <a 
+                                                href={res.fileUrl} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer" 
+                                                className="text-emerald-600 hover:underline flex items-center gap-0.5"
+                                            >
+                                                Download <ChevronRight className="w-3.5 h-3.5" />
+                                            </a>
+                                        ) : <span className="text-slate-400">Unavailable</span>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
 
                 {/* ── Quick Links ─────────────────────────────────── */}
                 <section>

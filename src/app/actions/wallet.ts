@@ -11,7 +11,7 @@
 "use server";
 
 import { db } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { logger } from "@/lib/logger";
 import { requireSession } from "@/lib/session-guard";
 import { getBaseUrl } from "@/lib/server-utils";
@@ -209,7 +209,7 @@ export async function fundWalletViaPaystackAction(amountNGN: number): Promise<Ac
 // CONFIRM: Handle Paystack callback to credit the wallet
 // ---------------------------------------------------------------------------
 
-export async function confirmWalletFundingAction(reference: string): Promise<ActionResponse<{ newBalance: number }>> {
+export async function confirmWalletFundingAction(reference: string, paidAt?: Date): Promise<ActionResponse<{ newBalance: number }>> {
     try {
         // Verify with Paystack
         const paystackRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
@@ -241,6 +241,8 @@ export async function confirmWalletFundingAction(reference: string): Promise<Act
 
         // Credit wallet via Firestore transaction for atomicity
         const walletRef = db.collection(WALLET_COLLECTION).doc(userId);
+
+        const paymentTimestamp = paidAt ? Timestamp.fromDate(paidAt) : FieldValue.serverTimestamp();
 
         const newBalance = await db.runTransaction(async (t) => {
             const freshTxn = await t.get(txnRef);
@@ -280,7 +282,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<Act
                 amount: amountNGN,
                 currency: "NGN",
                 status: "completed",
-                date: FieldValue.serverTimestamp(),
+                date: paymentTimestamp,
                 reference,
                 description: "Wallet funded successfully"
             }, { merge: true });
@@ -290,7 +292,7 @@ export async function confirmWalletFundingAction(reference: string): Promise<Act
                 type: "wallet_funding",
                 userId,
                 amount: amountNGN,
-                processedAt: FieldValue.serverTimestamp(),
+                processedAt: paymentTimestamp,
                 source: "wallet_funding_action",
                 status: "completed",
             });
