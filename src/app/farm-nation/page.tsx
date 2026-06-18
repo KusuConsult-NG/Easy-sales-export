@@ -208,7 +208,11 @@ export default function FarmNationLandingPage() {
                                     <h3 className="text-xl font-bold text-slate-900 mb-2">{property.title}</h3>
                                     <div className="flex items-center gap-2 text-slate-600 mb-4">
                                         <MapPin className="w-4 h-4" />
-                                        <span className="text-sm">{property.location || property.state}</span>
+                                        <span className="text-sm">
+                                            {typeof property.location === "object" && property.location
+                                                ? `${property.location.address || property.location.lga || ""}, ${property.location.state || ""}`.trim().replace(/^,\s*/, "")
+                                                : (property.location || property.state || "Nigeria")}
+                                        </span>
                                     </div>
                                     <div className="flex items-center justify-between pt-4 border-t border-slate-200">
                                         <div>
