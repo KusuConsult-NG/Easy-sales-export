@@ -18,27 +18,64 @@ async function healApplicationStatuses() {
 
     for (const collection of collectionsToHeal) {
         console.log(`Checking ${collection}...`);
-        const snap = await db.collection(collection).where("paymentStatus", "==", "completed").get();
-        console.log(`Found ${snap.docs.length} completed payments in ${collection}.`);
+        
+        let docsToProcess: any[] = [];
+        
+        // For large collections, use queries. For smaller ones, load all to catch legacy formats.
+        if (collection === COLLECTIONS.WAVE_APPLICATIONS) {
+            const snap = await db.collection(collection).where("paymentStatus", "in", ["completed", "paid"]).get();
+            docsToProcess = snap.docs;
+        } else {
+            const snap = await db.collection(collection).get();
+            docsToProcess = snap.docs.filter(doc => {
+                const data = doc.data();
+                return data.paymentStatus === "completed" || data.paymentStatus === "paid" || data.paid === true;
+            });
+        }
+        
+        console.log(`Found ${docsToProcess.length} paid/completed records in ${collection}.`);
 
-        for (const doc of snap.docs) {
+        for (const doc of docsToProcess) {
             const data = doc.data();
-            const needsUpdate = 
-                (data.status === "pending" || !data.status) || 
-                (collection === COLLECTIONS.COOPERATIVE_MEMBERS && (data.membershipStatus === "pending" || !data.membershipStatus));
+            
+            let needsUpdate = false;
+            const updateData: any = {
+                updatedAt: new Date()
+            };
+            
+            if (collection === COLLECTIONS.COOPERATIVE_MEMBERS) {
+                // For cooperative members, status and membershipStatus should be 'active'
+                const currentStatus = data.status || "pending";
+                const currentMemberStatus = data.membershipStatus || "pending";
+                
+                if (currentStatus !== "active" || currentMemberStatus !== "active") {
+                    needsUpdate = true;
+                    updateData.status = "active";
+                    updateData.membershipStatus = "active";
+                    
+                    // Also canonicalize payment status
+                    if (data.paymentStatus !== "completed") {
+                        updateData.paymentStatus = "completed";
+                    }
+                }
+            } else {
+                // For other applications, status should be 'approved'
+                const currentStatus = data.status || "pending";
+                if (currentStatus !== "approved") {
+                    needsUpdate = true;
+                    updateData.status = "approved";
+                    
+                    // Also canonicalize payment status
+                    if (data.paymentStatus !== "completed" && data.paymentStatus !== "paid") {
+                        updateData.paymentStatus = "completed";
+                    }
+                }
+            }
 
             if (needsUpdate) {
-                const updateData: any = { 
-                    status: "approved",
-                    updatedAt: new Date()
-                };
-                if (collection === COLLECTIONS.COOPERATIVE_MEMBERS) {
-                    updateData.membershipStatus = "approved";
-                }
-                
                 batch.update(doc.ref, updateData);
                 updates++;
-                console.log(`[${collection}] Updated doc ${doc.id} (User ${data.userId}) to approved.`);
+                console.log(`[${collection}] Queued update for doc ${doc.id} (User ${data.userId || "unknown"}) -> ${JSON.stringify(updateData)}`);
 
                 if (updates >= 450) {
                     await batch.commit();
@@ -52,6 +89,7 @@ async function healApplicationStatuses() {
 
     if (updates > 0) {
         await batch.commit();
+        console.log("Committed final batch.");
     }
     
     console.log("Status heal complete!");

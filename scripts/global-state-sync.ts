@@ -43,7 +43,7 @@ async function globalStateSync() {
         up.serviceRegistrations.cooperatives.status = data.membershipStatus || "pending";
         up.serviceRegistrations.cooperatives.updatedAt = new Date();
 
-        if (data.paymentStatus === "completed" || data.membershipStatus === "active") {
+        if (data.paymentStatus === "completed" || data.membershipStatus === "active" || data.membershipStatus === "approved") {
             addRole(data.userId, "cooperative_member");
         }
     });
@@ -182,6 +182,37 @@ async function globalStateSync() {
         if (!existingRoles.has("general_user")) existingRoles.add("general_user");
         
         finalUpdate.roles = Array.from(existingRoles);
+
+        // CHECK IF ACTUAL CHANGES EXIST BEFORE QUEUING WRITE
+        let hasChanges = false;
+        
+        // 1. Compare roles
+        const currentRolesSorted = Array.from(currentUserData.roles || []).sort();
+        const finalRolesSorted = Array.from(finalUpdate.roles).sort();
+        if (currentRolesSorted.length !== finalRolesSorted.length || 
+            !currentRolesSorted.every((val, index) => val === finalRolesSorted[index])) {
+            hasChanges = true;
+        }
+
+        // 2. Compare service registrations (status, paymentStatus, plan)
+        if (!hasChanges) {
+            for (const [module, moduleData] of Object.entries(updates.serviceRegistrations || {})) {
+                const currentModule = (currentUserData.serviceRegistrations || {})[module] || {};
+                const newModule = (finalUpdate.serviceRegistrations || {})[module] || {};
+                
+                if (currentModule.status !== newModule.status ||
+                    currentModule.paymentStatus !== newModule.paymentStatus ||
+                    currentModule.plan !== newModule.plan) {
+                    hasChanges = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasChanges) {
+            // Already synced, skip updating this document to save API calls and avoid network timeouts
+            continue;
+        }
 
         batch.update(userRef, finalUpdate);
         count++;
