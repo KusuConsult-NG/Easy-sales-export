@@ -41,25 +41,27 @@ function AddProductModal({
 }) {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(false);
+    const [customUnit, setCustomUnit] = useState("");
     const [form, setForm] = useState({
         title: "",
         description: "",
         price: "",
         flashPrice: "",
-        unit: "kg",
+        unit: "Kwanu",
         availableQuantity: "",
     });
 
     async function handle() {
         if (!form.title || !form.price) return showToast("Title and price are required", "error");
         setLoading(true);
+        const finalUnit = form.unit === "other units" ? customUnit : form.unit;
         const res = await addFlashSaleProductAction({
             eventId,
             title: form.title,
             description: form.description || undefined,
             price: Number(form.price),
             flashPrice: form.flashPrice ? Number(form.flashPrice) : undefined,
-            unit: form.unit || undefined,
+            unit: finalUnit || undefined,
             availableQuantity: form.availableQuantity ? Number(form.availableQuantity) : undefined,
         });
         setLoading(false);
@@ -72,7 +74,18 @@ function AddProductModal({
         }
     };
 
-    const units = ["kg", "bags", "tonnes", "pieces", "crates", "litres", "units"];
+    const units = [
+        "Kwanu",
+        "mudu/darica",
+        "basket(small)",
+        "basket(medium)",
+        "basket(big)",
+        "small painter bucket",
+        "big painter bucket",
+        "small carton",
+        "big carton",
+        "other units"
+    ];
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -114,11 +127,16 @@ function AddProductModal({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit</label>
+                            <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit *</label>
                             <select value={form.unit} onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))}
                                 className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 bg-white">
-                                {units.map(u => <option key={u}>{u}</option>)}
+                                {units.map(u => <option key={u} value={u}>{u}</option>)}
                             </select>
+                            {form.unit === "other units" && (
+                                <input type="text" value={customUnit} onChange={(e) => setCustomUnit(e.target.value)}
+                                    placeholder="Enter custom unit"
+                                    className="mt-2 w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent" />
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-semibold text-slate-700 mb-1.5">Available Qty</label>
@@ -175,6 +193,19 @@ export default function VillageMarketSellerHubPage() {
         setJoiningId(null);
         if (res.success) {
             showToast("You've joined the event! You can now add products.", "success");
+            const currentUserId = (session?.user as any)?.id || session?.user?.id;
+            if (currentUserId) {
+                setEvents(prev => prev.map(evt => {
+                    if (evt.id === eventId) {
+                        const ids = evt.participantSellerIds || [];
+                        return {
+                            ...evt,
+                            participantSellerIds: ids.includes(currentUserId) ? ids : [...ids, currentUserId]
+                        };
+                    }
+                    return evt;
+                }));
+            }
             load();
         } else {
             showToast(res.error || "Failed to join event", "error");

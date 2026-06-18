@@ -240,7 +240,7 @@ export default function PropertyDetailsPage() {
                                         <span className="text-sm font-semibold">Price</span>
                                     </div>
                                     <p className="text-2xl font-bold text-slate-900">
-                                        ₦{property.price.toLocaleString()}
+                                        ₦{Number(property.price || 0).toLocaleString()}
                                     </p>
                                 </div>
 
@@ -259,9 +259,23 @@ export default function PropertyDetailsPage() {
                                         <Calendar className="w-5 h-5" />
                                         <span className="text-sm font-semibold">Category</span>
                                     </div>
-                                    <p className="text-lg font-bold text-slate-900 capitalize">
-                                        {property.category || "Farmland"}
-                                    </p>
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                        {Array.isArray(property.category) ? (
+                                            property.category.map((cat, idx) => (
+                                                <span key={idx} className="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-lg capitalize">
+                                                    {cat}
+                                                </span>
+                                            ))
+                                        ) : property.category ? (
+                                            <span className="px-2.5 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-lg capitalize">
+                                                {property.category}
+                                            </span>
+                                        ) : (
+                                            <span className="px-2.5 py-1 bg-slate-100 text-slate-800 text-xs font-bold rounded-lg">
+                                                Farmland
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -296,9 +310,9 @@ export default function PropertyDetailsPage() {
                         {/* CTA Card */}
                         <div className="bg-white rounded-2xl p-6 shadow-sm sticky top-24">
                              <div className="mb-6">
-                                 <p className="text-3xl font-bold text-slate-900 mb-1">
-                                     ₦{property.price.toLocaleString()}
-                                 </p>
+                                  <p className="text-3xl font-bold text-slate-900 mb-1">
+                                      ₦{Number(property.price || 0).toLocaleString()}
+                                  </p>
                                  <p className="text-sm text-slate-500">
                                      {property.availableForRent ? "Lease/Rental price" : "Purchase price"}
                                  </p>

@@ -44,7 +44,49 @@ const productCategories = [
     { value: "other", label: "Other" },
 ];
 
-const units = ["kg", "bags", "tonnes", "pieces", "crates", "litres"];
+const CATEGORY_TITLES: Record<string, string[]> = {
+    grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
+    cereal: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
+    tuber: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
+    root: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
+    fruit: ["Mango", "Orange", "Pineapple", "Banana", "Plantain", "Watermelon", "Pawpaw", "Lemon", "Lime"],
+    vegetable: ["Tomatoes", "Pepper (Rodo)", "Pepper (Tatashe)", "Onions", "Cabbage", "Carrot", "Pumpkin Leaves (Ugu)", "Spinach"],
+    spice: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    herb: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    seasoning: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    nut: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
+    seed: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
+    processed: ["Garri (White)", "Garri (Yellow)", "Elubo (Yam Flour)", "Palm Oil", "Groundnut Oil", "Bean Flour"],
+    livestock: ["Live Goat", "Live Sheep", "Live Ram", "Live Cow", "Pork", "Beef"],
+    poultry: ["Day Old Chicks", "Broilers", "Cockerels", "Layers", "Chicken Eggs", "Turkey"],
+    fishery: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
+    sea_food: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
+    beverage: ["Cocoa Powder", "Tea Leaves", "Coffee Beans", "Fruit Juice"],
+    dairy: ["Fresh Milk", "Local Cheese (Wara)", "Yogurt", "Butter"],
+};
+
+const PRODUCT_UNITS = [
+    "Kwanu",
+    "mudu/darica",
+    "basket(small)",
+    "basket(medium)",
+    "basket(big)",
+    "small painter bucket",
+    "big painter bucket",
+    "small carton",
+    "big carton",
+    "other units"
+];
+
+function getTitleOptions(categoryValue: string): string[] {
+    const norm = (categoryValue || "").toLowerCase();
+    for (const key of Object.keys(CATEGORY_TITLES)) {
+        if (norm.includes(key)) {
+            return CATEGORY_TITLES[key];
+        }
+    }
+    return [];
+}
 
 const nigerianStates = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
@@ -74,6 +116,11 @@ export default function EditProductPage() {
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState("");
     const [unit, setUnit] = useState("");
+    const [customTitle, setCustomTitle] = useState("");
+    const [customUnit, setCustomUnit] = useState("");
+
+    const titleOptions = getTitleOptions(category);
+    const hasCategoryTitles = titleOptions.length > 0;
     const [retailPrice, setRetailPrice] = useState<number>(0);
     const [availableQuantity, setAvailableQuantity] = useState<number>(0);
     const [minimumOrderQuantity, setMinimumOrderQuantity] = useState<number>(1);
@@ -109,10 +156,21 @@ export default function EditProductPage() {
                     const prod = result.data;
                     
                     // Pre-fill states
-                    setTitle(prod.title);
+                    const titleOpts = getTitleOptions(prod.category);
+                    if (titleOpts.length > 0 && !titleOpts.includes(prod.title)) {
+                        setTitle("Other");
+                        setCustomTitle(prod.title);
+                    } else {
+                        setTitle(prod.title);
+                    }
                     setDescription(prod.description);
                     setCategory(prod.category);
-                    setUnit(prod.unit);
+                    if (prod.unit && !PRODUCT_UNITS.includes(prod.unit)) {
+                        setUnit("other units");
+                        setCustomUnit(prod.unit);
+                    } else {
+                        setUnit(prod.unit || "");
+                    }
                     setAvailableQuantity(prod.availableQuantity);
                     setMinimumOrderQuantity(prod.minimumOrderQuantity || 1);
                     setImages(prod.images || []);
@@ -208,13 +266,16 @@ export default function EditProductPage() {
             // 3. Combine existing URLs and new uploaded URLs
             const finalImageUrls = [...existingCloudinaryUrls, ...uploadedUrls];
 
+            const finalTitle = (hasCategoryTitles && title === "Other") ? customTitle : title;
+            const finalUnit = (unit === "other units") ? customUnit : unit;
+
             // 4. Construct FormData
             const submitFormData = new FormData();
             submitFormData.append("productId", productId);
-            submitFormData.append("title", title);
+            submitFormData.append("title", finalTitle);
             submitFormData.append("description", description);
             submitFormData.append("category", category);
-            submitFormData.append("unit", unit);
+            submitFormData.append("unit", finalUnit);
             submitFormData.append("retailPrice", retailPrice.toString());
             submitFormData.append("availableQuantity", availableQuantity.toString());
             submitFormData.append("minimumOrderQuantity", minimumOrderQuantity.toString());
@@ -398,7 +459,11 @@ export default function EditProductPage() {
                                     <select
                                         required
                                         value={category}
-                                        onChange={(e) => setCategory(e.target.value)}
+                                        onChange={(e) => {
+                                            setCategory(e.target.value);
+                                            setTitle("");
+                                            setCustomTitle("");
+                                        }}
                                         className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
                                     >
                                         <option value="">Select Category</option>
@@ -415,14 +480,30 @@ export default function EditProductPage() {
                                     <select
                                         required
                                         value={unit}
-                                        onChange={(e) => setUnit(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setUnit(val);
+                                            if (val !== "other units") {
+                                                setCustomUnit("");
+                                            }
+                                        }}
                                         className="w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
                                     >
                                         <option value="">Select Unit</option>
-                                        {units.map(u => (
+                                        {PRODUCT_UNITS.map(u => (
                                             <option key={u} value={u}>{u}</option>
                                         ))}
                                     </select>
+                                    {unit === "other units" && (
+                                        <input
+                                            type="text"
+                                            value={customUnit}
+                                            onChange={(e) => setCustomUnit(e.target.value)}
+                                            required
+                                            placeholder="Enter custom unit"
+                                            className="mt-2 w-full px-4 py-3 rounded-xl border border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none transition"
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>

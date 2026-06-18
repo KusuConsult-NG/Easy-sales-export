@@ -259,10 +259,22 @@ function PropertiesContent() {
                                             fill
                                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                                         />
-                                        <div className="absolute top-4 right-4">
-                                            <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full capitalize">
-                                                {property.category}
-                                            </span>
+                                        <div className="absolute top-4 right-4 flex flex-wrap gap-1">
+                                            {Array.isArray(property.category) ? (
+                                                property.category.map((cat, idx) => (
+                                                    <span key={idx} className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full capitalize shadow-sm">
+                                                        {cat}
+                                                    </span>
+                                                ))
+                                            ) : property.category ? (
+                                                <span className="px-3 py-1 bg-teal-600 text-white text-xs font-bold rounded-full capitalize shadow-sm">
+                                                    {property.category}
+                                                </span>
+                                            ) : (
+                                                <span className="px-3 py-1 bg-slate-600 text-white text-xs font-bold rounded-full">
+                                                    Farmland
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="absolute top-4 left-4">
                                             <span className={`px-3 py-1 text-white text-xs font-bold rounded-full capitalize ${
@@ -326,7 +338,7 @@ function PropertiesContent() {
                                             <div className="text-right">
                                                 <p className="text-xs text-slate-500 mb-1">Price</p>
                                                 <p className="text-xl font-bold text-teal-600">
-                                                    ₦{property.price.toLocaleString()}
+                                                    ₦{Number(property.price || 0).toLocaleString()}
                                                 </p>
                                             </div>
                                         </div>

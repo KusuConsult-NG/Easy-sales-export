@@ -5,9 +5,11 @@ import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import {
     User, Mail, Phone, MapPin, Shield, Bell,
-    LogOut, Camera, Save, Lock, CheckCircle, Upload, FileText
+    LogOut, Camera, Save, Lock, CheckCircle, Upload, FileText,
+    AlertCircle, Loader2
 } from "lucide-react";
 import Image from "next/image";
+import { useToast } from "@/contexts/ToastContext";
 
 import { getUserProfileAction, updateUserProfileAction, updateNotificationPreferencesAction } from "@/app/actions/profile";
 import { changePasswordAction } from "@/app/actions/auth";
@@ -17,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 export default function ProfilePage() {
     const { data: session, update } = useSession();
+    const { showToast } = useToast();
 
     const { run: guardRun } = useSessionExpiry();
     const router = useRouter();
@@ -27,6 +30,13 @@ export default function ProfilePage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isFetching, setIsFetching] = useState(true);
     const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    // MFA / Two-Factor Authentication states
+    const [mfaEnabled, setMfaEnabled] = useState(false);
+    const [isMfaModalOpen, setIsMfaModalOpen] = useState(false);
+    const [mfaToken, setMfaToken] = useState("");
+    const [mfaError, setMfaError] = useState("");
+    const [isDisablingMfa, setIsDisablingMfa] = useState(false);
 
     // Real user data from Firestore
     const [userData, setUserData] = useState({
@@ -170,6 +180,18 @@ export default function ProfilePage() {
                     gender: ((session?.user as any)?.gender || "").toLowerCase() as any,
                 }));
             }
+            
+            // Fetch MFA Status
+            try {
+                const res = await fetch("/api/auth/mfa/status");
+                const mfaData = await res.json();
+                if (mfaData.success) {
+                    setMfaEnabled(mfaData.enabled || false);
+                }
+            } catch (err) {
+                console.error("Error loading MFA status:", err);
+            }
+
             setIsFetching(false);
         }
 
@@ -298,6 +320,47 @@ export default function ProfilePage() {
             }, 2000);
         } else {
             setPasswordError(res.error || "Failed to change password");
+        }
+    };
+
+    const handleMFAToggle = () => {
+        if (mfaEnabled) {
+            setMfaToken("");
+            setMfaError("");
+            setIsMfaModalOpen(true);
+        } else {
+            router.push("/settings/security/mfa");
+        }
+    };
+
+    const handleDisableMFA = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (mfaToken.length !== 6) {
+            setMfaError("Please enter a 6-digit code");
+            return;
+        }
+        setIsDisablingMfa(true);
+        setMfaError("");
+        try {
+            const res = await fetch("/api/auth/mfa/disable", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ token: mfaToken }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                setMfaEnabled(false);
+                setIsMfaModalOpen(false);
+                showToast("Two-Factor Authentication disabled successfully", "success");
+            } else {
+                setMfaError(data.error || "Failed to disable Two-Factor Authentication");
+            }
+        } catch (err) {
+            setMfaError("An unexpected error occurred");
+        } finally {
+            setIsDisablingMfa(false);
         }
     };
 
@@ -660,9 +723,20 @@ export default function ProfilePage() {
                                                 <h4 className="font-medium text-slate-900">Two-Factor Authentication</h4>
                                                 <p className="text-sm text-slate-500">Add an extra layer of security to your account</p>
                                             </div>
-                                            <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-slate-200 cursor-pointer">
-                                                <span className="translate-x-1 inline-block h-4 w-4 transform rounded-full bg-white transition" />
-                                            </div>
+                                            <button
+                                                onClick={handleMFAToggle}
+                                                disabled={isDisablingMfa}
+                                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 ${
+                                                    mfaEnabled ? "bg-emerald-600" : "bg-slate-200"
+                                                }`}
+                                                aria-pressed={mfaEnabled}
+                                            >
+                                                <span
+                                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                                        mfaEnabled ? "translate-x-5" : "translate-x-0"
+                                                    }`}
+                                                />
+                                            </button>
                                         </div>
                                     </div>
 
@@ -809,6 +883,75 @@ export default function ProfilePage() {
                                         </>
                                     ) : (
                                         "Update Password"
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Disable MFA Modal */}
+            {isMfaModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-900">Disable Two-Factor Authentication</h3>
+                            <button 
+                                onClick={() => setIsMfaModalOpen(false)}
+                                className="text-slate-400 hover:text-slate-600 transition"
+                            >
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <form onSubmit={handleDisableMFA} className="p-6 space-y-4">
+                            {mfaError && (
+                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center gap-2">
+                                    <AlertCircle className="w-4 h-4 shrink-0" />
+                                    <span>{mfaError}</span>
+                                </div>
+                            )}
+                            
+                            <p className="text-sm text-slate-600 leading-relaxed">
+                                Enter the 6-digit code from your authenticator app to disable Two-Factor Authentication. This will reduce your account security.
+                            </p>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Verification Code</label>
+                                <input
+                                    type="text"
+                                    required
+                                    maxLength={6}
+                                    pattern="\d{6}"
+                                    value={mfaToken}
+                                    onChange={(e) => setMfaToken(e.target.value.replace(/\D/g, ''))}
+                                    placeholder="123456"
+                                    className="w-full p-3 text-center text-xl tracking-widest border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-hidden font-mono"
+                                />
+                            </div>
+
+                            <div className="pt-4 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsMfaModalOpen(false)}
+                                    className="flex-1 py-3 px-4 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isDisablingMfa || mfaToken.length !== 6}
+                                    className="flex-1 py-3 px-4 bg-red-600 text-white font-semibold rounded-xl hover:bg-red-700 transition disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                >
+                                    {isDisablingMfa ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            Disabling...
+                                        </>
+                                    ) : (
+                                        "Disable 2FA"
                                     )}
                                 </button>
                             </div>

@@ -51,7 +51,8 @@ export default function VillageMarketEventPage() {
     const [joining, setJoining] = useState(false);
     const [showAddProduct, setShowAddProduct] = useState(false);
     const [addingProduct, setAddingProduct] = useState(false);
-    const [productForm, setProductForm] = useState({ title: "", price: "", flashPrice: "", unit: "", availableQuantity: "" });
+    const [customUnit, setCustomUnit] = useState("");
+    const [productForm, setProductForm] = useState({ title: "", price: "", flashPrice: "", unit: "Kwanu", availableQuantity: "" });
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -132,6 +133,17 @@ export default function VillageMarketEventPage() {
         setJoining(false);
         if (res.success) {
             showToast("You've joined this Village Market event!", "success");
+            const currentUserId = (session?.user as any)?.id || session?.user?.id;
+            if (currentUserId) {
+                setEvent(prev => {
+                    if (!prev) return null;
+                    const ids = prev.participantSellerIds || [];
+                    return {
+                        ...prev,
+                        participantSellerIds: ids.includes(currentUserId) ? ids : [...ids, currentUserId]
+                    };
+                });
+            }
             loadEvent();
         } else {
             showToast(res.error || "Failed to join event", "error");
@@ -171,12 +183,13 @@ export default function VillageMarketEventPage() {
             }
         }
 
+        const finalUnit = productForm.unit === "other units" ? customUnit : productForm.unit;
         const res = await addFlashSaleProductAction({
             eventId,
             title: productForm.title,
             price: Number(productForm.price),
             flashPrice: productForm.flashPrice ? Number(productForm.flashPrice) : undefined,
-            unit: productForm.unit || undefined,
+            unit: finalUnit || undefined,
             availableQuantity: productForm.availableQuantity ? Number(productForm.availableQuantity) : undefined,
             imageUrl: uploadedUrl,
         });
@@ -184,7 +197,8 @@ export default function VillageMarketEventPage() {
         if (res.success) {
             showToast("Product listed for this event!", "success");
             setShowAddProduct(false);
-            setProductForm({ title: "", price: "", flashPrice: "", unit: "", availableQuantity: "" });
+            setProductForm({ title: "", price: "", flashPrice: "", unit: "Kwanu", availableQuantity: "" });
+            setCustomUnit("");
             setSelectedFile(null);
             setImagePreview(null);
             loadEvent();
@@ -211,7 +225,7 @@ export default function VillageMarketEventPage() {
     }
 
     const live = isEventLive(event);
-    const userId = session?.user?.id;
+    const userId = (session?.user as any)?.id || session?.user?.id;
     const hasJoined = !!(userId && event.participantSellerIds?.includes(userId));
 
     return (
@@ -368,11 +382,9 @@ export default function VillageMarketEventPage() {
                         <h3 className="text-xl font-bold text-slate-900 mb-5">List a Flash Sale Product</h3>
                         <div className="space-y-4">
                             {[
-                                { label: "Product Title *", key: "title", placeholder: "e.g. Fresh Tomatoes (10kg bag)" },
+                                { label: "Product Title *", key: "title", placeholder: "e.g. Fresh Tomatoes" },
                                 { label: "Regular Price (₦) *", key: "price", placeholder: "e.g. 3000", type: "number" },
                                 { label: "Flash Sale Price (₦)", key: "flashPrice", placeholder: "Lower than regular price", type: "number" },
-                                { label: "Unit", key: "unit", placeholder: "e.g. bag, kg, crate" },
-                                { label: "Available Quantity", key: "availableQuantity", placeholder: "e.g. 50", type: "number" },
                             ].map(({ label, key, placeholder, type = "text" }) => (
                                 <div key={key}>
                                     <label className="block text-sm font-semibold text-slate-700 mb-1.5">{label}</label>
@@ -381,10 +393,54 @@ export default function VillageMarketEventPage() {
                                         value={productForm[key as keyof typeof productForm]}
                                         onChange={(e) => setProductForm(f => ({ ...f, [key]: e.target.value }))}
                                         placeholder={placeholder}
-                                        className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
                                     />
                                 </div>
                             ))}
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Unit *</label>
+                                <select
+                                    value={productForm.unit}
+                                    onChange={(e) => setProductForm(f => ({ ...f, unit: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white outline-none"
+                                >
+                                    {[
+                                        "Kwanu",
+                                        "mudu/darica",
+                                        "basket(small)",
+                                        "basket(medium)",
+                                        "basket(big)",
+                                        "small painter bucket",
+                                        "big painter bucket",
+                                        "small carton",
+                                        "big carton",
+                                        "other units"
+                                    ].map(u => (
+                                        <option key={u} value={u}>{u}</option>
+                                    ))}
+                                </select>
+                                {productForm.unit === "other units" && (
+                                    <input
+                                        type="text"
+                                        value={customUnit}
+                                        onChange={(e) => setCustomUnit(e.target.value)}
+                                        placeholder="Enter custom unit"
+                                        className="mt-2 w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                    />
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Available Quantity</label>
+                                <input
+                                    type="number"
+                                    value={productForm.availableQuantity}
+                                    onChange={(e) => setProductForm(f => ({ ...f, availableQuantity: e.target.value }))}
+                                    placeholder="e.g. 50"
+                                    className="w-full px-4 py-3 border border-slate-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                                />
+                            </div>
 
                             <div>
                                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">Product Image</label>

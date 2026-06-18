@@ -40,9 +40,6 @@ export {
     enrollInWaveAction,
     getWaveResourcesAction,
     getWaveTrainingEventsAction,
-    getShipmentTrackingAction,
-    updateShipmentStatusAction,
-    syncShipmentWithCarrierAction,
     calculateEarningsAction,
     generateCertificateAction,
     getMemberCertificatesAction,
@@ -56,6 +53,7 @@ export {
     requestWaveRevisionAction,
     resubmitWaveApplicationAction,
     checkWaveAccessAction,
+    getMemberDisbursementsAction,
 } from "./_actions";
 
 // ─── Member utility actions ───────────────────────────────────────────────────
@@ -83,8 +81,6 @@ export {
     getStandardWaveApplicationsAction,
     getStandardWaveWithdrawalsAction,
     processWaveWithdrawalAction,
-    createWaveShipmentAction,
-    getWaveShipmentsAction,
 } from "./_admin";
 
 

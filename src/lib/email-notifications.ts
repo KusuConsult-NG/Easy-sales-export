@@ -13,6 +13,15 @@ interface EmailData {
 }
 
 /**
+ * Helper to get the application base URL with fallbacks.
+ * Prioritizes NEXT_PUBLIC_APP_URL, then NEXTAUTH_URL, and finally the production fallback.
+ */
+function getBaseUrl(): string {
+    const url = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'https://easysalesexport.com';
+    return url.endsWith('/') ? url.slice(0, -1) : url;
+}
+
+/**
  * Send email notification using Resend
  * Production-ready implementation
  */
@@ -130,10 +139,30 @@ export async function sendMembershipApprovalEmail(memberEmail: string, memberNam
         to: memberEmail,
         subject: 'Cooperative Membership Approved',
         message: `
-            <h2>Congratulations ${memberName}!</h2>
-            <p>Your cooperative membership application has been approved.</p>
-            <p>You can now access all member benefits and start contributing.</p>
-            <p>Login to your dashboard to get started.</p>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background-color: #7c3aed; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 24px;">Membership Approved!</h1>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${memberName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        Congratulations! Your Easy Sales Export Cooperative membership application has been <strong>approved</strong>.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        You can now access all member benefits, start contributing, and explore cooperative funding opportunities.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="${getBaseUrl()}/cooperatives/dashboard"
+                           style="background-color: #7c3aed; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
+                            Go to Cooperative Dashboard &rarr;
+                        </a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
         `,
         metadata: { type: 'membership_approval' },
     });
@@ -147,11 +176,33 @@ export async function sendMembershipRejectionEmail(memberEmail: string, memberNa
         to: memberEmail,
         subject: 'Cooperative Membership Application Update',
         message: `
-            <h2>Hello ${memberName},</h2>
-            <p>Thank you for your interest in joining our cooperative.</p>
-            <p>Unfortunately, we are unable to approve your application at this time.</p>
-            ${reason ? `<p>Reason: ${reason}</p>` : ''}
-            <p>If you have questions, please contact our support team.</p>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
+                <div style="background-color: #ef4444; padding: 24px; border-radius: 12px 12px 0 0; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 22px;">Application Update Required</h1>
+                </div>
+                <div style="padding: 32px; background: #ffffff; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+                    <p style="font-size: 16px; margin: 0 0 12px;">Hello <strong>${memberName}</strong>,</p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        Thank you for your interest in joining our cooperative.
+                    </p>
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 16px;">
+                        Unfortunately, we are unable to approve your application at this time.
+                    </p>
+                    ${reason ? `
+                    <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 16px; margin: 24px 0;">
+                        <p style="margin: 0; font-size: 14px; font-weight: bold; color: #991b1b;">Admin Feedback:</p>
+                        <p style="margin: 4px 0 0; font-size: 14px; color: #7f1d1d;">${reason}</p>
+                    </div>
+                    ` : ''}
+                    <p style="font-size: 15px; color: #374151; margin: 0 0 28px;">
+                        If you have questions or need clarification, please contact our support team.
+                    </p>
+                    <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+                    <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">
+                        Easy Sales Export &mdash; Nigeria's Premier Agricultural Export Platform
+                    </p>
+                </div>
+            </div>
         `,
         metadata: { type: 'membership_rejection', reason },
     });
@@ -247,7 +298,7 @@ export async function sendWaveApplicationEmail(
             <p>Log in to your dashboard to start exploring the resources available to you.</p>
 
             <div style="text-align: center; margin-top: 30px;">
-                <a href="https://easysalesexport.com/wave/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to WAVE Dashboard</a>
+                <a href="${getBaseUrl()}/wave/dashboard" style="background-color: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to WAVE Dashboard</a>
             </div>
             
             <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
@@ -505,8 +556,8 @@ export async function sendExportWindowCompleteEmail(
 
                 <p>Your funds are ready for withdrawal. Log in to your dashboard to request a withdrawal.</p>
 
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/export/transactions"
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="${getBaseUrl()}/export/transactions"
                        style="background: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
                         View My Returns
                     </a>
@@ -648,7 +699,7 @@ export async function sendSellerApprovalEmail(
                         You can now start setting up your storefront, adding products, and reaching global buyers.
                     </p>
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/marketplace/dashboard"
+                        <a href="${getBaseUrl()}/marketplace/dashboard"
                            style="background-color: #2563eb; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
                             Go to Seller Dashboard &rarr;
                         </a>
@@ -696,7 +747,7 @@ export async function sendSellerRejectionEmail(
                         Please log in to your dashboard to edit and resubmit your application.
                     </p>
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/marketplace/onboarding?edit=true"
+                        <a href="${getBaseUrl()}/marketplace/onboarding?edit=true"
                            style="background-color: #1f2937; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
                             Edit My Application &rarr;
                         </a>
@@ -740,7 +791,7 @@ export async function sendAcademyEnrollmentEmail(
                         Your account has been fully configured and you can bypass the payment step to access all your courses and resources immediately.
                     </p>
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://easysalesexport.com'}/academy/dashboard"
+                        <a href="${getBaseUrl()}/academy/dashboard"
                            style="background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block;">
                             Go to My Academy Dashboard &rarr;
                         </a>
@@ -769,7 +820,7 @@ export async function sendExportProductApprovalEmail(
             <p>It is now live in the Export Catalog and visible to international buyers.</p>
             <p>Log in to your dashboard to monitor its status and any associated buyer inquiries.</p>
             <br />
-            <a href="${process.env.NEXT_PUBLIC_APP_URL}/export/products" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">View My Products</a>
+            <a href="${getBaseUrl()}/export/products" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold;">View My Products</a>
             <p style="margin-top: 30px; font-size: 14px; color: #64748b;">
                 Best regards,<br/>
                 The Easy Sales Export Team
@@ -846,7 +897,7 @@ export async function sendLegacyMemberWelcomeEmail(
                             <p style="margin: 0; font-size: 12px; color: #4b5563; text-transform: uppercase; font-weight: bold; letter-spacing: 1px;">Your Temporary PIN</p>
                             <p style="margin: 8px 0 0; font-size: 32px; color: #16a34a; font-weight: bold; letter-spacing: 4px;">${temporaryPassword}</p>
                         </div>
-                        <a href="${process.env.NEXTAUTH_URL || 'https://easysalesexport.com'}/auth/login"
+                        <a href="${getBaseUrl()}/auth/login"
                            style="display: inline-block; background-color: #16a34a; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold;">
                             Log In Now →
                         </a>

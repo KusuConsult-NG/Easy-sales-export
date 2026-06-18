@@ -45,6 +45,61 @@ function estimateCartWeight(items: any[]): number {
     }, 0);
 }
 
+const NIGERIAN_STATE_COORDINATES: Record<string, { lat: number; lng: number }> = {
+    "Abia": { lat: 5.5249, lng: 7.4898 },
+    "Adamawa": { lat: 9.3265, lng: 12.3984 },
+    "Akwa Ibom": { lat: 5.0389, lng: 7.9092 },
+    "Anambra": { lat: 6.2209, lng: 7.0670 },
+    "Bauchi": { lat: 10.3158, lng: 9.8442 },
+    "Bayelsa": { lat: 4.9267, lng: 6.2676 },
+    "Benue": { lat: 7.3333, lng: 8.8833 },
+    "Borno": { lat: 11.8311, lng: 13.1509 },
+    "Cross River": { lat: 5.9631, lng: 8.3300 },
+    "Delta": { lat: 5.7040, lng: 5.9789 },
+    "Ebonyi": { lat: 6.2649, lng: 8.0874 },
+    "Edo": { lat: 6.3350, lng: 5.6037 },
+    "Ekiti": { lat: 7.6306, lng: 5.2194 },
+    "Enugu": { lat: 6.4584, lng: 7.5464 },
+    "FCT": { lat: 9.0765, lng: 7.3986 },
+    "Abuja": { lat: 9.0765, lng: 7.3986 },
+    "Gombe": { lat: 10.2796, lng: 11.1686 },
+    "Imo": { lat: 5.4854, lng: 7.0357 },
+    "Jigawa": { lat: 12.1852, lng: 9.7742 },
+    "Kaduna": { lat: 10.5105, lng: 7.4165 },
+    "Kano": { lat: 12.0022, lng: 8.5919 },
+    "Katsina": { lat: 12.9856, lng: 7.6171 },
+    "Kebbi": { lat: 11.4942, lng: 4.1950 },
+    "Kogi": { lat: 7.7969, lng: 6.7406 },
+    "Kwara": { lat: 8.4833, lng: 4.5417 },
+    "Lagos": { lat: 6.5244, lng: 3.3792 },
+    "Nasarawa": { lat: 8.4907, lng: 7.7212 },
+    "Niger": { lat: 9.5833, lng: 6.5000 },
+    "Ogun": { lat: 7.1583, lng: 3.3500 },
+    "Ondo": { lat: 7.2500, lng: 5.2000 },
+    "Osun": { lat: 7.5629, lng: 4.5200 },
+    "Oyo": { lat: 7.9700, lng: 3.5900 },
+    "Plateau": { lat: 9.8965, lng: 8.8583 },
+    "Rivers": { lat: 4.8156, lng: 7.0498 },
+    "Sokoto": { lat: 13.0622, lng: 5.2439 },
+    "Taraba": { lat: 8.0000, lng: 10.5000 },
+    "Yobe": { lat: 12.0000, lng: 11.5000 },
+    "Zamfara": { lat: 12.1222, lng: 6.2236 }
+};
+
+import dynamicImport from "next/dynamic";
+
+const CheckoutMapFallback = dynamicImport(
+    () => import("@/components/marketplace/CheckoutMapFallback"),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[300px] w-full bg-slate-100 animate-pulse rounded-xl flex items-center justify-center text-slate-500 text-sm">
+                Loading route map...
+            </div>
+        )
+    }
+);
+
 export default function CheckoutPage() {
     const router = useRouter();
     const { data: session } = useSession();
@@ -109,48 +164,72 @@ export default function CheckoutPage() {
 
     // Geocode product locations when maps script loads and cart changes
     useEffect(() => {
-        if (!isClient || !mapsLoaded || !(window as any).google || cart.length === 0) return;
+        if (!isClient || cart.length === 0) return;
 
-        try {
-            if (!(window as any).google.maps?.Geocoder) {
-                console.warn("Google Maps Geocoder is not loaded yet.");
-                return;
-            }
+        // If Google Maps is loaded, use it. Otherwise, use our local fallback coordinates.
+        if (mapsLoaded && (window as any).google?.maps?.Geocoder) {
+            try {
+                const geocoder = new (window as any).google.maps.Geocoder();
+                const newCoords = { ...productCoords };
+                let updated = false;
 
-            const geocoder = new (window as any).google.maps.Geocoder();
-            const newCoords = { ...productCoords };
-            let updated = false;
+                const geocodePromises = cart.map((item) => {
+                    const lga = item.location?.lga && item.location.lga.toLowerCase() !== "unknown" ? item.location.lga : "";
+                    const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
+                    
+                    const locKey = `${lga}, ${state}`.trim();
+                    if (!locKey || productCoords[item.id]) return Promise.resolve();
 
-            const geocodePromises = cart.map((item) => {
-                const lga = item.location?.lga && item.location.lga.toLowerCase() !== "unknown" ? item.location.lga : "";
-                const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
-                
-                const locKey = `${lga}, ${state}`.trim();
-                if (!locKey || productCoords[item.id]) return Promise.resolve();
-
-                const addressStr = `${lga ? lga + ", " : ""}${state}, Nigeria`;
-                
-                return new Promise<void>((resolve) => {
-                    geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                        if (status === "OK" && results && results[0] && results[0].geometry) {
-                            const loc = results[0].geometry.location;
-                            newCoords[item.id] = { lat: loc.lat(), lng: loc.lng() };
-                            updated = true;
-                        } else {
-                            console.error(`Geocoding failed for product ${item.id} (${addressStr}):`, status);
-                        }
-                        resolve();
+                    const addressStr = `${lga ? lga + ", " : ""}${state}, Nigeria`;
+                    
+                    return new Promise<void>((resolve) => {
+                        geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                            if (status === "OK" && results && results[0] && results[0].geometry) {
+                                const loc = results[0].geometry.location;
+                                newCoords[item.id] = { lat: loc.lat(), lng: loc.lng() };
+                                updated = true;
+                            } else {
+                                console.error(`Geocoding failed for product ${item.id} (${addressStr}):`, status);
+                                // Fallback locally for this item
+                                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                                    s => s.toLowerCase() === state.toLowerCase()
+                                );
+                                if (matchedState) {
+                                    newCoords[item.id] = NIGERIAN_STATE_COORDINATES[matchedState];
+                                    updated = true;
+                                }
+                            }
+                            resolve();
+                        });
                     });
                 });
-            });
 
-            Promise.all(geocodePromises).then(() => {
-                if (updated) {
-                    setProductCoords(newCoords);
+                Promise.all(geocodePromises).then(() => {
+                    if (updated) {
+                        setProductCoords(newCoords);
+                    }
+                });
+            } catch (e) {
+                console.error("Failed to geocode product locations with Google Maps:", e);
+            }
+        } else {
+            // Local geocoding fallback
+            const newCoords = { ...productCoords };
+            let updated = false;
+            cart.forEach((item) => {
+                if (productCoords[item.id]) return;
+                const state = item.location?.state && item.location.state.toLowerCase() !== "unknown" ? item.location.state : "Lagos";
+                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                    s => s.toLowerCase() === state.toLowerCase()
+                );
+                if (matchedState) {
+                    newCoords[item.id] = NIGERIAN_STATE_COORDINATES[matchedState];
+                    updated = true;
                 }
             });
-        } catch (e) {
-            console.error("Failed to geocode product locations:", e);
+            if (updated) {
+                setProductCoords(newCoords);
+            }
         }
     }, [mapsLoaded, cart, isClient, productCoords]);
 
@@ -271,41 +350,79 @@ export default function CheckoutPage() {
 
         const addressStr = `${deliveryAddress.street}, ${deliveryAddress.city}, ${deliveryAddress.state}, Nigeria`;
 
-        try {
-            if (typeof window === "undefined" || !(window as any).google?.maps?.Geocoder) {
-                throw new Error("Google Maps Geocoder is not loaded. Please ensure you have an active internet connection or click 'Use Address Anyway' below.");
-            }
+        // Check if Google Maps Geocoder is available
+        const hasGoogleGeocoder = typeof window !== "undefined" && (window as any).google?.maps?.Geocoder;
 
-            const geocoder = new (window as any).google.maps.Geocoder();
-            geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
-                setIsGeocoding(false);
-                if (status === "OK" && results && results[0] && results[0].geometry) {
-                    const loc = results[0].geometry.location;
-                    setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+        if (hasGoogleGeocoder) {
+            try {
+                const geocoder = new (window as any).google.maps.Geocoder();
+                geocoder.geocode({ address: addressStr, componentRestrictions: { country: "ng" } }, (results: any, status: any) => {
+                    setIsGeocoding(false);
+                    if (status === "OK" && results && results[0] && results[0].geometry) {
+                        const loc = results[0].geometry.location;
+                        setDestinationCoords({ lat: loc.lat(), lng: loc.lng() });
+                        setIsAddressVerified(true);
+                        setVerificationError(null);
+                        showToast("Location successfully verified on Google Maps!", "success");
+                    } else {
+                        console.error("Geocoding failed for manual address:", status);
+                        // Local geocoding fallback
+                        const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                            s => s.toLowerCase() === deliveryAddress.state.toLowerCase()
+                        );
+                        if (matchedState) {
+                            setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
+                            setIsAddressVerified(true);
+                            setVerificationError(null);
+                            showToast(`Address verified using local ${matchedState} state coordinates fallback.`, "success");
+                        } else {
+                            setDestinationCoords(null);
+                            setIsAddressVerified(false);
+                            let errMsg = `Google Places could not find this location (Status: ${status}). Try selecting from the dropdown or click 'Use Address Anyway' to bypass.`;
+                            if (status === "REQUEST_DENIED") {
+                                errMsg = "Google Maps API request was denied. This usually means the Geocoding API or Places API is not enabled in your Google Cloud Console, or billing is not linked to your project. Please verify your Google Developer Console settings, or click 'Use Address Anyway' to bypass.";
+                            }
+                            setVerificationError(errMsg);
+                            showToast(status === "REQUEST_DENIED" ? "Maps API request denied. See details below." : "Could not verify address. Please use the dropdown options or bypass.", "error");
+                        }
+                    }
+                });
+            } catch (e: any) {
+                console.error("Error in Google geocodeManualAddress:", e);
+                // Local geocoding fallback on catch
+                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                    s => s.toLowerCase() === deliveryAddress.state.toLowerCase()
+                );
+                if (matchedState) {
+                    setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
                     setIsAddressVerified(true);
                     setVerificationError(null);
-                    showToast("Location successfully verified on Google Maps!", "success");
+                    showToast(`Address verified using local ${matchedState} state coordinates fallback.`, "success");
                 } else {
-                    console.error("Geocoding failed for manual address:", status);
+                    setIsGeocoding(false);
                     setDestinationCoords(null);
                     setIsAddressVerified(false);
-                    
-                    let errMsg = `Google Places could not find this location (Status: ${status}). Try selecting from the dropdown or click 'Use Address Anyway' to bypass.`;
-                    if (status === "REQUEST_DENIED") {
-                        errMsg = "Google Maps API request was denied. This usually means the Geocoding API or Places API is not enabled in your Google Cloud Console, or billing is not linked to your project. Please verify your Google Developer Console settings, or click 'Use Address Anyway' to bypass.";
-                    }
-                    
-                    setVerificationError(errMsg);
-                    showToast(status === "REQUEST_DENIED" ? "Maps API request denied. See details below." : "Could not verify address. Please use the dropdown options or bypass.", "error");
+                    setVerificationError(e?.message || "Google Maps could not be loaded. Please check your connection or use the bypass below.");
+                    showToast("Address verification failed.", "error");
                 }
-            });
-        } catch (e: any) {
-            console.error("Error in geocodeManualAddress:", e);
+            }
+        } else {
+            // No Google Maps geocoder available, use local state coordinates
+            const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                s => s.toLowerCase() === deliveryAddress.state.toLowerCase()
+            );
             setIsGeocoding(false);
-            setDestinationCoords(null);
-            setIsAddressVerified(false);
-            setVerificationError(e?.message || "Google Maps could not be loaded. Please check your connection or use the bypass below.");
-            showToast("Address verification failed.", "error");
+            if (matchedState) {
+                setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
+                setIsAddressVerified(true);
+                setVerificationError(null);
+                showToast(`Address verified using local ${matchedState} state coordinates fallback.`, "success");
+            } else {
+                setDestinationCoords(null);
+                setIsAddressVerified(false);
+                setVerificationError("Google Maps is not loaded and the selected state is invalid. Please select a valid state.");
+                showToast("State coordinates not found.", "error");
+            }
         }
     }, [deliveryAddress, showToast]);
 
@@ -367,23 +484,52 @@ export default function CheckoutPage() {
                         setVerificationError(null);
                     } else {
                         console.error("Geocoding failed for saved address:", status);
-                        setIsAddressVerified(false);
-                        let errMsg = `Saved address could not be verified by Google Places (Status: ${status}).`;
-                        if (status === "REQUEST_DENIED") {
-                            errMsg = "Google Maps API request was denied for your saved address. This usually means the Geocoding API is not enabled in Google Cloud Console, or billing is not linked to your project. Click 'Verify Address' to retry or click 'Use Address Anyway' below.";
+                        // Fallback locally
+                        const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                            s => s.toLowerCase() === savedAddress.state.toLowerCase()
+                        );
+                        if (matchedState) {
+                            setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
+                            setIsAddressVerified(true);
+                            setVerificationError(null);
+                        } else {
+                            setIsAddressVerified(false);
+                            let errMsg = `Saved address could not be verified by Google Places (Status: ${status}).`;
+                            if (status === "REQUEST_DENIED") {
+                                errMsg = "Google Maps API request was denied for your saved address. This usually means the Geocoding API is not enabled in Google Cloud Console, or billing is not linked to your project. Click 'Verify Address' to retry or click 'Use Address Anyway' below.";
+                            }
+                            setVerificationError(errMsg);
                         }
-                        setVerificationError(errMsg);
                     }
                 });
             } else {
-                console.error("Google Maps Geocoder is not loaded yet.");
-                setIsAddressVerified(false);
-                setVerificationError("Google Maps Geocoder is not loaded yet. Click 'Verify Address' when loaded or use the bypass below.");
+                console.error("Google Maps Geocoder is not loaded yet. Falling back to local state coordinates.");
+                const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                    s => s.toLowerCase() === savedAddress.state.toLowerCase()
+                );
+                if (matchedState) {
+                    setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
+                    setIsAddressVerified(true);
+                    setVerificationError(null);
+                } else {
+                    setIsAddressVerified(false);
+                    setVerificationError("Google Maps Geocoder is not loaded yet. Click 'Verify Address' when loaded or use the bypass below.");
+                }
             }
         } catch (e: any) {
             console.error("Error in handleUseSavedAddress geocoding:", e);
-            setIsAddressVerified(false);
-            setVerificationError(e?.message || "An error occurred during saved address geocoding.");
+            // Fallback locally
+            const matchedState = Object.keys(NIGERIAN_STATE_COORDINATES).find(
+                s => s.toLowerCase() === savedAddress.state.toLowerCase()
+            );
+            if (matchedState) {
+                setDestinationCoords(NIGERIAN_STATE_COORDINATES[matchedState]);
+                setIsAddressVerified(true);
+                setVerificationError(null);
+            } else {
+                setIsAddressVerified(false);
+                setVerificationError(e?.message || "An error occurred during saved address geocoding.");
+            }
         }
         showToast("Address populated from your profile!", "success");
     };
@@ -837,6 +983,20 @@ export default function CheckoutPage() {
                                                     Verify Address
                                                 </button>
                                             </div>
+
+                                            {isAddressVerified && destinationCoords && (
+                                                <div className="mt-3">
+                                                    <CheckoutMapFallback
+                                                        destination={destinationCoords}
+                                                        products={cart.map(item => ({
+                                                            id: item.id,
+                                                            name: item.title,
+                                                            coords: productCoords[item.id] || null,
+                                                            locationName: `${item.location?.lga || ""}, ${item.location?.state || ""}`
+                                                        }))}
+                                                    />
+                                                </div>
+                                            )}
 
                                             {verificationError && (
                                                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-4 text-xs">

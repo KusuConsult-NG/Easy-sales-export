@@ -1706,3 +1706,38 @@ async function _checkWaveAccessAction(): Promise<ActionResponse<boolean>> {
     }
 }
 export const checkWaveAccessAction = withFlexibleSafeAction("checkWaveAccessAction", _checkWaveAccessAction);
+
+async function _getMemberDisbursementsAction(): Promise<ActionResponse<any[]>> {
+    try {
+        const sessionResult = await requireSession();
+        if (!sessionResult.session) return { success: false as const, error: sessionResult.error?.error ?? "Authentication required", data: null };
+        const { session } = sessionResult;
+        
+        const snapshot = await db.collection(COLLECTIONS.WAVE_WITHDRAWALS)
+            .where("userId", "==", session.user.id)
+            .orderBy("requestedAt", "desc")
+            .get();
+            
+        const { serializeValue } = await import("@/lib/firestore-serialize");
+        const disbursements = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                amount: data.amount,
+                status: data.status,
+                requestedAt: serializeValue(data.requestedAt || data.createdAt || null),
+                processedAt: serializeValue(data.processedAt || null),
+                completedAt: serializeValue(data.completedAt || null),
+                adminNotes: data.adminNotes || null,
+                transactionReference: data.transactionReference || null,
+            };
+        });
+        
+        return { error: null, success: true as const, data: disbursements };
+    } catch (error) {
+        logger.error("Get member disbursements error:", error);
+        return { success: false as const, error: "Failed to load disbursements", data: null };
+    }
+}
+export const getMemberDisbursementsAction = withFlexibleSafeAction("getMemberDisbursementsAction", _getMemberDisbursementsAction);
+

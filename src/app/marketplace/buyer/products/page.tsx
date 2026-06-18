@@ -423,11 +423,15 @@ export default function ProductsPage() {
                                                         Verified
                                                     </span>
                                                 )}
-                                                {product.status === "out_of_stock" && (
-                                                    <span className="absolute top-3 right-3 bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">
+                                                {product.availableQuantity === 0 || product.status === "out_of_stock" ? (
+                                                    <span className="absolute top-3 right-3 bg-red-100 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
                                                         Out of Stock
                                                     </span>
-                                                )}
+                                                ) : (product.availableQuantity ?? 9999) <= 5 ? (
+                                                    <span className="absolute top-3 right-3 bg-orange-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-md animate-pulse">
+                                                        Only {product.availableQuantity} left!
+                                                    </span>
+                                                ) : null}
                                                 {isFS && (
                                                     <span className="absolute top-3 right-3 bg-red-600 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow animate-pulse">
                                                         FLASH DEAL

@@ -375,7 +375,7 @@ export default function CheckoutPage() {
                                         {property.availableForRent ? 'Lease Price' : 'Property Price'}
                                     </span>
                                     <span className="font-semibold text-slate-900">
-                                        ₦{property.price.toLocaleString()}
+                                        ₦{Number(property.price || 0).toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-sm">
@@ -389,7 +389,7 @@ export default function CheckoutPage() {
                                 <div className="border-t border-slate-200 pt-3 flex justify-between">
                                     <span className="font-bold text-slate-900">Total Amount</span>
                                     <span className="text-2xl font-bold text-green-600">
-                                        ₦{property.price.toLocaleString()}
+                                        ₦{Number(property.price || 0).toLocaleString()}
                                     </span>
                                 </div>
                             </div>

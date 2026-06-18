@@ -229,7 +229,7 @@ export default function MyPropertiesPage() {
                                                 <span className="text-xs font-semibold">Price</span>
                                             </div>
                                             <p className="text-sm font-bold text-slate-900">
-                                                ₦{property.price?.toLocaleString()}
+                                                ₦{Number(property.price || 0).toLocaleString()}
                                             </p>
                                         </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Package, ShoppingCart, Star, MapPin, Award, Phone, Mail, Shield, Loader2 } from "lucide-react";
+import { ArrowLeft, Package, ShoppingCart, Star, MapPin, Award, Phone, Mail, Shield, Loader2, AlertCircle } from "lucide-react";
 import { logger } from '@/lib/logger';
 import Image from "next/image";
 import Link from "next/link";
@@ -235,10 +235,22 @@ export default function ProductDetailPage() {
                         </div>
 
                         {/* CTA Buttons */}
+                        {product.availableQuantity === 0 || product.status === "out_of_stock" ? (
+                            <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-xl font-bold flex items-center gap-2 mb-6">
+                                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                                <span>This product is currently out of stock.</span>
+                            </div>
+                        ) : (product.availableQuantity ?? 9999) <= 5 ? (
+                            <div className="p-4 bg-orange-50 border border-orange-200 text-orange-800 rounded-xl font-bold flex items-center gap-2 mb-6 animate-pulse">
+                                <AlertCircle className="w-5 h-5 text-orange-600 shrink-0" />
+                                <span>Hurry! Only {product.availableQuantity} left in stock.</span>
+                            </div>
+                        ) : null}
+
                         <div className="flex flex-col sm:flex-row gap-4">
                             <button 
                                 onClick={handleAddToCart}
-                                disabled={isAddingToCart}
+                                disabled={isAddingToCart || product.availableQuantity === 0 || product.status === "out_of_stock"}
                                 className="flex-1 flex items-center justify-center gap-2 px-8 py-4 bg-green-600 text-white font-bold text-lg rounded-xl hover:bg-green-700 transition-all hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isAddingToCart ? (
@@ -246,7 +258,7 @@ export default function ProductDetailPage() {
                                 ) : (
                                     <ShoppingCart className="w-5 h-5" />
                                 )}
-                                {isAddingToCart ? "Adding..." : "Add to Cart"}
+                                {isAddingToCart ? "Adding..." : (product.availableQuantity === 0 || product.status === "out_of_stock") ? "Out of Stock" : "Add to Cart"}
                             </button>
                             <button 
                                 onClick={() => setShowQuoteModal(true)}

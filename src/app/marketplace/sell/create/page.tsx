@@ -47,7 +47,49 @@ const productCategories = [
     { value: "other", label: "Other" },
 ];
 
-const units = ["kg", "bags", "tonnes", "pieces", "crates", "litres"];
+const CATEGORY_TITLES: Record<string, string[]> = {
+    grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
+    cereal: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
+    tuber: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
+    root: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
+    fruit: ["Mango", "Orange", "Pineapple", "Banana", "Plantain", "Watermelon", "Pawpaw", "Lemon", "Lime"],
+    vegetable: ["Tomatoes", "Pepper (Rodo)", "Pepper (Tatashe)", "Onions", "Cabbage", "Carrot", "Pumpkin Leaves (Ugu)", "Spinach"],
+    spice: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    herb: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    seasoning: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    nut: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
+    seed: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
+    processed: ["Garri (White)", "Garri (Yellow)", "Elubo (Yam Flour)", "Palm Oil", "Groundnut Oil", "Bean Flour"],
+    livestock: ["Live Goat", "Live Sheep", "Live Ram", "Live Cow", "Pork", "Beef"],
+    poultry: ["Day Old Chicks", "Broilers", "Cockerels", "Layers", "Chicken Eggs", "Turkey"],
+    fishery: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
+    sea_food: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
+    beverage: ["Cocoa Powder", "Tea Leaves", "Coffee Beans", "Fruit Juice"],
+    dairy: ["Fresh Milk", "Local Cheese (Wara)", "Yogurt", "Butter"],
+};
+
+const PRODUCT_UNITS = [
+    "Kwanu",
+    "mudu/darica",
+    "basket(small)",
+    "basket(medium)",
+    "basket(big)",
+    "small painter bucket",
+    "big painter bucket",
+    "small carton",
+    "big carton",
+    "other units"
+];
+
+function getTitleOptions(categoryValue: string): string[] {
+    const norm = (categoryValue || "").toLowerCase();
+    for (const key of Object.keys(CATEGORY_TITLES)) {
+        if (norm.includes(key)) {
+            return CATEGORY_TITLES[key];
+        }
+    }
+    return [];
+}
 
 const nigerianStates = [
     "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
@@ -62,6 +104,17 @@ export default function CreateProductPage() {
     const router = useRouter();
     const { showToast } = useToast();
     const [state, formAction, isPending] = useActionState(createProductAction, initialState);
+
+    const [category, setCategory] = useState("");
+    const [title, setTitle] = useState("");
+    const [customTitle, setCustomTitle] = useState("");
+    const [unit, setUnit] = useState("");
+    const [customUnit, setCustomUnit] = useState("");
+
+    const titleOptions = getTitleOptions(category);
+    const hasCategoryTitles = titleOptions.length > 0;
+    const titleSelectValue = !title ? "" : (titleOptions.includes(title) ? title : "Other");
+    const unitSelectValue = !unit ? "" : (PRODUCT_UNITS.includes(unit) ? unit : "other units");
     const { uploadFile, uploadState } = useStorage();
     const [isUploadingClient, setIsUploadingClient] = useState(false);
 
@@ -199,16 +252,63 @@ export default function CreateProductPage() {
                         </h2>
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Product Title *
-                                </label>
-                                <input
-                                    type="text"
-                                    name="title"
-                                    required
-                                    placeholder="e.g., Fresh Organic Tomatoes"
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
-                                />
+                                {hasCategoryTitles ? (
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Product Title Option *
+                                            </label>
+                                            <select
+                                                value={titleSelectValue}
+                                                name={titleSelectValue !== "Other" ? "title" : undefined}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setTitle(val);
+                                                    if (val !== "Other") {
+                                                        setCustomTitle("");
+                                                    }
+                                                }}
+                                                className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary outline-none"
+                                                required
+                                            >
+                                                <option value="">Select Option</option>
+                                                {titleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
+                                        {titleSelectValue === "Other" && (
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                    Custom Product Title *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="title"
+                                                    value={customTitle}
+                                                    onChange={(e) => setCustomTitle(e.target.value)}
+                                                    required
+                                                    placeholder="e.g., Premium Yellow Maize"
+                                                    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary outline-none"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Product Title *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="title"
+                                            value={title}
+                                            onChange={(e) => setTitle(e.target.value)}
+                                            required
+                                            placeholder="e.g., Fresh Organic Tomatoes"
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary outline-none"
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -231,6 +331,12 @@ export default function CreateProductPage() {
                                     </label>
                                     <select
                                         name="category"
+                                        value={category}
+                                        onChange={(e) => {
+                                            setCategory(e.target.value);
+                                            setTitle("");
+                                            setCustomTitle("");
+                                        }}
                                         required
                                         className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
@@ -246,15 +352,34 @@ export default function CreateProductPage() {
                                         Unit *
                                     </label>
                                     <select
-                                        name="unit"
+                                        value={unitSelectValue}
+                                        name={unitSelectValue !== "other units" ? "unit" : undefined}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setUnit(val);
+                                            if (val !== "other units") {
+                                                setCustomUnit("");
+                                            }
+                                        }}
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary outline-none"
                                         required
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary"
                                     >
                                         <option value="">Select Unit</option>
-                                        {units.map(unit => (
-                                            <option key={unit} value={unit}>{unit}</option>
+                                        {PRODUCT_UNITS.map(u => (
+                                            <option key={u} value={u}>{u}</option>
                                         ))}
                                     </select>
+                                    {unitSelectValue === "other units" && (
+                                        <input
+                                            type="text"
+                                            name="unit"
+                                            value={customUnit}
+                                            onChange={(e) => setCustomUnit(e.target.value)}
+                                            required
+                                            placeholder="Enter custom unit"
+                                            className="mt-2 w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-primary outline-none"
+                                        />
+                                    )}
                                 </div>
                             </div>
                         </div>

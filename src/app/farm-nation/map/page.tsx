@@ -114,7 +114,12 @@ export default function FarmNationMapPage() {
         }
 
         if (filters.category) {
-            filtered = filtered.filter(l => l.category === filters.category);
+            filtered = filtered.filter(l => {
+                if (Array.isArray(l.category)) {
+                    return l.category.includes(filters.category);
+                }
+                return l.category === filters.category;
+            });
         }
 
         if (filters.minPrice > 0) {
@@ -331,7 +336,7 @@ export default function FarmNationMapPage() {
                                         <div className="text-right">
                                             <p className="text-xs text-slate-500">Total Price</p>
                                             <p className="font-bold text-green-600">
-                                                ₦{(listing.totalPrice ?? listing.price ?? 0).toLocaleString()}
+                                                ₦{Number(listing.totalPrice ?? listing.price ?? 0).toLocaleString()}
                                             </p>
                                         </div>
                                     </div>

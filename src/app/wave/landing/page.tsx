@@ -56,8 +56,26 @@ function ClickToPlayVideo({ videoId }: { videoId: string }) {
 }
 
 export default function WaveLandingPage() {
-    const { status: sessionStatus } = useSession();
+    const { data: session, status: sessionStatus } = useSession();
     const router = useRouter();
+
+    useEffect(() => {
+        if (sessionStatus === "authenticated" && session?.user) {
+            const roles = (session.user.roles || []) as string[];
+            const serviceRegistrations = (session.user as any).serviceRegistrations || {};
+            const waveRegStatus = serviceRegistrations.wave?.status;
+            
+            const hasWaveAccess = roles.includes("wave_participant") || 
+                                  waveRegStatus === "approved" || 
+                                  waveRegStatus === "active";
+                                  
+            if (hasWaveAccess) {
+                router.replace("/wave/dashboard");
+            } else if (waveRegStatus === "pending" || waveRegStatus === "under_review") {
+                router.replace("/wave/application/review-pending");
+            }
+        }
+    }, [sessionStatus, session, router]);
 
 
 

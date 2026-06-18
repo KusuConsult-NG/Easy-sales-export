@@ -13,6 +13,50 @@ import LoadingButton from "@/components/ui/LoadingButton";
 import { useStorage } from "@/hooks/use-storage";
 import { logger } from "@/lib/logger";
 
+const CATEGORY_TITLES: Record<string, string[]> = {
+    grains: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
+    cereal: ["White Maize", "Yellow Maize", "Sorghum", "Millet", "Local Rice", "Foreign Rice", "Wheat", "Soybeans"],
+    tuber: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
+    root: ["Yam", "Cassava", "Sweet Potato", "Irish Potato", "Coco Yam", "Ginger"],
+    fruit: ["Mango", "Orange", "Pineapple", "Banana", "Plantain", "Watermelon", "Pawpaw", "Lemon", "Lime"],
+    vegetable: ["Tomatoes", "Pepper (Rodo)", "Pepper (Tatashe)", "Onions", "Cabbage", "Carrot", "Pumpkin Leaves (Ugu)", "Spinach"],
+    spice: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    herb: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    seasoning: ["Garlic", "Ginger", "Turmeric", "Chili Pepper", "Clove", "Nutmeg"],
+    nut: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
+    seed: ["Groundnuts", "Cashew Nuts", "Sesame Seeds", "Melon Seeds (Egusi)", "Palm Kernel"],
+    processed: ["Garri (White)", "Garri (Yellow)", "Elubo (Yam Flour)", "Palm Oil", "Groundnut Oil", "Bean Flour"],
+    livestock: ["Live Goat", "Live Sheep", "Live Ram", "Live Cow", "Pork", "Beef"],
+    poultry: ["Day Old Chicks", "Broilers", "Cockerels", "Layers", "Chicken Eggs", "Turkey"],
+    fishery: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
+    sea_food: ["Catfish", "Tilapia", "Mackerel", "Dried Fish", "Crayfish"],
+    beverage: ["Cocoa Powder", "Tea Leaves", "Coffee Beans", "Fruit Juice"],
+    dairy: ["Fresh Milk", "Local Cheese (Wara)", "Yogurt", "Butter"],
+};
+
+const PRODUCT_UNITS = [
+    "Kwanu",
+    "mudu/darica",
+    "basket(small)",
+    "basket(medium)",
+    "basket(big)",
+    "small painter bucket",
+    "big painter bucket",
+    "small carton",
+    "big carton",
+    "other units"
+];
+
+function getTitleOptions(categoryValue: string): string[] {
+    const norm = (categoryValue || "").toLowerCase();
+    for (const key of Object.keys(CATEGORY_TITLES)) {
+        if (norm.includes(key)) {
+            return CATEGORY_TITLES[key];
+        }
+    }
+    return [];
+}
+
 export default function AddProductPage() {
     const router = useRouter();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,6 +79,14 @@ export default function AddProductPage() {
         lga: "",
         nearestMarket: "",
     });
+
+    const titleOptions = getTitleOptions(formData.category);
+    const hasCategoryTitles = titleOptions.length > 0;
+    const isCustomTitle = hasCategoryTitles && formData.name && !titleOptions.includes(formData.name);
+    const titleSelectValue = !formData.name ? "" : (isCustomTitle ? "Other" : formData.name);
+
+    const isCustomUnit = formData.unit && !PRODUCT_UNITS.includes(formData.unit);
+    const unitSelectValue = !formData.unit ? "" : (isCustomUnit ? "other units" : formData.unit);
 
     const [media, setMedia] = useState({
         images: [] as File[],
@@ -240,17 +292,61 @@ export default function AddProductPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
-                                            Product Name *
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={formData.name}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
-                                            placeholder="e.g., Premium Yam Tubers"
-                                            required
-                                        />
+                                        {hasCategoryTitles ? (
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                                        Product Title *
+                                                    </label>
+                                                    <select
+                                                        value={titleSelectValue}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            if (val === "Other") {
+                                                                setFormData({ ...formData, name: "" });
+                                                            } else {
+                                                                setFormData({ ...formData, name: val });
+                                                            }
+                                                        }}
+                                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                        required
+                                                    >
+                                                        <option value="">Select Option</option>
+                                                        {titleOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                        <option value="Other">Other</option>
+                                                    </select>
+                                                </div>
+                                                {(titleSelectValue === "Other" || !formData.name || isCustomTitle) && (
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                                            Custom Product Title *
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={formData.name}
+                                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                            placeholder="Enter custom product title"
+                                                            required
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <label className="block text-sm font-semibold text-slate-900 mb-2">
+                                                    Product Name *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.name}
+                                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                    placeholder="e.g., Premium Yam Tubers"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -374,18 +470,33 @@ export default function AddProductPage() {
                                         Unit *
                                     </label>
                                     <select
-                                        value={formData.unit}
-                                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                                        value={unitSelectValue}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "other units") {
+                                                setFormData({ ...formData, unit: "" });
+                                            } else {
+                                                setFormData({ ...formData, unit: val });
+                                            }
+                                        }}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
                                         required
                                     >
-                                        <option value="kg">Kilogram (kg)</option>
-                                        <option value="ton">Ton</option>
-                                        <option value="bag">Bag</option>
-                                        <option value="carton">Carton</option>
-                                        <option value="piece">Piece</option>
-                                        <option value="liter">Liter</option>
+                                        <option value="">Select Unit</option>
+                                        {PRODUCT_UNITS.map(u => (
+                                            <option key={u} value={u}>{u}</option>
+                                        ))}
                                     </select>
+                                    {(unitSelectValue === "other units" || !formData.unit || isCustomUnit) && (
+                                        <input
+                                            type="text"
+                                            value={formData.unit}
+                                            onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                                            className="mt-2 w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            placeholder="Enter custom unit (e.g. mudu, painter)"
+                                            required
+                                        />
+                                    )}
                                 </div>
 
                                 <div>

@@ -77,8 +77,7 @@ const WAVE_NAV: NavItem[] = [
     { name: "Training",       href: "/wave/training",       icon: BookOpen },
     { name: "Live Training",  href: "/wave/live-training",  icon: Video },
     { name: "Resources",      href: "/wave/resources",      icon: FileText },
-    { name: "Earnings",       href: "/wave/earnings",       icon: TrendingUp },
-    { name: "Shipments",      href: "/wave/shipments",      icon: Truck },
+    { name: "Tracking",       href: "/wave/tracking",       icon: TrendingUp },
     { name: "Certificates",   href: "/wave/certificates",   icon: Award },
 ];
 

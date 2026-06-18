@@ -78,7 +78,7 @@ LAND PURCHASE AGREEMENT
 
 Property: ${purchase.propertyName}
 Purchase Type: ${purchase.propertyType === "sale" ? "Sale" : "Lease"}
-Price: ₦${purchase.propertyPrice.toLocaleString()}
+Price: ₦${Number(purchase.propertyPrice || 0).toLocaleString()}
 Location: ${purchase.propertyLocation || "N/A"}
 
 BUYER INFORMATION:
@@ -314,7 +314,7 @@ This document serves as a record of the purchase agreement initiated through Eas
                                                 <div className="bg-slate-50 rounded-lg p-3">
                                                     <p className="text-xs text-slate-600 mb-1">Amount</p>
                                                     <p className="text-lg font-bold text-slate-900">
-                                                        ₦{purchase.propertyPrice.toLocaleString()}
+                                                        ₦{Number(purchase.propertyPrice || 0).toLocaleString()}
                                                     </p>
                                                 </div>
 
