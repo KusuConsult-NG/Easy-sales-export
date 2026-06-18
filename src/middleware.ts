@@ -39,15 +39,14 @@ const authMiddleware = auth((req: any) => {
         ""
     ).split(",")[0].trim().replace(/:\d+$/, "").toLowerCase();
 
-    // ── 1. www → Apex Redirect (High Priority) ──────────────────────────
-    // Redirect www subdomains to apex for consistent session handling.
-    if (hostname.startsWith("www.")) {
-        const apexHostname = hostname.replace(/^www\./, "");
-        const apexUrl = req.nextUrl.clone();
-        apexUrl.host = apexHostname;
-        apexUrl.protocol = "https:";
-        apexUrl.port = "";
-        return NextResponse.redirect(apexUrl, { status: 308 });
+    // ── 1. Apex → www Redirect (High Priority) ──────────────────────────
+    // Redirect apex domains to www for consistent session handling.
+    if (APEX_DOMAINS.includes(hostname)) {
+        const wwwUrl = req.nextUrl.clone();
+        wwwUrl.host = `www.${hostname}`;
+        wwwUrl.protocol = "https:";
+        wwwUrl.port = "";
+        return NextResponse.redirect(wwwUrl, { status: 308 });
     }
 
     // ── 1.1. Authentication Protection Gate ────────────────────────────
@@ -101,7 +100,7 @@ const authMiddleware = auth((req: any) => {
         if (isWaveBlocked && !isAdmin && (pathname.startsWith("/wave") || pathname.startsWith("/admin/wave") || rewritePrefix === "/wave")) {
             let hubOrigin = req.nextUrl.origin;
             if (normalizedHostname.endsWith(".easysalesexport.com")) {
-                hubOrigin = "https://easysalesexport.com";
+                hubOrigin = "https://www.easysalesexport.com";
             } else {
                 const hostParts = hostname.split(".");
                 const isLocalhost = hostname.endsWith("localhost");
@@ -149,13 +148,13 @@ const authMiddleware = auth((req: any) => {
             const hasSubdomain = isLocalhost ? hostParts.length > 1 : hostParts.length > 2;
             
             if (normalizedHostname.endsWith(".easysalesexport.com")) {
-                hubOrigin = "https://easysalesexport.com";
+                hubOrigin = "https://www.easysalesexport.com";
             } else if (hasSubdomain) {
                 const apexHost = isLocalhost ? "localhost" : hostParts.slice(1).join(".");
                 const portStr = req.nextUrl.port ? `:${req.nextUrl.port}` : "";
                 hubOrigin = `${req.nextUrl.protocol}//${apexHost}${portStr}`;
             } else {
-                hubOrigin = isLocalhost ? `http://localhost:${req.nextUrl.port || 3000}` : "https://easysalesexport.com";
+                hubOrigin = isLocalhost ? `http://localhost:${req.nextUrl.port || 3000}` : "https://www.easysalesexport.com";
             }
             
             const redirectUrl = new URL(pathname + req.nextUrl.search, hubOrigin);
