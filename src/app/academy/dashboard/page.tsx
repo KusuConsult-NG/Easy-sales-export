@@ -38,6 +38,7 @@ export default function AcademyDashboardPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [stats, setStats] = useState({
         totalCourses: 0,
+        totalModules: 0,
         inProgress: 0,
         completed: 0,
         certificatesEarned: 0,
@@ -220,9 +221,9 @@ export default function AcademyDashboardPage() {
                     <div className="bg-linear-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
                         <div className="flex items-center justify-between mb-4">
                             <BookOpen className="w-8 h-8 opacity-80" />
-                            <span className="text-3xl font-bold">{stats.totalCourses}</span>
+                            <span className="text-3xl font-bold">{stats.totalModules || 0}</span>
                         </div>
-                        <p className="text-blue-100 font-semibold">Total Courses</p>
+                        <p className="text-blue-100 font-semibold">Total Modules</p>
                     </div>
 
                     <div className="bg-linear-to-br from-yellow-500 to-yellow-600 rounded-xl shadow-lg p-6 text-white">
