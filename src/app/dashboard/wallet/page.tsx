@@ -640,85 +640,86 @@ export default function WalletPage() {
                         <h3 className="text-lg font-bold text-slate-900 text-center">Transaction Receipt</h3>
 
                         {/* The visible preview card to be captured */}
-                        <div className="border border-slate-100 rounded-xl p-1 bg-slate-50 flex justify-center overflow-x-auto">
+                        <div className="rounded-xl p-1 flex justify-center overflow-x-auto" style={{ border: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
                             <div 
                                 id="receipt-download-card" 
-                                className="w-[360px] bg-white text-slate-800 p-6 flex flex-col font-sans shrink-0"
+                                className="w-[360px] flex flex-col font-sans shrink-0 p-6"
+                                style={{ backgroundColor: "#ffffff", color: "#1e293b" }}
                             >
                                 {/* Brand Header */}
-                                <div className="flex items-center justify-between border-b-2 border-emerald-500 pb-3 mb-5">
+                                <div className="flex items-center justify-between pb-3 mb-5" style={{ borderBottom: "2px solid #10b981" }}>
                                     <div>
-                                        <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                        <h2 className="text-base font-extrabold tracking-tight flex items-center gap-1.5" style={{ color: "#0f172a" }}>
+                                            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: "#10b981" }}></span>
                                             EASY SALES
                                         </h2>
-                                        <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Export & Agro-Allied</p>
+                                        <p className="text-[8px] font-bold uppercase tracking-widest mt-0.5" style={{ color: "#94a3b8" }}>Export & Agro-Allied</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                        <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider" style={{ color: "#94a3b8", backgroundColor: "#f1f5f9" }}>
                                             Receipt
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* Transaction Amount & Status */}
-                                <div className="text-center bg-slate-50 rounded-xl py-5 px-3 mb-5 border border-slate-100">
-                                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider mb-1">Amount</p>
-                                    <p className={`text-xl font-black ${receiptTxn.amount < 0 ? 'text-slate-900' : 'text-emerald-600'}`}>
+                                <div className="text-center rounded-xl py-5 px-3 mb-5" style={{ backgroundColor: "#f8fafc", border: "1px solid #f1f5f9" }}>
+                                    <p className="text-[9px] font-medium uppercase tracking-wider mb-1" style={{ color: "#94a3b8" }}>Amount</p>
+                                    <p className="text-xl font-black" style={{ color: receiptTxn.amount < 0 ? "#0f172a" : "#059669" }}>
                                         {receiptTxn.amount < 0 ? '-' : '+'}{fmt(Math.abs(receiptTxn.amount))}
                                     </p>
                                     <div className="mt-1.5 inline-block">
-                                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider ${
-                                            receiptTxn.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                            receiptTxn.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                                            'bg-red-100 text-red-700'
-                                        }`}>
+                                        <span className="px-2 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wider" style={
+                                            receiptTxn.status === 'completed' ? { backgroundColor: '#dcfce7', color: '#15803d' } :
+                                            receiptTxn.status === 'pending' ? { backgroundColor: '#fef9c3', color: '#a16207' } :
+                                            { backgroundColor: '#fee2e2', color: '#b91c1c' }
+                                        }>
                                             {receiptTxn.status}
                                         </span>
                                     </div>
                                 </div>
 
                                 {/* Transaction Details */}
-                                <div className="space-y-2.5 text-[10px] pb-5 border-b border-dashed border-slate-200">
+                                <div className="space-y-2.5 text-[10px] pb-5" style={{ borderBottom: "1px dashed #e2e8f0" }}>
                                     <div className="flex justify-between items-start gap-4">
-                                        <span className="text-slate-400 font-medium">Date & Time</span>
-                                        <span className="text-slate-800 font-semibold text-right">{fmtDate(receiptTxn.createdAt)}</span>
+                                        <span className="font-medium" style={{ color: "#94a3b8" }}>Date & Time</span>
+                                        <span className="font-semibold text-right" style={{ color: "#1e293b" }}>{fmtDate(receiptTxn.createdAt)}</span>
                                     </div>
                                     <div className="flex justify-between items-start gap-4">
-                                        <span className="text-slate-400 font-medium">Transaction ID</span>
-                                        <span className="text-slate-800 font-mono font-medium text-right select-all truncate max-w-[140px]">{receiptTxn.id}</span>
+                                        <span className="font-medium" style={{ color: "#94a3b8" }}>Transaction ID</span>
+                                        <span className="font-mono font-medium text-right select-all truncate max-w-[140px]" style={{ color: "#1e293b" }}>{receiptTxn.id}</span>
                                     </div>
                                     {receiptTxn.reference && (
                                         <div className="flex justify-between items-start gap-4">
-                                            <span className="text-slate-400 font-medium">Reference</span>
-                                            <span className="text-slate-800 font-mono font-medium text-right truncate max-w-[140px]">{receiptTxn.reference}</span>
+                                            <span className="font-medium" style={{ color: "#94a3b8" }}>Reference</span>
+                                            <span className="font-mono font-medium text-right truncate max-w-[140px]" style={{ color: "#1e293b" }}>{receiptTxn.reference}</span>
                                         </div>
                                     )}
                                     {receiptTxn.orderId && (
                                         <div className="flex justify-between items-start gap-4">
-                                            <span className="text-slate-400 font-medium">Order ID</span>
-                                            <span className="text-slate-800 font-mono font-medium text-right truncate max-w-[140px]">{receiptTxn.orderId}</span>
+                                            <span className="font-medium" style={{ color: "#94a3b8" }}>Order ID</span>
+                                            <span className="font-mono font-medium text-right truncate max-w-[140px]" style={{ color: "#1e293b" }}>{receiptTxn.orderId}</span>
                                         </div>
                                     )}
                                     <div className="flex justify-between items-start gap-4">
-                                        <span className="text-slate-400 font-medium">Type</span>
-                                        <span className="text-slate-800 font-semibold capitalize text-right">{receiptTxn.type}</span>
+                                        <span className="font-medium" style={{ color: "#94a3b8" }}>Type</span>
+                                        <span className="font-semibold capitalize text-right" style={{ color: "#1e293b" }}>{receiptTxn.type}</span>
                                     </div>
                                     <div className="flex justify-between items-start gap-4">
-                                        <span className="text-slate-400 font-medium">Description</span>
-                                        <span className="text-slate-800 font-semibold text-right max-w-[150px] truncate">{receiptTxn.description}</span>
+                                        <span className="font-medium" style={{ color: "#94a3b8" }}>Description</span>
+                                        <span className="font-semibold text-right max-w-[150px] truncate" style={{ color: "#1e293b" }}>{receiptTxn.description}</span>
                                     </div>
 
                                     {/* Customer Details */}
-                                    <div className="pt-2.5 border-t border-slate-100 mt-2 space-y-2.5">
+                                    <div className="pt-2.5 mt-2 space-y-2.5" style={{ borderTop: "1px solid #f1f5f9" }}>
                                         <div className="flex justify-between items-start gap-4">
-                                            <span className="text-slate-400 font-medium">Customer</span>
-                                            <span className="text-slate-800 font-semibold text-right">{userName}</span>
+                                            <span className="font-medium" style={{ color: "#94a3b8" }}>Customer</span>
+                                            <span className="font-semibold text-right" style={{ color: "#1e293b" }}>{userName}</span>
                                         </div>
                                         {userEmail && (
                                             <div className="flex justify-between items-start gap-4">
-                                                <span className="text-slate-400 font-medium">Email</span>
-                                                <span className="text-slate-800 font-semibold text-right truncate max-w-[150px]">{userEmail}</span>
+                                                <span className="font-medium" style={{ color: "#94a3b8" }}>Email</span>
+                                                <span className="font-semibold text-right truncate max-w-[150px]" style={{ color: "#1e293b" }}>{userEmail}</span>
                                             </div>
                                         )}
                                     </div>
@@ -726,10 +727,10 @@ export default function WalletPage() {
 
                                 {/* Footer */}
                                 <div className="text-center mt-5">
-                                    <p className="text-[8px] text-slate-400 font-medium">
+                                    <p className="text-[8px] font-medium" style={{ color: "#94a3b8" }}>
                                         Thank you for transacting with Easy Sales & Export.
                                     </p>
-                                    <p className="text-[7px] text-slate-300 mt-1">
+                                    <p className="text-[7px] mt-1" style={{ color: "#cbd5e1" }}>
                                         This is an official computer-generated receipt and requires no signature.
                                     </p>
                                 </div>
