@@ -17,7 +17,7 @@ export async function register() {
         }
 
         // Asynchronously initialize Sentry
-        import("./sentry.server.config").catch(err => {
+        import("../sentry.server.config").catch(err => {
             console.error("❌ Sentry Server initialization failed:", err);
         });
 
@@ -40,7 +40,7 @@ export async function register() {
     }
 
     if (process.env.NEXT_RUNTIME === "edge") {
-        import("./sentry.edge.config").catch(err => {
+        import("../sentry.edge.config").catch(err => {
             console.error("❌ Sentry Edge initialization failed:", err);
         });
     }
