@@ -10,6 +10,7 @@ export async function logObservabilityTrace(trace: {
     queryOrAction: string;
     stackTrace: string;
     sessionContext: any;
+    route?: string;
 }): Promise<void> {
     if (typeof window !== 'undefined') return;
 
@@ -17,8 +18,21 @@ export async function logObservabilityTrace(trace: {
         const { getAdminDb } = await import("@/lib/firebase-admin");
         const db = getAdminDb();
         const traceRef = db.collection("error_observability_traces").doc();
+        
+        let route = trace.route || "unknown";
+        if (route === "unknown") {
+            try {
+                const { headers } = await import("next/headers");
+                const headerList = await headers();
+                route = headerList.get("x-url") || headerList.get("referer") || "unknown";
+            } catch (e) {
+                // quiet fail if outside request context
+            }
+        }
+
         await traceRef.set({
             ...trace,
+            route,
             timestamp: new Date().toISOString(),
             createdAt: new Date()
         });

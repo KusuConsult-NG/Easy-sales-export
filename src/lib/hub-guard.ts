@@ -80,7 +80,9 @@ export async function requireHubRegistration() {
         }
     } catch(err) {
         console.error("Hub Guard Exception:", err);
-        shouldRedirect = true;
+        // Rethrow the error so that the nearest Error Boundary catches it and offers a retry
+        // rather than forcing a redirection to /hub/register on transient database drops.
+        throw err;
     }
     
     // IMPORTANT: Next.js redirect() MUST be called outside the try/catch block
