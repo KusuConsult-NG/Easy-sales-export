@@ -304,7 +304,7 @@ export async function preValidateLoginAction(credentials: any): Promise<{ succes
         return { success: true, error: null };
     } catch (e: any) {
         logger.error(`[PreValidate] Exception: ${e.message}`, e);
-        return { success: false, error: "An unexpected error occurred. Please try again." };
+        return { success: false, error: `An unexpected error occurred: ${e.message || String(e)}` };
     }
 }
 
