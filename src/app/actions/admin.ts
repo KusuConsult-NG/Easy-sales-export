@@ -11,6 +11,7 @@ import { invalidateAdminGlobalStats, invalidateServiceCache } from "@/lib/cache-
 import crypto from 'crypto';
 import { db, adminAuth } from "@/lib/firebase-admin";
 import { logger } from '@/lib/logger';
+import { runQueryWithRetry } from "@/lib/firestore-utils";
 import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { auth } from "@/lib/auth";
 import { requireSession } from "@/lib/session-guard";
@@ -1419,7 +1420,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             }
         }
 
-        const countSnap = await countQuery.count().get();
+        const countSnap = await runQueryWithRetry(() => countQuery.count().get());
         const absoluteDbCount = countSnap.data().count;
 
         // Fetch a dynamic batch — no orderBy (avoids missing-field exclusion).
@@ -1431,7 +1432,7 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
             : Math.min(2000, (page + 1) * pageSize + 100);
         query = query.limit(FETCH_LIMIT);
 
-        const snapshot = await query.get();
+        const snapshot = await runQueryWithRetry(() => query.get());
 
         const users = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -1742,7 +1743,17 @@ async function _getUsersAction(options: GetUsersOptions = {}): Promise<ActionRes
         };
     } catch (error: any) {
         logger.error("Get users error:", error);
-        return { error: "Failed to fetch users: " + error.message, success: false as const, data: null };
+        const message = error?.message || String(error);
+        const isTransient = message.includes("Premature close") || 
+                            message.includes("socket hang up") || 
+                            message.includes("ECONNRESET") ||
+                            message.includes("Client network socket disconnected") ||
+                            message.includes("FetchError") ||
+                            message.includes("fetch failed");
+        const userFriendlyMessage = isTransient 
+            ? "A temporary connection issue occurred. Please try again." 
+            : message;
+        return { error: "Failed to fetch users: " + userFriendlyMessage, success: false as const, data: null };
     }
 }
 
