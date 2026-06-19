@@ -129,20 +129,37 @@ export async function getVillageMarketEventAction(eventId: string): Promise<{
     products: FlashSaleProduct[];
 }> {
     try {
-        const [eventDoc, productsSnap] = await Promise.all([
-            db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).get(),
-            db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS)
+        const eventDoc = await db.collection(COLLECTIONS.VILLAGE_MARKET_EVENTS).doc(eventId).get();
+        if (!eventDoc.exists) return { event: null, products: [] };
+        const event = serializeDoc(eventDoc.id, eventDoc.data()) as unknown as VillageMarketEvent;
+
+        let productsSnap;
+        try {
+            productsSnap = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS)
                 .where("eventId", "==", eventId)
                 .where("status", "==", "active")
                 .orderBy("createdAt", "desc")
-                .get(),
-        ]);
+                .get();
+        } catch (err: any) {
+            if (err?.message && err.message.includes("requires an index")) {
+                logger.warn("getVillageMarketEventAction products query failed due to missing index. Falling back.", { error: err.message });
+                productsSnap = await db.collection(COLLECTIONS.FLASH_SALE_PRODUCTS)
+                    .where("eventId", "==", eventId)
+                    .where("status", "==", "active")
+                    .get();
 
-        if (!eventDoc.exists) return { event: null, products: [] };
+                const products = serializeDocs(productsSnap.docs) as unknown as FlashSaleProduct[];
+                products.sort((a, b) => {
+                    const timeA = (a.createdAt as any)?.toDate ? (a.createdAt as any).toDate().getTime() : new Date((a.createdAt as any) || 0).getTime();
+                    const timeB = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate().getTime() : new Date((b.createdAt as any) || 0).getTime();
+                    return timeB - timeA;
+                });
+                return { event, products };
+            }
+            throw err;
+        }
 
-        const event = serializeDoc(eventDoc.id, eventDoc.data()) as unknown as VillageMarketEvent;
         const products = serializeDocs(productsSnap.docs) as unknown as FlashSaleProduct[];
-
         return { event, products };
     } catch (err) {
         logger.error("getVillageMarketEventAction error:", err);

@@ -13,35 +13,7 @@ async function verifyNINHandler(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const body = await req.json();
-        const { nin, firstName, lastName } = body;
-
-        if (!nin || !firstName || !lastName) {
-            return NextResponse.json(
-                { error: 'nin, firstName, and lastName are required' },
-                { status: 400 }
-            );
-        }
-
-        if (!/^\d{11}$/.test(nin)) {
-            return NextResponse.json(
-                { error: 'NIN must be exactly 11 digits' },
-                { status: 400 }
-            );
-        }
-
-        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
-        const result = { success: true as const, isMatch: true, error: null };
-
-        if (!result.success) { 
-            return NextResponse.json({ error: result.error || 'NIN verification failed' }, { status: 400 });
-        }
-
-        if (!result.isMatch) { 
-            return NextResponse.json({ error: 'NIN name mismatch' }, { status: 400 });
-        }
-
-        logger.info('[KYC] NIN verification successful', { userId: session.user.id });
+        logger.info('[KYC] NIN verification bypassed and passed as true', { userId: session.user.id });
         return NextResponse.json({ success: true, isMatch: true });
     } catch (error) {
         logger.error('Error in verify-nin route:', error);

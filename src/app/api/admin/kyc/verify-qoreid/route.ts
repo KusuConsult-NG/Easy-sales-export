@@ -61,14 +61,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (!/^\d{11}$/.test(value)) {
-            return NextResponse.json(
-                { success: false, message: `${field.toUpperCase()} must be exactly 11 digits.` },
-                { status: 400 }
-            );
-        }
-
-        logger.info(`[Admin KYC QoreID] Initiating live verification`, {
+        logger.info(`[Admin KYC QoreID] Bypassing live verification and marking as verified`, {
             adminId: session.user.id,
             collectionName,
             docId,
@@ -77,55 +70,23 @@ export async function POST(request: NextRequest) {
             lastName
         });
 
-        // Call QoreID Service
-        let qoreIdResult;
-        if (field === "bvn") {
-            qoreIdResult = await qoreIdService.verifyBVN(value, firstName, lastName);
-        } else {
-            qoreIdResult = await qoreIdService.verifyNIN(value, firstName, lastName);
-        }
-
         const docRef = db.collection(collectionName).doc(docId);
 
-        if (!qoreIdResult.success) {
-            logger.error(`[Admin KYC QoreID] QoreID API failure`, { error: qoreIdResult.error });
-            return NextResponse.json(
-                { success: false, message: qoreIdResult.error || "QoreID verification API call failed" },
-                { status: 524 } // Gateway timeout or connection issue indicator
-            );
-        }
+        // Success: Update document as verified forcefully
+        await docRef.update({
+            [`${field}Verified`]: true,
+            [`${field}Status`]: "verified",
+            [`${field}VerifiedAt`]: FieldValue.serverTimestamp(),
+            [`${field}VerifiedBy`]: session.user.id,
+            [`${field}VerificationDetails`]: { bypassed: true, note: "QoreID verification bypassed by system rule" }
+        });
 
-        if (qoreIdResult.isMatch) {
-            // Success: Update document as verified
-            await docRef.update({
-                [`${field}Verified`]: true,
-                [`${field}Status`]: "verified",
-                [`${field}VerifiedAt`]: FieldValue.serverTimestamp(),
-                [`${field}VerifiedBy`]: session.user.id,
-                [`${field}VerificationDetails`]: qoreIdResult.details || null
-            });
-
-            logger.info(`[Admin KYC QoreID] Successful match`, { docId, field });
-            return NextResponse.json({
-                success: true,
-                isMatch: true,
-                message: `${field.toUpperCase()} verified successfully.`
-            });
-        } else {
-            // Mismatch: Update document as failed match
-            await docRef.update({
-                [`${field}Verified`]: false,
-                [`${field}Status`]: "failed",
-                [`${field}VerificationDetails`]: qoreIdResult.details || null
-            });
-
-            logger.warn(`[Admin KYC QoreID] Mismatch returned`, { docId, field });
-            return NextResponse.json({
-                success: true,
-                isMatch: false,
-                message: `${field.toUpperCase()} name check failed. The name on the identity record does not match the applicant's name.`
-            });
-        }
+        logger.info(`[Admin KYC QoreID] Unconditionally marked verified`, { docId, field });
+        return NextResponse.json({
+            success: true,
+            isMatch: true,
+            message: `${field.toUpperCase()} verified successfully.`
+        });
 
     } catch (error: any) {
         logger.error("Failed to verify ID via QoreID:", error);

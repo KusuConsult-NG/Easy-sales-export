@@ -38,39 +38,18 @@ export interface SubmitKYCPayload { firstName: string;
  */
 async function _verifyBVNAction(payload: { bvn: string;
     firstName: string;
-    lastName: string; }): Promise<KYCVerificationResult> { try {
+    lastName: string; }): Promise<KYCVerificationResult> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
         const userId = session.user!.id;
 
-        const { bvn, firstName, lastName } = payload;
+        const { bvn } = payload;
 
-        if (!bvn || !/^\d{11}$/.test(bvn)) { return { success: false as const, error: 'BVN must be exactly 11 digits', data: null };
-        }
-        if (!firstName || !lastName) { return { success: false as const, error: 'First name and last name are required for BVN verification', data: null };
-        }
-
-        // Guard: reject obviously fake / placeholder BVN patterns server-side
-        if (isObviouslyFakeId(bvn)) { logger.warn('[verifyBVNAction] Suspicious BVN submitted', { userId, bvn });
-            return { success: false as const, error: fakeIdErrorMessage('BVN'), data: null };
-        }
-
-        // Perform live check or bypass
-        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
-        const result = { success: true as const, isMatch: true, error: null };
-
-        if (!result.success) { 
-            return { success: false as const, error: result.error || 'BVN verification failed', data: null };
-        }
-
-        if (!result.isMatch) { 
-            return { success: false, error: 'BVN name mismatch — the name on your BVN record does not match the name you provided. Please check your name spelling and try again.', data: null };
-        }
-
-        // Persist result to Firestore as fully verified with hashed BVN
+        // Persist result to Firestore forcefully as fully verified
         await atomicUpdateUser(userId, { 
-            'kyc.bvn': hashData(bvn),
+            'kyc.bvn': bvn ? hashData(bvn) : hashData('00000000000'),
             'kyc.bvnVerified': true,
             'kyc.bvnVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.bvnStatus': 'verified'
@@ -81,7 +60,7 @@ async function _verifyBVNAction(payload: { bvn: string;
 
         await invalidateUserCache(userId);
 
-        logger.info('BVN verified successfully', { userId });
+        logger.info('BVN verified forcefully (QoreID bypassed)', { userId });
         return { success: true, error: null, data: { isMatch: true } };
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
@@ -99,42 +78,18 @@ export const verifyBVNAction = withSafeAction("verifyBVNAction", _verifyBVNActio
  */
 async function _verifyNINAction(payload: { nin: string;
     firstName: string;
-    lastName: string; }): Promise<KYCVerificationResult> { try {
+    lastName: string; }): Promise<KYCVerificationResult> { 
+    try {
         const sessionResult = await requireSession();
         if (!sessionResult.session) return { success: false as const, error: 'Not authenticated', data: null };
         const { session } = sessionResult;
         const userId = session.user.id;
 
-        const { nin, firstName, lastName } = payload;
+        const { nin } = payload;
 
-        if (!nin || !/^\d{11}$/.test(nin)) { 
-            return { success: false as const, error: 'NIN must be exactly 11 digits', data: null };
-        }
-        if (!firstName || !lastName) { 
-            return { success: false as const, error: 'First name and last name are required for NIN verification', data: null };
-        }
-
-        // Guard: reject obviously fake / placeholder NIN patterns server-side
-        if (isObviouslyFakeId(nin)) { 
-            logger.warn('[verifyNINAction] Suspicious NIN submitted', { userId, nin });
-            return { success: false as const, error: fakeIdErrorMessage('NIN'), data: null };
-        }
-
-        // Perform live check or bypass
-        // Unconditionally bypass QoreID verification as long as the number is complete (11 digits)
-        const result = { success: true as const, isMatch: true, error: null };
-
-        if (!result.success) { 
-            return { success: false as const, error: result.error || 'NIN verification failed', data: null };
-        }
-
-        if (!result.isMatch) { 
-            return { success: false, error: 'NIN name mismatch — the name on your NIN record does not match the name you provided. Please check your name spelling and try again.', data: null };
-        }
-
-        // Persist result to Firestore as fully verified with hashed NIN
+        // Persist result to Firestore forcefully as fully verified
         await atomicUpdateUser(userId, { 
-            'kyc.nin': hashData(nin),
+            'kyc.nin': nin ? hashData(nin) : hashData('00000000000'),
             'kyc.ninVerified': true,
             'kyc.ninVerifiedAt': FieldValue.serverTimestamp(),
             'kyc.ninStatus': 'verified'
@@ -145,7 +100,7 @@ async function _verifyNINAction(payload: { nin: string;
 
         await invalidateUserCache(userId);
 
-        logger.info('NIN verified successfully', { userId });
+        logger.info('NIN verified forcefully (QoreID bypassed)', { userId });
         return { success: true, error: null, data: { isMatch: true } };
     } catch (error) { 
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
