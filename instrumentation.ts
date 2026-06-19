@@ -5,6 +5,8 @@ export async function register() {
     
     if (process.env.NEXT_RUNTIME === "nodejs") {
         try {
+            // Force IPv4-first resolution to prevent transient connection drops (Premature close)
+            // on Railway container hosts which lack outbound IPv6 routing.
             const dns = require('dns');
             if (dns && typeof dns.setDefaultResultOrder === 'function') {
                 dns.setDefaultResultOrder('ipv4first');
